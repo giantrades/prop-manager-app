@@ -146,3 +146,8 @@ tr:hover td { background: rgba(39,48,68,0.24); }
 .chip { border:1px solid var(--border); padding:6px 10px; border-radius:999px; background:transparent; cursor:pointer; }
 .chip.active { font-weight:600; }
 .range .chip.active { border-color: var(--primary); color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+
+/* opcional: evitar que o botão quebre layout */
+.navbar .drive-status .btn {
+  padding: 6px 10px;
+}

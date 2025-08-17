@@ -4,6 +4,7 @@ import { useCurrency } from '../state/CurrencyContext.jsx'
 import { useFilters } from '../state/FiltersContext.jsx'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid } from 'recharts'
 
+
 const CAT_COLORS = ['#7c5cff','#2ecc71','#3498db','#e1b12c','#e74c3c','#9b59b6']
 
 const Chips = ({items, active, onToggle})=> (
