@@ -10,7 +10,7 @@
   "scripts": {
     "build:main": "pnpm --filter main-app build",
     "build:journal": "pnpm --filter trading-journal build",
-    "build:all": "concurrently \"pnpm --filter main-app build\" \"pnpm --filter trading-journal build\"",
+    "build:all": "pnpm build:main && pnpm build:journal",
     "dev:main": "pnpm --filter main-app dev",
     "dev:journal": "pnpm --filter trading-journal dev",
     "dev:all": "concurrently \"pnpm --filter main-app dev\" \"pnpm --filter trading-journal dev\""
