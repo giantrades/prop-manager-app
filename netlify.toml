@@ -1,0 +1,19 @@
+[build]
+  command = "pnpm build:all && node scripts/merge-builds.js"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+  PNPM_VERSION = "8"
+
+# Roteamento para SPA - Trading Journal
+[[redirects]]
+  from = "/journal/*"
+  to = "/journal/index.html"
+  status = 200
+
+# Roteamento para SPA - Main App (deve ficar por último)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
