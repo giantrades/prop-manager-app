@@ -35,7 +35,9 @@ export default function Navbar({
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
 
   // rota do main-app (ajuste se não for 5174)
-  const mainAppUrl = import.meta.env.VITE_MAIN_URL || "http://localhost:5174/";
+  const mainAppUrl = import.meta.env.DEV 
+    ? (import.meta.env.VITE_MAIN_URL || "http://localhost:5174/")
+    : "/";
 
   return (
     <nav className="navbar">
