@@ -1,0 +1,13 @@
+{
+  "name": "@apps/state",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+   "exports": {
+    ".": "./index.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.0.0"
+  }
+}
