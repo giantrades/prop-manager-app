@@ -40,11 +40,31 @@ export default function Navbar({
         <NavLink to="/payouts"  className={({ isActive }) => (isActive ? "active" : "")}>Payouts</NavLink>
         <NavLink to="/firms" className={({isActive}) => isActive ? 'active' : ''}>Empresas</NavLink>
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>Settings</NavLink>
-        <a href={journalUrl} className="external-link">Trading Journal</a>
-
+        
       </div>
 
       <div className="spacer" />
+
+      <a href={journalUrl}  style={{ 
+    // Aparência de destaque (simulando um botão azul ou pílula)
+    color: '#fff', // Texto branco
+    padding: '8px 14px',
+    border: '2px solid var(--color-border-soft, #ffffffff)',
+    borderRadius: '16px', // Bordas bem arredondadas (estilo pílula)
+    fontWeight: '600',
+    fontSize: '1.1rem',
+
+    
+    // Alinhamento e Layout
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    transition: 'background-color 0.2s', // Efeito de hover
+  }}
+  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-accent-2, #161725ff)'} // Escurece no hover
+  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--color-accent-1, 15, 18, 24, 0.85)'} // Volta ao normal
+>
+  <span style={{ fontSize: '1rem' }}></span>Trading Journal</a>
 
       <CurrencyBox />
 

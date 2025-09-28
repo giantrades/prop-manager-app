@@ -58,51 +58,57 @@ export default function Navbar({
         <NavLink to="/montecarlo" className={({ isActive }) => (isActive ? "active" : "")}>
           Monte Carlo
         </NavLink>
-
-        {/* Voltar para Main-App */}
-        <a href={mainAppUrl} className="external-link">← Main App</a>
       </div>
 
       <div className="spacer" />
 
+        {/* Voltar para Main-App */}
+        {/* Voltar para Main-App (Estilizado como Botão/Pill) */}
+<a 
+  href={mainAppUrl} 
+  style={{ 
+    // Aparência de destaque (simulando um botão azul ou pílula)
+    color: '#fff', // Texto branco
+    padding: '8px 14px',
+    border: '2px solid var(--color-border-soft, #ffffffff)',
+    borderRadius: '16px', // Bordas bem arredondadas (estilo pílula)
+    fontWeight: '600',
+    fontSize: '1.1rem',
+
+    
+    // Alinhamento e Layout
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    transition: 'background-color 0.2s', // Efeito de hover
+  }}
+  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--color-accent-2, #161725ff)'} // Escurece no hover
+  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--color-accent-1, 15, 18, 24, 0.85)'} // Volta ao normal
+>
+  <span style={{ fontSize: '1rem' }}></span>Prop Manager
+</a>
+
       {/* Currency */}
       <CurrencyBox />
 
-      {/* Status + Drive actions */}
+      {/* Status + Ações Drive */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 16 }}>
         <span
-          title={
-            !driveReady
-              ? "Drive não inicializado"
-              : logged
-              ? "Conectado ao Google"
-              : "Desconectado do Google"
-          }
+          title={ !driveReady ? "Drive não inicializado" : (logged ? "Conectado ao Google" : "Desconectado do Google") }
           style={{
-            width: 12,
-            height: 12,
-            borderRadius: "50%",
-            backgroundColor: dotColor,
-            display: "inline-block",
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
+            width: 12, height: 12, borderRadius: "50%",
+            backgroundColor: dotColor, display: "inline-block",
+            boxShadow: "0 0 0 2px rgba(255,255,255,0.1)"
           }}
         />
         {logged ? (
           <>
-            <button className="btn ghost small" onClick={onLogout}>
-              Logout
-            </button>
-            <button className="btn ghost small" onClick={onBackup}>
-              Backup
-            </button>
-            <button className="btn ghost small" onClick={onList}>
-              Listar
-            </button>
+            <button className="btn ghost small" onClick={onLogout}>Logout</button>
+            <button className="btn ghost small" onClick={onBackup}>Backup</button>
+            <button className="btn ghost small" onClick={onList}>Listar</button>
           </>
         ) : (
-          <button className="btn ghost small" onClick={onLogin}>
-            Login Google
-          </button>
+          <button className="btn ghost small" onClick={onLogin}>Login Google</button>
         )}
       </div>
     </nav>

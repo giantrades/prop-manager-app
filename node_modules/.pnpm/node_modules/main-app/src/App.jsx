@@ -7,7 +7,7 @@ import Payouts from "./pages/Payouts.jsx";
 import Settings from "./pages/Settings.jsx";
 import Firms from "./pages/Firms.jsx";
 import Navbar from "./Navbar";
-
+import { useJournal } from "@apps/journal-state";
 import { useData } from "@apps/state";
 import {
   initGoogleDrive,

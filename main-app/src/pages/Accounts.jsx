@@ -1,4 +1,4 @@
-// src/pages/Accounts.jsx
+// main-app/src/pages/Accounts.jsx
 import React, { useMemo, useState, useEffect } from 'react'
 import { useData } from '@apps/state'
 import { useCurrency } from '@apps/state'
@@ -297,8 +297,9 @@ function NewAccountForm({ onCreate, onCancel, firms = [] }) {
       </div>
 
       <div className="field">
-        <label>Profit Split (0-1)</label>
-        <input type="number" step="0.01" className="input" value={form.profitSplit} onChange={e => setForm({ ...form, profitSplit: parseFloat(e.target.value) || 0 })} />
+        <label>Profit Split (%)</label>
+        <input type="number" step="1" className="input" value={Math.round(form.profitSplit*100) || 0} onChange={e => setForm({ ...form, profitSplit: parseFloat(e.target.value) / 100 || 0 })} style={{ flexGrow: 1 }}/>
+      
       </div>
 
       <div className="toolbar">
@@ -407,8 +408,8 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
 
       <div className="row">
         <div className="field">
-          <label>Profit Split (0-1)</label>
-          <input type="number" step="0.01" className="input" value={local.profitSplit || 0} onChange={e => setLocal({ ...local, profitSplit: parseFloat(e.target.value) || 0 })} />
+          <label>Profit Split (%)</label>
+          <input type="number" step="1" className="input" value={Math.round(local.profitSplit*100) || 0} onChange={e => setLocal({ ...local, profitSplit: parseFloat(e.target.value) / 100 || 0 })}style={{ flexGrow: 1 }} />
         </div>
         <div className="field">
           <label>ROI</label>

@@ -1,115 +1,159 @@
-// src/pages/Strategies.tsx
-import React, { useState } from 'react';
-import { useJournalLocal } from '../hooks/useJournalLocal';
+import React, { useState, useMemo } from 'react';
 import { useJournal } from "@apps/journal-state";
-/**
- * Strategies page:
- * - list strategies
- * - create/edit modal with dynamic checklist
- * - simple strategy analytics (PnL/time)
- */
+import { useCurrency } from "@apps/state";
+import StrategyForm from '../Components/StrategyForm';
+import { Strategy, StrategyStats } from '../types/strategy';
+import { Trade } from '../types/trade'; // Importa o Trade base
+
+// --- COMPONENTE AUXILIAR: StrategyCard para a lista ---
+// Normalmente estaria em src/components/strategies/StrategyCard.tsx
+interface StrategyCardProps {
+    strategy: Strategy;
+    trades: Trade[];
+    onEdit: (s: Strategy) => void;
+    onDelete: (id: string) => void;
+    currency: string;
+    rate: number;
+}
+
+const StrategyCard: React.FC<StrategyCardProps> = ({ strategy, trades, onEdit, onDelete, currency, rate }) => {
+    // 1. Cálculos de Análise (MUITO mais eficientes do que no original)
+    const stats: StrategyStats = useMemo(() => {
+        const linkedTrades = trades.filter((t: Trade) => t.strategyId === strategy.id);
+        const totalPnLNet = linkedTrades.reduce((a, b) => a + (b.result_net || 0), 0);
+        const totalR = linkedTrades.reduce((a, b) => a + (b.result_R || 0), 0);
+        const wins = linkedTrades.filter((t: Trade) => (t.result_net || 0) > 0).length;
+
+        const avgR = linkedTrades.length ? totalR / linkedTrades.length : 0;
+        const winrate = linkedTrades.length ? Math.round((wins / linkedTrades.length) * 1000) / 10 : 0;
+        
+        const largestWin = linkedTrades.reduce((max, t) => Math.max(max, t.result_net || 0), 0);
+        const largestLoss = linkedTrades.reduce((min, t) => Math.min(min, t.result_net || 0), 0);
+
+        return { 
+            linkedTradesCount: linkedTrades.length,
+            totalPnLNet,
+            avgR,
+            winrate,
+            largestWin,
+            largestLoss
+        } as StrategyStats;
+    }, [strategy.id, trades]);
+
+    // Formatador de moeda
+    const fmt = (v: number) => {
+        const value = currency === 'USD' ? (v || 0) : (v || 0) * rate;
+        const locale = currency === 'USD' ? 'en-US' : 'pt-BR';
+        const curr = currency === 'USD' ? 'USD' : 'BRL';
+        return new Intl.NumberFormat(locale, { style: 'currency', currency: curr }).format(value);
+    };
+
+    const pillClass = {
+        'Futures': 'pink',
+        'Forex': 'lavander',
+        'Cripto': 'orange',
+        'Personal': 'purple'
+    }[strategy.category] || 'gray';
+
+    const pnlClass = stats.totalPnLNet >= 0 ? 'value-green' : 'value-red';
+
+    return (
+        <div className="card p-4 flex flex-col justify-between" key={strategy.id}>
+            <div>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h4 className="font-medium text-lg">{strategy.name}</h4>
+                        <span className={`pill ${pillClass}`}>{strategy.category}</span>
+                    </div>
+                    <div className="text-right">
+                        <div className={`text-2xl font-bold ${pnlClass}`}>{fmt(stats.totalPnLNet)}</div>
+                        <div className="muted text-sm">P&L Total</div>
+                    </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>Trades: <span className="font-semibold">{stats.linkedTradesCount}</span></div>
+                    <div>Winrate: <span className="font-semibold">{stats.winrate}%</span></div>
+                    <div>**Expectancy (Avg R):** <span className="font-semibold">{stats.avgR.toFixed(2)} R</span></div>
+                    <div>Maior Ganho: <span className="value-green">{fmt(stats.largestWin)}</span></div>
+                    <div>Maior Perda: <span className="value-red">{fmt(stats.largestLoss)}</span></div>
+                </div>
+            </div>
+
+            <div className="mt-4 flex gap-2 justify-start">
+                <button className="btn ghost small" onClick={() => onEdit(strategy)}>
+                    Editar
+                </button>
+                <button className="btn ghost negative small" onClick={() => onDelete(strategy.id)}>
+                    Deletar
+                </button>
+            </div>
+        </div>
+    );
+};
+// --- FIM StrategyCard ---
+
 
 export default function StrategiesPage() {
-  const { strategies, trades, addStrategy, removeStrategy } = useJournalLocal() as any;
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any|null>(null);
-  const [form, setForm] = useState({ name:'', description:'', category:'Futures', checklist: [] as string[], tags: [] as string[] });
+    const { strategies, trades, removeStrategy } = useJournal() as any;
+    const { currency, rate } = useCurrency();
+    const [open, setOpen] = useState(false);
+    const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
 
-  const openNew = () => { setEditing(null); setForm({ name:'', description:'', category:'Futures', checklist: [], tags: [] }); setOpen(true); };
-  const save = () => {
-    addStrategy(form);
-    setOpen(false);
-  };
+    const openNew = () => {
+        setEditingStrategy(null);
+        setOpen(true);
+    };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Strategies</h2>
-        <div>
-          <button className="btn" onClick={openNew}>+ New Strategy</button>
-        </div>
-      </div>
+    const handleEdit = (s: Strategy) => {
+        setEditingStrategy(s);
+        setOpen(true);
+    };
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {(strategies||[]).map((s:any)=> {
-          const linkedTrades = (trades||[]).filter((t:any)=> t.strategyId === s.id);
-          const totalPnL = linkedTrades.reduce((a:any,b:any)=>a + (b.result_net||0),0);
-          const wins = linkedTrades.filter((t:any)=> (t.result_net||0) > 0).length;
-          const winrate = linkedTrades.length ? Math.round((wins/linkedTrades.length)*1000)/10 : 0;
-          const avgR = linkedTrades.length ? (linkedTrades.reduce((a:any,b:any)=> a + (b.result_R||0),0) / linkedTrades.length) : 0;
-          return (
-            <div className="card p-4" key={s.id}>
-              <div className="flex items-start justify-between">
+    const handleDelete = (id: string) => {
+        if (confirm('Tem certeza que deseja deletar esta estratégia? Todos os trades vinculados permanecerão.')) {
+            removeStrategy(id);
+        }
+    };
+
+    return (
+        <div className="p-6 space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-semibold">📈 Gerenciamento de Estratégias</h2>
                 <div>
-                  <h4 className="font-medium">{s.name}</h4>
-                  <div className="muted text-sm">{s.category}</div>
+                    <button className="btn" onClick={openNew}>➕ Nova Estratégia</button>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-semibold">{totalPnL.toFixed(2)}</div>
-                  <div className="muted text-xs">PnL</div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-sm">
-                <div>Trades: {linkedTrades.length}</div>
-                <div>Winrate: {winrate}%</div>
-                <div>Avg R: {avgR.toFixed(2)}</div>
-                <div className="mt-2">
-                  <button className="btn ghost small mr-2" onClick={()=> { setEditing(s); setForm(s); setOpen(true); }}>Edit</button>
-                  <button className="btn ghost negative small" onClick={()=> removeStrategy(s.id)}>Delete</button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Modal for create/edit */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-6">
-          <div className="bg-black/60 absolute inset-0" onClick={()=>setOpen(false)} />
-          <div className="relative z-10 bg-card rounded-2xl p-6 w-full max-w-2xl">
-            <h3 className="text-lg font-semibold mb-3">{editing ? 'Edit strategy' : 'New strategy'}</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="form-label">Name</label>
-                <input className="input" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} />
-              </div>
-              <div>
-                <label className="form-label">Category</label>
-                <select className="select" value={form.category} onChange={e=>setForm({...form, category:e.target.value})}>
-                  <option>Futures</option><option>Forex</option><option>Cripto</option><option>Personal</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="form-label">Description</label>
-                <textarea className="input" rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
-              </div>
-
-              <div className="col-span-2">
-                <label className="form-label">Checklist items</label>
-                <div className="flex gap-2">
-                  <input className="input" placeholder="Add checklist item and press Enter" onKeyDown={(e)=> {
-                    if (e.key==='Enter') {
-                      const v = (e.target as HTMLInputElement).value.trim();
-                      if (v) { setForm(prev => ({ ...prev, checklist: [...prev.checklist, v] })); (e.target as HTMLInputElement).value=''; }
-                    }
-                  }} />
-                </div>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {form.checklist.map((c, idx) => <span key={idx} className="px-2 py-1 rounded bg-[#0f1724]">{c} <button className="btn ghost tiny ml-2" onClick={()=> setForm(prev=> ({...prev, checklist: prev.checklist.filter((x,i)=>i!==idx)}))}>x</button></span>)}
-                </div>
-              </div>
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="btn ghost" onClick={()=> setOpen(false)}>Cancel</button>
-              <button className="btn" onClick={()=> { addStrategy(form); setOpen(false); }}>Save</button>
+            {/* Listagem de Estratégias (StrategiesTable) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {(strategies as Strategy[] || []).map((s) => (
+                    <StrategyCard
+                        key={s.id}
+                        strategy={s}
+                        trades={trades as Trade[] || []}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        currency={currency}
+                        rate={rate}
+                    />
+                ))}
             </div>
-          </div>
+            
+            {(strategies || []).length === 0 && (
+                <div className="card p-6 text-center text-muted">
+                    Nenhuma estratégia cadastrada. Clique em "Nova Estratégia" para começar a traquear seu edge.
+                </div>
+            )}
+
+
+            {/* Modal for create/edit */}
+            {open && (
+                <StrategyForm
+                    editing={editingStrategy}
+                    onClose={() => setOpen(false)}
+                />
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 }

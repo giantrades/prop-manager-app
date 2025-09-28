@@ -366,6 +366,7 @@ function PatrimonioLine(){
     if (!isEvent) return null
     return (
       <circle
+        key={`${payload.date}-${payload.dataKey}`} 
         cx={cx}
         cy={cy}
         r={5}
@@ -497,7 +498,7 @@ function FundingPerAccount(){
 
   // Custom bar shape with individual coloring
   const CustomBar = (props) => {
-    const { payload, index, ...rest } = props;
+    const { payload, index, dataKey, tooltipPayload, tooltipPosition, ...rest } = props;
     if (!payload) return null;
     
     const accountType = payload.type;
@@ -837,7 +838,7 @@ function FundingPerFirmChart() {
 
   // Shape customizado: use apenas os props seguros para evitar warnings
   const CustomBar = (props) => {
-    const { x, y, width, height, payload } = props;
+    const { x, y, width, height, payload, tooltipPayload, dataKey, ...rest } = props;
     const color = getTypeColor(payload?.type);
     if (width <= 0 || height <= 0) return null;
     return <rect x={x} y={y} width={width} height={height} rx={6} ry={6} fill={color} />;

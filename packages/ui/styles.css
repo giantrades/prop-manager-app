@@ -21,7 +21,7 @@ body {
   color: var(--text);
 }
 a { color: inherit; text-decoration: none; }
-.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
 
 /* Navbar */
 .navbar {
@@ -89,6 +89,33 @@ tr:hover td { background: rgba(39,48,68,0.24); }
 .card.accent2 { background: linear-gradient(180deg, #221b3a 0%, #171b2b 100%); border-color:#2f2a55; }
 .card.accent3 { background: linear-gradient(180deg, #1e2740 0%, #161b2b 100%); border-color:#2a3b6a; }
 .card.accent4 { background: linear-gradient(180deg, #2e2b12 0%, #1b2010 100%); border-color:#594e19; }
+/* Accent 5: Roxo */
+.card.accent5 { 
+  background: linear-gradient(180deg, #301a3a 0%, #1e1428 100%); border-color:#8e44ad; }
+/* Accent 6: Vermelho */
+.card.accent6 { 
+  background: linear-gradient(180deg, #3a1a1a 0%, #281414 100%); border-color:#e74c3c; }
+/* Accent 7: Ciano/Turquesa */
+.card.accent7 { 
+  background: linear-gradient(180deg, #1b2d35 0%, #152026 100%); border-color:#1abc9c; }
+/* Accent 8: Amarelo Dourado */
+.card.accent8 { 
+  background: linear-gradient(180deg, #302a1b 0%, #221d12 100%); border-color:#f1c40f; }
+/* Accent 9: Rosa Magenta */
+.card.accent9 { 
+  background: linear-gradient(180deg, #3a1a33 0%, #281422 100%); border-color:#ff0088; }
+/* Accent 10: Laranja Profundo */
+.card.accent10 { 
+  background: linear-gradient(180deg, #3a271a 0%, #281a14 100%); border-color:#e67e22; }
+/* Accent 11: Azul Marinho Claro */
+.card.accent11 { 
+  background: linear-gradient(180deg, #182240 0%, #131a30 100%); border-color:#3498db; }
+/* Accent 12: Cinza/Prata */
+.card.accent12 { 
+  background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%); border-color:#bdc3c7; }
+  /* Accent 13: Verde Musgo/Oliva */
+.card.accent13 { 
+  background: linear-gradient(180deg, #2b3a2a 0%, #202b1f 100%); border-color:#78866B; }
 
 .center { text-align:center; }
 .value-green { color: #2ecc71; font-weight: 700; }

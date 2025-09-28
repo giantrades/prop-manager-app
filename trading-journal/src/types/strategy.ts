@@ -1,0 +1,37 @@
+
+// Estrutura de risco padrão para auto-preenchimento no TradeForm
+export interface DefaultRiskSettings {
+  riskPerR: number;       // Risco em $ por R (e.g., $100)
+  profitTargetR?: number; // Alvo em múltiplos de R (e.g., 2)
+  stopLossR?: number;     // Stop em múltiplos de R (e.g., 1)
+}
+
+export type StrategyCategory = 'Futures' | 'Forex' | 'Cripto' | 'Personal';
+
+
+export interface Strategy {
+  id: string;
+  name: string;
+  description: string;
+  category: StrategyCategory;
+  // Checklist: itens obrigatórios antes de executar um trade
+  checklist: string[];
+  // Tags para categorização (e.g., 'Scalping', 'Reversão')
+  tags: string[];
+  // Configurações padrão para agilizar o TradeForm
+  defaultRisk: DefaultRiskSettings;
+  
+  // Metadados
+  createdAt: string;
+  updatedAt: string;
+}
+
+// O que os utilitários de análise retornarão
+export interface StrategyStats {
+  linkedTradesCount: number;
+  totalPnLNet: number;
+  winrate: number; // 0 a 100
+  avgR: number; // Múltiplo de R (Expectancy)
+  largestWin: number;
+  largestLoss: number;
+}

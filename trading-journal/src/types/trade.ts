@@ -25,6 +25,7 @@ export type Trade = {
   tf_signal?: string;
   volume?: number;
   entry_price?: number;
+  exit_price?: number;
   stop_loss_price?: number;
   profit_target_price?: number;
   orders_activated?: number;
@@ -44,3 +45,12 @@ export type Trade = {
   createdAt?: string;
   updatedAt?: string;
 };
+
+export interface EnrichedTrade extends Trade {
+  // Campos enriquecidos adicionados em TradesPage.tsx
+  accountType?: string; // Adicionado do primaryAccount?.type
+  accountName?: string; // Adicionado do primaryAccount?.name
+  account?: any; // O objeto Account completo
+  accountId?: string; // O ID da conta principal (opcional, mas útil)
+  
+}
