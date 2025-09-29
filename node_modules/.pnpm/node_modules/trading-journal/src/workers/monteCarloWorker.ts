@@ -16,6 +16,7 @@ declare const self: DedicatedWorkerGlobalScope & {
   postMessage: (msg: any) => void;
 };
 
+
 function seededRandomFactory(seed: number) {
   let s = seed >>> 0;
   return function random() {
@@ -53,15 +54,20 @@ function kurtosis(arr: number[]) {
   const a4 = arr.reduce((acc, x) => acc + Math.pow((x - m) / s, 4), 0) / n;
   return a4 - 3; // excess kurtosis
 }
-function pct(arr: number[], p: number) {
+
+// 💥 NOVO NOME/AJUSTE: Antiga função 'pct' agora é 'percentile'.
+function percentile(arr: number[], p: number) {
   if (!arr.length) return 0;
+  // p é 0..1, então usamos (s.length - 1) * p para indexar.
   const s = [...arr].sort((a, b) => a - b);
   const idx = (s.length - 1) * p;
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);
   if (lo === hi) return s[lo];
+  // Interpolação linear entre os dois pontos mais próximos
   return s[lo] * (hi - idx) + s[hi] * (idx - lo);
 }
+
 function maxDrawdown(equity: number[]) {
   let peak = -Infinity;
   let maxdd = 0;
@@ -132,9 +138,14 @@ function simulateRun(config: MonteCarloConfig, rng: () => number, empiricalR?: n
 function computeSummary(runs: any[], config: MonteCarloConfig) {
   const finals = runs.map((r) => r.finalEquity);
   const avgFinal = mean(finals);
-  const medianFinal = pct(finals, 0.5);
-  const p05 = pct(finals, 0.05);
-  const p95 = pct(finals, 0.95);
+  
+  // 💥 CÁLCULO DOS NOVOS PERCENTIS (usando 0.25 e 0.75 para 25% e 75%)
+  const medianFinal = percentile(finals, 0.5);
+  const p05 = percentile(finals, 0.05);
+  const p25 = percentile(finals, 0.25); // 💥 NOVO
+  const p75 = percentile(finals, 0.75); // 💥 NOVO
+  const p95 = percentile(finals, 0.95);
+  
   // approximate CAGR: need years. Estimate average trades per run (use config.tradesPerYear or default 252)
   const tradesPerYear = config.tradesPerYear ?? 252;
   const avgTrades = mean(runs.map((r) => r.tradesSimulated || 0));
@@ -169,6 +180,8 @@ function computeSummary(runs: any[], config: MonteCarloConfig) {
     avgFinal,
     medianFinal,
     p05,
+    p25, // 💥 NOVO: Incluído no retorno para corrigir TS2339
+    p75, // 💥 NOVO: Incluído no retorno para corrigir TS2339
     p95,
     cagr,
     maxDrawdown: maxDD,

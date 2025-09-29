@@ -1,47 +1,73 @@
 // @apps/trading-journal/src/components/MonteCarloResults.tsx
 import React from 'react';
 import type { MonteCarloSummary } from '../types/monteCarlo';
-import { Card } from '../Components/ui/Card';
+// Importação de Card não é necessária se você usar a div 'card'
+// import { Card } from '../Components/ui/Card'; 
 
 type Props = {
   summary: MonteCarloSummary | null;
 };
 
+// 💥 Replicando a estrutura de Card do seu dashboard
+const StatCard = ({ title, value, accent = 1, size = 'lg' }: any) => (
+  <div className={`card accent${accent} p-4 flex flex-col justify-between h-full`}>
+    <div className="muted small font-medium">{title}</div>
+    {/* Ajustamos o tamanho da fonte para o grid de 12 cards */}
+    <div 
+      className={`stat mt-1 ${accent > 4 ? 'text-lg' : 'text-xl'}`} 
+      style={{ fontSize: size === 'lg' ? 26 : size === 'md' ? 22 : 18 }}
+    >
+        {value}
+    </div>
+  </div>
+);
+
 export const MonteCarloResults: React.FC<Props> = ({ summary }) => {
   if (!summary) {
     return (
-      <Card className="p-4">
-        <div className="text-muted">Nenhuma simulação ainda. Rode uma simulação para ver os resultados.</div>
-      </Card>
+      <div className="card p-4 shadow-lg">
+        <div className="text-muted text-center py-6">Nenhuma simulação ainda. Rode uma simulação para ver os resultados.</div>
+      </div>
     );
   }
 
+  const fmt = (v: number) => Number.isFinite(v) ? v.toFixed(2) : '∞';
+  const fmtPct = (v: number) => Number.isFinite(v) ? (v * 100).toFixed(2) + '%' : '∞';
+  const fmtDol = (v: number) => `$${Number.isFinite(v) ? v.toFixed(0) : '∞'}`;
+
+
   const metrics = [
-    { label: 'CAGR', value: (summary.cagr * 100).toFixed(2) + '%' },
-    { label: 'Max Drawdown', value: (summary.maxDrawdown * 100).toFixed(2) + '%' },
-    { label: 'Calmar', value: summary.calmar.toFixed(2) },
-    { label: 'Sharpe', value: summary.sharpe.toFixed(2) },
-    { label: 'Sortino', value: summary.sortino.toFixed(2) },
-    { label: 'Profit Factor', value: isFinite(summary.profitFactor) ? summary.profitFactor.toFixed(2) : '∞' },
-    { label: 'Expected Value ($)', value: summary.expectedValue.toFixed(2) },
-    { label: 'Skewness', value: summary.skewness.toFixed(3) },
-    { label: 'Kurtosis', value: summary.kurtosis.toFixed(3) },
-    { label: 'Prob. Ruína', value: (summary.probRuin * 100).toFixed(2) + '%' },
-    { label: 'Media final ($)', value: summary.avgFinal.toFixed(2) },
-    { label: 'Mediana final ($)', value: summary.medianFinal.toFixed(2) },
+    // Fila 1: Retorno e Risco Geral (Accent 1-4, Grande)
+    { title: 'Média Final', value: fmtDol(summary.avgFinal), accent: 1, size: 'lg' },
+    { title: 'CAGR (Anual)', value: fmtPct(summary.cagr), accent: 2, size: 'lg' },
+    { title: 'Prob. Ruína', value: fmtPct(summary.probRuin), accent: 3, size: 'lg' },
+    { title: 'Max Drawdown', value: fmtPct(summary.maxDrawdown), accent: 4, size: 'lg' },
+    
+    // Fila 2: Relação Risco/Retorno (Accent 5-8, Médio)
+    { title: 'Sharpe Ratio', value: fmt(summary.sharpe), accent: 5, size: 'md' },
+    { title: 'Calmar Ratio', value: fmt(summary.calmar), accent: 6, size: 'md' },
+    { title: 'Sortino Ratio', value: fmt(summary.sortino), accent: 7, size: 'md' },
+    { title: 'Profit Factor', value: fmt(summary.profitFactor), accent: 8, size: 'md' },
+
+    // Fila 3: Estatísticas de Distribuição (Accent 9-12, Pequeno)
+    { title: 'Mediana Final', value: fmtDol(summary.medianFinal), accent: 9, size: 'sm' },
+    { title: 'P95 (Melhor Caso)', value: fmtDol(summary.p95), accent: 10, size: 'sm' },
+    { title: 'P05 (Pior Caso)', value: fmtDol(summary.p05), accent: 11, size: 'sm' },
+    { title: 'Expected Value ($)', value: fmt(summary.expectedValue), accent: 12, size: 'sm' },
   ];
 
   return (
-    <Card className="p-4">
-      <h3 className="text-lg font-semibold mb-3">Resumo da simulação</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {metrics.map(m => (
-          <div key={m.label} className="p-3 border rounded">
-            <div className="text-sm text-muted">{m.label}</div>
-            <div className="text-xl font-bold">{m.value}</div>
-          </div>
-        ))}
-      </div>
-    </Card>
+    // 💥 Usa o grid 3 fileiras x 4 colunas (grid-cols-4)
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+      {metrics.map((metric, index) => (
+        <StatCard 
+          key={index}
+          title={metric.title}
+          value={metric.value}
+          accent={metric.accent}
+          size={metric.size}
+        />
+      ))}
+    </div>
   );
 };

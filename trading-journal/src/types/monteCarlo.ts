@@ -30,6 +30,8 @@ export type MonteCarloSummary = {
   avgFinal: number;
   medianFinal: number;
   p05: number;
+  p25: number; // 💥 NOVO: 25th percentile
+  p75: number; // 💥 NOVO: 75th percentile
   p95: number;
   cagr: number;
   maxDrawdown: number;
@@ -43,6 +45,7 @@ export type MonteCarloSummary = {
   probRuin: number; // fraction 0..1
   totalRuns: number;
   runsSample?: Partial<MonteCarloRun>[];
+  simulationsCompleted: number;
 };
 
 export type MonteCarloHistoryItem = {
@@ -51,4 +54,5 @@ export type MonteCarloHistoryItem = {
   summary: MonteCarloSummary;
   createdAt: string;
   driveFileId?: string;
+  sampleRuns?: MonteCarloRun[] | null
 };

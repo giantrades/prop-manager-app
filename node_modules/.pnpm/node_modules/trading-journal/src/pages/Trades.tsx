@@ -240,70 +240,88 @@ export default function TradesPage() {
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid cards">
-        <div className="card accent1">
-          <h3>📊 Total Trades</h3>
-          <div className="stat">{filteredStats.total}</div>
-          <div className="muted">trades executados</div>
-        </div>
-        <div className="card accent2">
-          <h3>🎯 Win Rate</h3>
-          <div className="stat">{filteredStats.winrate}%</div>
-          <div className="muted">taxa de acerto</div>
-        </div>
-        <div className="card accent3">
-          <h3>📈 Avg R</h3>
-          <div className="stat">{filteredStats.avgR.toFixed(2)}</div>
-          <div className="muted">risco-retorno médio</div>
-        </div>
-        <div className="card accent4">
-          <h3>💰 P&L Total</h3>
-          <div className={`stat ${filteredStats.totalPnL >= 0 ? 'pos' : 'neg'}`}>
-            ${filteredStats.totalPnL.toFixed(2)}
-          </div>
-          <div className="muted">resultado líquido</div>
-        </div>
+     {/* KPI + Chart em 2 colunas */}
+<div
+  className="grid gap-6"
+  style={{
+    gridTemplateColumns: '1fr 2fr',   // ← esquerda menor, direita maior
+    alignItems: 'start'
+  }}
+>
+  {/* Cards: 2x2 */}
+  <div
+    className="grid gap-4"
+    style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}
+  >
+    <div className="card accent9">
+      <h3>📊 Total Trades</h3>
+      <div className="stat">{filteredStats.total}</div>
+      <div className="muted">trades executados</div>
+    </div>
+    <div className="card accent7">
+      <h3>🎯 Win Rate</h3>
+      <div className="stat">{filteredStats.winrate}%</div>
+      <div className="muted">taxa de acerto</div>
+    </div>
+    <div className="card accent8">
+      <h3>📈 Avg R</h3>
+      <div className="stat">{filteredStats.avgR.toFixed(2)}</div>
+      <div className="muted">risco-retorno médio</div>
+    </div>
+    <div className="card accent1">
+      <h3>💰 P&L Total</h3>
+      <div className={`stat ${filteredStats.totalPnL >= 0 ? 'pos' : 'neg'}`}>
+        ${filteredStats.totalPnL.toFixed(2)}
       </div>
+      <div className="muted">resultado líquido</div>
+    </div>
+  </div>
 
-      {/* Equity Chart */}
-      {equitySeries.length > 0 && (
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3>📈 Curva de Equity</h3>
-            <div className="muted">{filteredTrades.length} trades</div>
-          </div>
-          <div style={{ height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={equitySeries} margin={{ top: 15, right: 15, left: 40, bottom: 25 }}>
-                <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.3} horizontal vertical={false}/>
-                <XAxis 
-                  dataKey="x" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill:'#94a3b8', fontSize:11}} 
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('pt-BR', {day:'2-digit', month:'short'})}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{fill:'#94a3b8', fontSize:11}} 
-                  tickFormatter={(value) => `${value.toFixed(0)}`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="y" 
-                  stroke="#2ecc71" 
-                  strokeWidth={2.5} 
-                  dot={false}
-                  activeDot={{ r: 6, stroke: '#0f1218', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
+  {/* Gráfico */}
+  {equitySeries.length > 0 && (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h3>📈 Curva de Equity</h3>
+        <div className="muted">{filteredTrades.length} trades</div>
+      </div>
+      <div style={{ height: 300 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={equitySeries}
+            margin={{ top: 15, right: 15, left: 40, bottom: 25 }}
+          >
+            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.3} horizontal vertical={false}/>
+            <XAxis
+              dataKey="x"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill:'#94a3b8', fontSize:11 }}
+              tickFormatter={(value) =>
+                new Date(value).toLocaleDateString('pt-BR', { day:'2-digit', month:'short' })
+              }
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill:'#94a3b8', fontSize:11 }}
+              tickFormatter={(value) => `${value.toFixed(0)}`}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Line
+              type="monotone"
+              dataKey="y"
+              stroke="#2ecc71"
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={{ r: 6, stroke: '#0f1218', strokeWidth: 2 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )}
+</div>
+
 
       {/* Trades Table */}
       <div className="card">
