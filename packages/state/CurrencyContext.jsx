@@ -1,6 +1,7 @@
 import React, {createContext, useContext, useMemo, useState, useEffect} from 'react'
 const CurrencyContext = createContext(null)
 
+
 export function CurrencyProvider({children}){
   const [currency, setCurrency] = useState(localStorage.getItem('currency') || 'USD')
   const [rate, setRate] = useState(parseFloat(localStorage.getItem('usdBrlRate')) || 5.0)

@@ -3,6 +3,8 @@ import {ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Toolt
 import { useJournal } from "@apps/journal-state";
 import { useData, useCurrency } from "@apps/state";
 
+
+
 // --------------------------- Integrated Data Hook ---------------------------
 function useIntegratedData() {
   // Dados do journal (trades)
@@ -330,7 +332,7 @@ const CategoryCard = ({ data, fmt }: any) => {
     <div className="card">
       <h3>🎯 P&L por Categoria</h3>
       <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-        <div style={{ width: 240, height: 220 }}>
+        <div style={{ width: 260, height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -349,7 +351,7 @@ const CategoryCard = ({ data, fmt }: any) => {
               <ReTooltip
                 formatter={(val: any, _name: any, props: any) => {
                   const pct = totalPnl ? ((val / totalPnl) * 100).toFixed(1) + "%" : "0%";
-                  return [fmt(val) + " (" + pct + ")", props.payload.name];
+                  return [fmt(val) + "(" + pct + ")", props.payload.name];
                 }}
               />
             </PieChart>
@@ -431,14 +433,14 @@ const RecentTrades = ({ trades, fmt }: any) => {
 
   return (
     <div className="card">
-      <h3>📝 Últimos Trades</h3>
+      <h3>📝 Recent Trades</h3>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr style={{ textAlign: "left", color: "#94a3b8" }}>
             <th style={{ padding: "8px 6px" }}>Date</th>
             <th style={{ padding: "8px 6px" }}>Asset / TF</th>
-            <th style={{ padding: "8px 6px" }}>Conta</th>
-            <th style={{ padding: "8px 6px" }}>Dir</th>
+            <th style={{ padding: "8px 6px" }}>Markets / Accounts</th>
+            <th style={{ padding: "8px 6px" }}>Direction</th>
             <th style={{ padding: "8px 6px", textAlign: "right" }}>R</th>
             <th style={{ padding: "8px 6px", textAlign: "right" }}>PnL</th>
           </tr>
@@ -466,7 +468,7 @@ const RecentTrades = ({ trades, fmt }: any) => {
                 </div>
               </td>
               <td style={{ padding: "6px" }}>
-                <span className={`pill ${t.direction === "Long" ? "green" : "red"}`} style={{ padding: "4px 8px" }}>{t.direction}</span>
+                <span className={`pill ${t.direction === "Long" ? "lavander" : "orange"}`} style={{ padding: "4px 10px" }}>{t.direction}</span>
               </td>
               <td style={{ padding: "6px", textAlign: "right" }}>{(safeNumber(t.result_R)).toFixed(2)}</td>
               <td style={{ padding: "6px", textAlign: "right", color: safeNumber(t.result_net) >= 0 ? "#4ade80" : "#f87171" }}>{fmt(safeNumber(t.result_net))}</td>
@@ -594,7 +596,7 @@ export default function Dashboard() {
       {/* Enhanced Filters Bar with Account Types */}
       <div className="card">
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <strong>Filters:</strong>
             
             {/* Category filter with colors - CORRIGIDO */}
@@ -606,6 +608,8 @@ export default function Dashboard() {
                               : cat === 'Futures' ? 'pink'
                               : cat === 'Personal' ? 'purple'
                               : 'gray';
+
+                              
                 return (
                   <button key={cat}
                     className={`chip ${active ? 'active' : ''}`}
@@ -627,20 +631,22 @@ export default function Dashboard() {
             </div>
             
             <select value={timeframeFilter} onChange={e => setTimeframeFilter(e.target.value)} className="input">
-              <option value="">All timeframes</option>
+              <option value="">All Timeframes</option>
               {timeframes.map((t: string) => <option key={t} value={t}>{t}</option>)}
             </select>
             <select value={strategyFilter} onChange={e => setStrategyFilter(e.target.value)} className="input">
-              <option value="">All strategies</option>
+              <option value="">All Strategies</option>
               {strategies.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <select value={rangeFilter} onChange={e => setRangeFilter(e.target.value)} className="input">
-              <option value="7">7d</option>
-              <option value="30">30d</option>
-              <option value="90">90d</option>
-              <option value="180">180d</option>
-              <option value="all">All</option>
-            </select>
+
+         <div className="range">
+        {['7','30','180','365','all'].map(r=>(
+          <button key={r}
+            className={'chip '+(rangeFilter===r?'active':'')}
+            onClick={()=>setRangeFilter(r)}>
+            {r==='7'?'7d':r==='30'?'30d':r==='180'?'180d':r==='365'?'1y':'All'}
+          </button>))}
+           </div>
             <button className="chip" onClick={() => { 
               setCategoryFilter(""); 
               setTimeframeFilter(""); 

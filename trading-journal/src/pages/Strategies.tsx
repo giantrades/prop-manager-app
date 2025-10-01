@@ -87,6 +87,8 @@ const StrategyCard: React.FC<StrategyCardProps> = ({ strategy, trades, onEdit, o
                 <button className="btn ghost negative small" onClick={() => onDelete(strategy.id)}>
                     Deletar
                 </button>
+
+                
             </div>
         </div>
     );

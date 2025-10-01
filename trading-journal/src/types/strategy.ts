@@ -1,7 +1,7 @@
 
 // Estrutura de risco padrão para auto-preenchimento no TradeForm
 export interface DefaultRiskSettings {
-  riskPerR: number;       // Risco em $ por R (e.g., $100)
+
   profitTargetR?: number; // Alvo em múltiplos de R (e.g., 2)
   stopLossR?: number;     // Stop em múltiplos de R (e.g., 1)
 }

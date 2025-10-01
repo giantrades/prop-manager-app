@@ -2,7 +2,8 @@
 export type Execution = {
   id: string;
   date: string; // ISO date
-  time?: string; // hh:mm
+  entry_time?: string;
+  exit_time?: string;
   price: number;
   quantity: number;
   side: 'entry' | 'exit';
@@ -16,7 +17,8 @@ export type AccountWeight = {
 export type Trade = {
   id: string;
   date: string; // ISO date
-  time?: string;
+  entry_time?: string;
+  exit_time?: string;
   asset: string;
   strategyId?: string | null;
   marketCategory?: 'Futures'|'Forex'|'Cripto'|'Personal'|string;
@@ -44,6 +46,7 @@ export type Trade = {
   exitVwap?: number;
   createdAt?: string;
   updatedAt?: string;
+  
 };
 
 export interface EnrichedTrade extends Trade {
@@ -52,5 +55,6 @@ export interface EnrichedTrade extends Trade {
   accountName?: string; // Adicionado do primaryAccount?.name
   account?: any; // O objeto Account completo
   accountId?: string; // O ID da conta principal (opcional, mas útil)
+  strategyName?: string;
   
 }

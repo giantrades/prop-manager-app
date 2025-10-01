@@ -28,25 +28,19 @@ export default function TradeForm({ onClose, editing }: Props) {
     [accounts]
   );
 
-  // Initial form
+  // Initial form (ajustado para incluir tf_signal e remover risk_per_R)
   const [form, setForm] = useState<Partial<Trade>>(() => ({
-    date: new Date().toISOString().slice(0, 10),
-    time: new Date().toISOString().slice(11, 16),
-    direction: 'Long',
-    accounts: [], // Array de AccountWeight
-    executions: [],
-    tags: {},
-    volume: 0,
-    entry_price: 0,
-    exit_price: 0,
-    stop_loss_price: 0,
-    profit_target_price: 0,
-    result_gross: 0,
-    risk_per_R: 100,
-    commission: 0,
-    fees: 0,
-    swap: 0,
-    slippage: 0
+    // ... (date, time, direction, accounts, executions, tags)
+    tf_signal: editing?.tf_signal || '', // <--- NOVO: Timeframe
+    volume: editing?.volume || 0,
+    entry_price: editing?.entry_price || 0,
+    stop_loss_price: editing?.stop_loss_price || 0,
+    profit_target_price: editing?.profit_target_price || 0,
+    
+    result_gross: editing?.result_gross || 0, // <--- INPUT DIRETO
+    // ... (commission, fees, swap, slippage, e.g. 0)
+    // risk_per_R removido daqui também
+    ...(editing || {}),
   }));
 
   // Sincronizar selectedAccounts com form.accounts
@@ -91,34 +85,99 @@ export default function TradeForm({ onClose, editing }: Props) {
     const exits = (form.executions || []).filter(e => e.side === 'exit');
     const entryVwap = computeVWAP(entries, 'entry') || form.entry_price || 0;
     const exitVwap = computeVWAP(exits, 'exit') || form.exit_price || 0;
-    const qtyTotal = entries.reduce((s, a) => s + a.quantity, 0) || form.volume || 0;
-    const directionSign = form.direction === 'Long' ? 1 : -1;
-    const pnlGross = qtyTotal ? ((exitVwap - entryVwap) * directionSign * qtyTotal) : 0;
-    const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
-    const net = pnlGross - costs;
-    const riskAmount = form.risk_per_R || 100;
-    const r = riskAmount ? net / riskAmount : 0;
+
+    // 1. P&L Bruto é o valor do input (result_gross)
+    const result_gross = form.result_gross || 0;
     
-    setForm(prev => ({ 
-      ...prev, 
-      entryVwap, 
-      exitVwap, 
-      result_gross: pnlGross, 
-      result_net: net, 
-      result_R: r 
-    }));
+    // 2. Custos e P&L Líquido
+    const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
+    const result_net = result_gross - costs; // P&L Líquido = P&L Bruto (Input) - Custos
+    
+    // 3. Cálculo do R-Múltiplo (result_R)
+    const entry = form.entry_price || 0;
+    const stop = form.stop_loss_price || 0;
+    const takeprofit= form.profit_target_price ||0;
+    const exit = form.exit_price|| 0;
+    const netprofit= form.result_net ||0;
+    
+    // Risco em Pontos (1R) = |Entry Price - Stop-Loss Price|
+    const initialRiskPriceDiff = Math.abs(entry - stop);
+    
+const isLong = stop < entry; // Se stop está abaixo da entrada = Long
+const isShort = stop > entry; // Se stop está acima da entrada = Short
+
+// Calcula a diferença de preço com sinal correto
+let priceDiff = 0;
+if (isLong) {
+    priceDiff = exit - entry; // Long: se exit > entry = lucro (+), se exit < entry = prejuízo (-)
+} else if (isShort) {
+    priceDiff = entry - exit; // Short: se entry > exit = lucro (+), se entry < exit = prejuízo (-)
+}
+
+// R-Múltiplo = Diferença de Preço / Risco Inicial
+let result_R = 0;
+if (initialRiskPriceDiff > 0) {
+    result_R = priceDiff / initialRiskPriceDiff;
+}
+    
+  setForm(prev => {
+      let update: Partial<Trade> = {};
+      
+      if (prev.entryVwap !== entryVwap) update.entryVwap = entryVwap;
+      if (prev.exitVwap !== exitVwap) update.exitVwap = exitVwap;
+
+      if (prev.result_net !== result_net) update.result_net = result_net;
+      if (prev.result_R !== result_R) update.result_R = result_R;
+      
+      return (Object.keys(update).length > 0) ? { ...prev, ...update } : prev;
+    });
   };
 
   useEffect(() => {
-    recalc();
-  }, [form.executions, form.direction, form.risk_per_R, form.commission, form.fees, form.swap, form.slippage, form.entry_price,form.exit_price, form.volume]);
+       recalc();
+  }, [
+    form.executions, 
+    form.result_gross, 
+    form.volume, 
+    form.entry_price, 
+    form.stop_loss_price, 
+    form.commission, 
+    form.fees, 
+    form.swap, 
+    form.slippage,
+  ]);
+  
+ const save = () => {
+    // ... (Mesma lógica de recalculo que o useEffect para salvar)
+    const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
+    const result_gross = form.result_gross || 0;
+    const entry = form.entry_price || 0;
+    const stop = form.stop_loss_price || 0;
+    const riskInDollars = (form.volume || 0) * Math.abs(entry - stop);
+    const result_R = riskInDollars > 0 ? result_gross / riskInDollars : 0;
+    
+    const tradeToSave: Trade = {
+      ...form as Trade,
+      // ... (id, accounts, tags)
+      result_net: result_gross - costs,
+      result_R: result_R,
+      // @ts-ignore: Garante a remoção de campos indesejados (se existirem)
+      risk_per_R: undefined, 
+    };
+    
+    saveTrade(tradeToSave);
+    onClose();
+  };
+
+
 
   // Executions helpers
   const addExecution = (side: 'entry' | 'exit') => {
     const ex: Execution = {
       id: uuidv4(),
       date: form.date || new Date().toISOString().slice(0, 10),
-      time: form.time || new Date().toISOString().slice(11, 16),
+      entry_time: form.entry_time || new Date().toISOString().slice(11, 16),
+      exit_time: form.exit_time || new Date().toISOString().slice(11, 16),
       price: side === 'entry' ? (form.entry_price || 0) : 0,
       quantity: form.volume || 0,
       side
@@ -202,13 +261,12 @@ export default function TradeForm({ onClose, editing }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-panel rounded-2xl shadow-xl z-10 max-h-screen overflow-y-auto">
+       <div className="modal">
+      <div className="modal-content">
         <div className="sticky top-0 bg-panel p-6 border-b border-soft">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-text">
-              {editing ? 'Editar Trade' : 'Novo Trade'}
-            </h3>
+          <h2 className="text-xl font-semibold mb-4">{editing ? 'Editar Trade' : 'Novo Trade'}</h2>
+
             <div className="flex items-center gap-2">
               <button className="btn ghost" onClick={onClose}>Cancelar</button>
               <button className="btn" onClick={handleSave}>Salvar</button>
@@ -216,18 +274,8 @@ export default function TradeForm({ onClose, editing }: Props) {
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Debug Info */}
-          <div className="card" style={{ background: '#1a1a2e', border: '1px solid #16213e' }}>
-            <h4 className="font-medium mb-2">Debug Info</h4>
-            <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#a0a0a0' }}>
-              <div>Contas disponíveis: {accounts.length}</div>
-              <div>Contas ativas: {activeAccounts.length}</div>
-              <div>Contas selecionadas: {selectedAccounts.length}</div>
-              <div>Form accounts: {form.accounts?.length || 0}</div>
-            </div>
-          </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ 
           {/* Alerta se não há contas */}
           {activeAccounts.length === 0 && (
             <div className="card" style={{ 
@@ -245,7 +293,7 @@ export default function TradeForm({ onClose, editing }: Props) {
 
           {/* Basic Info */}
           <div className="card">
-            <h4 className="font-medium mb-4">Informações Básicas</h4>
+            <h4 className="font-medium mb-4">Basic Info</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="field">
                 <label>Data</label>
@@ -254,15 +302,6 @@ export default function TradeForm({ onClose, editing }: Props) {
                   type="date" 
                   value={form.date} 
                   onChange={e => setForm({ ...form, date: e.target.value })} 
-                />
-              </div>
-              <div className="field">
-                <label>Hora</label>
-                <input 
-                  className="input" 
-                  type="time" 
-                  value={form.time} 
-                  onChange={e => setForm({ ...form, time: e.target.value })} 
                 />
               </div>
               <div className="field">
@@ -278,12 +317,25 @@ export default function TradeForm({ onClose, editing }: Props) {
                 <label>Direção</label>
                 <select 
                   className="input" 
-                  value={form.direction || 'Long'} 
+                  value={form.direction || ''} 
                   onChange={e => setForm({ ...form, direction: e.target.value as any })}
                 >
+                  <option value=""> </option>
                   <option value="Long">Long</option>
                   <option value="Short">Short</option>
-                </select>
+                </select> </div>
+               <div className="grid grid-cols-2 gap-4">
+
+              {/* Campo Timeframe da Operação (tf_signal) - NOVO */}
+              <div>
+                <label className="form-label">Timeframe da Operação</label>
+                <input
+                  className="input w-full"
+                  value={form.tf_signal || ''}
+                  onChange={(e) => setForm({ ...form, tf_signal: e.target.value })}
+                  placeholder="Ex: H1, M15, Diário"
+                />
+              </div>
               </div>
             </div>
           </div>
@@ -383,99 +435,124 @@ export default function TradeForm({ onClose, editing }: Props) {
           <div className="card">
             <h4 className="font-medium mb-4">Detalhes do Trade</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+               <div className="field">
+                <label> Volume / Quantidade</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input w-full"
+                  value={form.volume || ''}
+                  onChange={(e) => setForm({ ...form, volume: Number(e.target.value) || 0 })}
+                  placeholder="Ex: 0.1, 1, 100"
+                />
+              </div>
+            
               <div className="field">
-                <label>Volume</label>
+                <label>Entry Price</label>
                 <input 
-                  className="input" 
+                  className="input w-full" 
                   type="number" 
-                  value={form.volume || 0} 
-                  onChange={e => setForm({ ...form, volume: Number(e.target.value) })} 
+                  step="0.01"
+                  value={form.entry_price || ''} 
+                  onChange={e => setForm({ ...form, entry_price: Number(e.target.value) || 0 })} 
                 />
               </div>
               <div className="field">
-                <label>Preço de Entrada</label>
+                <label>Entry time</label>
                 <input 
                   className="input" 
-                  type="number" 
-                  step="0.00001"
-                  value={form.entry_price || 0} 
-                  onChange={e => setForm({ ...form, entry_price: Number(e.target.value) })} 
+                  type="time" 
+                  value={form.entry_time} 
+                  onChange={e => setForm({ ...form, entry_time: e.target.value })} 
                 />
               </div>
               <div className="field">
-                <label>Preço de Saída</label>
+                <label>Exit Price</label>
+                <input 
+                  className="input w-full" 
+                  type="number" 
+                  step="0.01"
+                  value={form.exit_price || ''} 
+                  onChange={e => setForm({ ...form, exit_price: Number(e.target.value) || 0 })} 
+                />
+              </div>
+              <div className="field">
+                <label>Exit time</label>
                 <input 
                   className="input" 
+                  type="time" 
+                  value={form.exit_time} 
+                  onChange={e => setForm({ ...form, exit_time: e.target.value })} 
+                />
+              </div>
+               <div className="field">
+                <label>Take Profit</label>
+                <input 
+                  className="input w-full" 
                   type="number" 
-                  step="0.00001"
-                  value={form.exit_price || 0} 
-                  onChange={e => setForm({ ...form, exit_price: Number(e.target.value) })} 
+                  step="0.01"
+                  value={form.profit_target_price || ''} 
+                  onChange={e => setForm({ ...form, profit_target_price: Number(e.target.value)|| 0 })} 
                 />
               </div>
               <div className="field">
                 <label>Stop Loss</label>
                 <input 
-                  className="input" 
+                  className="input w-full" 
                   type="number" 
-                  step="0.00001"
-                  value={form.stop_loss_price || 0} 
-                  onChange={e => setForm({ ...form, stop_loss_price: Number(e.target.value) })} 
+                  step="0.01"
+                  value={form.stop_loss_price || ''} 
+                  onChange={e => setForm({ ...form, stop_loss_price: Number(e.target.value)|| 0 })} 
                 />
               </div>
-              <div className="field">
-                <label>Take Profit</label>
-                <input 
-                  className="input" 
-                  type="number" 
-                  step="0.00001"
-                  value={form.profit_target_price || 0} 
-                  onChange={e => setForm({ ...form, profit_target_price: Number(e.target.value) })} 
-                />
-              </div>
+             
             </div>
           </div>
 
           {/* Risk & Costs */}
           <div className="card">
-            <h4 className="font-medium mb-4">Risco e Custos</h4>
+            <h4 className="font-medium mb-4">PnL & Costs</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="field">
-                <label>Risco por R ($)</label>
+                <label>Gross PnL ($)</label>
                 <input 
-                  className="input" 
+                  className="input text-xl font-semibold" 
                   type="number" 
-                  value={form.risk_per_R || 100} 
-                  onChange={e => setForm({ ...form, risk_per_R: Number(e.target.value) })} 
+                  step="0.01"
+                  value={form.result_gross || ''} 
+                  onChange={e => setForm({ ...form, result_gross: Number(e.target.value)||0 })}
+                  placeholder ="0.00" 
                 />
               </div>
               <div className="field">
                 <label>Comissão ($)</label>
                 <input 
-                  className="input" 
+                  className="input w-full"
+                  step="0.01" 
                   type="number" 
-                  value={form.commission || 0} 
-                  onChange={e => setForm({ ...form, commission: Number(e.target.value) })} 
+                  value={form.commission || ''} 
+                  onChange={e => setForm({ ...form, commission: Number(e.target.value)||0 })} 
                 />
               </div>
               <div className="field">
-                <label>Taxas ($)</label>
+                <label>Fees ($)</label>
                 <input 
-                  className="input" 
+                  className="input w-full"
+                  step="0.01" 
                   type="number" 
-                  value={form.fees || 0} 
-                  onChange={e => setForm({ ...form, fees: Number(e.target.value) })} 
+                  value={form.fees || ''} 
+                  onChange={e => setForm({ ...form, fees: Number(e.target.value)||0 })} 
                 />
               </div>
               <div className="field">
-                <label>Swap/Slippage ($)</label>
-                <input 
-                  className="input" 
-                  type="number" 
-                  value={(form.swap || 0) + (form.slippage || 0)} 
-                  onChange={e => {
-                    const v = Number(e.target.value);
-                    setForm({ ...form, swap: v * 0.5, slippage: v * 0.5 });
-                  }} 
+                <label>Swap ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="input w-full"
+                  value={form.swap || ''}
+                  onChange={(e) => setForm({ ...form, swap: Number(e.target.value) || 0 })}
+                  placeholder="0.00"
                 />
               </div>
             </div>

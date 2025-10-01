@@ -1,14 +1,14 @@
-// packages/journal-state/src/JournalContext.jsx
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { openDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js'; // seu util
+import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
 
 const JournalCtx = createContext(null);
 
 async function getDB() {
-  return openDB('journal-db', 1, {
-    upgrade(db) {
+  // 💥 CORREÇÃO CRUCIAL: Incrementa a versão do DB para 2
+  return openDB('journal-db', 2, { 
+    upgrade(db, oldVersion) {
       if (!db.objectStoreNames.contains('trades')) {
         const store = db.createObjectStore('trades', { keyPath: 'id' });
         store.createIndex('date', 'date');
@@ -16,22 +16,36 @@ async function getDB() {
       if (!db.objectStoreNames.contains('meta')) {
         db.createObjectStore('meta');
       }
+      // Garante que a store 'strategies' seja criada se não existir (necessário após a versão 1)
+      if (!db.objectStoreNames.contains('strategies')) {
+        db.createObjectStore('strategies', { keyPath: 'id' });
+      }
     }
   });
 }
 
 export default function JournalProvider({ children }) {
   const [trades, setTrades] = useState([]);
+  const [strategies, setStrategies] = useState([]);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const db = await getDB();
-      const all = await db.getAll('trades');
-      if (!mounted) return;
-      setTrades(all || []);
-      setReady(true);
+      try {
+        const db = await getDB();
+        const allTrades = await db.getAll('trades');
+        const allStrategies = await db.getAll('strategies');
+        
+        if (!mounted) return;
+        setTrades(allTrades || []);
+        setStrategies(allStrategies || []); 
+        setReady(true);
+      } catch (error) {
+        console.error("Falha ao inicializar JournalProvider:", error);
+        // Em caso de erro, ainda definimos ready para evitar o loop infinito de "carregando"
+        if (mounted) setReady(true); 
+      }
     })();
     return () => { mounted = false; };
   }, []);
@@ -53,16 +67,42 @@ export default function JournalProvider({ children }) {
     await db.delete('trades', id);
     setTrades(prev => prev.filter(t => t.id !== id));
   }, []);
+  
+  const saveStrategy = useCallback(async (strategy) => {
+    const db = await getDB();
+    const id = strategy.id || uuidv4();
+    const payload = { ...strategy, id, updatedAt: new Date().toISOString() };
+    await db.put('strategies', payload); 
+    
+    setStrategies(prev => {
+      const other = prev.filter(s => s.id !== id);
+      return [payload, ...other];
+    });
+    return payload;
+  }, []);
+
+  const deleteStrategy = useCallback(async (id) => {
+    const db = await getDB();
+    await db.delete('strategies', id);
+    setStrategies(prev => prev.filter(s => s.id !== id));
+  }, []);
+
 
   const exportToDrive = useCallback(async (filename = 'journal_backup.json') => {
     try {
       const db = await getDB();
-      const all = await db.getAll('trades');
-      const payload = { trades: all, meta: { exportedAt: new Date().toISOString() } };
+      const allTrades = await db.getAll('trades');
+      const allStrategies = await db.getAll('strategies');
+      
+      const payload = { 
+          trades: allTrades, 
+          strategies: allStrategies,
+          meta: { exportedAt: new Date().toISOString() } 
+      };
+      
       if (isSignedIn && isSignedIn()) {
         return uploadOrUpdateJSON(filename, payload);
       } else {
-        // fallback: return payload
         return payload;
       }
     } catch (err) {
@@ -75,16 +115,35 @@ export default function JournalProvider({ children }) {
     try {
       if (!isSignedIn || !isSignedIn()) return null;
       const data = await downloadLatestJSON();
-      if (!data || !data.trades) return null;
+      if (!data || (!data.trades && !data.strategies)) return null; 
+      
       const db = await getDB();
-      const tx = db.transaction('trades', 'readwrite');
-      for (const t of data.trades) {
-        await tx.store.put(t);
+      
+      // Importar Trades
+      if (data.trades) {
+        const txTrades = db.transaction('trades', 'readwrite');
+        for (const t of data.trades) {
+          await txTrades.store.put(t);
+        }
+        await txTrades.done;
       }
-      await tx.done;
-      const all = await db.getAll('trades');
-      setTrades(all);
-      return all;
+      
+      // Importar Estratégias
+      if (data.strategies) {
+        const txStrategies = db.transaction('strategies', 'readwrite');
+        for (const s of data.strategies) {
+          await txStrategies.store.put(s);
+        }
+        await txStrategies.done;
+      }
+
+      // Atualiza os estados locais
+      const allTrades = await db.getAll('trades');
+      const allStrategies = await db.getAll('strategies'); 
+      setTrades(allTrades);
+      setStrategies(allStrategies); 
+      
+      return { trades: allTrades, strategies: allStrategies };
     } catch (err) {
       console.error('Import failed', err);
       throw err;
@@ -93,7 +152,8 @@ export default function JournalProvider({ children }) {
 
   return (
     <JournalCtx.Provider value={{
-      ready, trades, saveTrade, deleteTrade, exportToDrive, importFromDrive
+      ready, trades, saveTrade, deleteTrade, exportToDrive, importFromDrive,
+      strategies, saveStrategy, deleteStrategy 
     }}>
       {children}
     </JournalCtx.Provider>

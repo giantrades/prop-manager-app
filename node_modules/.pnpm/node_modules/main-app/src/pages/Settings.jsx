@@ -23,7 +23,7 @@ export default function Settings() {
           />
         </div>
         <p className="muted">
-          Esse valor será usado para o seletor de moeda no topo (USD/BRL) e aplicado ao Dashboard, Contas e Payouts.
+          Esse valor será usado para o seletor de moeda no topo (USD/BRL) e aplicado ao Prop-Manager.
         </p>
       </div>
 

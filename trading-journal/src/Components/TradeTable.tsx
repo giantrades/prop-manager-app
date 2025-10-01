@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '@apps/state';
 import { Trade, AccountWeight, EnrichedTrade } from '../types/trade'; // Certifique-se do path correto
-
+import { useJournal } from "@apps/journal-state";
 
 type Props = {
   trades: EnrichedTrade[];
@@ -14,7 +14,7 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
   
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [sortKey, setSortKey] = useState<'date' | 'result_net' | 'result_R' | 'asset'>('date');
+  const [sortKey, setSortKey] = useState<'date' | 'result_net' | 'result_R' | 'asset' |'tf_signal' | string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Função para resolver nomes das contas
@@ -38,7 +38,8 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
         || (t.accountName || '').toLowerCase().includes(lower)
         || (t.strategyId || '').toLowerCase().includes(lower)
         || (t.notes || '').toLowerCase().includes(lower)
-        || (t.direction || '').toLowerCase().includes(lower);
+        || (t.direction || '').toLowerCase().includes(lower)
+        || (t.tf_signal||'').toLowerCase().includes(lower);
     }).sort((a, b) => {
       let av: any = (a as any)[sortKey] || 0;
       let bv: any = (b as any)[sortKey] || 0;
@@ -159,6 +160,7 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
         <table>
           <thead>
             <tr>
+              {/* Cabeçalhos da tabela */}
               <th style={{ width: 40 }}>
                 <input 
                   type="checkbox" 
@@ -170,17 +172,18 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
                 style={{ cursor: 'pointer' }} 
                 onClick={() => toggleSort('date')}
               >
-                Data{getSortIndicator('date')}
+                Date{getSortIndicator('date')}
               </th>
               <th 
                 style={{ cursor: 'pointer' }} 
                 onClick={() => toggleSort('asset')}
               >
-                Asset{getSortIndicator('asset')}
+                Asset/TF{getSortIndicator('asset')}
               </th>
-              <th>Conta</th>
-              <th>Estratégia</th>
-              <th>Direção</th>
+              <th>Market/Accounts</th>
+              <th>Strategy</th>
+              <th>Dir</th>
+              
               <th>Volume</th>
               <th>Entry</th>
               <th>Exit</th>
@@ -190,17 +193,12 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
               >
                 P&L ($){getSortIndicator('result_net')}
               </th>
-              <th 
-                style={{ cursor: 'pointer' }} 
-                onClick={() => toggleSort('result_R')}
-              >
-                R{getSortIndicator('result_R')}
-              </th>
-              <th>Tags</th>
-              <th>Ações</th>
+              
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
+            
             {filtered.map(t => (
               <tr key={t.id} className="hover:bg-[#071023]">
                 <td>
@@ -211,65 +209,40 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
                   />
                 </td>
                 <td>
-                  <div>{new Date(t.date).toLocaleDateString('pt-BR')}</div>
-                  {t.time && <div className="text-xs text-muted">{t.time}</div>}
+                  <div>{new Date(t.date).toLocaleDateString('pt-BR')}</div><span className="muted">{t.entry_time}</span> <span className="muted">→ {t.exit_time ||'' } </span>
+                </td>
+                <td style={{ padding: "6px" }}>{t.asset} <span className="muted">• {t.tf_signal || ''}</span></td>
+                <td style={{ padding: "6px" }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {t.accountType && (
+                    <span className={`pill ${getAccountTypeClass(t.accountType)}`} 
+                      style={{ fontSize: 8, padding: '2px 4px' }}>
+                      {t.accountType}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 11 }}>{t.accountName || 'N/A'}</span>
+                </div>
+
                 </td>
                 <td>
-                  <div className="font-medium">{t.asset}</div>
-                  {t.tf_signal && <div className="text-xs text-muted">{t.tf_signal}</div>}
+                  <div className="text-sm">{t.strategyName || '-'}</div>
                 </td>
                 <td>
-                  <div className="flex items-center gap-2">
-                    {t.accountType && (
-                      <span className={`pill ${getAccountTypeClass(t.accountType)}`} 
-                        style={{ fontSize: 10, padding: '2px 6px' }}>
-                        {t.accountType}
-                      </span>
-                    )}
-                    <div className="text-sm">
-                      {t.accountName || resolveAccountNames(t.accounts) || 'N/A'}
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div className="text-sm">{t.strategyId || '-'}</div>
-                </td>
-                <td>
-                  <span className={`pill type ${t.direction === 'Long' ? 'blue' : 'green'}`}>
+                  <span className={`pill type ${t.direction === 'Long' ? 'lavander' : 'orange'}`}>
                     {t.direction}
                   </span>
                 </td>
                 <td>{(t.volume || 0).toLocaleString()}</td>
                 <td>
-                  {(t.entryVwap || t.entry_price || 0).toFixed?.(4) ?? '-'}
+                  {(t.entryVwap || t.entry_price || 0).toFixed?.(2) ?? '-'}
                 </td>
                 <td>
-                  {(t.exitVwap || t.exit_price || 0).toFixed?.(4) ?? '-'}
+                  {(t.exitVwap || t.exit_price || 0).toFixed?.(2) ?? '-'}
                 </td>
                 <td className={`font-medium ${(t.result_net || 0) >= 0 ? 'pos' : 'neg'}`}>
                   ${(t.result_net || 0).toFixed(2)}
                 </td>
-                <td className={`font-medium ${(t.result_R || 0) >= 0 ? 'pos' : 'neg'}`}>
-                  {(t.result_R || 0).toFixed(2)}
-                </td>
-                <td>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(t.tags || {}).map(([key, value]) => 
-                      value ? (
-                        <span key={key} className="pill gray" style={{ 
-                          fontSize: 9, 
-                          padding: '2px 4px',
-                          maxWidth: 80,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {key}
-                        </span>
-                      ) : null
-                    )}
-                  </div>
-                </td>
+ 
                 <td>
                   <div className="flex gap-1">
                     <button 

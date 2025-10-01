@@ -58,6 +58,9 @@ export default function Navbar({
         <NavLink to="/montecarlo" className={({ isActive }) => (isActive ? "active" : "")}>
           Monte Carlo
         </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+          Settings
+        </NavLink>
       </div>
 
       <div className="spacer" />

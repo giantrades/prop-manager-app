@@ -31,6 +31,7 @@ export default function App() {
         <Route path="/trades" element={<Trades/>} />
         <Route path="/Strategies" element={<Strategies/>} />
         <Route path="/Montecarlo" element={<Montecarlo/>} />
+        <Route path="/Settings" element={<Settings/>} />
       </Routes>
       </main>
   </div> 
