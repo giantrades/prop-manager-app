@@ -55,9 +55,6 @@ export default function Navbar({
         <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}>
           Strategies
         </NavLink>
-        <NavLink to="/montecarlo" className={({ isActive }) => (isActive ? "active" : "")}>
-          Monte Carlo
-        </NavLink>
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
           Settings
         </NavLink>

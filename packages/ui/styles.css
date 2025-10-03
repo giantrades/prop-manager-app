@@ -178,3 +178,39 @@ tr:hover td { background: rgba(39,48,68,0.24); }
 .navbar .drive-status .btn {
   padding: 6px 10px;
 }
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--color-panel, #1a1a1a);
+  border-radius: 12px;
+  padding: 24px;   /* ← padding geral */
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* ← espaço vertical entre seções */
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  font-size: 20px;
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+}
+

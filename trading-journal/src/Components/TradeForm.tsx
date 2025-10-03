@@ -17,9 +17,10 @@ export default function TradeForm({ onClose, editing }: Props) {
   const { strategies = [], saveTrade } = useJournal();
   const { currency, rate } = useCurrency();
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
-  
+  const [accountWeights, setAccountWeights] = useState<Record<string, number>>({});
+
   // Pegar contas do main-app
-  const { accounts = [] } = useData();
+  const { accounts = [], updateAccount } = useData();
   console.log("accounts disponíveis", accounts);
   
   // Filtrar contas ativas
@@ -71,6 +72,17 @@ export default function TradeForm({ onClose, editing }: Props) {
     }
   }, [editing]);
 
+  // Inicialização dos pesos
+useEffect(() => {
+  if (selectedAccounts.length) {
+    const newWeights: Record<string, number> = {}
+    selectedAccounts.forEach(id => {
+      const acc = accounts.find(a => a.id === id)
+      newWeights[id] = acc?.defaultWeight ?? (1 / selectedAccounts.length)
+    })
+    setAccountWeights(newWeights)
+  }
+}, [selectedAccounts, accounts])
   // Computed: VWAP / PnL / R
   const computeVWAP = (execs: Execution[], side: 'entry' | 'exit') => {
     const arr = execs.filter(e => e.side === side);
@@ -216,14 +228,39 @@ if (initialRiskPriceDiff > 0) {
     const tradeData = {
       ...form,
       id: editing?.id || uuidv4(),
-      accounts: selectedAccounts.map(id => ({ accountId: id, weight: 1 / selectedAccounts.length })),
-      // Campos enriquecidos para compatibilidade
-      accountId: selectedAccounts[0], // Conta principal
+      accounts: selectedAccounts.map(id => ({
+      accountId: id,
+       weight: accountWeights[id] && !isNaN(accountWeights[id])
+    ? accountWeights[id]
+    : 1 / selectedAccounts.length
+    })),
+    
+      accountId: selectedAccounts[0], // Conta principal (id direto)
       accountType: primaryAccount?.type || 'Unknown',
       accountName: primaryAccount?.name || 'Unknown Account',
       tf_signal: form.tf_signal || '1h' // Default
     };
+    // Atualizar currentFunding de cada conta de acordo com os pesos
+    if (form.result_net !== undefined) {
+    selectedAccounts.forEach(id => {
+    const acc = accounts.find(a => a.id === id)
+    if (acc) {
+      const weight = accountWeights[id] ?? 1 // default = 1 se não definido
+      const pnlImpact = form.result_net * weight
 
+      updateAccount(id, {
+        ...acc,
+        currentFunding: (acc.currentFunding || 0) + pnlImpact
+      })
+    }
+  })
+}
+      selectedAccounts.forEach(id => {
+      const acc = accounts.find(a => a.id === id)
+      if (acc) {
+      updateAccount(id, { ...acc, defaultWeight: accountWeights[id] })
+    }
+   })
     console.log('Salvando trade:', tradeData);
 
     try {
@@ -259,13 +296,28 @@ if (initialRiskPriceDiff > 0) {
       default: return 'gray';
     }
   };
+ const handleOverlayClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).classList.contains("modal-overlay")) {
+      onClose();
+    }
+  };
+const [filterType, setFilterType] = useState<string>("");
+
+const filteredAccounts = useMemo(() => {
+  return activeAccounts.filter(acc => !filterType || acc.type === filterType);
+}, [activeAccounts, filterType]);
+
 
   return (
-       <div className="modal">
+       <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content">
+      <button className="modal-close" onClick={onClose}>×</button>
+        {/* header com save/cancel */}
         <div className="sticky top-0 bg-panel p-6 border-b border-soft">
           <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold mb-4">{editing ? 'Editar Trade' : 'Novo Trade'}</h2>
+          <h2 className="text-xl font-semibold mb-4">
+            {editing ? 'Editar Trade' : 'Novo Trade'}
+            </h2>
 
             <div className="flex items-center gap-2">
               <button className="btn ghost" onClick={onClose}>Cancelar</button>
@@ -274,10 +326,10 @@ if (initialRiskPriceDiff > 0) {
           </div>
         </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="form-body">
  
           {/* Alerta se não há contas */}
-          {activeAccounts.length === 0 && (
+          {filteredAccounts.length === 0 && (
             <div className="card" style={{ 
               background: 'linear-gradient(180deg, #2e2b12 0%, #1b2010 100%)',
               borderColor: '#594e19' 
@@ -339,7 +391,16 @@ if (initialRiskPriceDiff > 0) {
               </div>
             </div>
           </div>
-
+          <div className="field">
+           <label>Categorias de Contas</label>
+          <select className="input" value={filterType} onChange={e => setFilterType(e.target.value)}>
+          <option value="">Todos</option>
+          <option value="Forex">Forex</option>
+          <option value="Futures">Futures</option>
+          <option value="Cripto">Cripto</option>
+         <option value="Personal">Personal</option>
+          </select>
+          </div>
           {/* Account Selection */}
           <div className="card">
             <h4 className="font-medium mb-4">Seleção de Contas</h4>
@@ -348,18 +409,35 @@ if (initialRiskPriceDiff > 0) {
               <select 
                 className="input"
                 multiple
-                size={Math.min(5, activeAccounts.length)}
+                size={Math.min(5, filteredAccounts.length)}
                 value={selectedAccounts}
                 onChange={e => setSelectedAccounts(Array.from(e.target.selectedOptions, o => o.value))}
                 style={{ height: 'auto', minHeight: 120 }}
               >
-                {activeAccounts.map(acc => (
+                {filteredAccounts.map(acc => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
                   </option>
                 ))}
               </select>
-              
+              {/* Multiplier do weight das contas */}
+          {selectedAccounts.map(id => {
+          const acc = accounts.find(a => a.id === id);
+          return (<div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>{acc?.name}</span>
+          <input
+          type="number"
+          className="input"
+          placeholder="Peso"
+          value={accountWeights[id] ?? ''}
+          onChange={(e) =>setAccountWeights({...accountWeights,[id]: Number(e.target.value)})}
+      style={{ width: 72 }}
+      />
+    </div>
+  );
+})}
+
+
               {/* Preview das contas selecionadas */}
               {selectedAccounts.length > 0 && (
                 <div className="mt-3 space-y-2">
@@ -602,6 +680,11 @@ if (initialRiskPriceDiff > 0) {
             </div>
           </div>
         </div>
+          <div className="flex justify-end p-4 border-t border-soft">
+          <button className="btn ghost mr-2" onClick={onClose}>Cancelar</button>
+          <button className="btn" onClick={handleSave}>Salvar</button>
+        </div>
+        
       </div>
     </div>
   );

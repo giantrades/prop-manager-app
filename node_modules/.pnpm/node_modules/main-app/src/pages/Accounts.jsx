@@ -213,7 +213,8 @@ function NewAccountForm({ onCreate, onCancel, firms = [] }) {
     payoutFrequency: 'monthly',
     initialFunding: 0,
     currentFunding: 0,
-    profitSplit: 0.8
+    profitSplit: 0.8,
+    defaultWeight: 1 
   })
 
   const handleSubmit = () => {
