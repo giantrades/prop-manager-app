@@ -1,4 +1,3 @@
-//main-app/ src/App.jsx//
 import React, { useEffect, useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -8,7 +7,6 @@ import Settings from "./pages/Settings.jsx";
 import Firms from "./pages/Firms.jsx";
 import Navbar from "./Navbar";
 import { useJournal } from "@apps/journal-state";
-import { useData } from "@apps/state";
 import {
   initGoogleDrive,
   isSignedIn,
@@ -16,11 +14,10 @@ import {
   signOut,
   onSignChange,
   listFiles,
+  backupToDrive as driveBackup,
 } from "@apps/utils/googleDrive.js";
 
 export default function App() {
-  const { backupToDrive } = useData();
-
   const [driveReady, setDriveReady] = useState(false);
   const [logged, setLogged] = useState(false);
 
@@ -28,9 +25,10 @@ export default function App() {
     let mounted = true;
     (async () => {
       try {
-        await initGoogleDrive( 
-        "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com",
-        "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M");
+        await initGoogleDrive(
+          "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com",
+          "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M"
+        );
         if (!mounted) return;
         setDriveReady(true);
         setLogged(isSignedIn());
@@ -44,13 +42,23 @@ export default function App() {
         setLogged(false);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const handleLogin  = async () => { await signIn();  setLogged(isSignedIn()); };
-  const handleLogout = async () => { await signOut(); setLogged(isSignedIn()); };
-  const handleBackup = async () => { await backupToDrive(); };
-  const handleList   = async () => {
+  const handleLogin = async () => {
+    await signIn();
+    setLogged(isSignedIn());
+  };
+  const handleLogout = async () => {
+    await signOut();
+    setLogged(isSignedIn());
+  };
+  const handleBackup = async () => {
+    await driveBackup(); // backup direto
+  };
+  const handleList = async () => {
     const files = await listFiles();
     console.log("📄 Arquivos no Drive:", files);
     alert("Arquivos listados no console.");

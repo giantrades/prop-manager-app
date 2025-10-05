@@ -7,7 +7,8 @@ const seed = {
   accounts: [ /* ... seus seeds existentes ... */ ],
   payouts: [],
   settings: { methods: ['Rise','Wise','Pix','Paypal','Cripto'] },
-  firms: []
+  firms: [],
+  trades: [],
 }
 
 function load() {
@@ -179,4 +180,47 @@ export function getFirmStats(firmId){
     })
   })
   return { totalFunding: Number(totalFunding.toFixed(2)), totalPayouts: Number(totalPayouts.toFixed(2)), accountCount: accounts.length }
+}
+
+// ---------------------------
+// NEW: TRADES CRUD
+// ---------------------------
+
+export function getTrades() {
+  return load().trades || [];
+}
+
+export function createTrade(partial) {
+  const data = load();
+  const t = {
+    id: uuid(),
+    date: new Date().toISOString().slice(0, 10),
+    asset: '',
+    direction: 'Long',
+    volume: 0,
+    entry_price: 0,
+    exit_price: 0,
+    result_net: 0,
+    accountId: null,
+    notes: '',
+    ...partial
+  };
+  data.trades.push(t);
+  save(data);
+  return t;
+}
+
+export function updateTrade(id, patch) {
+  const data = load();
+  const idx = data.trades.findIndex(t => t.id === id);
+  if (idx === -1) return null;
+  data.trades[idx] = { ...data.trades[idx], ...patch };
+  save(data);
+  return data.trades[idx];
+}
+
+export function deleteTrade(id) {
+  const data = load();
+  data.trades = data.trades.filter(t => t.id !== id);
+  save(data);
 }

@@ -4,6 +4,7 @@ import { useCurrency } from "@apps/state";
 import StrategyForm from '../Components/StrategyForm';
 import { Strategy } from '../types/strategy';
 import { Trade } from '../types/trade'; // Para filtragem de trades
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 // -----------------------------------------------------------
 // 💥 NOVO: Componente Tabela de Estratégias

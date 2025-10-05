@@ -162,3 +162,35 @@ export async function uploadOrUpdateJSON(name, content) {
     return uploadFile(name, content);
   }
 }
+// 🔹 Backup geral do estado local (accounts/payouts/firms)
+export async function backupToDrive() {
+  try {
+    const data = localStorage.getItem("propmanager-data-v1");
+    if (!data) {
+      alert("Nenhum dado encontrado para backup.");
+      return;
+    }
+    const parsed = JSON.parse(data);
+    await uploadOrUpdateJSON("propmanager-backup.json", parsed);
+    alert("Backup enviado para o Google Drive com sucesso ✅");
+  } catch (err) {
+    console.error("Erro no backupToDrive:", err);
+    alert("Erro ao enviar backup para o Google Drive ❌");
+  }
+}
+
+// 🔹 Restaura os dados do backup mais recente
+export async function restoreFromDrive() {
+  try {
+    const latest = await downloadLatestJSON();
+    if (!latest) {
+      alert("Nenhum backup encontrado no Drive.");
+      return;
+    }
+    localStorage.setItem("propmanager-data-v1", JSON.stringify(latest));
+    alert("Backup restaurado com sucesso ✅ (recarregue o app)");
+  } catch (err) {
+    console.error("Erro no restoreFromDrive:", err);
+    alert("Erro ao restaurar dados do Google Drive ❌");
+  }
+}

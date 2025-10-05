@@ -5,6 +5,8 @@
 import { Trade } from '../types/trade';
 import { v4 as uuidv4 } from 'uuid';
 import { downloadLatestJSON, uploadOrUpdateJSON } from '@apps/utils/googleDrive.js';
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 /**
  * NOTE: This service is intentionally simple:
@@ -72,7 +74,8 @@ export function addTrade(payload: Partial<Trade>) {
   const trade: Trade = {
     id: uuidv4(),
     date: payload.date || now.split('T')[0],
-    time: payload.time || now.split('T')[1]?.slice(0,5),
+    entry_time: payload.entry_time,
+    exit_time: payload.entry_time,
     asset: payload.asset || 'UNKNOWN',
     strategyId: payload.strategyId || null,
     marketCategory: payload.marketCategory || 'Futures',

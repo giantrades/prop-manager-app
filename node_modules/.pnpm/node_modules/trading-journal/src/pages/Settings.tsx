@@ -1,10 +1,12 @@
-import React from "react";
+// src/pages/Settings.jsx
+import React, {useState} from "react";
 import { useCurrency } from '@apps/state'
-import { useData } from '@apps/state'
+import { backupToDrive, restoreFromDrive } from "@apps/utils/googleDrive.js";
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
-  const { autoSync, setAutoSync, backupToDrive, restoreFromDrive } = useData();
+  const [autoSync, setAutoSync] = useState(false);
 
   return (
     <div className="grid" style={{ gap: 16 }}>
@@ -22,7 +24,7 @@ export default function Settings() {
           />
         </div>
         <p className="muted">
-          Esse valor será usado para o seletor de moeda no topo (USD/BRL) e aplicado ao Trading-Journal.
+          Esse valor será usado para o seletor de moeda no topo (USD/BRL) e aplicado ao Prop-Manager.
         </p>
       </div>
 

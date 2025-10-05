@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { openDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import { updateAccount as dsUpdateAccount } from '@apps/lib/dataStore.js';
+
+
 
 const JournalCtx = createContext(null);
 
@@ -50,17 +54,38 @@ export default function JournalProvider({ children }) {
     return () => { mounted = false; };
   }, []);
 
-  const saveTrade = useCallback(async (trade) => {
-    const db = await getDB();
-    const id = trade.id || uuidv4();
-    const payload = { ...trade, id, updatedAt: new Date().toISOString() };
-    await db.put('trades', payload);
-    setTrades(prev => {
-      const other = prev.filter(t => t.id !== id);
-      return [payload, ...other];
+ const saveTrade = useCallback(async (trade) => {
+  const db = await getDB();
+  const id = trade.id || uuidv4();
+  const payload = { ...trade, id, updatedAt: new Date().toISOString() };
+  await db.put('trades', payload);
+  setTrades(prev => {
+    const other = prev.filter(t => t.id !== id);
+    return [payload, ...other];
+  });
+
+  // Atualiza accounts no dataStore central (caso ainda não tenha sido feito no Form)
+  if (payload.accounts && Array.isArray(payload.accounts)) {
+    payload.accounts.forEach(accEntry => {
+      const acc = /* obter conta via dataStore */ (() => { 
+         try { return require('@apps/lib/dataStore.js').getAll().accounts.find(a=>a.id===accEntry.accountId); } catch(e) { return null; }
+      })();
+      if (!acc) return;
+      const pnlImpact = (payload.result_net || 0) * (accEntry.weight ?? 1);
+      dsUpdateAccount(acc.id, { ...acc, currentFunding: (acc.currentFunding || 0) + pnlImpact });
     });
-    return payload;
-  }, []);
+  }
+
+  // opcional: export to drive agora (se quiser)
+  try {
+    if (typeof exportToDrive === 'function') {
+      // chamada ao exportToDrive — ajuste conforme sua função existente
+      await exportToDrive('journal_backup.json');
+    }
+  } catch(e){ console.warn('drive export failed', e); }
+
+  return payload;
+}, []);
 
   const deleteTrade = useCallback(async (id) => {
     const db = await getDB();
@@ -93,10 +118,17 @@ export default function JournalProvider({ children }) {
       const db = await getDB();
       const allTrades = await db.getAll('trades');
       const allStrategies = await db.getAll('strategies');
+      const allAccounts = await db.getAll('accounts');
+      const allFirms = await db.getAll('firms');
+      const allSettings = await db.getAll('settings');
+      const allPayouts = await db.getAll('payouts');
       
       const payload = { 
           trades: allTrades, 
           strategies: allStrategies,
+          accounts: allAccounts,
+          settings: allSettings,
+          payouts: allPayouts,
           meta: { exportedAt: new Date().toISOString() } 
       };
       

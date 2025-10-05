@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useData } from '@apps/state'
 import { useCurrency } from '@apps/state'
 import { useFilters } from '@apps/state'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts'
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 /* =========================================================
    1) Barra de filtros (categorias + range)
@@ -103,7 +104,17 @@ function FiltersBar({ categories }) {
    2) Hook para filtrar contas/payouts e trazer firms
    ========================================================= */
 function useFiltered() {
-  const { accounts, payouts, firms } = useData()   // <-- traz firms também
+ const [accounts, setAccounts] = useState([])
+  const [payouts, setPayouts] = useState([])
+  const [firms, setFirms] = useState ([])
+ 
+   useEffect(() => {
+   const data = getAll()
+   setAccounts(data.accounts || [])
+   setPayouts(data.payouts || [])
+   setFirms(data.firms || [])
+   }, [])
+
   const { categories: selCats, timeRange, isMarkAllActive } = useFilters()
 
   const now = new Date()
@@ -609,7 +620,11 @@ function FundingPerAccount(){
 }
 
 function FundingPerCategory(){
-  const { accounts } = useData(); // Assumindo que useData() é o gancho correto
+  const [accounts, setAccounts] = useState([])
+   useEffect(() => {
+   const data = getAll()
+   setAccounts(data.accounts || [])
+   }, [])
   const { currency, rate } = useCurrency();
   const [categoryColors, setCategoryColors] = useState({});
 
@@ -770,7 +785,12 @@ function RecentPayouts(){
 function FundingPerFirmChart() {
   const { accounts = [] } = useFiltered() || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
-  const { firms = [] } = useData() || {};
+  const [firms, setFirms] = useState ([])
+ 
+   useEffect(() => {
+   const data = getAll()
+   setFirms(data.firms || [])
+   }, [])
 
   // === cores DENTRO do componente (pega from CSS .pill.<class>) ===
   const getTypeColor = React.useCallback((type) => {
@@ -902,7 +922,11 @@ function FundingPerFirmChart() {
 function PayoutsPerFirmChart() {
   const { payouts = [], accounts = [] } = useFiltered() || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
-  const { firms = [] } = useData() || {};
+  const [firms, setFirms] = useState ([])
+   useEffect(() => {
+   const data = getAll()
+   setFirms(data.firms || [])
+   }, [])
 
   // === cores DENTRO do componente ===
   const getTypeColor = React.useCallback((type) => {

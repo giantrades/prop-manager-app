@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Trade, Execution } from '../types/trade';
 import { useJournal } from '@apps/journal-state';
-import { useData, useCurrency } from '@apps/state';
+import { useCurrency } from '@apps/state';
 import { v4 as uuidv4 } from 'uuid';
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 type Props = {
   onClose: () => void;
@@ -18,16 +19,44 @@ export default function TradeForm({ onClose, editing }: Props) {
   const { currency, rate } = useCurrency();
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [accountWeights, setAccountWeights] = useState<Record<string, number>>({});
-
   // Pegar contas do main-app
-  const { accounts = [], updateAccount } = useData();
-  console.log("accounts disponíveis", accounts);
-  
-  // Filtrar contas ativas
-  const activeAccounts = useMemo(() => 
-    accounts.filter(acc => ['Live', 'Funded', 'Challenge'].includes(acc.status)),
-    [accounts]
-  );
+  const [accounts, setAccounts] = useState(() => {  try {
+        return getAll().accounts || [];
+      } catch {
+        return [];
+      }
+    });
+ useEffect(() => {
+    // Carrega imediatamente
+    const loadAccounts = () => {
+      try {
+        const data = getAll();
+        console.log('📦 Contas carregadas no TradeForm:', data.accounts); // DEBUG
+        setAccounts(data.accounts || []);
+      } catch (err) {
+        console.error('❌ Erro ao carregar contas:', err);
+        setAccounts([]);
+      }
+    };
+
+    loadAccounts(); // Executa na montagem
+
+    // Escuta mudanças
+    const refresh = () => {
+      console.log('🔄 Refresh triggered'); // DEBUG
+      loadAccounts();
+    };
+    
+    window.addEventListener('storage', refresh);
+    window.addEventListener('datastore:change', refresh);
+
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('datastore:change', refresh);
+    };
+  }, []);
+
+
 
   // Initial form (ajustado para incluir tf_signal e remover risk_per_R)
   const [form, setForm] = useState<Partial<Trade>>(() => ({
@@ -43,6 +72,15 @@ export default function TradeForm({ onClose, editing }: Props) {
     // risk_per_R removido daqui também
     ...(editing || {}),
   }));
+
+  // Filtrar contas ativas
+  const activeAccounts = useMemo(() => 
+    accounts.filter(acc => ['Live', 'Funded', 'Challenge'].includes(acc.status)),
+    [accounts]
+  );
+// Logo após o useMemo de activeAccounts
+console.log('✅ Active Accounts:', activeAccounts.length, activeAccounts);
+console.log('📊 All Accounts:', accounts.length, accounts);
 
   // Sincronizar selectedAccounts com form.accounts
   useEffect(() => {
@@ -211,66 +249,61 @@ if (initialRiskPriceDiff > 0) {
     }));
   };
 
-  const handleSave = async () => {
-    // Validações básicas
-    if (!form.asset?.trim()) {
-      alert('Asset é obrigatório');
-      return;
-    }
+  // no topo do componente TradeForm, garanta:
+// const { strategies = [], saveTrade, exportToDrive } = useJournal();
 
-    if (!selectedAccounts.length) {
-      alert('Selecione ao menos uma conta');
-      return;
-    }
 
-    // Preparar dados do trade com informações enriquecidas
-    const primaryAccount = accounts.find(acc => acc.id === selectedAccounts[0]);
-    const tradeData = {
-      ...form,
-      id: editing?.id || uuidv4(),
-      accounts: selectedAccounts.map(id => ({
-      accountId: id,
-       weight: accountWeights[id] && !isNaN(accountWeights[id])
-    ? accountWeights[id]
-    : 1 / selectedAccounts.length
-    })),
-    
-      accountId: selectedAccounts[0], // Conta principal (id direto)
-      accountType: primaryAccount?.type || 'Unknown',
-      accountName: primaryAccount?.name || 'Unknown Account',
-      tf_signal: form.tf_signal || '1h' // Default
-    };
-    // Atualizar currentFunding de cada conta de acordo com os pesos
-    if (form.result_net !== undefined) {
-    selectedAccounts.forEach(id => {
-    const acc = accounts.find(a => a.id === id)
-    if (acc) {
-      const weight = accountWeights[id] ?? 1 // default = 1 se não definido
-      const pnlImpact = form.result_net * weight
+const handleSave = async () => {
+  // validações
+  if (!form.asset?.trim()) { alert('Asset é obrigatório'); return; }
+  if (!selectedAccounts.length) { alert('Selecione ao menos uma conta'); return; }
 
-      updateAccount(id, {
-        ...acc,
-        currentFunding: (acc.currentFunding || 0) + pnlImpact
-      })
-    }
-  })
-}
-      selectedAccounts.forEach(id => {
-      const acc = accounts.find(a => a.id === id)
-      if (acc) {
-      updateAccount(id, { ...acc, defaultWeight: accountWeights[id] })
-    }
-   })
-    console.log('Salvando trade:', tradeData);
+  // garante shape accounts: [{accountId, weight}]
+  const accountsPayload = selectedAccounts.map(id => {
+    const defaultW = accountWeights[id];
+    const weight = (typeof defaultW === 'number' && !isNaN(defaultW)) ? defaultW : (1);
+    return { accountId: id, weight };
+  });
 
-    try {
-      await saveTrade(tradeData);
-      onClose();
-    } catch (error) {
-      console.error('Erro ao salvar trade:', error);
-      alert('Erro ao salvar trade: ' + (error.message || 'Erro desconhecido'));
-    }
+  const primaryAccountId = selectedAccounts[0];
+
+  const tradeData = {
+    ...form,
+    id: editing?.id || uuidv4(),
+    accounts: accountsPayload,
+    accountId: primaryAccountId, // principal
+    accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
+    accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
+    tf_signal: form.tf_signal || '1h',
   };
+
+  // Atualiza accounts: aplicar impacto do result_net * weight (multiplicador), conforme você pediu:
+  if (typeof form.result_net === 'number') {
+    const net = Number(form.result_net) || 0;
+    for (const entry of accountsPayload) {
+      const acc = accounts.find(a => a.id === entry.accountId);
+      if (!acc) continue;
+      const pnlImpact = net * (entry.weight ?? 1); // MULTIPLICADOR, não divisão
+      try {
+        // atualiza no dataStore central (persistence)
+        updateAccount(acc.id, { ...acc, currentFunding: (acc.currentFunding || 0) + pnlImpact, defaultWeight: entry.weight });
+      } catch (err) {
+        console.error('Erro ao atualizar conta via dataStore', err);
+      }
+    }
+  }
+
+  // salva trade no journal local (IndexedDB) como antes
+  try {
+    await saveTrade(tradeData);
+    onClose(); // fechar popup
+  } catch (err) {
+    console.error('Erro ao salvar trade', err);
+    alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
+  }
+};
+
+
 
   // Auto-populate tags when strategy changes
   useEffect(() => {
@@ -301,9 +334,10 @@ if (initialRiskPriceDiff > 0) {
       onClose();
     }
   };
-const [filterType, setFilterType] = useState<string>("");
+const [filterType, setFilterType] = useState<string>('');
 
 const filteredAccounts = useMemo(() => {
+  if (!Array.isArray(activeAccounts)) return [];
   return activeAccounts.filter(acc => !filterType || acc.type === filterType);
 }, [activeAccounts, filterType]);
 

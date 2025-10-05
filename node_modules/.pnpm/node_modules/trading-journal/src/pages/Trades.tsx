@@ -1,31 +1,60 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import TradeTable from '../Components/TradeTable';
 import TradeForm from '../Components/TradeForm';
 import { useJournal } from '@apps/journal-state';
-import { useData } from '@apps/state';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import type { EnrichedTrade, Trade, AccountWeight } from '../types/trade'; // Ajuste o caminho se necessário
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 
 export default function TradesPage() {
-  // 💥 CORRIGIDO: Garante que strategies seja desestruturado
-  const { trades = [], deleteTrade, ready, strategies = [] } = useJournal(); 
-  const { accounts = [] } = useData();
-  
-  if (!ready) {
-    return <div className="p-6 text-text">Carregando trades…</div>;
-  }
-  
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<EnrichedTrade | null>(null);
-
-  // Filtros com tipos corretos
-  const [filters, setFilters] = useState({
+   console.log("🧩 TradesPage renderizou");
+const [open, setOpen] = useState(false);
+const [editing, setEditing] = useState<EnrichedTrade | null>(null);  // 💥 CORRIGIDO: Garante que strategies seja desestruturado
+const { trades = [], deleteTrade, ready, strategies = [] } = useJournal(); 
+const [filters, setFilters] = useState({
     account: '', // Filtro por ID da conta
     category: '', // Filtro por Categoria de Mercado (Futures, Forex, Cripto, etc.)
     strategyId: '', // Filtro por ID da Estratégia
     timeframe: ''
   });
+  const [accounts, setAccounts] = useState(() => {
+    try {
+      return getAll().accounts || [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const data = getAll();
+      setAccounts(data.accounts || []);
+    } catch (err) {
+      console.error('Erro ao atualizar contas:', err);
+    }
+
+    const refresh = () => {
+      try {
+        const d = getAll();
+        setAccounts(d.accounts || []);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('storage', refresh);
+    window.addEventListener('datastore:change', refresh);
+
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('datastore:change', refresh);
+    };
+  }, []);
+
+
+  // Filtros com tipos corretos
+  
 
   // Enriquecer trades com informações das contas e da Estratégia
   const enrichedTrades: EnrichedTrade[] = useMemo(() => {

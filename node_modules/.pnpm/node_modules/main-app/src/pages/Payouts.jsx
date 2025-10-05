@@ -1,22 +1,40 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { useData } from '@apps/state'
 import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 // ---------------------------
 // Página de listagem + CRUD
 // ---------------------------
 export default function Payouts() {
-  const { accounts, payouts, createPayout, updatePayout, deletePayout } = useData()
-  const { currency, rate } = useCurrency()
+  const [accounts, setAccounts] = useState([])
+  const [payouts, setPayouts] = useState([])
 
+useEffect(() => {
+  const data = getAll()
+  setAccounts(data.accounts || [])
+  setPayouts(data.payouts || [])
+}, [])
+
+  // Mantém sincronizado com o localStorage quando outros componentes/páginas alteram
+  useEffect(() => {
+    const sync = () => {
+      const data = getAll()
+      setAccounts(data.accounts || [])
+      setPayouts(data.payouts || [])
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
+
+  const { currency, rate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState('')
-
+  
   // Paginação
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
-
+  
   // Ordenação
   const [sortField, setSortField] = useState('dateCreated')
   const [sortDirection, setSortDirection] = useState('desc')
@@ -171,14 +189,16 @@ export default function Payouts() {
                 <td className="center">{(p.accountIds || []).length}</td>
                 <td className="center"><span className="pill type">{p.type}</span></td>
                 <td className="center">
-                  <span className={
-                    'pill ' +
-                    (p.status === 'Completed'
-                      ? 'greenpayout'
-                      : p.status === 'Pending'
-                      ? 'yellowpayout'
-                      : 'gray')
-                  }>
+                  <span
+                    className={
+                      'pill ' +
+                      (p.status === 'Completed'
+                        ? 'greenpayout'
+                        : p.status === 'Pending'
+                        ? 'yellowpayout'
+                        : 'gray')
+                    }
+                  >
                     {p.status}
                   </span>
                 </td>
@@ -190,9 +210,32 @@ export default function Payouts() {
                   <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
                     Edit
                   </button>{' '}
-                  <button className="btn secondary" onClick={() => deletePayout(p.id)}>
-                    Delete
-                  </button>
+                 <button
+  className="btn secondary"
+  onClick={() => {
+    const data = getAll()
+    const payout = data.payouts.find(pp => pp.id === p.id)
+    if (payout?.accountIds?.length) {
+      const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
+      payout.accountIds.forEach(accId => {
+        const acc = data.accounts.find(a => a.id === accId)
+        if (acc) {
+          // devolve o valor retirado antes
+          const revertedFunding = (acc.currentFunding || 0) + netPerAccount
+          updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+        }
+      })
+    }
+    deletePayout(p.id)
+    const fresh = getAll()
+    setPayouts(fresh.payouts)
+    setAccounts(fresh.accounts)
+  }}
+>
+  Delete
+</button>
+
+
                 </td>
               </tr>
             ))}
@@ -216,11 +259,9 @@ export default function Payouts() {
           >
             ← Anterior
           </button>
-
           <span style={{ padding: '0 16px' }}>
             Página {currentPage} de {totalPages}
           </span>
-
           <button
             className="btn ghost"
             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
@@ -236,14 +277,50 @@ export default function Payouts() {
           onClose={() => setShowForm(false)}
           edit={showForm.edit}
           accounts={accounts}
-          onSave={(payload) => {
-            if (showForm.edit) {
-              updatePayout(showForm.edit.id, payload)
-            } else {
-              createPayout(payload)
-            }
-            setShowForm(false)
-          }}
+     onSave={(payload) => {
+  const isEdit = !!showForm.edit
+  const payoutId = showForm.edit?.id
+  const data = getAll()
+
+  // Antes de atualizar, se for edição, desfaz impacto antigo nas contas
+  if (isEdit) {
+    const oldPayout = data.payouts.find(p => p.id === payoutId)
+    if (oldPayout?.accountIds?.length) {
+      const oldNetPerAccount = (oldPayout.amountSolicited || 0) / oldPayout.accountIds.length
+      oldPayout.accountIds.forEach(accId => {
+        const acc = data.accounts.find(a => a.id === accId)
+        if (acc) {
+          // reverte o débito anterior
+          const revertedFunding = (acc.currentFunding || 0) + oldNetPerAccount
+          updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+        }
+      })
+    }
+  }
+
+  // Agora aplica o novo payout (criação ou edição)
+  const updatedPayout = isEdit
+    ? updatePayout(payoutId, payload)
+    : createPayout(payload)
+
+  // Aplica o novo impacto nas contas
+  const netPerAccount = (payload.amountSolicited || 0) / (payload.accountIds?.length || 1)
+  payload.accountIds?.forEach(accId => {
+    const acc = getAll().accounts.find(a => a.id === accId)
+    if (acc) {
+      const updatedFunding = Math.max((acc.currentFunding || 0) - netPerAccount, 0)
+      updateAccount(acc.id, { ...acc, currentFunding: updatedFunding })
+    }
+  })
+
+  // Atualiza o estado local
+  const fresh = getAll()
+  setPayouts(fresh.payouts)
+  setAccounts(fresh.accounts)
+  setShowForm(false)
+}}
+
+
         />
       )}
     </div>
@@ -266,6 +343,7 @@ function ExportCSV({ rows }) {
         )
       )
       .join('\n')
+
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -274,6 +352,7 @@ function ExportCSV({ rows }) {
     a.click()
     URL.revokeObjectURL(url)
   }
+
   return <button className="btn ghost" onClick={download}>Export CSV</button>
 }
 
@@ -302,13 +381,26 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
   const selectedSet = new Set(state.accountIds)
   const selectedAccounts = pool.filter(a => selectedSet.has(a.id))
 
-  const equalShare = selectedAccounts.length ? state.amountSolicited / selectedAccounts.length : 0
+  const equalShare = selectedAccounts.length
+    ? state.amountSolicited / selectedAccounts.length
+    : 0
+
   const preview = selectedAccounts.map(a => {
     const net = equalShare * (a.profitSplit || 1)
     const fee = equalShare - net
-    return { id: a.id, name: a.name, split: a.profitSplit, share: equalShare, net, fee,
-             type: a.type, funding: a.currentFunding, status: a.status }
+    return {
+      id: a.id,
+      name: a.name,
+      split: a.profitSplit,
+      share: equalShare,
+      net,
+      fee,
+      type: a.type,
+      funding: a.currentFunding,
+      status: a.status
+    }
   })
+
   const totals = preview.reduce((s, r) => ({ net: s.net + r.net, fee: s.fee + r.fee }), { net: 0, fee: 0 })
 
   const addMethod = () => {
@@ -475,9 +567,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
             type="date"
             className="input"
             value={state.approvedDate || ''}
-            onChange={(e) =>
-              setState({ ...state, approvedDate: e.target.value || null })
-            }
+            onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
           />
         </div>
       </div>

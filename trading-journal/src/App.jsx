@@ -7,7 +7,6 @@ import Trades from './pages/Trades';
 import Navbar from './Navbar.jsx';
 import Strategies from './pages/Strategies';
 import { useJournal } from "@apps/journal-state";
-import { useData } from "@apps/state";
 import {
   initGoogleDrive,
   isSignedIn,

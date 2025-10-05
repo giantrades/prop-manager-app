@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo,useEffect, useState } from "react";
 import {ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend,BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area} from "recharts";
 import { useJournal } from "@apps/journal-state";
-import { useData, useCurrency } from "@apps/state";
+import { useCurrency } from "@apps/state";
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 
 
@@ -12,7 +14,11 @@ function useIntegratedData() {
   const trades = journal?.trades || [];
   
   // Dados do main-app (contas)
-  const { accounts = [] } = useData() || {};
+  const [accounts, setAccounts] = useState(() => getAll().accounts || []);
+
+useEffect(() => {
+  setAccounts(getAll().accounts || []);
+}, []);
   
   // Map de contas por ID para facilitar lookup
   const accountsById = useMemo(() => {

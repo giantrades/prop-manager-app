@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useJournal } from "@apps/journal-state";
 import { v4 as uuidv4 } from 'uuid';
 import { Strategy, StrategyCategory, DefaultRiskSettings } from '../types/strategy';
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 // 💥 CORREÇÃO 1: Definição do Tipo Props
 type Props = {

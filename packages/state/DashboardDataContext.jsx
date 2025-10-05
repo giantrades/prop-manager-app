@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import * as store from "@apps/lib/dataStore";
 import { isSignedIn, uploadOrUpdateJSON, downloadLatestJSON } from "../utils/googleDrive.js";
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 const DataCtx = createContext(null);
 
@@ -13,6 +15,26 @@ export function DataProvider({ children }) {
   const [settings, setSettings] = useState(all.settings || { methods: ['Rise','Wise','Pix','Paypal','Cripto'] });
   const [firms, setFirms] = useState(all.firms || []);
   const [autoSync, setAutoSync] = useState(false);
+useEffect(() => {
+  const syncFromStorage = () => {
+    try {
+      const data = JSON.parse(localStorage.getItem('propmanager-data-v1') || '{}');
+      if (data.accounts) setAccounts(data.accounts);
+      if (data.payouts) setPayouts(data.payouts);
+      if (data.settings) setSettings(data.settings);
+      if (data.firms) setFirms(data.firms);
+    } catch (err) {
+      console.warn('Erro ao sincronizar localStorage:', err);
+    }
+  };
+
+  // roda na primeira montagem
+  syncFromStorage();
+
+  // sincroniza entre abas / apps
+  window.addEventListener('storage', syncFromStorage);
+  return () => window.removeEventListener('storage', syncFromStorage);
+}, []);
 
   // Backup para o Drive — envia o JSON com todas as chaves
   const backupToDrive = async (payload) => {

@@ -1,6 +1,8 @@
 // trading-journal/src/components/ExecutionsEditor.jsx
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 export default function ExecutionsEditor({ executions = [], onChange }) {
   const add = () => onChange([...(executions||[]), { id: uuidv4(), date: new Date().toISOString().split('T')[0], time: new Date().toTimeString().slice(0,5), price:0, quantity:0, side:'entry' }]);

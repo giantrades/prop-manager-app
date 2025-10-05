@@ -4,6 +4,8 @@ import { useCurrency } from "@apps/state";
 import StrategyForm from '../Components/StrategyForm';
 import { Strategy, StrategyStats } from '../types/strategy';
 import { Trade } from '../types/trade'; // Importa o Trade base
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 // --- COMPONENTE AUXILIAR: StrategyCard para a lista ---
 // Normalmente estaria em src/components/strategies/StrategyCard.tsx

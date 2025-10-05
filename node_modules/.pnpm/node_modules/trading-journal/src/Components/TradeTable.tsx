@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { useData } from '@apps/state';
+import React, { useMemo, useEffect, useState } from 'react';
 import { Trade, AccountWeight, EnrichedTrade } from '../types/trade'; // Certifique-se do path correto
 import { useJournal } from "@apps/journal-state";
+import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+
 
 type Props = {
   trades: EnrichedTrade[];
@@ -10,7 +11,12 @@ type Props = {
 };
 
 export default function TradeTable({ trades, onEdit, onDelete }: Props) {
-  const { accounts = [] } = useData();
+  const [accounts, setAccounts] = useState(() => getAll().accounts || []);
+
+useEffect(() => {
+  setAccounts(getAll().accounts || []);
+}, []);
+
   
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
