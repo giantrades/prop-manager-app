@@ -76,7 +76,7 @@ const StrategyCard: React.FC<StrategyCardProps> = ({ strategy, trades, onEdit, o
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div>Trades: <span className="font-semibold">{stats.linkedTradesCount}</span></div>
                     <div>Winrate: <span className="font-semibold">{stats.winrate}%</span></div>
-                    <div>**Expectancy (Avg R):** <span className="font-semibold">{stats.avgR.toFixed(2)} R</span></div>
+                    <div>**Expectancy (Avg R):** <span className="font-semibold">{fmt(stats.avgR)} R</span></div>
                     <div>Maior Ganho: <span className="value-green">{fmt(stats.largestWin)}</span></div>
                     <div>Maior Perda: <span className="value-red">{fmt(stats.largestLoss)}</span></div>
                 </div>
@@ -104,6 +104,9 @@ export default function StrategiesPage() {
     const [open, setOpen] = useState(false);
     const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
 
+    const fmt = (v: number) => currency === 'USD'
+  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+  : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
     const openNew = () => {
         setEditingStrategy(null);
         setOpen(true);

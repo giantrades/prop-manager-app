@@ -2,6 +2,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import { Trade, AccountWeight, EnrichedTrade } from '../types/trade'; // Certifique-se do path correto
 import { useJournal } from "@apps/journal-state";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import { useCurrency } from '@apps/state';
 
 
 type Props = {
@@ -22,7 +23,11 @@ useEffect(() => {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [sortKey, setSortKey] = useState<'date' | 'result_net' | 'result_R' | 'asset' |'tf_signal' | string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const { currency, rate } = useCurrency();
 
+const fmt = (v: number) => currency === 'USD'
+  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+  : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
   // Função para resolver nomes das contas
   function resolveAccountNames(tradeAccounts?: Array<{ accountId: string; weight?: number }>) {
     if (!tradeAccounts || tradeAccounts.length === 0) return 'N/A';
@@ -246,7 +251,7 @@ useEffect(() => {
                   {(t.exitVwap || t.exit_price || 0).toFixed?.(2) ?? '-'}
                 </td>
                 <td className={`font-medium ${(t.result_net || 0) >= 0 ? 'pos' : 'neg'}`}>
-                  ${(t.result_net || 0).toFixed(2)}
+                  {fmt(t.result_net || 0)}
                 </td>
  
                 <td>

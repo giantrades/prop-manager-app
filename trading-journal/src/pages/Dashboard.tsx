@@ -122,8 +122,9 @@ function genMockTrades(count = 120) {
 function useFormatter() {
   try {
     const { currency, rate } = useCurrency() || { currency: "USD", rate: 1 };
-    const fmt = (v: number) =>
-      new Intl.NumberFormat("en-US", { style: "currency", currency }).format((v || 0) * (rate || 1));
+        const fmt = (v: number) => currency === 'USD'
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
     const fmtShort = (v: number) =>
       (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0));
     return { fmt, fmtShort, currency, rate };

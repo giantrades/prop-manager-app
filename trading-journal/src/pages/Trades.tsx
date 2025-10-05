@@ -2,6 +2,7 @@ import React, { useMemo, useEffect, useState } from 'react';
 import TradeTable from '../Components/TradeTable';
 import TradeForm from '../Components/TradeForm';
 import { useJournal } from '@apps/journal-state';
+import { useCurrency } from '@apps/state';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import type { EnrichedTrade, Trade, AccountWeight } from '../types/trade'; // Ajuste o caminho se necessário
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
@@ -53,8 +54,12 @@ const [filters, setFilters] = useState({
   }, []);
 
 
-  // Filtros com tipos corretos
+  // usecurrency para mudar o rate
   
+const { currency, rate } = useCurrency();
+const fmt = (v: number) => currency === 'USD'
+  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+  : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
 
   // Enriquecer trades com informações das contas e da Estratégia
   const enrichedTrades: EnrichedTrade[] = useMemo(() => {
@@ -190,11 +195,11 @@ const [filters, setFilters] = useState({
             {new Date(label).toLocaleDateString('pt-BR')}
           </div>
           <div style={{ color: '#10b981', fontWeight: 600 }}>
-            Equity: ${data.y.toFixed(2)}
+            Equity: {fmt(data.y)}
           </div>
           {data.trade && (
             <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4 }}>
-              {data.trade.asset} ({data.trade.direction}) • R: {data.trade.result_R?.toFixed(2)}
+              {data.trade.asset} ({data.trade.direction}) • R: {fmt(data.trade.result_R)}
             </div>
           )}
         </div>
@@ -323,13 +328,13 @@ const [filters, setFilters] = useState({
           </div>
           <div className="card accent8">
             <h3>📈 Avg R</h3>
-            <div className="stat">{filteredStats.avgR.toFixed(2)}</div>
+            <div className="stat">{fmt(filteredStats.avgR)}</div>
             <div className="muted">risco-retorno médio</div>
           </div>
           <div className="card accent1">
             <h3>💰 P&L Total</h3>
             <div className={`stat ${filteredStats.totalPnL >= 0 ? 'pos' : 'neg'}`}>
-              ${filteredStats.totalPnL.toFixed(2)}
+              {fmt(filteredStats.totalPnL)}
             </div>
             <div className="muted">resultado líquido</div>
           </div>
