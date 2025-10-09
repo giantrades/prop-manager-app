@@ -214,3 +214,128 @@ tr:hover td { background: rgba(39,48,68,0.24); }
   cursor: pointer;
 }
 
+/* === GOALS DARK MODE ENHANCEMENT === */
+
+/* Cards principais */
+.goal-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  transition: border-color 0.25s, transform 0.2s ease;
+}
+.goal-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+}
+.goal-card.completed {
+  border-left: 4px solid #10b981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* Cabeçalho */
+.goal-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+}
+.goal-meta {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+/* Barra de progresso principal */
+.progress-bar {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  height: 6px;
+  overflow: hidden;
+}
+.progress-fill {
+  background: linear-gradient(90deg,#A8FF78, #00C895);
+  height: 100%;
+  transition: width 0.6s ease-out;
+}
+.progress-text {
+  font-size: 0.8rem;
+  color: #ccc;
+  margin-top: 0.25rem;
+}
+
+/* === Subgoals (hierarquia visual clara) === */
+.subgoals {
+  margin-top: 0.9rem;
+  padding-left: 1rem;
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.subgoal {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: #ddd;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background 0.25s;
+}
+.subgoal:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.subgoal > span {
+  font-size: 1rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.subgoal-title {
+  font-weight: 500;
+  color: #fff;
+}
+.subgoal.completed .subgoal-title {
+  color: #10b981;
+  text-decoration: line-through;
+}
+
+.mini-bar {
+  background: rgba(255, 255, 255, 0.1);
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.2rem;
+}
+.mini-bar > div {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.subgoal .muted {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+.goals-page {
+  margin-top: 1.5rem;
+}
+
+.goals-list {
+  margin-top: 1.5rem;
+}
+
+.goal-card {
+  transition: all 0.2s ease;
+}
+
+.goal-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 10px rgba(255,255,255,0.05);
+}
+
+.fade-out {
+  opacity: 0;
+  transform: translateY(-10px);
+}

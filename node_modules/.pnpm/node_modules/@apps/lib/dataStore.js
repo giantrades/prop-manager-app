@@ -4,32 +4,48 @@ import { v4 as uuid } from 'uuid'
 const LS_KEY = 'propmanager-data-v1'
 
 const seed = {
-  accounts: [ /* ... seus seeds existentes ... */ ],
+  accounts: [],
   payouts: [],
   settings: { methods: ['Rise','Wise','Pix','Paypal','Cripto'] },
   firms: [],
-  trades: [],
+  trades: [],   // ADICIONADO: armazena trades
+  goals: []     // ADICIONADO: armazena goals
 }
 
 function load() {
   const raw = localStorage.getItem(LS_KEY)
-  if (!raw) { localStorage.setItem(LS_KEY, JSON.stringify(seed)); return JSON.parse(JSON.stringify(seed)) }
+  if (!raw) { 
+    localStorage.setItem(LS_KEY, JSON.stringify(seed)); 
+    return JSON.parse(JSON.stringify(seed)) 
+  }
   try {
     const data = JSON.parse(raw)
-    // MIGRATION: garante chaves obrigatórias para compatibilidade com versões antigas
+    // MIGRATION: garante chaves obrigatórias
     data.settings = data.settings || { methods: ['Rise','Wise','Pix','Paypal','Cripto'] }
     data.accounts = data.accounts || []
     data.payouts = data.payouts || []
     data.firms = data.firms || []
+    data.trades = data.trades || []
+    data.goals = data.goals || []
     return data
   } catch (e) {
     localStorage.setItem(LS_KEY, JSON.stringify(seed))
     return JSON.parse(JSON.stringify(seed))
   }
 }
-function save(data){ localStorage.setItem(LS_KEY, JSON.stringify(data)) }
 
-// export helpers / existing functions
+// SAVE agora dispara evento datastore:change
+function save(data){ 
+  localStorage.setItem(LS_KEY, JSON.stringify(data))
+  // Dispara evento para as UIs sincronizarem
+  try {
+    window.dispatchEvent(new CustomEvent('datastore:change', { detail: { timestamp: Date.now() } }))
+  } catch(e) {}
+}
+
+/* --------------------
+   Export helpers / functions
+   -------------------- */
 export function getAll(){ return load() }
 export function getSettings(){ return load().settings }
 export function setSettings(patch){
@@ -38,11 +54,13 @@ export function setSettings(patch){
   save(data); return data.settings
 }
 
-// ACCOUNTS (mantive sua lógica existente)
+/* --------------------
+   ACCOUNTS
+   -------------------- */
 export function createAccount(partial){
   const data = load()
   const acc = { id: uuid(), name:'', type:'Forex', dateCreated: new Date().toISOString().slice(0,10), status:'Standby',
-    initialFunding:0, currentFunding:0, profitSplit:0.8, payoutFrequency:'monthly', ...partial }
+    initialFunding:0, currentFunding:0, profitSplit:0.8, payoutFrequency:'monthly', defaultWeight:1, ...partial }
   data.accounts.push(acc); save(data); return acc
 }
 export function updateAccount(id, patch){
@@ -55,15 +73,15 @@ export function deleteAccount(id){
   const data = load()
   data.accounts = data.accounts.filter(a=>a.id!==id)
   data.payouts = data.payouts.map(p=> ({...p, accountIds: p.accountIds?.filter(aid=>aid!==id) || []}))
+  // remove trades that referenced this account (or keep but mark?) -> we'll remove references
+  data.trades = data.trades.map(t => t.accountId === id ? ({...t, accountId: null}) : t)
   save(data)
 }
 
-// ---- payouts (mantive suas funções / lógica já existente) ----
-// computeSplit, createPayout, updatePayout, deletePayout
-// Como seu arquivo original já os continha, mantive a essência e preservei nomes.
-// Se for necessário, copie o conteúdo original destas funções aqui.
-// Para brevity: vou reutilizar as mesmas funções que já estavam no arquivo original.
-
+/* --------------------
+   PAYOUTS
+   (mantive sua lógica)
+   -------------------- */
 function computeSplit(amount, accounts){
   if (!accounts.length) return { totalNet:0, totalFee:0, splitMap:{}, deductions:{} }
   const share = amount / accounts.length
@@ -81,7 +99,6 @@ function computeSplit(amount, accounts){
 export function createPayout(partial){
   const data = load()
   const p = { id: uuid(), dateCreated: new Date().toISOString(), amountSolicited:0, method:'Rise', status:'Pending', accountIds: [], splitByAccount: {}, ...partial }
-  // se houver accounts referenciadas, computeSplit
   if (p.accountIds && p.accountIds.length){
     const accounts = p.accountIds.map(id=> data.accounts.find(a=>a.id===id)).filter(Boolean)
     const c = computeSplit(p.amountSolicited, accounts)
@@ -89,13 +106,21 @@ export function createPayout(partial){
     accounts.forEach(a => p.splitByAccount[a.id] = c.splitMap[a.id])
   }
   data.payouts.push(p)
-  // aplicar atualizacao do currentFunding se necessário (se for aprovado). A lógica original do seu arquivo já tratava
-  save(data); return p
+  save(data)
+  return p
 }
 export function updatePayout(id, patch){
   const data = load()
   const idx = data.payouts.findIndex(p=>p.id===id); if (idx===-1) return null
   data.payouts[idx] = { ...data.payouts[idx], ...patch }
+  // recompute split if accountIds/amount changed
+  const p = data.payouts[idx]
+  if (p.accountIds && p.amountSolicited !== undefined) {
+    const accounts = p.accountIds.map(id => data.accounts.find(a => a.id === id)).filter(Boolean)
+    const c = computeSplit(p.amountSolicited, accounts)
+    p.splitByAccount = {}
+    accounts.forEach(a => p.splitByAccount[a.id] = c.splitMap[a.id])
+  }
   save(data); return data.payouts[idx]
 }
 export function deletePayout(id){
@@ -104,7 +129,9 @@ export function deletePayout(id){
   save(data)
 }
 
-// Account stats (mantive a sua função)
+/* --------------------
+   Account stats
+   -------------------- */
 export function getAccountStats(accountId){
   const data = load()
   const acc = data.accounts.find(a=>a.id===accountId)
@@ -121,51 +148,28 @@ export function getAccountStats(accountId){
   return { roi, totalPayouts, lastPayoutAmount, nextPayout }
 }
 
-// ---------------------------
-// NEW: FIRMS (companies) CRUD + stats
-// ---------------------------
-
-export function getFirms(){
-  return load().firms || []
-}
-
+/* --------------------
+   FIRMS
+   -------------------- */
+export function getFirms(){ return load().firms || [] }
 export function createFirm(partial){
   const data = load()
-  const f = {
-    id: uuid(),
-    name: partial.name || '',
-    type: partial.type || 'Futures',
-    logo: partial.logo || null, // dataURL ou URL
-    dateCreated: new Date().toISOString().slice(0,10),
-    ...partial
-  }
-  data.firms.push(f)
-  save(data)
-  return f
+  const f = { id: uuid(), name: partial.name || '', type: partial.type || 'Futures', logo: partial.logo || null, dateCreated: new Date().toISOString().slice(0,10), ...partial }
+  data.firms.push(f); save(data); return f
 }
-
 export function updateFirm(id, patch){
   const data = load()
   const idx = data.firms.findIndex(x=>x.id===id); if (idx===-1) return null
   data.firms[idx] = { ...data.firms[idx], ...patch }
   save(data); return data.firms[idx]
 }
-
 export function deleteFirm(id){
   const data = load()
   data.firms = data.firms.filter(x=>x.id!==id)
-  // remove referência das contas
   data.accounts = data.accounts.map(a => a.firmId === id ? ({ ...a, firmId: null }) : a)
   save(data)
   return true
 }
-
-/*
-  getFirmStats(firmId):
-    - totalFunding: soma currentFunding das contas ligadas
-    - totalPayouts: soma de todos os valores net nos payouts que foram split para contas dessa firm
-    - accountCount: quantidade de contas
-*/
 export function getFirmStats(firmId){
   const data = load()
   const accounts = (data.accounts || []).filter(a => a.firmId === firmId)
@@ -182,45 +186,383 @@ export function getFirmStats(firmId){
   return { totalFunding: Number(totalFunding.toFixed(2)), totalPayouts: Number(totalPayouts.toFixed(2)), accountCount: accounts.length }
 }
 
-// ---------------------------
-// NEW: TRADES CRUD
-// ---------------------------
+/* --------------------
+   TRADES (NOVO)
+   -------------------- */
+export function getTrades(){ return load().trades || [] }
 
-export function getTrades() {
-  return load().trades || [];
-}
-
-export function createTrade(partial) {
-  const data = load();
+export function createTrade(partial){
+  const data = load()
   const t = {
     id: uuid(),
-    date: new Date().toISOString().slice(0, 10),
+    date: new Date().toISOString(),
     asset: '',
+    accountId: null,
+    strategyId: null,
     direction: 'Long',
     volume: 0,
     entry_price: 0,
     exit_price: 0,
     result_net: 0,
-    accountId: null,
-    notes: '',
+    result_R: 0,
     ...partial
-  };
-  data.trades.push(t);
-  save(data);
-  return t;
+  }
+  data.trades.push(t)
+  save(data)
+  return t
 }
 
-export function updateTrade(id, patch) {
-  const data = load();
-  const idx = data.trades.findIndex(t => t.id === id);
-  if (idx === -1) return null;
-  data.trades[idx] = { ...data.trades[idx], ...patch };
-  save(data);
-  return data.trades[idx];
+export function updateTrade(id, patch){
+  const data = load()
+  const idx = data.trades.findIndex(x=>x.id===id)
+  if (idx === -1) return null
+  data.trades[idx] = { ...data.trades[idx], ...patch }
+  save(data)
+  return data.trades[idx]
 }
 
-export function deleteTrade(id) {
-  const data = load();
-  data.trades = data.trades.filter(t => t.id !== id);
-  save(data);
+export function deleteTrade(id){
+  const data = load()
+  data.trades = data.trades.filter(t=>t.id!==id)
+  save(data)
+}
+
+/* --------------------
+   GOALS (NOVO)
+   -------------------- */
+// helpers
+function isInPeriod(dateToCheckISO, period, startDateISO) {
+  if (!dateToCheckISO) return false
+  const checkDate = new Date(dateToCheckISO)
+  const start = startDateISO ? new Date(startDateISO) : new Date(0)
+  const now = new Date()
+  if (checkDate < start) return false
+  if (period === 'allTime') return checkDate >= start
+  const periodDays = { daily:1, weekly:7, monthly:30, quarterly:90, yearly:365 }
+  const days = periodDays[period] || 30
+  const cutoffDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  return checkDate >= Math.max(start, cutoffDate) && checkDate <= now
+}
+
+// calcula métricas a partir de trades/accounts/payouts
+function calculateMetric(type, trades, accounts, config = {}) {
+  const period = config.period || 'allTime'
+  const startDate = config.startDate || null
+  // Filtra trades relevantes
+  const relevantTrades = (trades || []).filter(trade => {
+    if (!trade) return false
+    if (!isInPeriod(trade.date, period, startDate)) return false
+    if (config.linkedAccounts && config.linkedAccounts.length) {
+      if (!config.linkedAccounts.includes(trade.accountId)) return false
+    }
+    if (config.linkedStrategies && config.linkedStrategies.length) {
+      if (!config.linkedStrategies.includes(trade.strategyId)) return false
+    }
+    return true
+  })
+
+  switch(type) {
+    case 'profit':
+      return relevantTrades.reduce((sum, t) => sum + (Number(t.result_net) || 0), 0)
+
+    case 'tradeCount':
+      return relevantTrades.length
+
+    case 'winRate': {
+      const wins = relevantTrades.filter(t => (Number(t.result_R) || 0) > 0).length
+      const total = relevantTrades.length
+      return total > 0 ? (wins / total) * 100 : 0
+    }
+
+    case 'avgR': {
+      const totalR = relevantTrades.reduce((s,t)=> s + (Number(t.result_R) || 0), 0)
+      return relevantTrades.length > 0 ? totalR / relevantTrades.length : 0
+    }
+
+    case 'roi': {
+      const linked = (config.linkedAccounts && config.linkedAccounts.length) 
+        ? accounts.filter(acc=> config.linkedAccounts.includes(acc.id))
+        : accounts
+      const totalInitial = linked.reduce((s, a) => s + (Number(a.initialFunding)||0), 0)
+      const totalCurrent = linked.reduce((s, a) => s + (Number(a.currentFunding)||0), 0)
+      return totalInitial > 0 ? ((totalCurrent - totalInitial) / totalInitial) * 100 : 0
+    }
+
+    case 'payout': {
+      const payouts = load().payouts || []
+      const relevantPayouts = payouts.filter(p => {
+        // p.accountIds may be array; consider any matching account
+        const anyMatch = !config.linkedAccounts?.length || (p.accountIds || []).some(id => config.linkedAccounts.includes(id))
+        const inPeriod = isInPeriod(p.dateCreated || p.approvedDate || p.date, period, startDate)
+        return anyMatch && inPeriod
+      })
+      return relevantPayouts.reduce((s,p)=> s + (Number(p.amountReceived || p.amountSolicited || 0)), 0)
+    }
+
+    default:
+      return 0
+  }
+}
+
+// getGoalProgress
+export function getGoalProgress(goalId) {
+  const data = load()
+  const goals = data.goals || []
+  const goal = goals.find(g => g.id === goalId)
+  if (!goal) return null
+  const trades = data.trades || []
+  const accounts = data.accounts || []
+
+  // se tem subgoals
+  if (goal.subGoals && goal.subGoals.length) {
+    const subProgresses = goal.subGoals.map(sub => {
+      const config = {
+        ...sub,
+        period: sub.period || goal.period,
+        startDate: sub.startDate || goal.startDate
+      }
+      // if sub doesn't set linkedAccounts, inherit
+      if ((!sub.linkedAccounts || !sub.linkedAccounts.length) && goal.linkedAccounts && goal.linkedAccounts.length) {
+        config.linkedAccounts = goal.linkedAccounts
+      }
+      const currentValue = calculateMetric(sub.type, trades, accounts, config)
+      const progress = sub.targetValue > 0 ? Math.min(100, (currentValue / sub.targetValue) * 100) : 0
+      return {
+        id: sub.id,
+        title: sub.title,
+        type: sub.type,
+        targetValue: sub.targetValue,
+        currentValue,
+        progress,
+        completed: progress >= 100,
+        weight: sub.weight || 1,
+      }
+    })
+
+    const totalWeight = subProgresses.reduce((s,sg) => s + (sg.weight || 1), 0)
+    const weightedSum = subProgresses.reduce((s,sg) => s + (sg.progress * (sg.weight || 1)), 0)
+    const totalProgress = totalWeight > 0 ? weightedSum / totalWeight : 0
+    return {
+      progress: totalProgress,
+      completed: totalProgress >= 100,
+      subProgresses
+    }
+  } else {
+    // simple goal
+    const cfg = {
+      ...goal
+    }
+    const currentValue = calculateMetric(goal.type, trades, accounts, cfg)
+    const progress = goal.targetValue > 0 ? Math.min(100, (currentValue / goal.targetValue) * 100) : 0
+    return {
+      currentValue,
+      progress,
+      completed: progress >= 100
+    }
+  }
+}
+
+// getAllGoals retorna goals com progresso aplicado
+// agora aceita opção: getAllGoals({ includeArchived: false }) se quiser que inclua esses Goals em graficos botar "true"
+// getAllGoals retorna goals com progresso e status
+// agora aceita opção: getAllGoals({ includeArchived: false })
+export function getAllGoals(opts = { includeArchived: false }) {
+  const data = load()
+  let goals = data.goals || []
+
+  goals = goals.filter(g => g && typeof g === 'object' && g.id) // segurança extra
+  if (!opts.includeArchived) {
+    goals = goals.filter(g => !g.archived)
+  }
+
+  return goals.map(g => {
+    const p = getGoalProgress(g.id) || {}
+    const completed = !!p.completed
+    const progress = p.progress ?? 0
+
+    let status = 'not-started'
+    if (progress > 0 && progress < 100) status = 'in-progress'
+    if (completed) status = 'completed'
+    if (g.archived) status = 'archived'
+
+    return {
+      ...g,
+      ...p,
+      status,
+      createdAt: g.createdAt || new Date().toISOString(),
+      completedAt: completed
+        ? g.completedAt || new Date().toISOString()
+        : g.completedAt || null,
+      archived: !!g.archived,
+    }
+  })
+}
+
+// CRUD goals
+export function createGoal(goalData) {
+  const now = new Date().toISOString()
+  const data = load()
+  const subGoals = (goalData.subGoals || []).map(s => ({
+  ...s,
+  id: s.id || uuid(),
+  weight: s.weight !== undefined ? s.weight : 1,
+  createdAt: s.createdAt || new Date().toISOString(),
+  completedAt: s.completedAt || null,
+  archived: s.archived || false
+}))
+  const goal = { ...goalData, id: uuid(), subGoals, completedAt: null, createdAt: now, updatedAt: now, archived: goalData.archived || false }
+
+  // Recalcula progresso imediato e dispara event se já estiver completa
+  try {
+    const prog = getGoalProgress(goal.id)
+    if (prog && prog.completed) {
+      goal.completedAt = goal.completedAt || new Date().toISOString()
+      try { window.dispatchEvent(new CustomEvent('goal:completed', { detail: { goalId: goal.id, completedAt: goal.completedAt } })) } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('createGoal: não foi possível calcular progresso imediato', e)
+  }
+
+  // >>> Adiciona apenas UMA vez
+  data.goals = [...(data.goals || []), goal]
+  save(data)
+  return goal
+}
+
+
+export function updateGoal(id, patch) {
+  const data = load()
+  const idx = (data.goals || []).findIndex(g => g.id === id)
+  if (idx === -1) throw new Error('Goal not found')
+  if (patch.subGoals) {
+    patch.subGoals = patch.subGoals.map(s => ({ ...s, id: s.id || uuid(), weight: s.weight !== undefined ? s.weight : 1 }))
+  }
+  data.goals[idx] = { ...data.goals[idx], ...patch, updatedAt: new Date().toISOString() }
+  // recalcula completedAt
+  const prog = getGoalProgress(id)
+  if (prog && prog.completed && !data.goals[idx].completedAt) data.goals[idx].completedAt = new Date().toISOString()
+  else if (prog && !prog.completed && data.goals[idx].completedAt) data.goals[idx].completedAt = null
+// depois de ajustar completedAt no updateGoal:
+  if (prog && prog.completed && !data.goals[idx].completedNotified) {
+    // marca como notificado para evitar múltiplos eventos
+    data.goals[idx].completedNotified = true;
+    try { window.dispatchEvent(new CustomEvent('goal:completed', { detail: { goalId: id, completedAt: data.goals[idx].completedAt } })); } catch(e){}
+  } else if (prog && !prog.completed && data.goals[idx].completedNotified) {
+    // replayable: se for reaberto, resetamos a flag
+    data.goals[idx].completedNotified = false;
+  }
+  save(data)
+  return data.goals[idx]
+}
+
+export function deleteGoal(id) {
+  const data = load()
+  // Tenta remover como goal principal
+  const mainIndex = (data.goals || []).findIndex(g => g.id === id)
+  if (mainIndex !== -1) {
+    data.goals.splice(mainIndex, 1)
+    save(data)
+    return
+  }
+
+  // Se não for goal principal, remove de subGoals dentro das metas
+  let removed = false
+  data.goals = (data.goals || []).map(g => {
+    if (!g.subGoals || !g.subGoals.length) return g
+    const beforeLen = g.subGoals.length
+    g.subGoals = g.subGoals.filter(sg => sg.id !== id)
+    if (g.subGoals.length !== beforeLen) removed = true
+    return g
+  })
+
+  if (removed) {
+    save(data)
+  } else {
+    // se nada foi removido, mantemos o comportamento antigo (não crashar)
+    console.warn('deleteGoal: id não encontrado nem como goal nem como subGoal:', id)
+  }
+}
+
+export function archiveGoal(id, archived = true) {
+  const data = load()
+  if (!data.goals) data.goals = []
+
+  let changed = false
+
+  // 🔹 Atualiza goal principal
+  data.goals = data.goals.map(g => {
+    if (g.id === id) {
+      changed = true
+      return {
+        ...g,
+        archived,
+        archivedAt: archived ? new Date().toISOString() : null,
+        completedAt: archived && !g.completedAt ? new Date().toISOString() : g.completedAt,
+      }
+    }
+
+    // 🔹 Atualiza subgoals, se existir
+    if (Array.isArray(g.subGoals)) {
+      const subs = g.subGoals.map(s => {
+        if (s.id === id) {
+          changed = true
+          return {
+            ...s,
+            archived,
+            archivedAt: archived ? new Date().toISOString() : null,
+            completedAt: archived && !s.completedAt ? new Date().toISOString() : s.completedAt,
+          }
+        }
+        return s
+      })
+      return { ...g, subGoals: subs }
+    }
+
+    return g
+  })
+
+  // 🔹 Se mudou algo, salva
+  if (changed) {
+    save({ ...data }) // forçar nova referência (garante persistência)
+    console.log(`📦 Goal ${id} ${archived ? 'arquivado' : 'desarquivado'} com sucesso`)
+    window.dispatchEvent(new CustomEvent('datastore:change'))
+    return true
+  }
+
+  console.warn('⚠️ archiveGoal: ID não encontrado:', id)
+  return false
+}
+
+export function createTag(tag) {
+  const data = load()
+  if (!data.tags) data.tags = []
+
+  // Evita duplicadas pelo nome (case-insensitive)
+  const exists = data.tags.find(t => t.name.toLowerCase() === tag.name.toLowerCase())
+  if (exists) return exists
+
+  const newTag = { id: uuid(), ...tag }
+  data.tags.push(newTag)
+  save(data)
+  window.dispatchEvent(new CustomEvent('datastore:change'))
+  return newTag
+}
+
+export function getAllTags() {
+  const data = load()
+  return data.tags || []
+}
+
+
+/* --------------------
+   Export default summary (optional)
+   -------------------- */
+export default {
+  getAll, getSettings, setSettings,
+  createAccount, updateAccount, deleteAccount,
+  createPayout, updatePayout, deletePayout,
+  getAccountStats,
+  getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
+  getTrades, createTrade, updateTrade, deleteTrade,
+  getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal
 }

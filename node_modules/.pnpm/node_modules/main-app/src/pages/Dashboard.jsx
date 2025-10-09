@@ -6,7 +6,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
-
+import { getAllGoals } from '@apps/lib/dataStore';
 
 /* =========================================================
    1) Barra de filtros (categorias + range)
@@ -755,6 +755,119 @@ function FundingPerCategory(){
   );
 }
 
+
+function GoalsDistributionChart() {
+  const [goals, setGoals] = useState([])
+
+  useEffect(() => {
+    const data = getAllGoals({ includeArchived: true })
+    const normalized = data.map(g => ({
+      ...g,
+      status:
+        g.status === "in-progress" ? "inProgress" :
+        g.status === "not-started" ? "notStarted" :
+        g.status === "completed" ? "completed" :
+        g.status === "archived" ? "archived" : g.status
+    }))
+    setGoals(normalized)
+  }, [])
+
+const stats = {
+  total: goals.filter(g => !g.archived).length, // só metas ativas
+  concluido: goals.filter(g => g.completed && !g.archived).length,
+  emProgresso: goals.filter(g => !g.completed && !g.archived).length,
+  arquivado: goals.filter(g => g.archived).length,
+}
+
+
+  const chartData = [
+    { name: "Concluídos", value: stats.concluido },
+    { name: "Em Progresso", value: stats.emProgresso },
+    { name: "Arquivados", value: stats.arquivado },
+  ]
+
+  const colors = ["#10B981", "#8B5CF6", "#475569"]
+
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const { name, value } = payload[0]
+      return (
+        <div
+          style={{
+            backgroundColor: "#1c1f26",
+            color: "#e7eaf0",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            border: "1px solid #8B5CF6",
+            boxShadow: "0 0 10px rgba(139, 92, 246, 0.4)"
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            <strong>{name}</strong>: {value}
+          </p>
+        </div>
+      )
+    }
+    return null
+  }
+
+  return (
+    <div className="card">
+      <h3>🎯 Goals por Status</h3>
+      <div style={{ height: 280 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              dataKey="value"
+              nameKey="name"
+              outerRadius={100}
+              innerRadius={50}
+              // ⛔ removido label para tirar os “1” e “0”
+              stroke="none"
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={index} fill={colors[index]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ marginTop: "1rem", fontSize: "1rem" }}>
+        {chartData.map((row, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "8px 0",
+              borderTop: "1px solid #2a3246",
+              color: "#e7eaf0",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: colors[i],
+                  marginRight: 8,
+                }}
+              />
+              {row.name}
+            </div>
+            <div>{row.value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function RecentPayouts(){
   const { payouts } = useFiltered()
   const { currency, rate } = useCurrency()
@@ -1133,6 +1246,7 @@ export default function Dashboard(){
       <div className="grid" style={{gridTemplateColumns:'2fr 1fr', gap:16}}>
         <PatrimonioLine/>
         <FundingPerCategory/>
+        <GoalsDistributionChart />
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:16}}>
         <FundingPerAccount/>

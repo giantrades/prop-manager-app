@@ -135,10 +135,26 @@ export async function downloadFile(fileId) {
 }
 
 // 🔹 Pega o JSON mais recente
-export async function downloadLatestJSON() {
-  const files = await listFiles();
-  if (!files || files.length === 0) return null;
-  return downloadFile(files[0].id);
+export async function downloadLatestJSON(filename = 'propmanager-backup.json') {
+  // Procurar pelo arquivo com o nome exato (evita pegar qualquer JSON)
+  try {
+    const response = await gapi.client.drive.files.list({
+      q: `name='${filename.replace(/'/g, "\\'")}' and mimeType='application/json' and trashed=false`,
+      pageSize: 5,
+      fields: 'files(id,name,modifiedTime)',
+      orderBy: 'modifiedTime desc'
+    });
+
+    const files = response.result.files || [];
+    if (!files.length) return null;
+    // usamos o mais recente (já ordenado)
+    const fileId = files[0].id;
+    const dl = await gapi.client.drive.files.get({ fileId, alt: 'media' });
+    return dl.result;
+  } catch (err) {
+    console.error('downloadLatestJSON error:', err);
+    throw err;
+  }
 }
 
 // 🔹 Upload ou atualização de JSON
@@ -162,35 +178,69 @@ export async function uploadOrUpdateJSON(name, content) {
     return uploadFile(name, content);
   }
 }
-// 🔹 Backup geral do estado local (accounts/payouts/firms)
+
 export async function backupToDrive() {
+  const LS_KEY = "propmanager-data-v1";
   try {
-    const data = localStorage.getItem("propmanager-data-v1");
+    const data = localStorage.getItem(LS_KEY);
     if (!data) {
-      alert("Nenhum dado encontrado para backup.");
-      return;
+      const msg = `Nenhum dado encontrado na chave localStorage '${LS_KEY}'.`;
+      console.warn('[googleDrive] backupToDrive:', msg);
+      alert(msg);
+      return { success: false, message: msg };
     }
-    const parsed = JSON.parse(data);
-    await uploadOrUpdateJSON("propmanager-backup.json", parsed);
+    // tenta parse apenas para validar antes de enviar
+    let parsed;
+    try { parsed = JSON.parse(data); } catch (e) {
+      console.error('[googleDrive] backupToDrive: localStorage não é JSON válido', e);
+      alert('Erro: dados locais não são JSON válido. Backup abortado.');
+      return { success: false, message: 'LocalStorage não é JSON válido.' };
+    }
+
+    // utiliza sua função existente uploadOrUpdateJSON (que opera com objeto JSON)
+    const result = await uploadOrUpdateJSON("propmanager-backup.json", parsed);
+    console.info('[googleDrive] backupToDrive success', result);
     alert("Backup enviado para o Google Drive com sucesso ✅");
+    // retorna meta para UI/integracão
+    return { success: true, message: 'Backup enviado', meta: result };
   } catch (err) {
-    console.error("Erro no backupToDrive:", err);
-    alert("Erro ao enviar backup para o Google Drive ❌");
+    console.error('Erro no backupToDrive:', err);
+    alert('Erro ao enviar backup para o Google Drive ❌\n' + (err.message || err));
+    return { success: false, message: err.message || String(err) };
   }
 }
 
+
 // 🔹 Restaura os dados do backup mais recente
-export async function restoreFromDrive() {
+export async function restoreFromDrive({ filename = 'propmanager-backup.json' } = {}) {
+  const LS_KEY = "propmanager-data-v1";
   try {
-    const latest = await downloadLatestJSON();
+    const latest = await downloadLatestJSON(filename);
     if (!latest) {
-      alert("Nenhum backup encontrado no Drive.");
-      return;
+      const msg = 'Nenhum backup encontrado no Drive com o nome "' + filename + '".';
+      console.warn('[googleDrive] restoreFromDrive:', msg);
+      alert(msg);
+      return { success: false, message: msg };
     }
-    localStorage.setItem("propmanager-data-v1", JSON.stringify(latest));
-    alert("Backup restaurado com sucesso ✅ (recarregue o app)");
+
+    // Se a API devolver objeto JS já parseado (gapi retorna objeto), aceitamos.
+    const payload = typeof latest === 'string' ? JSON.parse(latest) : latest;
+
+    // SUBSTITUIR (sobrescrever) conforme sua preferência
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+
+    // IMPORTANTE: disparar event para UI reagir automaticamente
+    try {
+      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'googleDrive.restore', timestamp: Date.now() } }));
+    } catch (e) {
+      console.warn('Não foi possível disparar datastore:change após restore', e);
+    }
+
+    alert("Backup restaurado com sucesso ✅ (localStorage substituído).");
+    return { success: true, message: 'Restore concluído', data: payload };
   } catch (err) {
-    console.error("Erro no restoreFromDrive:", err);
-    alert("Erro ao restaurar dados do Google Drive ❌");
+    console.error('Erro no restoreFromDrive:', err);
+    alert('Erro ao restaurar dados do Google Drive ❌\n' + (err.message || err));
+    return { success: false, message: err.message || String(err) };
   }
 }

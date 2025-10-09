@@ -7,6 +7,7 @@ import Settings from "./pages/Settings.jsx";
 import Firms from "./pages/Firms.jsx";
 import Navbar from "./Navbar";
 import { useJournal } from "@apps/journal-state";
+import Goals from "./pages/Goals.jsx/"
 import {
   initGoogleDrive,
   isSignedIn,
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/payouts" element={<Payouts />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/firms" element={<Firms />} />
+          <Route path="/goals" element={<Goals />} />
         </Routes>
       </main>
     </div>

@@ -38,7 +38,8 @@ export default function Navbar({
         <NavLink to="/" className={({ isActive }) => (isActive ? "active" : "")}>Dashboard</NavLink>
         <NavLink to="/accounts" className={({ isActive }) => (isActive ? "active" : "")}>Accounts</NavLink>
         <NavLink to="/payouts"  className={({ isActive }) => (isActive ? "active" : "")}>Payouts</NavLink>
-        <NavLink to="/firms" className={({isActive}) => isActive ? 'active' : ''}>Empresas</NavLink>
+        <NavLink to="/goals" className={({isActive}) => isActive ? 'active' : ''}>Goals</NavLink>
+        <NavLink to="/firms" className={({isActive}) => isActive ? 'active' : ''}>Firms</NavLink>
         <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>Settings</NavLink>
         
       </div>
