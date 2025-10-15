@@ -20,6 +20,9 @@ const [filters, setFilters] = useState({
     strategyId: '', // Filtro por ID da Estratégia
     timeframe: ''
   });
+
+  const [searchAccount, setSearchAccount] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const [accounts, setAccounts] = useState(() => {
     try {
       return getAll().accounts || [];
@@ -100,36 +103,42 @@ const fmt = (v: number) => currency === 'USD'
   }, [trades, accounts, strategies]); // strategies adicionado como dependência
 
   // 💥 Lógica de Filtro CORRIGIDA
-  const filteredTrades = useMemo(() => {
-    let filtered = enrichedTrades;
-    
-    // 1. Filtro por Categoria de Mercado (MarketCategory)
-    if (filters.category) {
-      // CORREÇÃO: filtra pelo  pelo accountType
-      filtered = filtered.filter(t => t.accountType === filters.category); 
-    }
+const filteredTrades = useMemo(() => {
+  let filtered = enrichedTrades;
+  
+  // 1. Filtro por Categoria de Mercado
+  if (filters.category) {
+    filtered = filtered.filter(t => t.accountType === filters.category); 
+  }
 
-    // 2. Filtro por Estratégia (strategyId)
-    if (filters.strategyId) {
-      filtered = filtered.filter(t => t.strategyId === filters.strategyId);
-    }
-    
-    // 3. Filtro por Conta Específica (accountId)
-    if (filters.account) {
-      filtered = filtered.filter(t => 
-        t.accountId === filters.account || 
-        (t.accounts && t.accounts.some(acc => acc.accountId === filters.account))
-      );
-    }
-    
-    // Filtro por Timeframe (se você implementar)
-    // if (filters.timeframe) {
-    //   filtered = filtered.filter(t => t.tf_signal === filters.timeframe);
-    // }
-    
-    // Retorna ordenado por data
-    return filtered.sort((a, b) => new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime());
-  }, [enrichedTrades, filters]);
+  // 2. Filtro por Estratégia
+  if (filters.strategyId) {
+    filtered = filtered.filter(t => t.strategyId === filters.strategyId);
+  }
+  
+  // 3. Filtro por Conta Específica (campo select)
+  if (filters.account) {
+    filtered = filtered.filter(t => 
+      t.accountId === filters.account || 
+      (t.accounts && t.accounts.some(acc => acc.accountId === filters.account))
+    );
+  }
+  
+  // ✅ 4. ADICIONAR: Filtro por Conta Selecionada (busca)
+  if (selectedAccount) {
+    filtered = filtered.filter(t =>
+      t.accountId === selectedAccount.id ||
+      t.accountName === selectedAccount.name ||
+      (Array.isArray(t.accounts) &&
+        t.accounts.some(a => a.accountId === selectedAccount.id))
+    );
+  }
+  
+  // Retorna ordenado por data
+  return filtered.sort((a, b) => 
+    new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime()
+  );
+}, [enrichedTrades, filters, selectedAccount]); // ✅ Adicionar selectedAccount nas dependências
 
   // Calcular estatísticas dos trades filtrados (sua lógica estava correta)
   const filteredStats = useMemo(() => {
@@ -175,7 +184,25 @@ const fmt = (v: number) => currency === 'USD'
     accounts.filter(acc => ['Live', 'Funded', 'Challenge'].includes(acc.status)),
     [accounts]
   );
-
+const visibleAccounts = useMemo(() => {
+  let accs = activeAccounts || [];
+  
+  // Filtra por categoria (se selecionada)
+  if (filters.category) {
+    accs = accs.filter(a => a.type === filters.category);
+  }
+  
+  // Filtra por texto da busca
+  if (searchAccount.trim()) {
+    const q = searchAccount.toLowerCase();
+    accs = accs.filter(a =>
+      (a.name?.toLowerCase().includes(q)) ||
+      String(a.currentFunding || a.initialFunding || 0).includes(q)
+    );
+  }
+  
+  return accs;
+}, [activeAccounts, filters.category, searchAccount]);
   const clearFilters = () => {
     setFilters({ account: '', category: '', timeframe: '', strategyId: ''});
   };
@@ -257,51 +284,159 @@ const fmt = (v: number) => currency === 'USD'
       )}
 
       {/* 💥 NOVO: Filtros */}
-      <div className="card p-3 flex gap-4 items-center">
-        <span className="text-sm font-medium text-muted">🔎 Filtros:</span>
+<div className="card p-3 flex gap-4 items-center flex-wrap">
+  <span className="text-sm font-medium text-muted">🔎 Filtros:</span>
 
-        {/* 1. Filtro de Categoria de Mercado */}
-        <select 
-          className="input w-1/5" 
-          value={filters.category}
-          onChange={e => setFilters({...filters, category: e.target.value})}
-        >
-          <option value="">All Markets</option>
-          {accountType.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        
-        {/* 2. Filtro de Estratégia */}
-        <select 
-          className="input w-1/5" 
-          value={filters.strategyId}
-          onChange={e => setFilters({...filters, strategyId: e.target.value})}
-        >
-          <option value="">All Strategies</option>
-          {strategies.map(s => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+  {/* 1. Filtro de Categoria de Mercado */}
+  <select 
+    className="input w-1/5" 
+    value={filters.category}
+    onChange={e => setFilters({...filters, category: e.target.value})}
+  >
+    <option value="">All Markets</option>
+    {accountType.map(c => <option key={c} value={c}>{c}</option>)}
+  </select>
+  
+  {/* 2. Filtro de Estratégia */}
+  <select 
+    className="input w-1/5" 
+    value={filters.strategyId}
+    onChange={e => setFilters({...filters, strategyId: e.target.value})}
+  >
+    <option value="">All Strategies</option>
+    {strategies.map(s => (
+      <option key={s.id} value={s.id}>{s.name}</option>
+    ))}
+  </select>
 
-        {/* 3. Filtro por conta específica */}
-        {activeAccounts.length > 0 && (
-          <select 
-            className="input w-1/5"
-            value={filters.account}
-            onChange={(e) => setFilters(prev => ({ ...prev, account: e.target.value }))}
+  {/* ✅ 3. NOVO: Busca de Conta */}
+  <div style={{ position: "relative", minWidth: 260 }} className="account-search-container">
+    <input
+      type="text"
+      placeholder="🔍 Buscar conta..."
+      className="input w-full"
+      value={searchAccount}
+      onChange={(e) => setSearchAccount(e.target.value)}
+      style={{
+        paddingRight: selectedAccount ? '40px' : '12px' // espaço para botão de limpar
+      }}
+    />
+
+    {/* Dropdown de resultados */}
+    {searchAccount && (
+      <div
+        style={{
+          position: "absolute",
+          top: "110%",
+          left: 0,
+          width: "100%",
+          background: "#0f172a",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          zIndex: 50,
+          maxHeight: 200,
+          overflowY: "auto",
+        }}
+      >
+        {visibleAccounts.length === 0 ? (
+          <div
+            style={{
+              padding: 10,
+              fontSize: 12,
+              color: "#94a3b8",
+              textAlign: "center",
+            }}
           >
-            <option value="">All Accounts</option>
-            {activeAccounts.map(acc => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name} ({acc.status})
-              </option>
-            ))}
-          </select>
+            Nenhuma conta encontrada
+          </div>
+        ) : (
+          visibleAccounts.map((acc) => (
+            <div
+              key={acc.id}
+              onClick={() => {
+                setSelectedAccount(acc);
+                setSearchAccount(""); // Fecha dropdown
+              }}
+              style={{
+                padding: "10px 12px",
+                cursor: "pointer",
+                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                background: "#0f172a",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#1e293b")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#0f172a")}
+            >
+              <div style={{ fontWeight: 600, color: "#f9fafb" }}>{acc.name}</div>
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                {acc.type} • Balance: {fmt(acc.currentFunding || acc.balance || 0)}
+              </div>
+            </div>
+          ))
         )}
+      </div>
+    )}
 
-        <button className="btn ghost" onClick={clearFilters}>
-          🧹 Limpar
+    {/* ✅ Conta selecionada (filtro ativo) */}
+    {selectedAccount && (
+      <div
+        style={{
+          marginTop: 8,
+          background: "linear-gradient(90deg, #1a1f2e 0%, #151a27 100%)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 8,
+          padding: "10px 12px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          animation: "fadeIn 0.2s ease",
+        }}
+      >
+        <div>
+          <div style={{ fontWeight: 600, color: "#f9fafb" }}>{selectedAccount.name}</div>
+          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+            {selectedAccount.type} • Balance: {fmt(selectedAccount.currentFunding || selectedAccount.balance || 0)}
+          </div>
+        </div>
+        <button
+          onClick={() => setSelectedAccount(null)}
+          style={{
+            fontSize: 12,
+            color: "#f87171",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+          }}
+        >
+          Limpar conta ✕
         </button>
       </div>
+    )}
+  </div>
+
+  {/* 4. Filtro Select de Conta (mantido para compatibilidade) }
+  {activeAccounts.length > 0 && !selectedAccount && (
+    <select 
+      className="input w-1/5"
+      value={filters.account}
+      onChange={(e) => setFilters(prev => ({ ...prev, account: e.target.value }))}
+    >
+      <option value="">All Accounts</option>
+      {activeAccounts.map(acc => (
+        <option key={acc.id} value={acc.id}>
+          {acc.name} ({acc.status})
+        </option>
+      ))}
+    </select>
+  )}   */}
+
+  <button className="btn ghost" onClick={() => {
+    clearFilters();
+    setSelectedAccount(null); // ✅ Limpa também a conta selecionada
+    setSearchAccount(""); // ✅ Limpa o campo de busca
+  }}>
+    🧹 Limpar
+  </button>
+</div>
 
       {/* KPI + Chart em 2 colunas */}
       <div
@@ -345,7 +480,21 @@ const fmt = (v: number) => currency === 'USD'
           <div className="card">
             <div className="flex items-center justify-between mb-3">
               <h3>📈 Curva de Equity</h3>
+                    <div className="flex items-center gap-2">
+        {/* ✅ ADICIONAR: Indicador de conta selecionada */}
+        {selectedAccount && (
+          <span style={{
+            fontSize: 11,
+            color: '#9ca3af',
+            background: 'rgba(139, 92, 246, 0.2)',
+            padding: '4px 8px',
+            borderRadius: 6
+          }}>
+            📊 {selectedAccount.name}
+          </span>
+        )}
               <div className="muted">{filteredTrades.length} trades</div>
+            </div>
             </div>
             <div style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
