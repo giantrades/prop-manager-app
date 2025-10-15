@@ -1,12 +1,27 @@
 // src/pages/Settings.jsx
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
 import { useCurrency } from '@apps/state'
-import { backupToDrive, restoreFromDrive } from "@apps/utils/googleDrive.js";
+import {useDrive, DriveProvider} from "@apps/state/DriveContext";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
   const [autoSync, setAutoSync] = useState(false);
+const { backup, loadBackup } = useDrive();
+
+useEffect(() => {
+  if (!autoSync) return;
+  const interval = setInterval(async () => {
+    try {
+      const allData = getAll();
+      await backup(JSON.stringify(allData));
+      console.log('☁️ Auto-sync executado com sucesso.');
+    } catch (e) {
+      console.warn('Auto-sync falhou:', e);
+    }
+  }, 30000);
+  return () => clearInterval(interval);
+}, [autoSync, backup]);
 
   return (
     <div className="grid" style={{ gap: 16 }}>
@@ -44,8 +59,13 @@ export default function Settings() {
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn" onClick={backupToDrive}>Backup agora</button>
-          <button className="btn ghost" onClick={restoreFromDrive}>Restaurar do Drive</button>
+          <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
+  Backup agora
+</button>
+
+<button className="btn ghost" onClick={loadBackup}>
+  Restaurar do Drive
+</button>
         </div>
       </div>
     </div>
