@@ -19,11 +19,14 @@
     "@types/gapi.auth2": "^0.0.61",
     "@types/gapi.client": "^1.0.8",
     "@types/node": "^24.5.2",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
     "@types/uuid": "^10.0.0",
     "concurrently": "^8.2.2",
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "date-fns": "^4.1.0",
     "react-csv": "^2.2.2",
     "recharts": "^2.15.4",
     "uuid": "^9.0.1"
