@@ -1,7 +1,7 @@
 // src/utils/googleDrive.js
 
 // ============================================================
-// 🔹 CONFIGURAÇÕES PADRÃO
+// 🔹 CONFIGURAÇÕES PADRÃO - V1
 // ============================================================
 const DEFAULT_CLIENT_ID = "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com";
 const DEFAULT_API_KEY = "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M";
