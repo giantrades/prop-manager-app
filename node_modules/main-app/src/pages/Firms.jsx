@@ -6,6 +6,8 @@ import {
   deleteFirm,
   getFirmStats,
 } from "@apps/lib/dataStore";
+import { useCurrency } from '@apps/state'
+
 
 const TYPES = ["Futures", "Forex", "Cripto", "Personal"];
 
@@ -13,6 +15,11 @@ export default function FirmsPage() {
   const [firms, setFirms] = useState(() => getAll().firms || []);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", type: "Futures", logo: null });
+  const { currency, rate } = useCurrency();
+  const fmt = (v) =>
+  currency === 'USD'
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
 
   useEffect(() => {
     setFirms(getAll().firms || []);
@@ -290,18 +297,9 @@ export default function FirmsPage() {
                   </td>
                   <td>{f.name}</td>
                   <td>{f.type}</td>
-                  <td>
-                    {new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(s.totalFunding || 0)}
-                  </td>
-                  <td>
-                    {new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(s.totalPayouts || 0)}
-                  </td>
+                 <td>{fmt(s.totalFunding)}</td>
+                <td>{fmt(s.totalPayouts)}</td>
+
                   <td>{s.accountCount}</td>
                   <td style={{ textAlign: "right" }}>
                     <button className="btn ghost small" onClick={() => onEdit(f)}>

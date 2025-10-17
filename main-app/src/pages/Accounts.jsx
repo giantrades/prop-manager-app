@@ -681,7 +681,7 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
           />
         </div>
         <div className="field">
-          <label>ROI</label>
+          <label>%</label>
           <div className="input" style={{ opacity: 0.8 }} readOnly>
             {(s.roi * 100).toFixed(2)}%
           </div>
