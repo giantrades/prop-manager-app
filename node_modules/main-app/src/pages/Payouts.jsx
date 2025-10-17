@@ -117,6 +117,150 @@ useEffect(() => {
 
   return (
     <div className="grid" style={{ gap: 16 }}>
+
+      {/* ==== DASHBOARD DE RESUMO DE PAYOUTS ==== */}
+<div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: 16,
+  }}
+>
+  {/* CARD 1 - Total Gross */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total Gross Payouts
+    </h4>
+    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
+      {fmt(
+        payouts.reduce(
+          (sum, p) => sum + (Number(p.amountSolicited) || 0),
+          0
+        )
+      )}
+    </div>
+  </div>
+
+  {/* CARD 2 - Total Fee */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total Fee Payouts
+    </h4>
+    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
+      {fmt(
+        payouts.reduce(
+          (sum, p) => sum + (Number(p.fee) || 0),
+          0
+        )
+      )}
+    </div>
+  </div>
+
+  {/* CARD 3 - Total Net */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total Net Payouts
+    </h4>
+    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
+      {fmt(
+        payouts.reduce(
+          (sum, p) => sum + (Number(p.amountReceived) || 0),
+          0
+        )
+      )}
+    </div>
+  </div>
+</div>
+
+{/* ==== PAYOUTS POR CATEGORIA + QUANTIDADE ==== */}
+<div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: 16,
+  }}
+>
+  {/* CARD 4 - Payouts por Categoria */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #05080f) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total Payouts por Categoria
+    </h4>
+    {['Futures', 'Forex', 'Cripto', 'Personal'].map((cat) => {
+      const totalCat = payouts
+        .filter((p) => p.type === cat)
+        .reduce((sum, p) => sum + (Number(p.amountReceived) || 0), 0)
+      return (
+        <div
+          key={cat}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: 6,
+            color: 'var(--text)',
+          }}
+        >
+          <span>{cat}</span>
+          <span style={{ fontWeight: 600 }}>{fmt(totalCat)}</span>
+        </div>
+      )
+    })}
+  </div>
+
+  {/* CARD 5 - Total Payouts Solicitados */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #05080f) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total de Payouts Solicitados
+    </h4>
+    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
+      {payouts.reduce(
+        (sum, p) => sum + (p.accountIds?.length || 0),
+        0
+      )}
+    </div>
+  </div>
+</div>
+{/* ==== FIM DOS CARDS ==== */}
+
       {/* Toolbar superior */}
       <div className="toolbar">
         <input

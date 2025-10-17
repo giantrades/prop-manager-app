@@ -171,7 +171,7 @@ function SummaryCards(){
   <div className="grid cards"> 
   <div className="card accent1"><h3>💰 Payouts</h3><div className="stat">{fmt(totalNetPayouts)}</div></div> 
   <div className="card accent2"><h3>🏦 Funding</h3><div className="stat">{fmt(totalFunding)}</div></div> 
-  <div className="card accent3"><h3>📈 ROI %</h3><div className="stat">{(roi*100).toFixed(2)}%</div></div> 
+  <div className="card accent3"><h3>📈  %</h3><div className="stat">{(roi*100).toFixed(2)}%</div></div> 
   <div className="card accent4"> <h3>🧮 Contas</h3> <div style={{display:'flex',justifyContent:'center',gap:40}}> <div><div className="thin">Ativas</div><div className="stat center">{activeCount}</div></div> <div style={{width:1,background:'#ccc'}}/> <div><div className="thin">Standby</div><div className="stat center">{standbyCount}</div></div> </div> </div> </div> ) }
 /* =========================================================
    4) (Gráficos e outros subcomponentes) – mantidos iguais,

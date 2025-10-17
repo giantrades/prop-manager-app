@@ -15,7 +15,6 @@ export default function FirmsPage() {
   const [form, setForm] = useState({ name: "", type: "Futures", logo: null });
 
   useEffect(() => {
-    // recarrega dados sempre que montar
     setFirms(getAll().firms || []);
   }, []);
 
@@ -39,7 +38,7 @@ export default function FirmsPage() {
       await createFirm(form);
     }
     setForm({ name: "", type: "Futures", logo: null });
-    setFirms(getAll().firms || []); // refresh
+    setFirms(getAll().firms || []);
   };
 
   const onEdit = (f) => {
@@ -54,59 +53,197 @@ export default function FirmsPage() {
     setFirms(getAll().firms || []);
   };
 
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    fontSize: "14px",
+    border: "1px solid #3a3a4a",
+    borderRadius: "6px",
+    backgroundColor: "#2a2a3a",
+    color: "#e0e0e0",
+    outline: "none",
+    transition: "all 0.2s",
+  };
+
+  const labelStyle = {
+    display: "block",
+    marginBottom: "6px",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#b0b0c0",
+  };
+
+  const buttonStyle = {
+    padding: "10px 20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    transition: "all 0.2s",
+  };
+
+  const primaryButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: "#6366f1",
+    color: "white",
+  };
+
+  const ghostButtonStyle = {
+    ...buttonStyle,
+    backgroundColor: "transparent",
+    border: "1px solid #3a3a4a",
+    color: "#b0b0c0",
+  };
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
+{/* ==== RESUMO DE EMPRESAS ==== */}
+<div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: 16,
+  }}
+>
+  {/* CARD 1 - Total de Empresas */}
+  <div className="card accent5">
+    <h4
+      style={{
+        marginBottom: 8,
+        fontWeight: 600,
+        color: 'var(--text-muted, #b4b8c0)',
+      }}
+    >
+      Total de Empresas
+    </h4>
+    <div
+      style={{
+        fontSize: 28,
+        fontWeight: 700,
+        color: 'var(--text)',
+      }}
+    >
+      {firms.length}
+    </div>
+  </div>
+
+  {/* DEMAIS CARDS POR CATEGORIA */}
+  {TYPES.map((type) => {
+    const count = firms.filter((f) => f.type === type).length;
+    const accentMap = {
+      Futures: 'accent16',
+      Forex: 'accent17',
+      Cripto: 'accent14',
+      Personal: 'accent15',
+    };
+    return (
+      <div key={type} className={`card ${accentMap[type]}`}>
+        <h4
+          style={{
+            marginBottom: 8,
+            fontWeight: 600,
+            color: 'var(--text-muted, #b4b8c0)',
+          }}
+        >
+          {type}
+        </h4>
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            color: 'var(--text)',
+          }}
+        >
+          {count}
+        </div>
+      </div>
+    );
+  })}
+</div>
+{/* ==== FIM DO RESUMO ==== */}
+
+
       <div className="card">
-        <h3>{editing ? "Editar Empresa" : "Nova Empresa"}</h3>
-        <div className="field">
-          <label>Nome</label>
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </div>
-        <div className="field">
-          <label>Tipo</label>
-          <select
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
-          >
-            {TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label>Logo (PNG/JPG)</label>
-          <input type="file" accept="image/*" onChange={handleFile} />
+        <h3 style={{ marginBottom: "16px", color: "#e0e0e0" }}>
+          {editing ? "Editar Empresa" : "Nova Empresa"}
+        </h3>
+        
+        <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: "1", minWidth: "200px" }}>
+            <label style={labelStyle}>Nome</label>
+            <input
+              style={inputStyle}
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onFocus={(e) => e.target.style.borderColor = "#6366f1"}
+              onBlur={(e) => e.target.style.borderColor = "#3a3a4a"}
+            />
+          </div>
+
+          <div style={{ width: "150px" }}>
+            <label style={labelStyle}>Tipo</label>
+            <select
+              style={inputStyle}
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              onFocus={(e) => e.target.style.borderColor = "#6366f1"}
+              onBlur={(e) => e.target.style.borderColor = "#3a3a4a"}
+            >
+              {TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ width: "180px" }}>
+            <label style={labelStyle}>Logo (PNG/JPG)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFile}
+              style={{
+                ...inputStyle,
+                padding: "8px",
+                cursor: "pointer",
+              }}
+            />
+          </div>
+
           {form.logo && (
-            <div style={{ marginTop: 8 }}>
+            <div style={{ padding: "8px 12px", backgroundColor: "#1a1a2a", borderRadius: "6px", border: "1px solid #3a3a4a", height: "42px", display: "flex", alignItems: "center" }}>
               <img
                 src={form.logo}
                 alt="logo"
                 style={{
-                  width: 120,
-                  height: 50,
+                  height: 26,
+                  maxWidth: 80,
                   objectFit: "contain",
-                  border: "1px solid #eee",
                 }}
               />
             </div>
           )}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn" onClick={onSave}>
+
+          <button
+            style={primaryButtonStyle}
+            onClick={onSave}
+            onMouseEnter={(e) => e.target.style.backgroundColor = "#5558e3"}
+            onMouseLeave={(e) => e.target.style.backgroundColor = "#6366f1"}
+          >
             {editing ? "Salvar" : "Criar"}
           </button>
+          
           {editing && (
             <button
-              className="btn ghost"
+              style={ghostButtonStyle}
               onClick={() => {
                 setEditing(null);
                 setForm({ name: "", type: "Futures", logo: null });
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = "#2a2a3a"}
+              onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
             >
               Cancelar
             </button>
@@ -115,7 +252,7 @@ export default function FirmsPage() {
       </div>
 
       <div className="card">
-        <h3>Empresas</h3>
+        <h3 style={{ marginBottom: "20px", color: "#e0e0e0" }}>Empresas</h3>
         <table className="table">
           <thead>
             <tr>

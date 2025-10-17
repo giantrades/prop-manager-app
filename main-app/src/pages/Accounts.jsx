@@ -3,8 +3,8 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { useCurrency } from '@apps/state'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
-const statuses = ['Standby', 'Live', 'Challenge', 'Funded']
-const types = ['Futures', 'Forex', 'Cripto', 'Personal']
+const statuses = ['Live','Funded','Challenge','Standby']
+const types = ['Futures', 'Forex','Personal' ,'Cripto' ]
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState([])
@@ -92,9 +92,184 @@ export default function Accounts() {
 
   // Helper to get firm object by id
   const findFirm = (id) => firms.find(f => f.id === id) || null
+// ==== SUMMARY STATS ====
+const summary = useMemo(() => {
+  const total = accounts.length
+
+  const byType = types.map((type) => ({
+    label: type,
+    value: accounts.filter((a) => a.type === type).length,
+    pillClass:
+      type === 'Futures'
+        ? 'pink'
+        : type === 'Forex'
+        ? 'lavander'
+        : type === 'Cripto'
+        ? 'orange'
+        : type === 'Personal'
+        ? 'purple'
+        : 'gray',
+  }))
+
+  const byStatus = statuses.map((status) => ({
+    label: status,
+    value: accounts.filter((a) => a.status === status).length,
+    pillClass:
+      status === 'Live'
+        ? 'green'
+        : status === 'Funded'
+        ? 'blue'
+        : status === 'Challenge'
+        ? 'yellow'
+        : 'gray',
+  }))
+
+  return { total, byType, byStatus }
+}, [accounts])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+{/* ==== SUMMARY CARDS ==== */}
+{/* === CARDS DE RESUMO === */}
+<div
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  }}
+>
+  {/* --- TOTAL --- */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+    className="hover-card"
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Total de Contas
+    </h4>
+    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-strong, #fff)' }}>
+      {accounts.length}
+    </div>
+  </div>
+
+  {/* --- POR CATEGORIA --- */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Por Categoria
+    </h4>
+    {types.map((type) => {
+      const count = accounts.filter((a) => a.type === type).length
+      const color =
+        type === 'Forex' ? 'lavander' :
+        type === 'Cripto' ? 'orange' :
+        type === 'Futures' ? 'pink' :
+        type === 'Personal' ? 'purple' :
+        'gray'
+
+      return (
+        <div
+          key={type}
+          style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
+        >
+          {count > 0 && (
+            <span
+              className={`pill ${color}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 22,
+                height: 22,
+                borderRadius: '9999px',
+                fontSize: 13,
+                fontWeight: 600,
+                marginRight: 8,
+                padding: '0 6px',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              {count}
+            </span>
+          )}
+          <span>{type}</span>
+        </div>
+      )
+    })}
+  </div>
+
+  {/* --- POR STATUS --- */}
+  <div
+    style={{
+      flex: 1,
+      background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)',
+      borderRadius: 10,
+      boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)',
+      padding: '16px 24px',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+  >
+    <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>
+      Por Status
+    </h4>
+    {statuses.map((status) => {
+      const count = accounts.filter((a) => a.status === status).length
+      const color =
+        status === 'Live' ? 'green' :
+        status === 'Funded' ? 'blue' :
+        status === 'Challenge' ? 'yellow' :
+        status === 'Standby' ? 'gray' :
+        'gray'
+
+      return (
+        <div
+          key={status}
+          style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}
+        >
+          {count > 0 && (
+            <span
+              className={`pill ${color}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 22,
+                height: 22,
+                borderRadius: '9999px',
+                fontSize: 13,
+                fontWeight: 600,
+                marginRight: 8,
+                padding: '0 6px',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              {count}
+            </span>
+          )}
+          <span>{status}</span>
+        </div>
+      )
+    })}
+  </div>
+</div>
+
+
       {/* FORM APPEARS ABOVE THE TABLE SO IT PUSHES THE TABLE DOWN */}
       {selected && (
         <div>
@@ -149,7 +324,7 @@ export default function Accounts() {
                   Status<span style={{ float: 'right' }}>{getSortIndicator('status')}</span>
                 </th>
                 <th className='center' style={{ cursor: 'pointer' }} onClick={() => handleSort('roi')}>
-                  ROI<span style={{ float: 'right' }}>{getSortIndicator('roi')}</span>
+                  %<span style={{ float: 'right' }}>{getSortIndicator('roi')}</span>
                 </th>
                 <th className='center' style={{ cursor: 'pointer' }} onClick={() => handleSort('profitSplit')}>
                   Split<span style={{ float: 'right' }}>{getSortIndicator('profitSplit')}</span>

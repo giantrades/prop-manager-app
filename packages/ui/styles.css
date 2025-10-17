@@ -117,6 +117,32 @@ tr:hover td { background: rgba(39,48,68,0.24); }
   /* Accent 13: Verde Musgo/Oliva */
 .card.accent13 { 
   background: linear-gradient(180deg, #2b3a2a 0%, #202b1f 100%); border-color:#78866B; }
+/* Accent 14: Cripto (laranja escuro elegante) */
+.card.accent14 { 
+  background: linear-gradient(180deg, #8a4b06 0%, #3d2305 100%);
+  border-color: #e9820d;
+}
+
+/* Accent 15: Personal (magenta avermelhado intenso) */
+.card.accent15 { 
+  background: linear-gradient(180deg, #5a0e2a 0%, #2b0a14 100%);
+  border-color: #cc1e52;
+}
+
+/* Accent 16: Futures (azul profundo) */
+.card.accent16 { 
+  background: linear-gradient(180deg, #143564 0%, #0c1a2f 100%);
+  border-color: #1b55ad;
+}
+
+/* Accent 17: Forex (verde vibrante com contraste) */
+.card.accent17 { 
+  background: linear-gradient(180deg, #0b4d10 0%, #07240a 100%);
+  border-color: #15b91d;
+}
+
+
+
 
 .center { text-align:center; }
 .value-green { color: #2ecc71; font-weight: 700; }
@@ -496,3 +522,64 @@ tr:hover td { background: rgba(39,48,68,0.24); }
   box-shadow: 0 3px 6px rgba(233, 130, 13, 0.15);
 }
 
+/* === Cards da seção de estatísticas === */
+.stats-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stats-card {
+  flex: 1;
+  background: var(--card-bg, #0b1018);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  padding: 16px 24px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.stats-card h4 {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-muted, #b4b8c0);
+}
+
+/* === Números === */
+.stats-number {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-strong, #fff);
+  transition: color 0.3s ease;
+}
+
+/* === Bolinhas coloridas iguais às pills === */
+.stats-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-right: 6px;
+  transition: all 0.3s ease;
+  padding: 0 6px;
+}
+
+/* Cores herdadas das classes existentes */
+.stats-pill.lavander { background: var(--lavander); }
+.stats-pill.orange { background: var(--orange); }
+.stats-pill.pink { background: var(--pink); }
+.stats-pill.purple { background: var(--purple); }
+.stats-pill.green { background: var(--green); }
+.stats-pill.blue { background: var(--blue); }
+.stats-pill.yellow { background: var(--yellow); }
+.stats-pill.gray { background: var(--gray); }
