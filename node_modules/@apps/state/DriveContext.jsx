@@ -20,10 +20,11 @@ const DriveContext = createContext(null);
 export function DriveProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [logged, setLogged] = useState(false);
-
-  // 🔁 Canal global para sincronizar entre apps/abas
   const channel = new BroadcastChannel("drive-sync");
 
+  // ===========================================================
+  // 🔹 Inicialização principal do Drive
+  // ===========================================================
   useEffect(() => {
     let mounted = true;
 
@@ -34,28 +35,29 @@ export function DriveProvider({ children }) {
         if (!ok) console.warn("⚠️ Falha ao inicializar o gapi");
         setReady(true);
 
-        // 🔹 Restaura sessão anterior
-        const token = localStorage.getItem("drive-token");
-        if (token) {
+        // 🔹 Restaura token local, se houver
+        const saved = localStorage.getItem("drive-token");
+        if (saved) {
           try {
-            gapi.client.setToken(JSON.parse(token));
-          } catch (e) {
+            gapi.client.setToken(JSON.parse(saved));
+            setLogged(true);
+          } catch {
             console.warn("Token inválido, limpando storage");
             localStorage.removeItem("drive-token");
           }
         }
 
-        // 🔹 Define estado inicial
+        // 🔹 Estado inicial
         const signed = isSignedIn();
         setLogged(signed);
 
-        // 🔹 Escuta mudanças de login
+        // 🔹 Escuta mudanças internas no login
         onSignChange((status) => {
           setLogged(status);
           persistStatus(status);
         });
 
-        // 🔹 Escuta mudanças em outros apps
+        // 🔹 Escuta mensagens vindas de outro app/aba
         channel.onmessage = (e) => {
           if (e.data?.type === "drive-status") {
             setLogged(e.data.logged);
@@ -72,7 +74,25 @@ export function DriveProvider({ children }) {
     };
   }, []);
 
-  // 🧠 Sincroniza status global (para manter login entre abas/apps)
+  // ===========================================================
+  // 🔁 Novo: listener global (sincroniza eventos `drive:status-change`)
+  // ===========================================================
+  useEffect(() => {
+    const handleDriveStatus = (e) => {
+      const { logged } = e.detail || {};
+      if (typeof logged === "boolean") {
+        setLogged(logged);
+      }
+    };
+    window.addEventListener("drive:status-change", handleDriveStatus);
+    return () => {
+      window.removeEventListener("drive:status-change", handleDriveStatus);
+    };
+  }, []);
+
+  // ===========================================================
+  // 🔐 Persistência + Broadcast global de status
+  // ===========================================================
   const persistStatus = (status) => {
     const token = gapi.client.getToken();
     if (status && token) {
@@ -81,27 +101,33 @@ export function DriveProvider({ children }) {
       localStorage.removeItem("drive-token");
     }
 
-    // 🔁 Broadcast
+    // 🔁 Atualiza outros apps/abas
     channel.postMessage({ type: "drive-status", logged: status });
     window.dispatchEvent(
       new CustomEvent("drive:status-change", { detail: { logged: status } })
     );
   };
 
-  // 🔹 Login/Logout
+  // ===========================================================
+  // 🔹 Login / Logout (com broadcast imediato)
+  // ===========================================================
   const login = useCallback(async () => {
     await signIn();
     persistStatus(true);
     setLogged(true);
+    channel.postMessage({ type: "drive-status", logged: true });
   }, []);
 
   const logout = useCallback(async () => {
     await signOut();
     persistStatus(false);
     setLogged(false);
+    channel.postMessage({ type: "drive-status", logged: false });
   }, []);
 
-  // 🔹 Backup & Listagem
+  // ===========================================================
+  // 🔹 Backup / Listagem
+  // ===========================================================
   const backup = useCallback(async (data) => {
     return uploadFile("propmanager-backup.json", data);
   }, []);
@@ -110,7 +136,9 @@ export function DriveProvider({ children }) {
     return listFiles();
   }, []);
 
+  // ===========================================================
   // 🔹 Carregar backup existente
+  // ===========================================================
   const loadBackup = useCallback(async () => {
     try {
       const files = await listFiles("propmanager-backup.json");
@@ -124,6 +152,9 @@ export function DriveProvider({ children }) {
     }
   }, []);
 
+  // ===========================================================
+  // 🔚 Render
+  // ===========================================================
   return (
     <DriveContext.Provider
       value={{
@@ -141,5 +172,11 @@ export function DriveProvider({ children }) {
   );
 }
 
-// ✅ Export nomeado compatível com Vite + Fast Refresh
+// ✅ Export nomeado (compatível com Fast Refresh)
 export const useDrive = () => useContext(DriveContext);
+
+// ✅ Export default consistente
+export default {
+  DriveProvider,
+  useDrive,
+};

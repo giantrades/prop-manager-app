@@ -1,68 +1,104 @@
 // src/utils/googleDrive.js
 
-// 🔹 Suas chaves
+// ============================================================
+// 🔹 CONFIGURAÇÕES PADRÃO
+// ============================================================
 const DEFAULT_CLIENT_ID = "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com";
-const DEFAULT_API_KEY   = "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M";
+const DEFAULT_API_KEY = "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M";
 
-// 🔹 Config Google Drive
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 const SCOPES = "https://www.googleapis.com/auth/drive.file";
 
-let tokenClient;
+let tokenClient = null;
 let gapiInited = false;
 let gisInited = false;
 
-// 🔹 Inicializa a API
-export function initGoogleDrive(clientId = DEFAULT_CLIENT_ID, apiKey = DEFAULT_API_KEY) {
+// ============================================================
+// 🔹 CARREGAMENTO SEGURO DO GAPI
+// ============================================================
+
+function loadScript(src) {
   return new Promise((resolve, reject) => {
-    gapi.load("client", async () => {
-      try {
-        await gapi.client.init({
-          apiKey,
-          discoveryDocs: DISCOVERY_DOCS,
-        });
-        gapiInited = true;
+    const existing = document.querySelector(`script[src="${src}"]`);
+    if (existing) return resolve();
 
-        // Inicializa o cliente de token (GIS)
-        tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: SCOPES,
-          callback: (resp) => {
-            if (resp.error) reject(resp);
-            else resolve(resp);
-          },
-        });
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
 
-        gisInited = true;
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
+/**
+ * Inicializa o Google API Client + Google Identity Services
+ */
+export async function initGoogleDrive(
+  clientId = DEFAULT_CLIENT_ID,
+  apiKey = DEFAULT_API_KEY
+) {
+  try {
+    // Evita inicializar múltiplas vezes
+    if (gapiInited && gisInited && tokenClient) return true;
+
+    // Carrega scripts externos se ainda não existem
+    if (typeof gapi === "undefined")
+      await loadScript("https://apis.google.com/js/api.js");
+    if (typeof google === "undefined")
+      await loadScript("https://accounts.google.com/gsi/client");
+
+    // Inicializa cliente Drive
+    await new Promise((resolve, reject) => {
+      gapi.load("client", async () => {
+        try {
+          await gapi.client.init({
+            apiKey,
+            discoveryDocs: DISCOVERY_DOCS,
+          });
+          gapiInited = true;
+          resolve();
+        } catch (err) {
+          console.error("❌ Erro ao iniciar gapi:", err);
+          reject(err);
+        }
+      });
     });
-  });
+
+    // Inicializa token client GIS
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: SCOPES,
+      callback: () => {}, // callback real definido no signIn()
+    });
+
+    gisInited = true;
+    console.log("✅ Google Drive pronto.");
+    return true;
+  } catch (err) {
+    console.error("⚠️ Falha ao inicializar Google Drive:", err);
+    return false;
+  }
 }
 
-// 🔹 Verifica se está logado (se tem token válido)
+// ============================================================
+// 🔹 STATUS / LOGIN / LOGOUT
+// ============================================================
+
 export function isSignedIn() {
-  return !!gapi.client.getToken();
+  return !!(gapi?.client?.getToken());
 }
 
-// 🔹 Listener (simulando o antigo)
 export function onSignChange(callback) {
-  // GIS não tem listener nativo → checamos manualmente
-  window.addEventListener("gapi-token-change", () => {
-    callback(isSignedIn());
-  });
+  window.addEventListener("gapi-token-change", () => callback(isSignedIn()));
 }
 
-// 🔹 Login
-export function signIn() {
+export async function signIn() {
   return new Promise((resolve, reject) => {
     if (!tokenClient) return reject("TokenClient não inicializado");
     tokenClient.callback = (resp) => {
       if (resp.error) reject(resp);
       else {
-        // dispara evento fake para apps que usam listener
         window.dispatchEvent(new Event("gapi-token-change"));
         resolve(resp);
       }
@@ -71,19 +107,21 @@ export function signIn() {
   });
 }
 
-// 🔹 Logout
 export function signOut() {
-  const token = gapi.client.getToken();
+  const token = gapi?.client?.getToken();
   if (token) {
     google.accounts.oauth2.revoke(token.access_token, () => {
       gapi.client.setToken("");
       window.dispatchEvent(new Event("gapi-token-change"));
-      console.log("Token revogado.");
+      console.log("🔒 Token revogado (logout).");
     });
   }
 }
 
-// 🔹 Upload simples
+// ============================================================
+// 🔹 UPLOAD / LISTAGEM / DOWNLOAD
+// ============================================================
+
 export async function uploadFile(name, content) {
   const boundary = "-------314159265358979323846";
   const delimiter = `\r\n--${boundary}\r\n`;
@@ -114,7 +152,6 @@ export async function uploadFile(name, content) {
   return request;
 }
 
-// 🔹 Lista arquivos JSON
 export async function listFiles() {
   const response = await gapi.client.drive.files.list({
     pageSize: 10,
@@ -125,7 +162,6 @@ export async function listFiles() {
   return response.result.files;
 }
 
-// 🔹 Download de um arquivo pelo ID
 export async function downloadFile(fileId) {
   const response = await gapi.client.drive.files.get({
     fileId,
@@ -134,30 +170,30 @@ export async function downloadFile(fileId) {
   return response.result;
 }
 
-// 🔹 Pega o JSON mais recente
-export async function downloadLatestJSON(filename = 'propmanager-backup.json') {
-  // Procurar pelo arquivo com o nome exato (evita pegar qualquer JSON)
+// ============================================================
+// 🔹 JSON helpers — mantidos do original
+// ============================================================
+
+export async function downloadLatestJSON(filename = "propmanager-backup.json") {
   try {
     const response = await gapi.client.drive.files.list({
       q: `name='${filename.replace(/'/g, "\\'")}' and mimeType='application/json' and trashed=false`,
       pageSize: 5,
-      fields: 'files(id,name,modifiedTime)',
-      orderBy: 'modifiedTime desc'
+      fields: "files(id,name,modifiedTime)",
+      orderBy: "modifiedTime desc",
     });
 
     const files = response.result.files || [];
     if (!files.length) return null;
-    // usamos o mais recente (já ordenado)
     const fileId = files[0].id;
-    const dl = await gapi.client.drive.files.get({ fileId, alt: 'media' });
+    const dl = await gapi.client.drive.files.get({ fileId, alt: "media" });
     return dl.result;
   } catch (err) {
-    console.error('downloadLatestJSON error:', err);
+    console.error("downloadLatestJSON error:", err);
     throw err;
   }
 }
 
-// 🔹 Upload ou atualização de JSON
 export async function uploadOrUpdateJSON(name, content) {
   const response = await gapi.client.drive.files.list({
     q: `name='${name}' and mimeType='application/json'`,
@@ -179,68 +215,69 @@ export async function uploadOrUpdateJSON(name, content) {
   }
 }
 
+// ============================================================
+// 🔹 BACKUP E RESTORE
+// ============================================================
+
 export async function backupToDrive() {
   const LS_KEY = "propmanager-data-v1";
   try {
     const data = localStorage.getItem(LS_KEY);
     if (!data) {
       const msg = `Nenhum dado encontrado na chave localStorage '${LS_KEY}'.`;
-      console.warn('[googleDrive] backupToDrive:', msg);
+      console.warn("[googleDrive] backupToDrive:", msg);
       alert(msg);
       return { success: false, message: msg };
     }
-    // tenta parse apenas para validar antes de enviar
     let parsed;
-    try { parsed = JSON.parse(data); } catch (e) {
-      console.error('[googleDrive] backupToDrive: localStorage não é JSON válido', e);
-      alert('Erro: dados locais não são JSON válido. Backup abortado.');
-      return { success: false, message: 'LocalStorage não é JSON válido.' };
+    try {
+      parsed = JSON.parse(data);
+    } catch (e) {
+      console.error("[googleDrive] backupToDrive: localStorage não é JSON válido", e);
+      alert("Erro: dados locais não são JSON válido. Backup abortado.");
+      return { success: false, message: "LocalStorage não é JSON válido." };
     }
 
-    // utiliza sua função existente uploadOrUpdateJSON (que opera com objeto JSON)
     const result = await uploadOrUpdateJSON("propmanager-backup.json", parsed);
-    console.info('[googleDrive] backupToDrive success', result);
+    console.info("[googleDrive] backupToDrive success", result);
     alert("Backup enviado para o Google Drive com sucesso ✅");
-    // retorna meta para UI/integracão
-    return { success: true, message: 'Backup enviado', meta: result };
+    return { success: true, message: "Backup enviado", meta: result };
   } catch (err) {
-    console.error('Erro no backupToDrive:', err);
-    alert('Erro ao enviar backup para o Google Drive ❌\n' + (err.message || err));
+    console.error("Erro no backupToDrive:", err);
+    alert("Erro ao enviar backup para o Google Drive ❌\n" + (err.message || err));
     return { success: false, message: err.message || String(err) };
   }
 }
 
-
-// 🔹 Restaura os dados do backup mais recente
-export async function restoreFromDrive({ filename = 'propmanager-backup.json' } = {}) {
+export async function restoreFromDrive({ filename = "propmanager-backup.json" } = {}) {
   const LS_KEY = "propmanager-data-v1";
   try {
     const latest = await downloadLatestJSON(filename);
     if (!latest) {
       const msg = 'Nenhum backup encontrado no Drive com o nome "' + filename + '".';
-      console.warn('[googleDrive] restoreFromDrive:', msg);
+      console.warn("[googleDrive] restoreFromDrive:", msg);
       alert(msg);
       return { success: false, message: msg };
     }
 
-    // Se a API devolver objeto JS já parseado (gapi retorna objeto), aceitamos.
-    const payload = typeof latest === 'string' ? JSON.parse(latest) : latest;
-
-    // SUBSTITUIR (sobrescrever) conforme sua preferência
+    const payload = typeof latest === "string" ? JSON.parse(latest) : latest;
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
 
-    // IMPORTANTE: disparar event para UI reagir automaticamente
     try {
-      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'googleDrive.restore', timestamp: Date.now() } }));
+      window.dispatchEvent(
+        new CustomEvent("datastore:change", {
+          detail: { source: "googleDrive.restore", timestamp: Date.now() },
+        })
+      );
     } catch (e) {
-      console.warn('Não foi possível disparar datastore:change após restore', e);
+      console.warn("Não foi possível disparar datastore:change após restore", e);
     }
 
     alert("Backup restaurado com sucesso ✅ (localStorage substituído).");
-    return { success: true, message: 'Restore concluído', data: payload };
+    return { success: true, message: "Restore concluído", data: payload };
   } catch (err) {
-    console.error('Erro no restoreFromDrive:', err);
-    alert('Erro ao restaurar dados do Google Drive ❌\n' + (err.message || err));
+    console.error("Erro no restoreFromDrive:", err);
+    alert("Erro ao restaurar dados do Google Drive ❌\n" + (err.message || err));
     return { success: false, message: err.message || String(err) };
   }
 }
