@@ -52,7 +52,7 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <div className="nav-logo">
-        📊 <span>Gian PropManager</span>
+        📊 <span>PropManager</span>
       </div>
 
       <div className="nav-links">

@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { useCurrency } from '@apps/state'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
-
+import { X } from "lucide-react"; // ícone de fechar
 const statuses = ['Live','Funded','Challenge','Standby']
 const types = ['Futures', 'Forex','Personal' ,'Cripto' ]
 
@@ -479,15 +479,35 @@ function NewAccountForm({ onCreate, onCancel, firms = [] }) {
       </div>
 
       <div className="row">
-        <div className="field">
-          <label>Funding Inicial</label>
-          <input type="number" className="input" value={form.initialFunding} onChange={e => setForm({ ...form, initialFunding: parseFloat(e.target.value) || 0 })} />
-        </div>
-        <div className="field">
-          <label>Funding Atual</label>
-          <input type="number" className="input" value={form.currentFunding} onChange={e => setForm({ ...form, currentFunding: parseFloat(e.target.value) || 0 })} />
-        </div>
-      </div>
+  <div className="field">
+    <label>Funding Inicial</label>
+    <input
+      type="number"
+      className="input"
+      value={form.initialFunding}
+      onChange={e => {
+        const value = parseFloat(e.target.value) || 0;
+        setForm({
+          ...form,
+          initialFunding: value,
+          currentFunding: value, // ← sincroniza automaticamente ao criar
+        });
+      }}
+    />
+  </div>
+
+  <div className="field">
+    <label>Funding Atual</label>
+    <input
+      type="number"
+      className="input"
+      value={form.currentFunding}
+      readOnly // ← torna não editável durante criação
+      style={{ opacity: 0.7, cursor: 'not-allowed' }}
+    />
+  </div>
+</div>
+
 
       <div className="field">
         <label>Profit Split (%)</label>
