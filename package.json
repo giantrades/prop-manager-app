@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "lucide-react": "^0.544.0",
     "react-csv": "^2.2.2",
     "recharts": "^2.15.4",
     "uuid": "^9.0.1"
