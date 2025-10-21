@@ -31,9 +31,11 @@ export default function Goals() {
     const handler = () => loadData()
     window.addEventListener('datastore:change', handler)
     window.addEventListener('storage', handler)
+    const interval = setInterval(() => loadData(), 15 * 60 * 1000) // atualiza a cada 15minutos
     return () => {
       window.removeEventListener('datastore:change', handler)
       window.removeEventListener('storage', handler)
+      clearInterval(interval)
     }
   }, [])
 
@@ -383,6 +385,12 @@ setTimeout(() => {
           <div className="progress-fill" style={{ width: `${Math.min(100, goal.progress || 0)}%`}}  />
         </div>
         <div className="progress-text" style={{ marginTop: '0.4rem' }}>
+          {goal.minDays > 0 && (
+  <div className="muted small" style={{ marginTop: '0.3rem' }}>
+    Dias ativos: <strong>{goal.daysActive || 0}</strong> / {goal.minDays}
+  </div>
+)}
+
           <strong>{(goal.progress || 0).toFixed(1)}%</strong>
           {goal.currentValue !== undefined && (
             <span className="muted"> ({fmt(goal.currentValue)} / {fmt(goal.targetValue)})</span>
@@ -390,28 +398,96 @@ setTimeout(() => {
         </div>
       </div>
 
-      {/* SUBGOALS */}
-      {goal.subProgresses && goal.subProgresses.length > 0 && (
-        <div className="subgoals" style={{ marginTop: '1rem' }}>
-          {goal.subProgresses.map(s => (
-            <div key={s.id} className="subgoal" style={{ marginBottom: '0.8rem' }}>
-              <span className={s.completed ? 'completed' : 'pending'}>
-                {s.completed ? '✓' : '⏳'}
-              </span>
-              <div>
-                <div className="subgoal-title">{s.title}</div>
-                <div className="mini-bar"><div style={{ width: `${Math.min(100, s.progress)}%` }} /></div>
-                <div className="muted">
-                  {(s.progress || 0).toFixed(0)}% ({fmt(s.currentValue ?? 0)} / {fmt(s.targetValue)})
+{/* SUBGOALS */}
+{goal.subProgresses && goal.subProgresses.length > 0 && (
+  (() => {
+    const seqMode = goal.mode === 'sequential'
+    // índice do primeiro subgoal não concluído (o "atual" no modo sequencial)
+    const firstIncomplete = seqMode
+      ? goal.subProgresses.findIndex(s => !s.completed)
+      : -1
+
+    // cor / estilo herdado do card principal
+    const tagColor = goal.tag?.color || '#6d4aff'
+    const cardBorder = `1px solid ${tagColor}`
+    const cardShadow = `0 6px 18px ${hexToRgba(tagColor, 0.12)}`
+
+    return (
+      <div className="subgoals" style={{ marginTop: '1rem', position: 'relative' }}>
+        {goal.subProgresses.map((s, idx) => {
+          const isCompleted = !!s.completed
+          const isCurrent = seqMode && firstIncomplete === idx
+          const isLocked = seqMode && firstIncomplete !== -1 && idx > firstIncomplete
+
+          // estilos dinâmicos:
+          const wrapperStyle = {
+            marginBottom: '1rem',
+            borderRadius: 8,
+            padding: '0.8rem 1rem',
+            transition: 'all 0.18s ease',
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-start',
+            background: isCurrent ? hexToRgba(tagColor, 0.03) : 'transparent',
+            border: isCurrent ? cardBorder : '1px solid rgba(255,255,255,0.03)',
+            boxShadow: isCurrent ? cardShadow : 'none',
+            opacity: isCompleted ? 0.6 : (isLocked ? 0.45 : 1),
+            filter: isLocked ? 'grayscale(60%) blur(0.3px)' : 'none',
+            pointerEvents: isLocked ? 'none' : 'auto' // opcional: impede clique nos bloqueados
+          }
+
+          return (
+            <div key={s.id} style={{ position: 'relative' }}>
+              <div className="subgoal" style={wrapperStyle}>
+                <span className={isCompleted ? 'completed' : 'pending'}>
+                  {isCompleted ? '✓' : (isCurrent ? '▶' : '⏳')}
+                </span>
+
+                <div style={{ flex: 1 }}>
+                  <div className="subgoal-title" style={{ fontWeight: isCurrent ? 700 : 600 }}>
+                    {s.title}
+                  </div>
+
+                  <div className="mini-bar" style={{ marginTop: 8 }}>
+                    <div style={{ width: `${Math.min(100, s.progress)}%` }} />
+                  </div>
+
+                  <div className="muted small" style={{ marginTop: '0.3rem' }}>
+                    {(s.progress || 0).toFixed(0)}% ({fmt(s.currentValue ?? 0)} / {fmt(s.targetValue)})
+                  </div>
+
+                  {s.minDays > 0 && (
+                    <div className="muted small" style={{ marginTop: '0.3rem' }}>
+                      Dias ativos: <strong>{s.daysActive || 0}</strong> / {s.minDays}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* seta entre subgoals (modo sequencial) */}
+              {goal.mode === 'sequential' && idx < goal.subProgresses.length - 1 && (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    fontSize: '1.4rem',
+                    opacity: isLocked ? 0.2 : 0.5,
+                    margin: '-0.5rem 0 0.5rem 0',
+                    color: isLocked ? '#777' : undefined
+                  }}
+                >
+                  ↓
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
+    )
+  })()
+)}
+
     </div>
-  )
-}
+)}
 
 
 
@@ -429,6 +505,7 @@ function GoalModal({ goal, accounts = [], strategies = [], onSave, onClose }) {
     deadline: goal?.deadline ? goal.deadline.split('T')[0] : '',
     subGoals: (goal?.subGoals || []).map(s => ({ ...s })),
     tag: goal?.tag || { name: '', color: '' },
+    minDays: goal?.minDays || 0,
   }))
 const [availableTags, setAvailableTags] = useState(getAllTags())
 
@@ -460,9 +537,27 @@ const filteredAccounts = useMemo(() => {
   })
 }, [accounts, query, filterType])
 
-  const addSubGoal = () => {
-    setForm(f => ({ ...f, subGoals: [...f.subGoals, { id: uuid(), title:'', type:'profit', targetValue:0, weight:1, linkedAccounts: [], linkedStrategies: [] }] }))
-  }
+const addSubGoal = () => {
+  setForm(f => ({
+    ...f,
+    subGoals: [
+      ...f.subGoals,
+      {
+        id: uuid(),
+        title: '',
+        type: 'profit',
+        targetValue: 0,
+        weight: 1,
+        minDays: 0,
+        daysActive: 0,       // 👈 novo campo
+        uniqueDays: [],      // 👈 novo campo
+        linkedAccounts: [],
+        linkedStrategies: []
+      }
+    ]
+  }))
+}
+
   const removeSub = (id) => setForm(f => ({ ...f, subGoals: f.subGoals.filter(s => s.id !== id) }))
   const updateSub = (id, field, value) => setForm(f => ({ ...f, subGoals: f.subGoals.map(s => s.id === id ? ({ ...s, [field]: value }) : s) }))
 
@@ -580,19 +675,56 @@ const filteredAccounts = useMemo(() => {
         </div>
 
         <div className="field">
-          <label><input type="checkbox" checked={form.perpetual} onChange={e => setForm({...form, perpetual: e.target.checked})}/> Meta contínua (Global)</label>
-        </div>
+  <label>
+    <input 
+      type="checkbox" 
+      checked={form.perpetual} 
+      onChange={e => setForm({...form, perpetual: e.target.checked})}
+    /> 
+    Meta contínua (Global)
+  </label>
+</div>
 
-        <div className="row">
-          <div className="field">
-            <label>Data Início</label>
-            <input type="date" className="input" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})}/>
-          </div>
-          {!form.perpetual && <div className="field">
-            <label>Data Limite</label>
-            <input type="date" className="input" value={form.deadline} onChange={e => setForm({...form, deadline: e.target.value})}/>
-          </div>}
-        </div>
+<div className="row" style={{ display: 'flex', gap: '16px', flexWrap: 'nowrap' }}>
+  <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
+    <label>Data Início</label>
+    <input 
+      type="date" 
+      className="input" 
+      value={form.startDate} 
+      onChange={e => setForm({...form, startDate: e.target.value})}
+    />
+  </div>
+  
+  {!form.perpetual && (
+    <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
+      <label>Data Limite</label>
+      <input 
+        type="date" 
+        className="input" 
+        value={form.deadline} 
+        onChange={e => setForm({...form, deadline: e.target.value})}
+      />
+    </div>
+  )}
+  
+  <div className="field" style={{ flex: '0 0 120px' }}>
+    <label>Prazo mínimo (dias)</label>
+    <input
+      type="number"
+      className="input"
+      min="0"
+      max="999"
+      style={{ textAlign: 'center' }}
+      value={form.minDays || 0}
+      onChange={e => setForm({ ...form, minDays: Number(e.target.value) })}
+    />
+  </div>
+</div>
+
+<p className="muted small" style={{ marginTop: '8px' }}>
+  💡 Dias de trades diferentes necessários para completar a meta, mesmo atingindo o valor alvo antes.
+</p>
 
         {/* 🔍 Filtro e busca de contas */}
 <div className="field">
@@ -645,47 +777,115 @@ const filteredAccounts = useMemo(() => {
     ))}
   </select>
   <p className="muted small">Se nenhuma conta for selecionada, esta meta se aplicará a todas as contas.</p>
-
         </div>
 
-        <div className="subgoals-section">
-          <h3>SubGoals</h3>
-          {form.subGoals.map((s, idx) => (
-            <div key={s.id} className="card subgoal-form">
-              <div className="field">
-                <label>Título</label>
-                <input className="input" value={s.title} onChange={e => updateSub(s.id, 'title', e.target.value)}/>
-              </div>
-              <div className="row">
-                <div className="field">
-                  <label>Tipo</label>
-                  <select className="input" value={s.type} onChange={e => updateSub(s.id, 'type', e.target.value)}>
-                    <option value="profit">Profit</option>
-                    <option value="roi">ROI %</option>
-                    <option value="payout">Payout</option>
-                    <option value="tradeCount">Trade Count</option>
-                    <option value="winRate">winRate</option>
-                    <option value="avgR">avgR</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>Alvo</label>
-                  <input type="number" className="input" value={s.targetValue} onChange={e => updateSub(s.id, 'targetValue', Number(e.target.value))}/>
-                </div>
-                <div className="field">
-                  <label>Peso</label>
-                  <input type="number" step="0.1" className="input" value={s.weight} onChange={e => updateSub(s.id, 'weight', Number(e.target.value))}/>
-                </div>
-              </div>
-              <button className="btn ghost small" onClick={() => removeSub(s.id)}>Remover SubGoal</button>
-            </div>
-          ))}
+<div className="subgoals-section">
+  <h3>SubGoals</h3>
+  
+  <div className="field" style={{ marginBottom: '6px' }}>
+    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
+      Modo de progresso
+    </label>
+    <select
+      className="input"
+      value={form.mode || 'parallel'}
+      onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}
+      style={{ maxWidth: '400px' }}
+    >
+      <option value="parallel">Ponderado (Subgoals independentes)</option>
+      <option value="sequential">Sequencial (Subgoals em ordem)</option>
+    </select>
+    <p className="muted small" style={{ marginTop: '6px', lineHeight: '1.5' }}>
+      {form.mode === 'parallel'
+        ? '💡 Todos os subgoals contribuem de forma ponderada para o progresso total.'
+        : '📋 Cada subgoal deve ser concluído antes do próximo começar.'}
+    </p>
+  </div>
+
+  {form.subGoals.map((s, idx) => (
+    <div key={s.id} className="card subgoal-form">
+      <div className="field">
+        <label>Título</label>
+        <input className="input" value={s.title} onChange={e => updateSub(s.id, 'title', e.target.value)}/>
+      </div>
+
+      <div className="row" style={{ display: 'flex', gap: '12px', flexWrap: 'nowrap' }}>
+        <div className="field" style={{ flex: '0 0 140px' }}>
+          <label>Tipo</label>
+          <select
+            className="input"
+            value={s.type}
+            onChange={e => updateSub(s.id, 'type', e.target.value)}
+          >
+            <option value="profit">Profit</option>
+            <option value="roi">ROI %</option>
+            <option value="payout">Payout</option>
+            <option value="tradeCount">Trade Count</option>
+            <option value="winRate">WinRate</option>
+            <option value="avgR">AvgR</option>
+          </select>
+        </div>
+
+        <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
+          <label>Alvo ($)</label>
+          <input
+            type="number"
+            className="input"
+            value={s.targetValue}
+            onChange={e => updateSub(s.id, 'targetValue', Number(e.target.value))}
+          />
+        </div>
+
+        <div className="field" style={{ flex: '0 0 90px' }}>
+          <label>Peso - <small className="muted">{(() => {
+      const totalWeight = form.subGoals.reduce((sum, sg) => sum + (Number(sg.weight) || 0), 0)
+      const pct = totalWeight > 0 ? (s.weight / totalWeight) * 100 : 0
+      return `(${pct.toFixed(1)}%)`})()}</small></label>
+          <input
+            type="number"
+            step="0.1"
+            className="input"
+            value={s.weight}
+            onChange={e => updateSub(s.id, 'weight', Number(e.target.value))}
+            style={{ textAlign: 'center' }}
+          />
+        </div>
+
+        <div className="field" style={{ flex: '0 0 90px' }}>
+          <label>Dias mín.</label>
+          <input
+            type="number"
+            className="input"
+            min="0"
+            value={s.minDays || 0}
+            onChange={e => updateSub(s.id, 'minDays', Number(e.target.value))}
+            style={{ textAlign: 'center' }}
+          />
+        </div>
+      </div>
+
+      <button className="btn ghost small" onClick={() => removeSub(s.id)}>Remover SubGoal</button>
+      {/* Seta para o próximo subgoal */}
+    {form.mode === 'sequential' && idx < form.subGoals.length - 1 && (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '8px 0',
+        color: '#888'
+      }}>
+        <span style={{ fontSize: '18px' }}>↓</span>
+      </div>
+    )}
+  </div>
+  ))}
+
           <button className="btn ghost" onClick={addSubGoal}>+ Adicionar SubGoal</button>
         </div>
 
         {(!form.subGoals || form.subGoals.length === 0) && (
           <div className="field">
-            <label>Valor Alvo</label>
+            <label>Valor Alvo ($)</label>
             <input type="number" className="input" value={form.targetValue} onChange={e => setForm({...form, targetValue: Number(e.target.value)})}/>
           </div>
         )}

@@ -309,27 +309,51 @@ function calculateMetric(type, trades, accounts, config = {}) {
 
 // getGoalProgress
 export function getGoalProgress(goalId) {
-  const data = load()
-  const goals = data.goals || []
-  const goal = goals.find(g => g.id === goalId)
-  if (!goal) return null
-  const trades = data.trades || []
-  const accounts = data.accounts || []
+  const data = load();
+  const goals = data.goals || [];
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal) return null;
 
-  // se tem subgoals
+  const trades = data.trades || [];
+  const accounts = data.accounts || [];
+
+  // 🔹 SE TEM SUBGOALS
   if (goal.subGoals && goal.subGoals.length) {
     const subProgresses = goal.subGoals.map(sub => {
       const config = {
         ...sub,
         period: sub.period || goal.period,
-        startDate: sub.startDate || goal.startDate
+        startDate: sub.startDate || goal.startDate,
+      };
+
+      // Herda contas se o sub não tiver suas próprias
+      if (
+        (!sub.linkedAccounts || !sub.linkedAccounts.length) &&
+        goal.linkedAccounts &&
+        goal.linkedAccounts.length
+      ) {
+        config.linkedAccounts = goal.linkedAccounts;
       }
-      // if sub doesn't set linkedAccounts, inherit
-      if ((!sub.linkedAccounts || !sub.linkedAccounts.length) && goal.linkedAccounts && goal.linkedAccounts.length) {
-        config.linkedAccounts = goal.linkedAccounts
+
+      // Calcula métrica atual
+      const currentValue = calculateMetric(sub.type, trades, accounts, config);
+      const progress = sub.targetValue > 0 ? Math.min(100, (currentValue / sub.targetValue) * 100) : 0;
+
+      // 🔹 Cálculo dos dias ativos (subgoal individual)
+      let daysActive = 0;
+      if (sub.minDays && sub.minDays > 0) {
+        const relevantTrades = (trades || []).filter(t =>
+          isInPeriod(t.date, config.period, config.startDate)
+        );
+        const uniqueDays = new Set(relevantTrades.map(t => new Date(t.date).toISOString().split("T")[0]));
+        daysActive = uniqueDays.size;
       }
-      const currentValue = calculateMetric(sub.type, trades, accounts, config)
-      const progress = sub.targetValue > 0 ? Math.min(100, (currentValue / sub.targetValue) * 100) : 0
+
+      // 🔹 Condições de conclusão
+      const meetsValue = progress >= 100;
+      const meetsDays = !sub.minDays || daysActive >= sub.minDays;
+      const completed = meetsValue && meetsDays;
+
       return {
         id: sub.id,
         title: sub.title,
@@ -337,33 +361,74 @@ export function getGoalProgress(goalId) {
         targetValue: sub.targetValue,
         currentValue,
         progress,
-        completed: progress >= 100,
+        completed,
         weight: sub.weight || 1,
-      }
-    })
+        minDays: sub.minDays || 0,
+        daysActive,
+      };
+    });
 
-    const totalWeight = subProgresses.reduce((s,sg) => s + (sg.weight || 1), 0)
-    const weightedSum = subProgresses.reduce((s,sg) => s + (sg.progress * (sg.weight || 1)), 0)
-    const totalProgress = totalWeight > 0 ? weightedSum / totalWeight : 0
+    // 🔹 Cálculo de progresso total conforme o modo
+    let totalProgress = 0;
+
+    if (goal.mode === "sequential") {
+      // ✅ MODO SEQUENCIAL — cada sub depende do anterior
+      for (let i = 0; i < subProgresses.length; i++) {
+        const s = subProgresses[i];
+        if (i === 0) {
+          totalProgress += s.progress / subProgresses.length;
+        } else {
+          const prev = subProgresses[i - 1];
+          if (prev.completed) {
+            totalProgress += s.progress / subProgresses.length;
+          } else {
+            break; // interrompe se o anterior não estiver completo
+          }
+        }
+      }
+    } else {
+      // ✅ MODO PARALELO (ponderado)
+      const totalWeight = subProgresses.reduce((s, sg) => s + (sg.weight || 1), 0);
+      const weightedSum = subProgresses.reduce((s, sg) => s + sg.progress * (sg.weight || 1), 0);
+      totalProgress = totalWeight > 0 ? weightedSum / totalWeight : 0;
+    }
+
+    // 🔹 Cálculo dos dias ativos do goal principal
+    let daysActive = 0;
+    if (goal.minDays && goal.minDays > 0) {
+      const relevantTrades = (trades || []).filter(t =>
+        isInPeriod(t.date, goal.period, goal.startDate)
+      );
+      const uniqueDays = new Set(relevantTrades.map(t => new Date(t.date).toISOString().split("T")[0]));
+      daysActive = uniqueDays.size;
+    }
+
+    // 🔹 Condições para completar o goal
+    const meetsValue = totalProgress >= 100;
+    const meetsDays = !goal.minDays || daysActive >= goal.minDays;
+    const completed = meetsValue && meetsDays;
+
     return {
       progress: totalProgress,
-      completed: totalProgress >= 100,
-      subProgresses
-    }
-  } else {
-    // simple goal
-    const cfg = {
-      ...goal
-    }
-    const currentValue = calculateMetric(goal.type, trades, accounts, cfg)
-    const progress = goal.targetValue > 0 ? Math.min(100, (currentValue / goal.targetValue) * 100) : 0
-    return {
-      currentValue,
-      progress,
-      completed: progress >= 100
-    }
+      completed,
+      daysActive,
+      minDays: goal.minDays || 0,
+      subProgresses,
+    };
   }
+
+  // 🔹 SE FOR GOAL SIMPLES (sem subgoals)
+  const cfg = { ...goal };
+  const currentValue = calculateMetric(goal.type, trades, accounts, cfg);
+  const progress = goal.targetValue > 0 ? Math.min(100, (currentValue / goal.targetValue) * 100) : 0;
+
+  return {
+    currentValue,
+    progress,
+    completed: progress >= 100,
+  };
 }
+
 
 // getAllGoals retorna goals com progresso aplicado
 // agora aceita opção: getAllGoals({ includeArchived: false }) se quiser que inclua esses Goals em graficos botar "true"
