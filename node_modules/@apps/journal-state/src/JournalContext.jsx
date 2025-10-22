@@ -103,13 +103,12 @@ const saveTrade = useCallback(async (trade) => {
   }
 
   // 🔹 Exportar automaticamente para o Drive (mantido)
-  try {
-    if (typeof exportToDrive === 'function') {
-      await exportToDrive('journal_backup.json');
-    }
-  } catch (e) {
-    console.warn('⚠️ Falha ao exportar para o Drive:', e);
-  }
+  // 🔹 Exporta em background para não travar o form
+if (typeof exportToDrive === 'function') {
+  exportToDrive('journal_backup.json')
+    .catch(e => console.warn('⚠️ Falha ao exportar para o Drive:', e));
+}
+
 
   return payload;
 }, []);

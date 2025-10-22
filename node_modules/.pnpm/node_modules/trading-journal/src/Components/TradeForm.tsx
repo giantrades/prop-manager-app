@@ -352,25 +352,7 @@ const handleSave = async () => {
   };
 
   // 🔹 Atualiza saldo das contas com impacto do P&L
-  if (typeof updatedForm.result_net === 'number') {
-    const net = Number(updatedForm.result_net) || 0;
-    for (const entry of accountsPayload) {
-      const acc = accounts.find(a => a.id === entry.accountId);
-      if (!acc) continue;
-
-      const pnlImpact = net * (entry.weight ?? 1);
-      try {
-        updateAccount(acc.id, {
-          ...acc,
-          currentFunding: (acc.currentFunding || 0) + pnlImpact,
-          defaultWeight: entry.weight,
-        });
-      } catch (err) {
-        console.error('Erro ao atualizar conta via dataStore', err);
-      }
-    }
-  }
-
+ 
   // 🔹 Salva trade
   try {
     await saveTrade(tradeData);
