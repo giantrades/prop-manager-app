@@ -3,7 +3,7 @@ import type { Trade, Execution, PartialExecution } from '../types/trade';
 import { useJournal } from '@apps/journal-state';
 import { useCurrency } from '@apps/state';
 import { v4 as uuidv4 } from 'uuid';
-import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import {getAll, createAccount,getTrades, createTrade, updateTrade, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 type Props = {
   onClose: () => void;
@@ -274,14 +274,13 @@ const updatePartial = (
 
 
 const handleSave = async () => {
-  // Validações
-  if (!form.asset?.trim()) { 
-    alert('Asset é obrigatório'); 
-    return; 
+  if (!form.asset?.trim()) {
+    alert("Asset é obrigatório");
+    return;
   }
-  if (!selectedAccounts.length) { 
-    alert('Selecione ao menos uma conta'); 
-    return; 
+  if (!selectedAccounts.length) {
+    alert("Selecione ao menos uma conta");
+    return;
   }
   if (!form.entry_datetime) {
     alert("Entry Date & Time é obrigatório");
@@ -292,35 +291,45 @@ const handleSave = async () => {
     return;
   }
 
-  // Garante shape accounts: [{accountId, weight}]
+  // Shape das contas [{accountId, weight}]
   const accountsPayload = selectedAccounts.map(id => {
     const defaultW = accountWeights[id];
-    const weight = (typeof defaultW === 'number' && !isNaN(defaultW)) ? defaultW : 1;
+    const weight =
+      typeof defaultW === "number" && !isNaN(defaultW) ? defaultW : 1;
     return { accountId: id, weight };
   });
 
   const primaryAccountId = selectedAccounts[0];
+  const updatedForm = { ...form };
 
-  // 🔹 Processa Execuções Parciais (se existirem)
-  let updatedForm = { ...form };
-  
-  if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
-    const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
+  // 🔹 Processa execuções parciais
+  if (
+    Array.isArray(updatedForm.PartialExecutions) &&
+    updatedForm.PartialExecutions.length > 0
+  ) {
+    const totalVol = updatedForm.PartialExecutions.reduce(
+      (acc, e) => acc + (e.volume || 0),
+      0
+    );
 
     if (totalVol > 0) {
-      const avgEntry = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.entryPrice * e.volume), 0
-      ) / totalVol;
-      
-      const avgExit = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.exitPrice * e.volume), 0
-      ) / totalVol;
+      const avgEntry =
+        updatedForm.PartialExecutions.reduce(
+          (acc, e) => acc + e.entryPrice * e.volume,
+          0
+        ) / totalVol;
+
+      const avgExit =
+        updatedForm.PartialExecutions.reduce(
+          (acc, e) => acc + e.exitPrice * e.volume,
+          0
+        ) / totalVol;
 
       const totalGross = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.result_gross || 0), 0
+        (acc, e) => acc + (e.result_gross || 0),
+        0
       );
 
-      // Atualiza apenas se não foram definidos manualmente
       if (!updatedForm.entry_price || updatedForm.entry_price === 0) {
         updatedForm.entry_price = avgEntry;
       }
@@ -330,66 +339,71 @@ const handleSave = async () => {
       if (!updatedForm.result_gross || updatedForm.result_gross === 0) {
         updatedForm.result_gross = totalGross;
       }
-      
+
       updatedForm.volume = totalVol;
     }
   }
 
-  // 🔹 Monta o tradeData FINAL
+  // 🔹 Monta trade final
   const tradeData = {
     ...updatedForm,
     id: editing?.id || uuidv4(),
-    
-    // ✅ CRÍTICO: Mantém ISO completo (não fatiar!)
-    entry_datetime: updatedForm.entry_datetime, 
+    entry_datetime: updatedForm.entry_datetime,
     exit_datetime: updatedForm.exit_datetime || null,
-    
     isBreakeven: !!updatedForm.isBreakeven,
     accounts: accountsPayload,
     accountId: primaryAccountId,
-    accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
-    accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
-    tf_signal: updatedForm.tf_signal || '1h',
+    accountName:
+      accounts.find(a => a.id === primaryAccountId)?.name || "",
+    accountType:
+      accounts.find(a => a.id === primaryAccountId)?.type || "Unknown",
+    tf_signal: updatedForm.tf_signal || "1h",
   };
 
-  // 🔹 Atualiza saldo das contas com impacto do P&L
-  const { trades, saveTrade } = useJournal();
- if (typeof updatedForm.result_net === 'number') {
+  // 🔹 Atualiza saldo das contas (respeita edição)
   const net = Number(updatedForm.result_net) || 0;
+  let prevNet = 0;
 
-  const prevTrade = trades.find(t => t.id === updatedForm.id);
-  const prevNet = prevTrade ? Number(prevTrade.result_net) || 0 : 0;
+  if (editing?.id) {
+    // trade em edição
+    const existing = getTrades().find(t => t.id === editing.id);
+    prevNet = existing ? Number(existing.result_net) || 0 : 0;
+  }
+
   const delta = net - prevNet;
 
-  for (const entry of accountsPayload) {
-    const acc = accounts.find(a => a.id === entry.accountId);
-    if (!acc) continue;
+  if (delta !== 0) {
+    for (const entry of accountsPayload) {
+      const acc = accounts.find(a => a.id === entry.accountId);
+      if (!acc) continue;
 
-    const pnlImpact = delta * (entry.weight ?? 1);
-
-    try {
+      const pnlImpact = delta * (entry.weight ?? 1);
       updateAccount(acc.id, {
         ...acc,
         currentFunding: (acc.currentFunding || 0) + pnlImpact,
         defaultWeight: entry.weight,
       });
-      window.dispatchEvent(new Event('storage'));
-    } catch (err) {
-      console.error('Erro ao atualizar conta via dataStore', err);
     }
+
+    // Força refresh
+    window.dispatchEvent(new CustomEvent("datastore:change"));
   }
-}
 
-
-  // 🔹 Salva trade
+  // 🔹 Salva o trade (sem hook aqui)
   try {
-    await saveTrade(tradeData);
+    if (editing?.id) {
+      updateTrade(editing.id, tradeData);
+    } else {
+      createTrade(tradeData);
+    }
+
     onClose();
   } catch (err) {
-    console.error('Erro ao salvar trade', err);
-    alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
+    console.error("Erro ao salvar trade", err);
+    alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
   }
 };
+
 
 
   // Auto-populate tags when strategy changes
