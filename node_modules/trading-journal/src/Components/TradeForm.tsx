@@ -347,7 +347,7 @@ const handleSave = async () => {
   // 🔹 Monta trade final
   const tradeData = {
     ...updatedForm,
-    id: editing?.id || uuidv4(),
+    id: editing?.id || updatedForm.id || uuidv4(), // ✅ preserva id existente
     entry_datetime: updatedForm.entry_datetime,
     exit_datetime: updatedForm.exit_datetime || null,
     isBreakeven: !!updatedForm.isBreakeven,
@@ -364,10 +364,9 @@ const handleSave = async () => {
   const net = Number(updatedForm.result_net) || 0;
   let prevNet = 0;
 
-  if (editing?.id) {
-    // trade em edição
-    const existing = getTrades().find(t => t.id === editing.id);
-    prevNet = existing ? Number(existing.result_net) || 0 : 0;
+  const existingTrade = getTrades().find(t => t.id === tradeData.id);
+  if (existingTrade) {
+    prevNet = Number(existingTrade.result_net) || 0;
   }
 
   const delta = net - prevNet;
@@ -385,14 +384,13 @@ const handleSave = async () => {
       });
     }
 
-    // Força refresh
     window.dispatchEvent(new CustomEvent("datastore:change"));
   }
 
-  // 🔹 Salva o trade (sem hook aqui)
+  // 🔹 Salva trade (resiliente)
   try {
-    if (editing?.id) {
-      updateTrade(editing.id, tradeData);
+    if (existingTrade) {
+      updateTrade(tradeData.id, tradeData);
     } else {
       createTrade(tradeData);
     }
@@ -403,6 +401,7 @@ const handleSave = async () => {
     alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
   }
 };
+
 
 
 

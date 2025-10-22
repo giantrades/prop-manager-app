@@ -187,47 +187,72 @@ export function getFirmStats(firmId){
 }
 
 /* --------------------
-   TRADES (NOVO)
+   TRADES (REVISADO)
    -------------------- */
-export function getTrades(){ return load().trades || [] }
+export function getTrades() {
+  const data = load();
+  return data.trades || [];
+}
 
-export function createTrade(partial){
-  const data = load()
+export function createTrade(partial) {
+  const data = load();
+  const id = partial.id || uuid(); // 🔹 mantém id se vier de edição
   const t = {
-    id: uuid(),
+    id,
     entry_datetime: partial.entry_datetime || new Date().toISOString(),
     exit_datetime: partial.exit_datetime || null,
-    asset: '',
-    accountId: null,
-    strategyId: null,
-    direction: 'Long',
-    volume: 0,
-    entry_price: 0,
-    exit_price: 0,
+    asset: partial.asset || '',
+    accountId: partial.accountId || null,
+    strategyId: partial.strategyId || null,
+    direction: partial.direction || 'Long',
+    volume: partial.volume || 0,
+    entry_price: partial.entry_price || 0,
+    exit_price: partial.exit_price || 0,
     entry_time: partial.entry_time || null,
     exit_time: partial.exit_time || null,
-    result_net: 0,
-    result_R: 0,
+    result_net: partial.result_net || 0,
+    result_R: partial.result_R || 0,
+    notes: partial.notes || '',
+    PartialExecutions: partial.PartialExecutions || [],
+    accounts: partial.accounts || [],
     ...partial
+  };
+
+  // Evita duplicados — se já existir com o mesmo ID, substitui
+  const existingIdx = data.trades.findIndex(tr => tr.id === id);
+  if (existingIdx !== -1) {
+    data.trades[existingIdx] = { ...data.trades[existingIdx], ...t };
+  } else {
+    data.trades.push(t);
   }
-  data.trades.push(t)
-  save(data)
-  return t
+
+  save(data);
+  return t;
 }
 
-export function updateTrade(id, patch){
-  const data = load()
-  const idx = data.trades.findIndex(x=>x.id===id)
-  if (idx === -1) return null
-  data.trades[idx] = { ...data.trades[idx], ...patch }
-  save(data)
-  return data.trades[idx]
+export function updateTrade(id, patch) {
+  const data = load();
+  const trades = data.trades || [];
+  const idx = trades.findIndex(x => x.id === id);
+
+  // Se existir, substitui
+  if (idx !== -1) {
+    trades[idx] = { ...trades[idx], ...patch };
+  } else {
+    // Se não achar (caso raro), cria novo com o id recebido
+    console.warn('updateTrade: trade não encontrado, criando novo', id);
+    trades.push({ id, ...patch });
+  }
+
+  data.trades = trades;
+  save(data);
+  return patch;
 }
 
-export function deleteTrade(id){
-  const data = load()
-  data.trades = data.trades.filter(t=>t.id!==id)
-  save(data)
+export function deleteTrade(id) {
+  const data = load();
+  data.trades = data.trades.filter(t => t.id !== id);
+  save(data);
 }
 
 /* --------------------
