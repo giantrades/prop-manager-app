@@ -74,24 +74,112 @@ const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
   const id = trade.id || uuidv4();
 
-  const payload = { ...trade, id, updatedAt: new Date().toISOString() };
-  await db.put('trades', payload);
+  // 🔹 Verifica se já existe trade anterior (edição)
+  const existing = trade.id ? await db.get("trades", id) : null;
 
-  setTrades(prev => [payload, ...prev.filter(t => t.id !== id)]);
+  const payload = {
+    ...trade,
+    id,
+    updatedAt: new Date().toISOString(),
+  };
 
-  return payload; // ✅ importante
+  // 🔹 Salva ou atualiza trade no IndexedDB
+  await db.put("trades", payload);
+
+  // 🔹 Atualiza estado local de trades
+  setTrades(prev => {
+    const other = prev.filter(t => t.id !== id);
+    return [payload, ...other];
+  });
+
+  // 🔹 Atualiza funding incremental com correção de delta
+  if (Array.isArray(payload.accounts)) {
+    try {
+      const ds = await import("@apps/lib/dataStore.js");
+      const { getAll, updateAccount } = ds;
+      const all = await getAll();
+      const accounts = all?.accounts || [];
+
+      for (const accEntry of payload.accounts) {
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
+
+        const weight = accEntry.weight ?? 1;
+        const oldPnl = existing ? (Number(existing.result_net) || 0) * weight : 0;
+        const newPnl = (Number(payload.result_net) || 0) * weight;
+        const pnlDiff = newPnl - oldPnl;
+
+        console.log(`💰 Conta ${acc.name}: oldPnl=${oldPnl}, newPnl=${newPnl}, diff=${pnlDiff}`);
+
+        // Evita aplicar duas vezes se não há mudança real
+        if (Math.abs(pnlDiff) < 1e-9) continue;
+
+        await updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) + pnlDiff,
+        });
+      }
+
+      // 🔹 Dispara eventos para sincronizar UI
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('datastore:change'));
+    } catch (e) {
+      console.warn("⚠️ Falha ao atualizar contas:", e);
+    }
+  }
+
+  // 🔹 Exporta automaticamente para o Drive
+  if (typeof exportToDrive === "function") {
+    exportToDrive("journal_backup.json")
+      .catch(e => console.warn("⚠️ Falha ao exportar para o Drive:", e));
+  }
+
+  return payload;
 }, []);
 
 
 const deleteTrade = useCallback(async (tradeId) => {
   const db = await getDB();
-  await db.delete('trades', tradeId);
+  const trade = await db.get("trades", tradeId);
+
+  if (!trade) return;
+
+  await db.delete("trades", tradeId);
   setTrades(prev => prev.filter(t => t.id !== tradeId));
+
+  // 🔹 Reverte impacto do PnL nas contas
+  if (Array.isArray(trade.accounts)) {
+    try {
+      const ds = await import("@apps/lib/dataStore.js");
+      const { getAll, updateAccount } = ds;
+      const all = await getAll();
+      const accounts = all?.accounts || [];
+
+      for (const accEntry of trade.accounts) {
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
+
+        const weight = accEntry.weight ?? 1;
+        const pnlImpact = Number(trade.result_net || 0) * weight;
+
+        await updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) - pnlImpact,
+        });
+      }
+    } catch (e) {
+      console.warn("⚠️ Falha ao remover impacto de PnL:", e);
+    }
+  }
+
+  // 🔹 Atualiza backup no Drive
+  if (typeof exportToDrive === "function") {
+    exportToDrive("journal_backup.json")
+      .catch(e => console.warn("⚠️ Falha ao exportar para o Drive:", e));
+  }
 }, []);
 
 
-
-  
   const saveStrategy = useCallback(async (strategy) => {
     const db = await getDB();
     const id = strategy.id || uuidv4();

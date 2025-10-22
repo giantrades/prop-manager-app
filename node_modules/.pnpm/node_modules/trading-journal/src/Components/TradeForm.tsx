@@ -355,40 +355,23 @@ const handleSave = async () => {
 
  console.log('🚀 tradeData final:', tradeData);
   // 🔹 Salva trade
-  try {
-    await saveTrade(tradeData);
-    try {
+ try {
+  // 🔹 Salva trade (uma única vez)
+  if (!tradeData.id) {
+  tradeData.id = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+}
+ console.log('🚀 tradeData final:', tradeData);
   const savedTrade = await saveTrade(tradeData);
 
-  // 🔹 Atualiza funding das contas no dataStore
-  const ds = await import("@apps/lib/dataStore.js");
-  const { getAll, updateAccount } = ds;
-  const all = await getAll();
-  const accounts = all.accounts || [];
+// 🔹 Salva trade (saveTrade já cuida de atualizar as contas)
+  await saveTrade(tradeData);
 
-  for (const accEntry of savedTrade.accounts || []) {
-    const acc = accounts.find((a) => a.id === accEntry.accountId);
-    if (!acc) continue;
-
-    const pnlImpact = (savedTrade.result_net || 0) * (accEntry.weight ?? 1);
-    await updateAccount(acc.id, {
-      ...acc,
-      currentFunding: (acc.currentFunding || 0) + pnlImpact,
-    });
-  }
-
-  // 🔹 Fecha o form normalmente
   onClose();
 } catch (err) {
   console.error("Erro ao salvar trade:", err);
   alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
 }
 
-    onClose();
-  } catch (err) {
-    console.error('Erro ao salvar trade', err);
-    alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
-  }
 
 };
 
