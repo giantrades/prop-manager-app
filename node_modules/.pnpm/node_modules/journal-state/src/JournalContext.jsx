@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { updateAccount as dsUpdateAccount } from '@apps/lib/dataStore.js';
-import { useRecalcAccountFunding } from '@/hooks/useRecalcAccountFunding';
 
 
 
@@ -69,11 +68,6 @@ export default function JournalProvider({ children }) {
     })();
     return () => { mounted = false; };
   }, []);
-const { recalcAllAccountsFunding } = useRecalcAccountFunding();
-
-useEffect(() => {
-  recalcAllAccountsFunding();
-}, []);
 
 const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
