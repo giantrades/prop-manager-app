@@ -73,27 +73,47 @@ const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
   const id = trade.id || uuidv4();
   const payload = { ...trade, id, updatedAt: new Date().toISOString() };
-
-  // 🔹 Grava apenas no IndexedDB
   await db.put('trades', payload);
 
-  // 🔹 (opcional) sincroniza com o dataStore central
-  try {
-    const ds = require('@apps/lib/dataStore.js');
-    if (ds && typeof ds.createTrade === 'function') {
-      await ds.createTrade(payload);
+  setTrades(prev => {
+    const other = prev.filter(t => t.id !== id);
+    return [payload, ...other];
+  });
+
+  // 🔹 Atualiza accounts no dataStore central (sem require)
+  if (payload.accounts && Array.isArray(payload.accounts)) {
+    try {
+      const ds = await import('@apps/lib/dataStore.js');
+      const all = await ds.getAll();
+      const accounts = all?.accounts || [];
+
+      for (const accEntry of payload.accounts) {
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
+
+        const pnlImpact = (payload.result_net || 0) * (accEntry.weight ?? 1);
+        await ds.updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) + pnlImpact,
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao atualizar accounts:', e);
     }
-  } catch (e) {
-    console.warn('createTrade via dataStore falhou:', e);
   }
 
-  // ❌ NÃO atualize com setTrades(prev => [...]) — isso gerava duplicações
-  // ✅ Em vez disso, recarregue a lista do DB após o save
-  const allTrades = await db.getAll('trades');
-  setTrades(allTrades);
+  // 🔹 Exportar automaticamente para o Drive (mantido)
+  try {
+    if (typeof exportToDrive === 'function') {
+      await exportToDrive('journal_backup.json');
+    }
+  } catch (e) {
+    console.warn('⚠️ Falha ao exportar para o Drive:', e);
+  }
 
   return payload;
 }, []);
+
 
 
 

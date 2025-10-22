@@ -274,12 +274,13 @@ const updatePartial = (
 
 
 const handleSave = async () => {
+  // Validações
   if (!form.asset?.trim()) {
-    alert("Asset é obrigatório");
+    alert('Asset é obrigatório');
     return;
   }
   if (!selectedAccounts.length) {
-    alert("Selecione ao menos uma conta");
+    alert('Selecione ao menos uma conta');
     return;
   }
   if (!form.entry_datetime) {
@@ -291,45 +292,36 @@ const handleSave = async () => {
     return;
   }
 
-  // Shape das contas [{accountId, weight}]
+  // Garante shape accounts: [{accountId, weight}]
   const accountsPayload = selectedAccounts.map(id => {
     const defaultW = accountWeights[id];
-    const weight =
-      typeof defaultW === "number" && !isNaN(defaultW) ? defaultW : 1;
+    const weight = (typeof defaultW === 'number' && !isNaN(defaultW)) ? defaultW : 1;
     return { accountId: id, weight };
   });
 
   const primaryAccountId = selectedAccounts[0];
-  const updatedForm = { ...form };
 
-  // 🔹 Processa execuções parciais
-  if (
-    Array.isArray(updatedForm.PartialExecutions) &&
-    updatedForm.PartialExecutions.length > 0
-  ) {
-    const totalVol = updatedForm.PartialExecutions.reduce(
-      (acc, e) => acc + (e.volume || 0),
-      0
-    );
-
+  // 🔹 Processa Execuções Parciais (se existirem)
+  let updatedForm = { ...form };
+  if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
+    const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
     if (totalVol > 0) {
-      const avgEntry =
-        updatedForm.PartialExecutions.reduce(
-          (acc, e) => acc + e.entryPrice * e.volume,
-          0
-        ) / totalVol;
+      const avgEntry = updatedForm.PartialExecutions.reduce(
+        (acc, e) => acc + (e.entryPrice * e.volume),
+        0
+      ) / totalVol;
 
-      const avgExit =
-        updatedForm.PartialExecutions.reduce(
-          (acc, e) => acc + e.exitPrice * e.volume,
-          0
-        ) / totalVol;
+      const avgExit = updatedForm.PartialExecutions.reduce(
+        (acc, e) => acc + (e.exitPrice * e.volume),
+        0
+      ) / totalVol;
 
       const totalGross = updatedForm.PartialExecutions.reduce(
         (acc, e) => acc + (e.result_gross || 0),
         0
       );
 
+      // Atualiza apenas se não foram definidos manualmente
       if (!updatedForm.entry_price || updatedForm.entry_price === 0) {
         updatedForm.entry_price = avgEntry;
       }
@@ -344,63 +336,52 @@ const handleSave = async () => {
     }
   }
 
-  // 🔹 Monta trade final
+  // 🔹 Monta o tradeData FINAL
   const tradeData = {
     ...updatedForm,
-    id: editing?.id || updatedForm.id || uuidv4(), // ✅ preserva id existente
+    id: editing?.id || uuidv4(),
+    // ✅ CRÍTICO: Mantém ISO completo (não fatiar!)
     entry_datetime: updatedForm.entry_datetime,
     exit_datetime: updatedForm.exit_datetime || null,
     isBreakeven: !!updatedForm.isBreakeven,
     accounts: accountsPayload,
     accountId: primaryAccountId,
-    accountName:
-      accounts.find(a => a.id === primaryAccountId)?.name || "",
-    accountType:
-      accounts.find(a => a.id === primaryAccountId)?.type || "Unknown",
-    tf_signal: updatedForm.tf_signal || "1h",
+    accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
+    accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
+    tf_signal: updatedForm.tf_signal || '1h',
   };
 
-  // 🔹 Atualiza saldo das contas (respeita edição)
-  const net = Number(updatedForm.result_net) || 0;
-  let prevNet = 0;
-
-  const existingTrade = getTrades().find(t => t.id === tradeData.id);
-  if (existingTrade) {
-    prevNet = Number(existingTrade.result_net) || 0;
-  }
-
-  const delta = net - prevNet;
-
-  if (delta !== 0) {
+  // 🔹 Atualiza saldo das contas com impacto do P&L
+  if (typeof updatedForm.result_net === 'number') {
+    const net = Number(updatedForm.result_net) || 0;
     for (const entry of accountsPayload) {
       const acc = accounts.find(a => a.id === entry.accountId);
       if (!acc) continue;
 
-      const pnlImpact = delta * (entry.weight ?? 1);
-      updateAccount(acc.id, {
-        ...acc,
-        currentFunding: (acc.currentFunding || 0) + pnlImpact,
-        defaultWeight: entry.weight,
-      });
+      const pnlImpact = net * (entry.weight ?? 1);
+      try {
+        updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) + pnlImpact,
+          defaultWeight: entry.weight,
+        });
+      } catch (err) {
+        console.error('Erro ao atualizar conta via dataStore', err);
+      }
     }
-
-    window.dispatchEvent(new CustomEvent("datastore:change"));
   }
 
-  // 🔹 Salva trade (resiliente)
+  // 🔹 Salva trade
   try {
-    if (existingTrade) {
-      updateTrade(tradeData.id, tradeData);
-    } else {
-      createTrade(tradeData);
-    }
-
+    await saveTrade(tradeData);
     onClose();
   } catch (err) {
-    console.error("Erro ao salvar trade", err);
-    alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
+    console.error('Erro ao salvar trade', err);
+    alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
   }
 };
+
+
 
 
 
