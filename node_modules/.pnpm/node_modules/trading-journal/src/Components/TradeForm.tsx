@@ -339,7 +339,7 @@ const handleSave = async () => {
   // 🔹 Monta o tradeData FINAL
   const tradeData = {
     ...updatedForm,
-    id: editing?.id || uuidv4(),
+    id: editing?.id,
     // ✅ CRÍTICO: Mantém ISO completo (não fatiar!)
     entry_datetime: updatedForm.entry_datetime,
     exit_datetime: updatedForm.exit_datetime || null,
