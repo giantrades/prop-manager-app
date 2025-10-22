@@ -274,7 +274,7 @@ const updatePartial = (
 
 
 const handleSave = async () => {
-  // --- 🔹 Validações básicas ---
+  // Validações
   if (!form.asset?.trim()) {
     alert('Asset é obrigatório');
     return;
@@ -292,7 +292,7 @@ const handleSave = async () => {
     return;
   }
 
-  // --- 🔹 Garante estrutura correta de contas ---
+  // Garante shape accounts: [{accountId, weight}]
   const accountsPayload = selectedAccounts.map(id => {
     const defaultW = accountWeights[id];
     const weight = (typeof defaultW === 'number' && !isNaN(defaultW)) ? defaultW : 1;
@@ -301,7 +301,7 @@ const handleSave = async () => {
 
   const primaryAccountId = selectedAccounts[0];
 
-  // --- 🔹 Processa Execuções Parciais (caso existam) ---
+  // 🔹 Processa Execuções Parciais (se existirem)
   let updatedForm = { ...form };
   if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
     const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
@@ -321,21 +321,26 @@ const handleSave = async () => {
         0
       );
 
-      if (!updatedForm.entry_price || updatedForm.entry_price === 0)
+      // Atualiza apenas se não foram definidos manualmente
+      if (!updatedForm.entry_price || updatedForm.entry_price === 0) {
         updatedForm.entry_price = avgEntry;
-      if (!updatedForm.exit_price || updatedForm.exit_price === 0)
+      }
+      if (!updatedForm.exit_price || updatedForm.exit_price === 0) {
         updatedForm.exit_price = avgExit;
-      if (!updatedForm.result_gross || updatedForm.result_gross === 0)
+      }
+      if (!updatedForm.result_gross || updatedForm.result_gross === 0) {
         updatedForm.result_gross = totalGross;
+      }
 
       updatedForm.volume = totalVol;
     }
   }
 
-  // --- 🔹 Monta tradeData final ---
+  // 🔹 Monta o tradeData FINAL
   const tradeData = {
     ...updatedForm,
     id: editing?.id || uuidv4(),
+    // ✅ CRÍTICO: Mantém ISO completo (não fatiar!)
     entry_datetime: updatedForm.entry_datetime,
     exit_datetime: updatedForm.exit_datetime || null,
     isBreakeven: !!updatedForm.isBreakeven,
@@ -346,18 +351,18 @@ const handleSave = async () => {
     tf_signal: updatedForm.tf_signal || '1h',
   };
 
-  console.log('🚀 tradeData final:', tradeData);
+  // 🔹 Atualiza saldo das contas com impacto do P&L
 
-  // --- ✅ Salva trade e aciona recálculo automático de funding (feito dentro do saveTrade) ---
+ console.log('🚀 tradeData final:', tradeData);
+  // 🔹 Salva trade
   try {
-    await saveTrade(tradeData); 
+    await saveTrade(tradeData);
     onClose();
   } catch (err) {
     console.error('Erro ao salvar trade', err);
     alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
   }
 };
-
 
 
 

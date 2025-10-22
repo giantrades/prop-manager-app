@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { updateAccount as dsUpdateAccount } from '@apps/lib/dataStore.js';
+import { useRecalcAccountFunding } from '@/hooks/useRecalcAccountFunding';
 
 
 
@@ -68,44 +69,58 @@ export default function JournalProvider({ children }) {
     })();
     return () => { mounted = false; };
   }, []);
+const { recalcAllAccountsFunding } = useRecalcAccountFunding();
+
+useEffect(() => {
+  recalcAllAccountsFunding();
+}, []);
 
 const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
   const id = trade.id || uuidv4();
+
+  // Verifica se já existe (para calcular delta de PnL)
   const existing = trade.id ? await db.get('trades', id) : null;
 
-  const payload = { 
-    ...trade, 
-    id, 
-    updatedAt: new Date().toISOString() 
+  const payload = {
+    ...trade,
+    id,
+    updatedAt: new Date().toISOString(),
   };
 
-  // 🔹 Salva trade no banco local
   await db.put('trades', payload);
 
-  // 🔹 Atualiza estado local
   setTrades(prev => {
-    const others = prev.filter(t => t.id !== id);
-    return [payload, ...others];
+    const other = prev.filter(t => t.id !== id);
+    return [payload, ...other];
   });
 
-  // ✅ NOVO: Recalcula funding da(s) conta(s) afetadas
-  try {
-    const ds = await import('@apps/lib/dataStore.js');
+  // 🔹 Atualiza funding incrementalmente (delta de PnL)
+  if (payload.accounts && Array.isArray(payload.accounts)) {
+    try {
+      const ds = await import('@apps/lib/dataStore.js');
+      const all = await ds.getAll();
+      const accounts = all?.accounts || [];
 
-    if (Array.isArray(payload.accounts) && payload.accounts.length > 0) {
       for (const accEntry of payload.accounts) {
-        await ds.recalcAccountFunding(accEntry.accountId);
-      }
-    } else if (payload.accountId) {
-      await ds.recalcAccountFunding(payload.accountId);
-    }
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
 
-  } catch (e) {
-    console.warn('⚠️ Falha ao recalcular funding:', e);
+        const oldPnl = existing ? (existing.result_net || 0) : 0;
+        const newPnl = payload.result_net || 0;
+        const pnlDiff = (newPnl - oldPnl) * (accEntry.weight ?? 1);
+
+        await ds.updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) + pnlDiff,
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao atualizar contas:', e);
+    }
   }
 
-  // 🔹 Exportar automaticamente (sem travar a UI)
+  // 🔹 Exporta automaticamente pro Drive
   if (typeof exportToDrive === 'function') {
     exportToDrive('journal_backup.json')
       .catch(e => console.warn('⚠️ Falha ao exportar para o Drive:', e));
@@ -116,43 +131,45 @@ const saveTrade = useCallback(async (trade) => {
 
 
 
-
-
-
-const deleteTrade = useCallback(async (id) => {
+const deleteTrade = useCallback(async (tradeId) => {
   const db = await getDB();
-  const existing = await db.get('trades', id);
-  await db.delete('trades', id);
-  setTrades(prev => prev.filter(t => t.id !== id));
+  const trade = await db.get('trades', tradeId);
 
-  // 🔹 Reverte o impacto do P&L nas contas vinculadas
-  if (existing && existing.accounts && Array.isArray(existing.accounts)) {
+  if (!trade) return;
+
+  await db.delete('trades', tradeId);
+  setTrades(prev => prev.filter(t => t.id !== tradeId));
+
+  // 🔹 Remove impacto do PnL das contas envolvidas
+  if (trade.accounts && Array.isArray(trade.accounts)) {
     try {
       const ds = await import('@apps/lib/dataStore.js');
       const all = await ds.getAll();
       const accounts = all?.accounts || [];
 
-      for (const accEntry of existing.accounts) {
+      for (const accEntry of trade.accounts) {
         const acc = accounts.find(a => a.id === accEntry.accountId);
         if (!acc) continue;
 
-        const pnlImpact = (existing.result_net || 0) * (accEntry.weight ?? 1);
+        const pnlToRemove = (trade.result_net || 0) * (accEntry.weight ?? 1);
+
         await ds.updateAccount(acc.id, {
           ...acc,
-          currentFunding: (acc.currentFunding || 0) - pnlImpact, // 👈 reverte impacto
+          currentFunding: (acc.currentFunding || 0) - pnlToRemove,
         });
       }
     } catch (e) {
-      console.warn('⚠️ Falha ao reverter P&L de conta ao deletar trade:', e);
+      console.warn('⚠️ Falha ao remover impacto de PnL:', e);
     }
   }
 
-  // 🔹 Exporta automaticamente (em background, sem travar)
+  // 🔹 Atualiza backup no Drive
   if (typeof exportToDrive === 'function') {
     exportToDrive('journal_backup.json')
-      .catch(e => console.warn('⚠️ Falha ao exportar após deleção:', e));
+      .catch(e => console.warn('⚠️ Falha ao exportar para o Drive:', e));
   }
 }, []);
+
 
 
   

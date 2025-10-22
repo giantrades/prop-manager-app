@@ -47,6 +47,14 @@ export type Trade = {
   updatedAt?: string;
   PartialExecutions?:PartialExecution[];
   isBreakeven?: boolean;
+    attachments?: {
+    id: string;
+    name: string;
+    mimeType: string;
+    driveId: string;
+    order: number;
+    url?: string; // opcional: usado no preview
+  }[];
 };
 
 export interface EnrichedTrade extends Trade {
