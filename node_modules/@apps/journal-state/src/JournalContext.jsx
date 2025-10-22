@@ -72,6 +72,7 @@ export default function JournalProvider({ children }) {
 const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
   const id = trade.id || uuidv4();
+  const existing = trade.id ? await db.get('trades', id) : null;
   const payload = { ...trade, id, updatedAt: new Date().toISOString() };
   await db.put('trades', payload);
 
@@ -80,7 +81,7 @@ const saveTrade = useCallback(async (trade) => {
     return [payload, ...other];
   });
 
-  // 🔹 Atualiza accounts no dataStore central (sem require)
+  // 🔹 Atualiza contas no dataStore central (ajuste incremental de P&L)
   if (payload.accounts && Array.isArray(payload.accounts)) {
     try {
       const ds = await import('@apps/lib/dataStore.js');
@@ -91,27 +92,29 @@ const saveTrade = useCallback(async (trade) => {
         const acc = accounts.find(a => a.id === accEntry.accountId);
         if (!acc) continue;
 
-        const pnlImpact = (payload.result_net || 0) * (accEntry.weight ?? 1);
+        const oldPnl = existing ? (existing.result_net || 0) : 0;
+        const newPnl = payload.result_net || 0;
+        const pnlDiff = (newPnl - oldPnl) * (accEntry.weight ?? 1);
+
         await ds.updateAccount(acc.id, {
           ...acc,
-          currentFunding: (acc.currentFunding || 0) + pnlImpact,
+          currentFunding: (acc.currentFunding || 0) + pnlDiff,
         });
       }
     } catch (e) {
-      console.warn('⚠️ Falha ao atualizar accounts:', e);
+      console.warn('⚠️ Falha ao atualizar contas:', e);
     }
   }
 
-  // 🔹 Exportar automaticamente para o Drive (mantido)
-  // 🔹 Exporta em background para não travar o form
-if (typeof exportToDrive === 'function') {
-  exportToDrive('journal_backup.json')
-    .catch(e => console.warn('⚠️ Falha ao exportar para o Drive:', e));
-}
-
+  // 🔹 Exportar automaticamente (sem travar a UI)
+  if (typeof exportToDrive === 'function') {
+    exportToDrive('journal_backup.json')
+      .catch(e => console.warn('⚠️ Falha ao exportar para o Drive:', e));
+  }
 
   return payload;
 }, []);
+
 
 
 
@@ -122,23 +125,35 @@ const deleteTrade = useCallback(async (id) => {
   await db.delete('trades', id);
   setTrades(prev => prev.filter(t => t.id !== id));
 
-  // ✅ Ajusta funding ao deletar trade
+  // 🔹 Reverte o impacto do P&L nas contas vinculadas
   if (existing && existing.accounts && Array.isArray(existing.accounts)) {
-    existing.accounts.forEach(accEntry => {
-      const acc = (() => { 
-        try { return require('@apps/lib/dataStore.js').getAll().accounts.find(a => a.id === accEntry.accountId); } 
-        catch(e) { return null; }
-      })();
-      if (!acc) return;
+    try {
+      const ds = await import('@apps/lib/dataStore.js');
+      const all = await ds.getAll();
+      const accounts = all?.accounts || [];
 
-      const pnlImpact = (existing.result_net || 0) * (accEntry.weight ?? 1);
-      dsUpdateAccount(acc.id, { 
-        ...acc, 
-        currentFunding: (acc.currentFunding || 0) - pnlImpact // 👈 reverte o impacto
-      });
-    });
+      for (const accEntry of existing.accounts) {
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
+
+        const pnlImpact = (existing.result_net || 0) * (accEntry.weight ?? 1);
+        await ds.updateAccount(acc.id, {
+          ...acc,
+          currentFunding: (acc.currentFunding || 0) - pnlImpact, // 👈 reverte impacto
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao reverter P&L de conta ao deletar trade:', e);
+    }
+  }
+
+  // 🔹 Exporta automaticamente (em background, sem travar)
+  if (typeof exportToDrive === 'function') {
+    exportToDrive('journal_backup.json')
+      .catch(e => console.warn('⚠️ Falha ao exportar após deleção:', e));
   }
 }, []);
+
 
   
   const saveStrategy = useCallback(async (strategy) => {
