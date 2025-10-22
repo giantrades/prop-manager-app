@@ -41,41 +41,47 @@ export default function Settings() {
   }, [autoSync, backup]);
 
   // ⚙️ Função para recalcular fundings das contas
-  const handleRecalcFunding = useCallback(async () => {
-    try {
-      setRecalcLoading(true);
-      const db = await getDB();
-      const allTrades = await db.getAll("trades");
-      const { accounts } = getAll();
+const handleRecalcFunding = useCallback(async () => {
+  try {
+    setRecalcLoading(true);
+    const db = await getDB();
+    const allTrades = await db.getAll("trades");
 
-      // Zera os fundings
-      for (const acc of accounts) {
-        await updateAccount(acc.id, { ...acc, currentFunding: 0 });
-      }
+    const ds = await import('@apps/lib/dataStore.js');
+    const { getAll, updateAccount } = ds;
+    const all = await getAll();
+    const accounts = all.accounts || [];
 
-      // Recalcula com base em todos os trades existentes
-      for (const trade of allTrades) {
-        if (!trade.accounts || !Array.isArray(trade.accounts)) continue;
-        for (const accEntry of trade.accounts) {
-          const acc = accounts.find((a) => a.id === accEntry.accountId);
-          if (!acc) continue;
-
-          const pnlImpact = (trade.result_net || 0) * (accEntry.weight ?? 1);
-          await updateAccount(acc.id, {
-            ...acc,
-            currentFunding: (acc.currentFunding || 0) + pnlImpact,
-          });
-        }
-      }
-
-      alert("✅ Fundings recalculados com sucesso!");
-    } catch (err) {
-      console.error("Erro ao recalcular fundings:", err);
-      alert("❌ Erro ao recalcular fundings: " + err.message);
-    } finally {
-      setRecalcLoading(false);
+    // 🔹 Zera fundings primeiro
+    for (const acc of accounts) {
+      await updateAccount(acc.id, { ...acc, currentFunding: 0 });
     }
-  }, []);
+
+    // 🔹 Aplica todos os trades uma única vez
+    for (const trade of allTrades) {
+      for (const accEntry of trade.accounts || []) {
+        const acc = accounts.find(a => a.id === accEntry.accountId);
+        if (!acc) continue;
+
+        const pnlImpact = (trade.result_net || 0) * (accEntry.weight ?? 1);
+        acc.currentFunding = (acc.currentFunding || 0) + pnlImpact;
+      }
+    }
+
+    // 🔹 Salva fundings finais
+    for (const acc of accounts) {
+      await updateAccount(acc.id, acc);
+    }
+
+    alert("✅ Fundings recalculados com sucesso!");
+  } catch (err) {
+    console.error("Erro ao recalcular fundings:", err);
+    alert("❌ Erro ao recalcular fundings: " + err.message);
+  } finally {
+    setRecalcLoading(false);
+  }
+}, []);
+
 
   return (
     <div className="grid" style={{ gap: 16 }}>

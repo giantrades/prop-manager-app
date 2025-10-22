@@ -69,121 +69,24 @@ export default function JournalProvider({ children }) {
     return () => { mounted = false; };
   }, []);
 
+// JournalContext.js
 const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
-
-  // ✅ Usa ID existente se for edição, senão gera novo
   const id = trade.id || uuidv4();
 
-  // Verifica se já existe no DB (para delta PnL)
-  const existing = await db.get("trades", id);
+  const payload = { ...trade, id, updatedAt: new Date().toISOString() };
+  await db.put('trades', payload);
 
-  const payload = {
-    ...trade,
-    id,
-    updatedAt: new Date().toISOString(),
-  };
+  setTrades(prev => [payload, ...prev.filter(t => t.id !== id)]);
 
-  // Salva no IndexedDB
-  await db.put("trades", payload);
-
-  // Atualiza contexto local de trades
-  setTrades((prev) => {
-    const other = prev.filter((t) => t.id !== id);
-    return [payload, ...other];
-  });
-
-  // 🔹 Atualiza funding incremental (sem duplicar)
-  if (payload.accounts && Array.isArray(payload.accounts)) {
-    try {
-      const ds = await import("@apps/lib/dataStore.js");
-      const all = await ds.getAll();
-      const accounts = all?.accounts || [];
-
-      const updatedAccounts = [];
-
-      for (const accEntry of payload.accounts) {
-        const acc = accounts.find((a) => a.id === accEntry.accountId);
-        if (!acc) continue;
-
-        const oldPnl = existing ? existing.result_net || 0 : 0;
-        const newPnl = payload.result_net || 0;
-        const pnlDiff = (newPnl - oldPnl) * (accEntry.weight ?? 1);
-
-        const updated = {
-          ...acc,
-          currentFunding: (acc.currentFunding || 0) + pnlDiff,
-        };
-
-        await ds.updateAccount(acc.id, updated);
-        updatedAccounts.push(updated);
-      }
-
-      // ✅ Atualiza contexto local imediatamente
-      setAccounts((prev) =>
-        prev.map((a) => updatedAccounts.find((u) => u.id === a.id) || a)
-      );
-    } catch (e) {
-      console.warn("⚠️ Falha ao atualizar contas:", e);
-    }
-  }
-
-  // 🔹 Exporta automaticamente pro Drive
-  if (typeof exportToDrive === "function") {
-    exportToDrive("journal_backup.json").catch((e) =>
-      console.warn("⚠️ Falha ao exportar para o Drive:", e)
-    );
-  }
-
-  return payload;
+  return payload; // ✅ importante
 }, []);
 
 
 const deleteTrade = useCallback(async (tradeId) => {
   const db = await getDB();
-  const trade = await db.get("trades", tradeId);
-  if (!trade) return;
-
-  await db.delete("trades", tradeId);
-  setTrades((prev) => prev.filter((t) => t.id !== tradeId));
-
-  if (trade.accounts && Array.isArray(trade.accounts)) {
-    try {
-      const ds = await import("@apps/lib/dataStore.js");
-      const all = await ds.getAll();
-      const accounts = all?.accounts || [];
-
-      const updatedAccounts = [];
-
-      for (const accEntry of trade.accounts) {
-        const acc = accounts.find((a) => a.id === accEntry.accountId);
-        if (!acc) continue;
-
-        const pnlToRemove = (trade.result_net || 0) * (accEntry.weight ?? 1);
-
-        const updated = {
-          ...acc,
-          currentFunding: (acc.currentFunding || 0) - pnlToRemove,
-        };
-
-        await ds.updateAccount(acc.id, updated);
-        updatedAccounts.push(updated);
-      }
-
-      // ✅ Atualiza contexto local imediatamente
-      setAccounts((prev) =>
-        prev.map((a) => updatedAccounts.find((u) => u.id === a.id) || a)
-      );
-    } catch (e) {
-      console.warn("⚠️ Falha ao remover impacto de PnL:", e);
-    }
-  }
-
-  if (typeof exportToDrive === "function") {
-    exportToDrive("journal_backup.json").catch((e) =>
-      console.warn("⚠️ Falha ao exportar para o Drive:", e)
-    );
-  }
+  await db.delete('trades', tradeId);
+  setTrades(prev => prev.filter(t => t.id !== tradeId));
 }, []);
 
 

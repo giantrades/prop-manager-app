@@ -357,11 +357,39 @@ const handleSave = async () => {
   // 🔹 Salva trade
   try {
     await saveTrade(tradeData);
+    try {
+  const savedTrade = await saveTrade(tradeData);
+
+  // 🔹 Atualiza funding das contas no dataStore
+  const ds = await import("@apps/lib/dataStore.js");
+  const { getAll, updateAccount } = ds;
+  const all = await getAll();
+  const accounts = all.accounts || [];
+
+  for (const accEntry of savedTrade.accounts || []) {
+    const acc = accounts.find((a) => a.id === accEntry.accountId);
+    if (!acc) continue;
+
+    const pnlImpact = (savedTrade.result_net || 0) * (accEntry.weight ?? 1);
+    await updateAccount(acc.id, {
+      ...acc,
+      currentFunding: (acc.currentFunding || 0) + pnlImpact,
+    });
+  }
+
+  // 🔹 Fecha o form normalmente
+  onClose();
+} catch (err) {
+  console.error("Erro ao salvar trade:", err);
+  alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
+}
+
     onClose();
   } catch (err) {
     console.error('Erro ao salvar trade', err);
     alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
   }
+
 };
 
 
