@@ -353,7 +353,33 @@ const handleSave = async () => {
   };
 
   // 🔹 Atualiza saldo das contas com impacto do P&L
- 
+  const { trades, saveTrade } = useJournal();
+ if (typeof updatedForm.result_net === 'number') {
+  const net = Number(updatedForm.result_net) || 0;
+
+  const prevTrade = trades.find(t => t.id === updatedForm.id);
+  const prevNet = prevTrade ? Number(prevTrade.result_net) || 0 : 0;
+  const delta = net - prevNet;
+
+  for (const entry of accountsPayload) {
+    const acc = accounts.find(a => a.id === entry.accountId);
+    if (!acc) continue;
+
+    const pnlImpact = delta * (entry.weight ?? 1);
+
+    try {
+      updateAccount(acc.id, {
+        ...acc,
+        currentFunding: (acc.currentFunding || 0) + pnlImpact,
+        defaultWeight: entry.weight,
+      });
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('Erro ao atualizar conta via dataStore', err);
+    }
+  }
+}
+
 
   // 🔹 Salva trade
   try {
