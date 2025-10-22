@@ -353,26 +353,7 @@ const handleSave = async () => {
   };
 
   // 🔹 Atualiza saldo das contas com impacto do P&L
-  if (typeof updatedForm.result_net === 'number') {
-    const net = Number(updatedForm.result_net) || 0;
-    
-    for (const entry of accountsPayload) {
-      const acc = accounts.find(a => a.id === entry.accountId);
-      if (!acc) continue;
-      
-      const pnlImpact = net * (entry.weight ?? 1);
-      
-      try {
-        updateAccount(acc.id, {
-          ...acc,
-          currentFunding: (acc.currentFunding || 0) + pnlImpact,
-          defaultWeight: entry.weight,
-        });
-      } catch (err) {
-        console.error('Erro ao atualizar conta via dataStore', err);
-      }
-    }
-  }
+ 
 
   // 🔹 Salva trade
   try {
@@ -800,19 +781,8 @@ const filteredAccounts = useMemo(() => {
 
           {/* Risk & Costs */}
           <div className="card">
-            <h4 className="font-medium mb-4">PnL & Costs</h4>
+            <h4 className="font-medium mb-4">Costs</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="field">
-                <label>Gross PnL ($)</label>
-                <input 
-                  className="input text-xl font-semibold" 
-                  type="number" 
-                  step="0.01"
-                  value={form.result_gross || ''} 
-                  onChange={e => setForm({ ...form, result_gross: Number(e.target.value)||0 })}
-                  placeholder ="0.00" 
-                />
-              </div>
               <div className="field">
                 <label>Comissão ($)</label>
                 <input 
