@@ -86,7 +86,6 @@ export default function TradeForm({ onClose, editing }: Props) {
     stop_loss_price: editing?.stop_loss_price || 0,
     profit_target_price: editing?.profit_target_price || 0,
     
-    result_gross: editing?.result_gross || 0, // <--- INPUT DIRETO
     // ... (commission, fees, swap, slippage, e.g. 0)
     // risk_per_R removido daqui também
     ...(editing || {}),
@@ -149,14 +148,17 @@ useEffect(() => {
     return num / denom;
   };
 
-  const recalc = () => {
-    const entries = (form.executions || []).filter(e => e.side === 'entry');
-    const exits = (form.executions || []).filter(e => e.side === 'exit');
-    const entryVwap = computeVWAP(entries, 'entry') || form.entry_price || 0;
-    const exitVwap = computeVWAP(exits, 'exit') || form.exit_price || 0;
+ const recalc = () => {
+  const entries = (form.executions || []).filter(e => e.side === 'entry');
+  const exits = (form.executions || []).filter(e => e.side === 'exit');
+  const entryVwap = computeVWAP(entries, 'entry') || form.entry_price || 0;
+  const exitVwap = computeVWAP(exits, 'exit') || form.exit_price || 0;
 
-    // 1. P&L Bruto é o valor do input (result_gross)
-    const result_gross = form.result_gross || 0;
+  // 1. P&L Bruto = SOMA dos result_gross das execuções parciais
+  const result_gross = (form.PartialExecutions || []).reduce(
+    (sum, exec) => sum + (Number(exec.result_gross) || 0), 
+    0
+  );
     
     // 2. Custos e P&L Líquido
     const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
@@ -205,7 +207,8 @@ if (initialRiskPriceDiff > 0) {
   useEffect(() => {
        recalc();
   }, [
-    form.executions, 
+    form.executions,
+    form.PartialExecutions, 
     form.result_gross, 
     form.volume, 
     form.entry_price, 
@@ -303,39 +306,36 @@ const handleSave = async () => {
 
   // 🔹 Processa Execuções Parciais (se existirem)
   let updatedForm = { ...form };
-  if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
-    const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
-    if (totalVol > 0) {
-      const avgEntry = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.entryPrice * e.volume),
-        0
-      ) / totalVol;
+  // 🔹 Processa Execuções Parciais
+if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
+  const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
+  
+  if (totalVol > 0) {
+    const avgEntry = updatedForm.PartialExecutions.reduce(
+      (acc, e) => acc + (e.entryPrice * e.volume), 0
+    ) / totalVol;
 
-      const avgExit = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.exitPrice * e.volume),
-        0
-      ) / totalVol;
+    const avgExit = updatedForm.PartialExecutions.reduce(
+      (acc, e) => acc + (e.exitPrice * e.volume), 0
+    ) / totalVol;
 
-      const totalGross = updatedForm.PartialExecutions.reduce(
-        (acc, e) => acc + (e.result_gross || 0),
-        0
-      );
+    const totalGross = updatedForm.PartialExecutions.reduce(
+      (acc, e) => acc + (Number(e.result_gross) || 0), 0
+    );
 
-      // Atualiza apenas se não foram definidos manualmente
-      if (!updatedForm.entry_price || updatedForm.entry_price === 0) {
-        updatedForm.entry_price = avgEntry;
-      }
-      if (!updatedForm.exit_price || updatedForm.exit_price === 0) {
-        updatedForm.exit_price = avgExit;
-      }
-      if (!updatedForm.result_gross || updatedForm.result_gross === 0) {
-        updatedForm.result_gross = totalGross;
-      }
-
-      updatedForm.volume = totalVol;
-    }
+    // ✅ Sempre sobrescreve com valores calculados
+    updatedForm.entry_price = avgEntry;
+    updatedForm.exit_price = avgExit;
+    updatedForm.result_gross = totalGross;
+    updatedForm.volume = totalVol;
   }
-
+}
+// 🔹 Calcula P&L Gross total das execuções (ANTES de montar tradeData)
+const totalGross = (updatedForm.PartialExecutions || []).reduce(
+  (sum, exec) => sum + (Number(exec.result_gross) || 0),
+  0
+);
+updatedForm.result_gross = totalGross; // ← Atualiza o form com o valor calculado
   // 🔹 Monta o tradeData FINAL
   const tradeData = {
     ...updatedForm,
@@ -349,11 +349,12 @@ const handleSave = async () => {
     accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
     accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
     tf_signal: updatedForm.tf_signal || '1h',
+     // ← ADICIONAR AQUI
   };
 
   // 🔹 Atualiza saldo das contas com impacto do P&L
 
- console.log('🚀 tradeData final:', tradeData);
+
   // 🔹 Salva trade
  try {
   // 🔹 Salva trade (uma única vez)
