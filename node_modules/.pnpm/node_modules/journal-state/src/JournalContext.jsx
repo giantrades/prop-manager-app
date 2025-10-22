@@ -73,37 +73,36 @@ const saveTrade = useCallback(async (trade) => {
   const db = await getDB();
   const id = trade.id || uuidv4();
   const existing = trade.id ? await db.get('trades', id) : null;
-  const payload = { ...trade, id, updatedAt: new Date().toISOString() };
+
+  const payload = { 
+    ...trade, 
+    id, 
+    updatedAt: new Date().toISOString() 
+  };
+
+  // 🔹 Salva trade no banco local
   await db.put('trades', payload);
 
+  // 🔹 Atualiza estado local
   setTrades(prev => {
-    const other = prev.filter(t => t.id !== id);
-    return [payload, ...other];
+    const others = prev.filter(t => t.id !== id);
+    return [payload, ...others];
   });
 
-  // 🔹 Atualiza contas no dataStore central (ajuste incremental de P&L)
-  if (payload.accounts && Array.isArray(payload.accounts)) {
-    try {
-      const ds = await import('@apps/lib/dataStore.js');
-      const all = await ds.getAll();
-      const accounts = all?.accounts || [];
+  // ✅ NOVO: Recalcula funding da(s) conta(s) afetadas
+  try {
+    const ds = await import('@apps/lib/dataStore.js');
 
+    if (Array.isArray(payload.accounts) && payload.accounts.length > 0) {
       for (const accEntry of payload.accounts) {
-        const acc = accounts.find(a => a.id === accEntry.accountId);
-        if (!acc) continue;
-
-        const oldPnl = existing ? (existing.result_net || 0) : 0;
-        const newPnl = payload.result_net || 0;
-        const pnlDiff = (newPnl - oldPnl) * (accEntry.weight ?? 1);
-
-        await ds.updateAccount(acc.id, {
-          ...acc,
-          currentFunding: (acc.currentFunding || 0) + pnlDiff,
-        });
+        await ds.recalcAccountFunding(accEntry.accountId);
       }
-    } catch (e) {
-      console.warn('⚠️ Falha ao atualizar contas:', e);
+    } else if (payload.accountId) {
+      await ds.recalcAccountFunding(payload.accountId);
     }
+
+  } catch (e) {
+    console.warn('⚠️ Falha ao recalcular funding:', e);
   }
 
   // 🔹 Exportar automaticamente (sem travar a UI)
@@ -114,6 +113,7 @@ const saveTrade = useCallback(async (trade) => {
 
   return payload;
 }, []);
+
 
 
 

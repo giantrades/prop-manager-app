@@ -78,6 +78,25 @@ export function deleteAccount(id){
   save(data)
 }
 
+export function recalcAccountFunding(accountId) {
+  const data = load();
+  const account = data.accounts.find(a => a.id === accountId);
+  if (!account) return null;
+
+  // Filtra todos os trades relacionados a essa conta
+  const trades = (data.trades || []).filter(t => t.accountId === accountId);
+
+  // Soma apenas result_net válidos
+  const totalPnL = trades.reduce((sum, t) => sum + (Number(t.result_net) || 0), 0);
+
+  // Recalcula o funding atual baseado no funding inicial
+  account.currentFunding = (Number(account.initialFunding) || 0) + totalPnL;
+
+  // Salva e dispara evento
+  save(data);
+  return account;
+}
+
 /* --------------------
    PAYOUTS
    (mantive sua lógica)
@@ -652,7 +671,7 @@ export function getAllTags() {
    -------------------- */
 export default {
   getAll, getSettings, setSettings,
-  createAccount, updateAccount, deleteAccount,
+  createAccount, updateAccount, deleteAccount,recalcAccountFunding,
   createPayout, updatePayout, deletePayout,
   getAccountStats,
   getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
