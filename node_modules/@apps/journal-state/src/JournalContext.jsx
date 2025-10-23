@@ -76,6 +76,14 @@ const saveTrade = useCallback(async (trade) => {
 
   // 🔹 Verifica se já existe trade anterior (edição)
   const existing = trade.id ? await db.get("trades", id) : null;
+  console.log('🔍 saveTrade ANTES:', {
+    id,
+    isEditing: !!trade.id,
+    existingPnL: existing?.result_net || 0,
+    newPnL: trade.result_net || 0,
+    existingGross: existing?.result_gross || 0,
+    newGross: trade.result_gross || 0,
+  });
 
   const payload = {
     ...trade,
@@ -109,8 +117,14 @@ const saveTrade = useCallback(async (trade) => {
         const newPnl = (Number(payload.result_net) || 0) * weight;
         const pnlDiff = newPnl - oldPnl;
 
-        console.log(`💰 Conta ${acc.name}: oldPnl=${oldPnl}, newPnl=${newPnl}, diff=${pnlDiff}`);
-
+console.log(`💰 Conta ${acc.name}:`, {
+    weight,
+    oldPnl,
+    newPnl,
+    diff: pnlDiff,
+    currentFunding: acc.currentFunding,
+    newFunding: (acc.currentFunding || 0) + pnlDiff,
+  });
         // Evita aplicar duas vezes se não há mudança real
         if (Math.abs(pnlDiff) < 1e-9) continue;
 

@@ -363,7 +363,15 @@ updatedForm.result_gross = totalGross; // ← Atualiza o form com o valor calcul
 }
  console.log('🚀 tradeData final:', tradeData);
   const savedTrade = await saveTrade(tradeData);
-
+  
+console.log('💾 Enviando para saveTrade:', {
+  result_gross: tradeData.result_gross,
+  result_net: tradeData.result_net,
+  commission: tradeData.commission,
+  fees: tradeData.fees,
+  swap: tradeData.swap,
+  PartialExecutions: tradeData.PartialExecutions,
+});
 // 🔹 Salva trade (saveTrade já cuida de atualizar as contas)
   await saveTrade(tradeData);
 
