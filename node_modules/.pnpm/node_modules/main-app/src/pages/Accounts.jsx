@@ -670,18 +670,26 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
           <label>Funding Inicial</label>
           <input
             type="number"
+            step="0.01"
             className="input"
             value={local.initialFunding || 0}
-            onChange={(e) => setLocal({ ...local, initialFunding: parseFloat(e.target.value) || 0 })}
+            onChange={(e) => {
+        const value = parseFloat(e.target.value) || 0;
+        setLocal({ ...local, initialFunding: parseFloat(value.toFixed(2)) });  // ← ajustar
+      }}
           />
         </div>
         <div className="field">
           <label>Funding Atual</label>
           <input
             type="number"
+            step="0.01"
             className="input"
             value={local.currentFunding || 0}
-            onChange={(e) => setLocal({ ...local, currentFunding: parseFloat(e.target.value) || 0 })}
+            onChange={(e) => {
+        const value = parseFloat(e.target.value) || 0;
+        setLocal({ ...local, currentFunding: parseFloat(value.toFixed(2)) });  // ← ajustar
+      }}
           />
         </div>
       </div>

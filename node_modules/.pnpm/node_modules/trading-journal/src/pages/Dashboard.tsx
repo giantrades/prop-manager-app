@@ -1,5 +1,5 @@
 import React, { useMemo,useEffect, useState } from "react";
-import {ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend,BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, Scatter, ScatterChart} from "recharts";
+import {ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend,BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, Scatter, ScatterChart, ComposedChart, ReferenceLine} from "recharts";
 import { useJournal } from "@apps/journal-state";
 import { useCurrency } from "@apps/state";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
@@ -317,6 +317,7 @@ function winRateByTimeframe(trades: any[]) {
       map[tf].pnlLoss += Math.abs(pnl);
     }
   });
+  
 
   return Object.entries(map)
     .map(([tf, v]) => ({
@@ -331,7 +332,6 @@ function winRateByTimeframe(trades: any[]) {
     }))
     .sort((a, b) => (b.pnlWin - b.pnlLoss) - (a.pnlWin - a.pnlLoss));
 }
-
 
 
 // Histogram R function (suporta bins dinâmicos)
@@ -378,7 +378,8 @@ function computeKDE(values: number[], bins = 40) {
 
 // 📈 PnL Growth Curve (Total Net P&L por filtros/contas)
 const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
-  const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
+  const safeNumber = (n: any) =>
+    typeof n === "number" && !isNaN(n) ? n : Number(n) || 0;
 
   // 🔹 Aplica filtro de conta se houver conta selecionada
   const filtered = React.useMemo(() => {
@@ -395,10 +396,21 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
   const series = React.useMemo(() => {
     const sorted = (filtered || [])
       .filter((t: any) => t && t.entry_datetime)
-      .sort((a: any, b: any) => new Date(a.entry_datetime).getTime() - new Date(b.entry_datetime).getTime());
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.entry_datetime).getTime() -
+          new Date(b.entry_datetime).getTime()
+      );
 
     let cumulativePnL = 0;
-    const result = [{ entry_datetime: sorted[0] ? new Date(sorted[0].entry_datetime).toLocaleDateString("pt-BR") : "", pnl: 0 }];
+    const result = [
+      {
+        entry_datetime: sorted[0]
+          ? new Date(sorted[0].entry_datetime).toLocaleDateString("pt-BR")
+          : "",
+        pnl: 0,
+      },
+    ];
 
     sorted.forEach((t: any) => {
       cumulativePnL += safeNumber(t.result_net);
@@ -410,6 +422,14 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
 
     return result;
   }, [filtered]);
+
+  // 📊 Estatísticas básicas da curva
+  const highestPnL = Math.max(...series.map((s) => s.pnl || 0), 0);
+  const currentPnL = series.length ? series[series.length - 1].pnl : 0;
+  const minPnL = Math.min(...series.map((s) => s.pnl || 0), 0);
+  const maxDrawdownAbs = highestPnL - minPnL;
+  const maxDrawdownPct =
+    highestPnL > 0 ? ((maxDrawdownAbs / highestPnL) * 100).toFixed(2) : "0.00";
 
   // 🔹 Tooltip customizado
   const CustomTooltip = ({ active, payload }: any) => {
@@ -428,7 +448,12 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
           <div style={{ fontSize: 12, color: "#9ca3af" }}>
             {payload[0]?.payload?.entry_datetime}
           </div>
-          <div style={{ fontWeight: 600, color: val >= 0 ? "#4ade80" : "#ef4444" }}>
+          <div
+            style={{
+              fontWeight: 600,
+              color: val >= 0 ? "#4ade80" : "#ef4444",
+            }}
+          >
             {fmt ? fmt(val) : val.toLocaleString()}
           </div>
         </div>
@@ -451,13 +476,14 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
         📈 PnL Growth (Cumulative)
       </h3>
 
-      {/* Se há conta selecionada, mostra info abaixo do título */}
       {selectedAccount && (
         <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
-          Showing data for <strong>{selectedAccount.name}</strong> ({selectedAccount.type})
+          Showing data for <strong>{selectedAccount.name}</strong> (
+          {selectedAccount.type})
         </div>
       )}
 
+      {/* Gráfico */}
       <div style={{ height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -471,7 +497,11 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
               </linearGradient>
             </defs>
 
-            <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" opacity={0.3} />
+            <CartesianGrid
+              stroke="#1f2937"
+              strokeDasharray="3 3"
+              opacity={0.3}
+            />
             <XAxis
               dataKey="entry_datetime"
               tick={{ fill: "#9ca3af", fontSize: 11 }}
@@ -487,7 +517,6 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
               width={100}
             />
             <ReTooltip content={<CustomTooltip />} />
-
             <Area
               type="monotoneX"
               dataKey="pnl"
@@ -501,11 +530,51 @@ const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+
+      {/* 📘 Legenda estilo histograma */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          background: "rgba(15, 23, 42, 0.6)",
+          border: "1px solid rgba(255,255,255,0.05)",
+          borderRadius: 10,
+          padding: "10px 14px",
+          marginTop: 14,
+        }}
+      >
+        <div style={{ textAlign: "center", flex: 1 }}>
+          <div style={{ color: "#9ca3af", fontSize: 12 }}>Highest PnL</div>
+          <div style={{ color: "#e5e7eb", fontWeight: 600 }}>
+            {fmt ? fmt(highestPnL) : highestPnL}
+          </div>
+        </div>
+
+        <div style={{ textAlign: "center", flex: 1 }}>
+          <div style={{ color: "#9ca3af", fontSize: 12 }}>Current PnL</div>
+          <div
+            style={{
+              color: currentPnL >= 0 ? "#4ade80" : "#f87171",
+              fontWeight: 600,
+            }}
+          >
+            {fmt ? fmt(currentPnL) : currentPnL}
+          </div>
+        </div>
+
+        <div style={{ textAlign: "center", flex: 1 }}>
+          <div style={{ color: "#9ca3af", fontSize: 12 }}>Max Drawdown</div>
+          <div style={{ color: "#e5e7eb", fontWeight: 600 }}>
+            {fmt ? fmt(maxDrawdownAbs) : maxDrawdownAbs}{" "}
+            <span style={{ color: "#9ca3af", fontSize: 11 }}>
+              ({maxDrawdownPct}%)
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
-
-
 
 
 
@@ -697,18 +766,59 @@ const CategoryCard = ({ data, fmt }: any) => {
   );
 };
 
+// versão corrigida e compatível com seu winRateByTimeframe atual
+const TimeframeBar = ({ data = [], fmt }: any) => {
+  if (!data || data.length === 0) return null;
 
-// Timeframe stacked performance chart (pnl ganhos vs perdas)
-const TimeframeBar = ({ data }: any) => {
+  const totalPnL = data.reduce((sum, d) => sum + (d.pnlWin - d.pnlLoss), 0);
+  const best = data.reduce(
+    (a, b) => ((b.pnlWin - b.pnlLoss) > (a.pnlWin - a.pnlLoss) ? b : a),
+    data[0]
+  );
+  const worst = data.reduce(
+    (a, b) => ((b.pnlWin - b.pnlLoss) < (a.pnlWin - a.pnlLoss) ? b : a),
+    data[0]
+  );
+
+  const bestPnL = best ? best.pnlWin - best.pnlLoss : 0;
+  const worstPnL = worst ? worst.pnlWin - worst.pnlLoss : 0;
+
+  const meanPnL = totalPnL / data.length;
+  const variance =
+    data.reduce((sum, d) => {
+      const pnl = d.pnlWin - d.pnlLoss;
+      return sum + Math.pow(pnl - meanPnL, 2);
+    }, 0) / data.length;
+  const stdDev = Math.sqrt(variance);
+  const consistency = meanPnL !== 0 ? 1 - Math.abs(stdDev / meanPnL) : 0;
+  const dominance = totalPnL ? ((bestPnL / totalPnL) * 100).toFixed(1) : 0;
+
   return (
-    <div className="card" style={{ position: "relative" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0 }}>⏱ Timeframe Performance</h3>
+    <div
+      className="card"
+      style={{
+        background: "linear-gradient(180deg,#10151f 0%,#0c1119 100%)",
+        border: "1px solid rgba(255,255,255,0.05)",
+        borderRadius: 12,
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 18, color: "#f3f4f6" }}>
+          ⏱ Timeframe Performance
+        </h3>
       </div>
 
       <div style={{ height: 260, marginTop: 8 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barGap={4}>
+          <ComposedChart data={data}>
             <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
             <XAxis
               dataKey="tf"
@@ -720,7 +830,7 @@ const TimeframeBar = ({ data }: any) => {
               tick={{ fill: "#9ca3af", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `$${v.toLocaleString()}`}
+              tickFormatter={(v) => (fmt ? fmt(v) : `$${v.toLocaleString()}`)}
             />
             <ReTooltip
               contentStyle={{
@@ -728,30 +838,94 @@ const TimeframeBar = ({ data }: any) => {
                 border: "1px solid #1e293b",
                 borderRadius: 8,
                 color: "#f3f4f6",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
               }}
               formatter={(value, name, props) => {
-                const tf = props.payload?.tf || "";
+                const val = Number(value);
                 const winRate = props.payload?.winRate || 0;
                 const lossRate = props.payload?.lossRate || 0;
-                return [
-                  `$${Number(value).toLocaleString()}`,
-                  name === "pnlWin"
-                    ? `Ganho (${winRate}% WR)`
-                    : `Perda (${lossRate}% LR)`,
-                ];
+                if (name === "pnlWin")
+                  return [
+                    fmt ? fmt(val) : `$${val.toLocaleString()}`,
+                    `Ganho (${winRate}% WR)`,
+                  ];
+                if (name === "pnlLoss")
+                  return [
+                    fmt ? fmt(val) : `$${val.toLocaleString()}`,
+                    `Perda (${lossRate}% LR)`,
+                  ];
+                return [fmt ? fmt(val) : `$${val.toFixed(2)}`, "Média PnL"];
               }}
               labelFormatter={(label) => `Timeframe: ${label}`}
             />
 
-            {/* Barras empilhadas */}
-            <Bar dataKey="pnlWin" stackId="a" fill="#4ade80" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="pnlLoss" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-          </BarChart>
+            {/* barras fixas (sem .map) */}
+            <Bar
+              dataKey="pnlWin"
+              stackId="a"
+              fill="#4ade80"
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar
+              dataKey="pnlLoss"
+              stackId="a"
+              fill="#ef4444"
+              radius={[4, 4, 0, 0]}
+            />
+
+            {/* linha média */}
+            <ReferenceLine
+              y={meanPnL}
+              stroke="#60a5fa"
+              strokeDasharray="4 4"
+              label={{
+                value: `Mean ${fmt ? fmt(meanPnL) : `$${meanPnL.toFixed(2)}`}`,
+                position: "top",
+                fill: "#9fbff6",
+                fontSize: 12,
+              }}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* legenda inferior */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-around",
+          marginTop: 14,
+          color: "#e5e7eb",
+          fontSize: 13,
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          paddingTop: 10,
+        }}
+      >
+        <div>
+          <div style={{ color: "#9ca3af", fontSize: 11 }}>🏆 Best Timeframe</div>
+          <div style={{ fontWeight: 600 }}>
+            {best?.tf || "-"} ({fmt ? fmt(bestPnL) : bestPnL}){" "}
+            <span style={{ color: "#9ca3af", fontSize: 11 }}>{dominance}%</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ color: "#9ca3af", fontSize: 11 }}>💀 Worst Timeframe</div>
+          <div style={{ fontWeight: 600 }}>
+            {worst?.tf || "-"} ({fmt ? fmt(worstPnL) : worstPnL})
+          </div>
+        </div>
+        <div>
+          <div style={{ color: "#9ca3af", fontSize: 11 }}>📏 Consistency</div>
+          <div style={{ fontWeight: 600 }}>
+            {(consistency * 100).toFixed(1)}%
+          </div>
+        </div>
       </div>
     </div>
   );
 };
+
+
 
 
 
@@ -767,102 +941,139 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
 
   const dataHist = React.useMemo(() => histogramR(filteredTrades, 20), [filteredTrades]);
   const kde = React.useMemo(() => computeKDE(filteredTrades.map(t => Number(t.result_R) || 0), 40), [filteredTrades]);
+const R_values = filteredTrades.map(t => Number(t.result_R) || 0);
+const avgR = R_values.reduce((s, r) => s + r, 0) / R_values.length || 0;
+const sortedR = [...R_values].sort((a, b) => a - b);
+const medianR = sortedR[Math.floor(sortedR.length / 2)] || 0;
+const minR = Math.min(...R_values);
+const maxR = Math.max(...R_values);
+const variance = R_values.reduce((s, r) => s + Math.pow(r - avgR, 2), 0) / (R_values.length || 1);
+const stdR = Math.sqrt(variance);
+const wins = R_values.filter(r => r > 0).length;
+const winrate = wins / (R_values.length || 1);
+const losses = R_values.filter(r => r <= 0).length;
+const avgWin = wins ? R_values.filter(r => r > 0).reduce((s, r) => s + r, 0) / wins : 0;
+const avgLoss = losses ? R_values.filter(r => r <= 0).reduce((s, r) => s + r, 0) / losses : 0;
+const expectedR = (winrate * avgWin) + ((1 - winrate) * avgLoss);
 
-  return (
-    <div className="card">
-      <div style={{
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: 12
-}}>
-  <h3 style={{
-    fontSize: 16,
-    fontWeight: 600,
-    color: "#e5e7eb",
-    display: "flex",
-    alignItems: "center",
-    gap: 6
-  }}>
-    📊 Distribuição de R (histograma)
-  </h3>
-
+return (
   <div
-  style={{
-    display: "flex",
-    alignItems: "center",
-    background: "#0f172a",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    position: "relative",
-    width: 165, // 🔹 ligeiramente maior para caber o texto completo
-    height: 34,
-    justifyContent: "space-between",
-    padding: "3px",
-    boxShadow: "0 0 10px rgba(0,0,0,0.35)",
-  }}
->
-  {/* Fundo animado */}
-  <div
+    className="card"
     style={{
-      position: "absolute",
-      top: 3,
-      bottom: 3,
-      left: mode === "hist" ? 3 : "calc(50% + 3px)",
-      width: "calc(50% - 6px)",
-      borderRadius: 999,
-      background:
-        "linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.45))",
-      transition: "all 0.3s ease",
-      boxShadow: "0 0 6px rgba(139,92,246,0.4)",
-    }}
-  />
-
-  {/* Botão Histograma */}
-  <button
-    onClick={() => setMode("hist")}
-    style={{
-      flex: 1,
-      border: "none",
-      background: "none",
-      color: mode === "hist" ? "#e0e7ff" : "#9ca3af",
-      fontSize: 12.5,
-      fontWeight: 600,
-      zIndex: 2,
-      cursor: "pointer",
-      borderRadius: 999,
-      transition: "color 0.2s ease",
+      background: "#0f172a",
+      border: "1px solid rgba(255,255,255,0.05)",
+      borderRadius: 16,
+      padding: 16,
     }}
   >
-    Histograma
-  </button>
+    {/* --- Header --- */}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 12,
+      }}
+    >
+      <h3
+        style={{
+          fontSize: 16,
+          fontWeight: 600,
+          color: "#e5e7eb",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        📊 Distribuição de R (histograma)
+      </h3>
 
-  {/* Botão Densidade */}
-  <button
-    onClick={() => setMode("density")}
-    style={{
-      flex: 1,
-      border: "none",
-      background: "none",
-      color: mode === "density" ? "#e0e7ff" : "#9ca3af",
-      fontSize: 12.5,
-      fontWeight: 600,
-      zIndex: 2,
-      cursor: "pointer",
-      borderRadius: 999,
-      transition: "color 0.2s ease",
-    }}
-  >
-    Densidade
-  </button>
-</div>
-</div>
+      {/* --- Toggle --- */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          background: "#0f172a",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 999,
+          position: "relative",
+          width: 165,
+          height: 34,
+          justifyContent: "space-between",
+          padding: "3px",
+          boxShadow: "0 0 10px rgba(0,0,0,0.35)",
+        }}
+      >
+        {/* Fundo animado */}
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            bottom: 3,
+            left: mode === "hist" ? 3 : "calc(50% + 3px)",
+            width: "calc(50% - 6px)",
+            borderRadius: 999,
+            background:
+              "linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.45))",
+            transition: "all 0.3s ease",
+            boxShadow: "0 0 6px rgba(139,92,246,0.4)",
+          }}
+        />
 
+        <button
+          onClick={() => setMode("hist")}
+          style={{
+            flex: 1,
+            border: "none",
+            background: "none",
+            color: mode === "hist" ? "#e0e7ff" : "#9ca3af",
+            fontSize: 12.5,
+            fontWeight: 600,
+            zIndex: 2,
+            cursor: "pointer",
+            borderRadius: 999,
+            transition: "color 0.2s ease",
+          }}
+        >
+          Histograma
+        </button>
 
+        <button
+          onClick={() => setMode("density")}
+          style={{
+            flex: 1,
+            border: "none",
+            background: "none",
+            color: mode === "density" ? "#e0e7ff" : "#9ca3af",
+            fontSize: 12.5,
+            fontWeight: 600,
+            zIndex: 2,
+            cursor: "pointer",
+            borderRadius: 999,
+            transition: "color 0.2s ease",
+          }}
+        >
+          Densidade
+        </button>
+      </div>
+    </div>
+
+    {/* --- Gráfico + Legenda --- */}
+    <div
+      style={{
+        background: "rgba(15,23,42,0.4)",
+        border: "1px solid rgba(255,255,255,0.04)",
+        borderRadius: 12,
+        padding: 12,
+      }}
+    >
       <div style={{ height: 240 }}>
         <ResponsiveContainer width="100%" height="100%">
           {mode === "hist" ? (
-            <BarChart data={dataHist} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+            <BarChart
+              data={dataHist}
+              margin={{ top: 10, right: 10, left: 5, bottom: 15 }}
+            >
               <defs>
                 <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.9} />
@@ -880,7 +1091,7 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
                 contentStyle={{
                   background: "#0f172a",
                   border: "1px solid #1e293b",
-                  borderRadius: 8
+                  borderRadius: 8,
                 }}
                 formatter={(v: any) => [`${v} trades`, "Frequência"]}
               />
@@ -892,27 +1103,29 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
               />
             </BarChart>
           ) : (
-            <LineChart data={kde}>
+            <LineChart
+              data={kde}
+              margin={{ top: 10, right: 10, left: 5, bottom: 15 }}
+            >
               <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
               <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-            <ReTooltip
-            contentStyle={{
+              <ReTooltip
+                contentStyle={{
                   background: "#0f172a",
                   border: "1px solid #1e293b",
-                  borderRadius: 8}}
-  formatter={(value: any, name: any) => {
-    if (typeof value === "number") {
-      // Limita a 3 casas decimais para densidade, e 0 para contagem
-      const formatted =
-        mode === "density" ? value.toFixed(3) : value.toFixed(0);
-      return [formatted, name];
-    }
-    return [value, name];
-  }}
-  labelFormatter={(label) => `R: ${label}`}
-/>
-
+                  borderRadius: 8,
+                }}
+                formatter={(value: any, name: any) => {
+                  if (typeof value === "number") {
+                    const formatted =
+                      mode === "density" ? value.toFixed(3) : value.toFixed(0);
+                    return [formatted, name];
+                  }
+                  return [value, name];
+                }}
+                labelFormatter={(label) => `R: ${label}`}
+              />
               <Line
                 type="monotone"
                 dataKey="density"
@@ -924,8 +1137,55 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
           )}
         </ResponsiveContainer>
       </div>
+
+      {/* --- Legenda --- */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
+          gap: 8,
+          marginTop: 14,
+          background: "rgba(2,6,23,0.5)",
+          border: "1px solid rgba(255,255,255,0.05)",
+          borderRadius: 10,
+          padding: "10px 12px",
+        }}
+      >
+        {[
+          { label: "Avg R", value: "0.67" },
+          { label: "Median R", value: "1.00" },
+          { label: "Std Dev", value: "1.25" },
+          { label: "Winrate", value: "66.7%" },
+          { label: "EV", value: "0.67", color: "#4ade80" },
+          { label: "Best R", value: "2.00" },
+          { label: "Worst R", value: "-1.00", color: "#f87171" },
+        ].map((item) => (
+          <div key={item.label} style={{ textAlign: "center" }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "#94a3b8",
+                marginBottom: 2,
+              }}
+            >
+              {item.label}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: item.color || "#f1f5f9",
+              }}
+            >
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
-  );
+  </div>
+);
+
 };
 
 
