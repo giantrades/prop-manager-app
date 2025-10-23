@@ -927,266 +927,166 @@ const TimeframeBar = ({ data = [], fmt }: any) => {
 
 
 
-
-
-// ✅ Histograma interativo de R com alternância densidade/contagem
+// 🔥 HistogramR atualizado — usa filteredTrades reais e legenda dinâmica
 const HistogramR = ({ trades = [] }: { trades: any[] }) => {
   const [mode, setMode] = React.useState<"hist" | "density">("hist");
 
   // Aplica os filtros da Dashboard
   const filteredTrades = React.useMemo(() => {
     if (!trades?.length) return [];
-    return trades.filter(t => t && typeof t.result_R === "number");
+    return trades.filter(t => t && (t.result_R !== undefined) && !isNaN(Number(t.result_R)));
   }, [trades]);
 
+  // histograma e kde (como você já tinha)
   const dataHist = React.useMemo(() => histogramR(filteredTrades, 20), [filteredTrades]);
   const kde = React.useMemo(() => computeKDE(filteredTrades.map(t => Number(t.result_R) || 0), 40), [filteredTrades]);
-const R_values = filteredTrades.map(t => Number(t.result_R) || 0);
-const avgR = R_values.reduce((s, r) => s + r, 0) / R_values.length || 0;
-const sortedR = [...R_values].sort((a, b) => a - b);
-const medianR = sortedR[Math.floor(sortedR.length / 2)] || 0;
-const minR = Math.min(...R_values);
-const maxR = Math.max(...R_values);
-const variance = R_values.reduce((s, r) => s + Math.pow(r - avgR, 2), 0) / (R_values.length || 1);
-const stdR = Math.sqrt(variance);
-const wins = R_values.filter(r => r > 0).length;
-const winrate = wins / (R_values.length || 1);
-const losses = R_values.filter(r => r <= 0).length;
-const avgWin = wins ? R_values.filter(r => r > 0).reduce((s, r) => s + r, 0) / wins : 0;
-const avgLoss = losses ? R_values.filter(r => r <= 0).reduce((s, r) => s + r, 0) / losses : 0;
-const expectedR = (winrate * avgWin) + ((1 - winrate) * avgLoss);
 
-return (
-  <div
-    className="card"
-    style={{
-      background: "#0f172a",
-      border: "1px solid rgba(255,255,255,0.05)",
-      borderRadius: 16,
-      padding: 16,
-    }}
-  >
-    {/* --- Header --- */}
+  // --- métricas dinâmicas (remove EV, Worst R, Winrate conforme pediu) ---
+  const R_values = React.useMemo(() => filteredTrades.map(t => Number(t.result_R) || 0), [filteredTrades]);
+
+  const avgR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    return R_values.reduce((s, r) => s + r, 0) / R_values.length;
+  }, [R_values]);
+
+  const medianR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    const s = [...R_values].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  }, [R_values]);
+
+  const stdR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    const mean = avgR;
+    const variance = R_values.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / (R_values.length || 1);
+    return Math.sqrt(variance);
+  }, [R_values, avgR]);
+
+  const bestR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    return Math.max(...R_values);
+  }, [R_values]);
+
+  // formato (R não é currency — manter 2 casas)
+  const fmtR = (v: number) => Number(v || 0).toFixed(2);
+
+  return (
     <div
+      className="card"
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 12,
+        background: "#0f172a",
+        border: "1px solid rgba(255,255,255,0.05)",
+        borderRadius: 16,
+        padding: 16,
       }}
     >
-      <h3
-        style={{
-          fontSize: 16,
-          fontWeight: 600,
-          color: "#e5e7eb",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        📊 Distribuição de R (histograma)
-      </h3>
+      {/* --- Header --- */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: "#e5e7eb", display: "flex", alignItems: "center", gap: 6 }}>
+          📊 Distribuição de R (histograma)
+        </h3>
 
-      {/* --- Toggle --- */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          background: "#0f172a",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 999,
-          position: "relative",
-          width: 165,
-          height: 34,
-          justifyContent: "space-between",
-          padding: "3px",
-          boxShadow: "0 0 10px rgba(0,0,0,0.35)",
-        }}
-      >
-        {/* Fundo animado */}
-        <div
-          style={{
-            position: "absolute",
-            top: 3,
-            bottom: 3,
-            left: mode === "hist" ? 3 : "calc(50% + 3px)",
-            width: "calc(50% - 6px)",
-            borderRadius: 999,
-            background:
-              "linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.45))",
-            transition: "all 0.3s ease",
-            boxShadow: "0 0 6px rgba(139,92,246,0.4)",
-          }}
-        />
-
-        <button
-          onClick={() => setMode("hist")}
-          style={{
-            flex: 1,
-            border: "none",
-            background: "none",
-            color: mode === "hist" ? "#e0e7ff" : "#9ca3af",
-            fontSize: 12.5,
-            fontWeight: 600,
-            zIndex: 2,
-            cursor: "pointer",
-            borderRadius: 999,
-            transition: "color 0.2s ease",
-          }}
-        >
-          Histograma
-        </button>
-
-        <button
-          onClick={() => setMode("density")}
-          style={{
-            flex: 1,
-            border: "none",
-            background: "none",
-            color: mode === "density" ? "#e0e7ff" : "#9ca3af",
-            fontSize: 12.5,
-            fontWeight: 600,
-            zIndex: 2,
-            cursor: "pointer",
-            borderRadius: 999,
-            transition: "color 0.2s ease",
-          }}
-        >
-          Densidade
-        </button>
+        {/* Toggle */}
+        <div style={{
+          display: "flex", alignItems: "center", background: "#0f172a", border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 999, position: "relative", width: 165, height: 34, justifyContent: "space-between", padding: "3px",
+          boxShadow: "0 0 10px rgba(0,0,0,0.35)"
+        }}>
+          <div style={{
+            position: "absolute", top: 3, bottom: 3, left: mode === "hist" ? 3 : "calc(50% + 3px)",
+            width: "calc(50% - 6px)", borderRadius: 999,
+            background: "linear-gradient(135deg, rgba(167,139,250,0.3), rgba(139,92,246,0.45))",
+            transition: "all 0.3s ease", boxShadow: "0 0 6px rgba(139,92,246,0.4)"
+          }} />
+          <button onClick={() => setMode("hist")} style={{
+            flex: 1, border: "none", background: "none",
+            color: mode === "hist" ? "#e0e7ff" : "#9ca3af", fontSize: 12.5, fontWeight: 600, zIndex: 2,
+            cursor: "pointer", borderRadius: 999, transition: "color 0.2s ease"
+          }}>Histograma</button>
+          <button onClick={() => setMode("density")} style={{
+            flex: 1, border: "none", background: "none",
+            color: mode === "density" ? "#e0e7ff" : "#9ca3af", fontSize: 12.5, fontWeight: 600, zIndex: 2,
+            cursor: "pointer", borderRadius: 999, transition: "color 0.2s ease"
+          }}>Densidade</button>
+        </div>
       </div>
-    </div>
 
-    {/* --- Gráfico + Legenda --- */}
-    <div
-      style={{
+      {/* --- Gráfico + Legenda --- */}
+      <div style={{
         background: "rgba(15,23,42,0.4)",
         border: "1px solid rgba(255,255,255,0.04)",
         borderRadius: 12,
-        padding: 12,
-      }}
-    >
-      <div style={{ height: 240 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          {mode === "hist" ? (
-            <BarChart
-              data={dataHist}
-              margin={{ top: 10, right: 10, left: 5, bottom: 15 }}
-            >
-              <defs>
-                <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "#94a3b8", fontSize: 10 }}
-                interval={Math.floor(dataHist.length / 8)}
-              />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <ReTooltip
-                contentStyle={{
-                  background: "#0f172a",
-                  border: "1px solid #1e293b",
-                  borderRadius: 8,
-                }}
-                formatter={(v: any) => [`${v} trades`, "Frequência"]}
-              />
-              <Bar
-                dataKey="count"
-                fill="url(#barGrad)"
-                radius={[4, 4, 0, 0]}
-                barSize={20}
-              />
-            </BarChart>
-          ) : (
-            <LineChart
-              data={kde}
-              margin={{ top: 10, right: 10, left: 5, bottom: 15 }}
-            >
-              <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <ReTooltip
-                contentStyle={{
-                  background: "#0f172a",
-                  border: "1px solid #1e293b",
-                  borderRadius: 8,
-                }}
-                formatter={(value: any, name: any) => {
-                  if (typeof value === "number") {
-                    const formatted =
-                      mode === "density" ? value.toFixed(3) : value.toFixed(0);
-                    return [formatted, name];
-                  }
-                  return [value, name];
-                }}
-                labelFormatter={(label) => `R: ${label}`}
-              />
-              <Line
-                type="monotone"
-                dataKey="density"
-                stroke="#a78bfa"
-                strokeWidth={2.5}
-                dot={false}
-              />
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+        padding: 12
+      }}>
+        <div style={{ height: 240 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            {mode === "hist" ? (
+              <BarChart data={dataHist} margin={{ top: 10, right: 10, left: 5, bottom: 15 }}>
+                <defs>
+                  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.1} />
+                  </linearGradient>
+                </defs>
 
-      {/* --- Legenda --- */}
-      <div
-        style={{
+                <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} interval={Math.floor(dataHist.length / 8)} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                <ReTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                  formatter={(v: any) => [`${v} trades`, "Frequência"]} />
+                <Bar dataKey="count" fill="url(#barGrad)" radius={[4,4,0,0]} barSize={20} />
+              </BarChart>
+            ) : (
+              <LineChart data={kde} margin={{ top: 10, right: 10, left: 5, bottom: 15 }}>
+                <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                <ReTooltip
+                  contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                  formatter={(value: any) => [typeof value === "number" ? value.toFixed(3) : value, "Density"]}
+                  labelFormatter={(label) => `R: ${label}`} />
+                <Line type="monotone" dataKey="density" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+
+        {/* --- Legenda dinâmica (removidos EV, Worst R, Winrate) --- */}
+        <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
-          gap: 8,
-          marginTop: 14,
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+          gap: 8, marginTop: 14,
           background: "rgba(2,6,23,0.5)",
           border: "1px solid rgba(255,255,255,0.05)",
           borderRadius: 10,
-          padding: "10px 12px",
-        }}
-      >
-        {[
-          { label: "Avg R", value: "0.67" },
-          { label: "Median R", value: "1.00" },
-          { label: "Std Dev", value: "1.25" },
-          { label: "Winrate", value: "66.7%" },
-          { label: "EV", value: "0.67", color: "#4ade80" },
-          { label: "Best R", value: "2.00" },
-          { label: "Worst R", value: "-1.00", color: "#f87171" },
-        ].map((item) => (
-          <div key={item.label} style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: 11,
-                color: "#94a3b8",
-                marginBottom: 2,
-              }}
-            >
-              {item.label}
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: item.color || "#f1f5f9",
-              }}
-            >
-              {item.value}
-            </div>
+          padding: "10px 12px"
+        }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Avg R</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtR(avgR)}</div>
           </div>
-        ))}
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Median R</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtR(medianR)}</div>
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Std Dev</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{fmtR(stdR)}</div>
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 2 }}>Best R</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#4ade80" }}>{fmtR(bestR)}</div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-);
-
+  );
 };
+
 
 
 // Recent trades table with account info
