@@ -12,6 +12,7 @@ const SCOPES = "https://www.googleapis.com/auth/drive.file";
 let tokenClient = null;
 let gapiInited = false;
 let gisInited = false;
+let tokenRefreshInterval = null; // ← ADICIONAR
 
 // ============================================================
 // 🔹 CARREGAMENTO SEGURO DO GAPI
@@ -30,7 +31,81 @@ function loadScript(src) {
     document.body.appendChild(script);
   });
 }
+// ============================================================
+// 🔹 RENOVAÇÃO AUTOMÁTICA DE TOKEN
+// ============================================================
 
+/**
+ * Verifica e renova o token se estiver próximo de expirar
+ */
+async function ensureValidToken() {
+  try {
+    const token = gapi?.client?.getToken();
+    
+    if (!token) {
+      console.warn('⚠️ Token não encontrado');
+      return false;
+    }
+    
+    // Verifica se o token está próximo de expirar (5 minutos antes)
+    const expiresIn = (token.expires_at || 0) - Date.now();
+    
+    if (expiresIn < 5 * 60 * 1000) {
+      console.log('🔄 Token próximo de expirar, renovando...');
+      // Força nova requisição de token
+      return new Promise((resolve) => {
+        tokenClient.callback = (resp) => {
+          if (resp.error) {
+            console.warn('⚠️ Erro ao renovar token:', resp);
+            resolve(false);
+          } else {
+            console.log('✅ Token renovado com sucesso');
+            window.dispatchEvent(new Event("gapi-token-change"));
+            resolve(true);
+          }
+        };
+        // Usa 'prompt: ""' para renovação silenciosa (sem popup)
+        tokenClient.requestAccessToken({ prompt: '' });
+      });
+    }
+    
+    return true; // Token ainda válido
+  } catch (err) {
+    console.warn('⚠️ Erro ao verificar token:', err);
+    return false;
+  }
+}
+
+/**
+ * Inicia renovação automática a cada 50 minutos
+ */
+function startTokenRefresh() {
+  // Limpa interval anterior se existir
+  if (tokenRefreshInterval) {
+    clearInterval(tokenRefreshInterval);
+  }
+  
+  // Renova a cada 50 minutos (token expira em 1 hora)
+  tokenRefreshInterval = setInterval(async () => {
+    if (isSignedIn()) {
+      console.log('🔄 Verificando token do Google Drive...');
+      await ensureValidToken();
+    }
+  }, 50 * 60 * 1000); // 50 minutos
+  
+  console.log('✅ Renovação automática de token ativada');
+}
+
+/**
+ * Para a renovação automática
+ */
+function stopTokenRefresh() {
+  if (tokenRefreshInterval) {
+    clearInterval(tokenRefreshInterval);
+    tokenRefreshInterval = null;
+    console.log('🛑 Renovação automática de token desativada');
+  }
+}
 /**
  * Inicializa o Google API Client + Google Identity Services
  */
@@ -74,6 +149,11 @@ export async function initGoogleDrive(
 
     gisInited = true;
     console.log("✅ Google Drive pronto.");
+        // ✅ ADICIONE ESTAS LINHAS:
+    // Inicia renovação automática se já estiver logado
+    if (isSignedIn()) {
+      startTokenRefresh();
+    }
     return true;
   } catch (err) {
     console.error("⚠️ Falha ao inicializar Google Drive:", err);
@@ -100,6 +180,7 @@ export async function signIn() {
       if (resp.error) reject(resp);
       else {
         window.dispatchEvent(new Event("gapi-token-change"));
+        startTokenRefresh(); // ✅ ADICIONAR ESTA LINHA
         resolve(resp);
       }
     };
@@ -112,6 +193,7 @@ export function signOut() {
   if (token) {
     google.accounts.oauth2.revoke(token.access_token, () => {
       gapi.client.setToken("");
+      stopTokenRefresh(); // ✅ ADICIONAR ESTA LINHA
       window.dispatchEvent(new Event("gapi-token-change"));
       console.log("🔒 Token revogado (logout).");
     });
@@ -123,6 +205,7 @@ export function signOut() {
 // ============================================================
 
 export async function uploadFile(name, content) {
+  await ensureValidToken();
   const boundary = "-------314159265358979323846";
   const delimiter = `\r\n--${boundary}\r\n`;
   const closeDelim = `\r\n--${boundary}--`;
@@ -153,6 +236,7 @@ export async function uploadFile(name, content) {
 }
 
 export async function listFiles() {
+  await ensureValidToken();
   const response = await gapi.client.drive.files.list({
     pageSize: 10,
     fields: "files(id, name, modifiedTime)",
@@ -163,6 +247,7 @@ export async function listFiles() {
 }
 
 export async function downloadFile(fileId) {
+  await ensureValidToken();
   const response = await gapi.client.drive.files.get({
     fileId,
     alt: "media",
@@ -175,6 +260,7 @@ export async function downloadFile(fileId) {
 // ============================================================
 
 export async function downloadLatestJSON(filename = "propmanager-backup.json") {
+  await ensureValidToken();
   try {
     const response = await gapi.client.drive.files.list({
       q: `name='${filename.replace(/'/g, "\\'")}' and mimeType='application/json' and trashed=false`,
@@ -195,6 +281,7 @@ export async function downloadLatestJSON(filename = "propmanager-backup.json") {
 }
 
 export async function uploadOrUpdateJSON(name, content) {
+  await ensureValidToken();
   const response = await gapi.client.drive.files.list({
     q: `name='${name}' and mimeType='application/json'`,
     fields: "files(id, name)",
@@ -281,3 +368,5 @@ export async function restoreFromDrive({ filename = "propmanager-backup.json" } 
     return { success: false, message: err.message || String(err) };
   }
 }
+// Exporta funções de controle de token (opcional, para debug)
+export { ensureValidToken, startTokenRefresh, stopTokenRefresh };
