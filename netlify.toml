@@ -17,3 +17,10 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+  # ✅ ADICIONE ESTAS LINHAS:
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Cross-Origin-Embedder-Policy = "credentialless"
