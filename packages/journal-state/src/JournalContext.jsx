@@ -58,7 +58,22 @@ export default function JournalProvider({ children }) {
         
         if (!mounted) return;
         setTrades(allTrades || []);
-        setStrategies(allStrategies || []); 
+        // Normaliza checklist (compatibilidade com dados antigos)
+const normalized = (allStrategies || []).map(s => {
+  // Se checklist estiver em formato antigo (array de strings), convertê-la
+  if (Array.isArray(s.checklist) && s.checklist.length > 0 && typeof s.checklist[0] === 'string') {
+    const items = s.checklist.map((t, idx) => ({ id: `legacy-${idx}-${String(t).replace(/\s+/g, '-').toLowerCase()}`, title: String(t) }));
+    return { ...s, checklist: items };
+  }
+  // Se não existir checklist, garantir array vazio (opcional)
+  if (!s.checklist) return { ...s, checklist: [] };
+  return s;
+});
+
+setTrades(allTrades || []);
+setStrategies(normalized);
+setReady(true);
+
         setReady(true);
       } catch (error) {
         console.error("Falha ao inicializar JournalProvider:", error);

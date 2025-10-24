@@ -46,6 +46,7 @@ const TagsBuilder: React.FC<{ tags: string[]; onChange: (list: string[]) => void
   );
 };
 
+
 export default function StrategyForm({ onClose, editing }: Props) {
   const { saveStrategy } = useJournal();
 
@@ -58,6 +59,7 @@ export default function StrategyForm({ onClose, editing }: Props) {
     name: editing?.name || '',
     category: editing?.category as StrategyCategory | undefined,
     description: editing?.description || '',
+    checklist: editing?.checklist || [],
     defaultRisk: editing?.defaultRisk || { profitTargetR: 0, stopLossR: 0 },
   });
 
@@ -85,11 +87,27 @@ export default function StrategyForm({ onClose, editing }: Props) {
       defaultRisk,
       createdAt: editing?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      checklist: form.checklist || [],
     } as Strategy;
 
     await saveStrategy(finalForm);
     onClose();
   };
+
+// Helpers para checklist
+const addChecklistItem = (title = '') => {
+  const id = crypto?.randomUUID?.() || (Math.random().toString(36).slice(2));
+  const item = { id, title };
+  setForm(prev => ({ ...prev, checklist: [...(prev.checklist || []), item] }));
+};
+
+const updateChecklistItem = (id, title) => {
+  setForm(prev => ({ ...prev, checklist: (prev.checklist || []).map(i => i.id === id ? { ...i, title } : i) }));
+};
+
+const removeChecklistItem = (id) => {
+  setForm(prev => ({ ...prev, checklist: (prev.checklist || []).filter(i => i.id !== id) }));
+};
 
   return (
     <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -144,6 +162,28 @@ export default function StrategyForm({ onClose, editing }: Props) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
+{/* --- Checklist (editor) --- */}
+<div>
+  <h4 className="text-sm text-muted font-semibold mb-2">Checklist</h4>
+  <div className="space-y-2">
+    {(form.checklist || []).map((item, idx) => (
+      <div key={item.id} className="flex items-center gap-2">
+        <input
+          className="input"
+          value={item.title}
+          placeholder={`Item #${idx + 1}`}
+          onChange={(e) => updateChecklistItem(item.id, e.target.value)}
+        />
+        <button className="btn ghost small" onClick={() => removeChecklistItem(item.id)}>Remover</button>
+      </div>
+    ))}
+
+    <div>
+      <button className="btn" onClick={() => addChecklistItem('')}>➕ Adicionar item</button>
+      <div className="muted text-sm mt-2">Itens do checklist serão exibidos no TradeForm quando esta estratégia for selecionada.</div>
+    </div>
+  </div>
+</div>
 
           <div>
             <h4 className="text-sm text-muted font-semibold mb-2">Configurações Padrão R:R</h4>

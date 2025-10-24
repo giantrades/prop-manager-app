@@ -55,6 +55,7 @@ export type Trade = {
     order: number;
     url?: string; // opcional: usado no preview
   }[];
+  checklistResults?: { [checkId: string]: boolean };
 };
 
 export interface EnrichedTrade extends Trade {

@@ -127,6 +127,21 @@ useEffect(() => {
     }
   }
 }, [editing]);
+// Quando a strategy do form muda, (re)inicializa checklistResults com as keys da strategy
+useEffect(() => {
+  const strat = strategies?.find(s => s.id === form.strategyId);
+  if (strat && Array.isArray(strat.checklist)) {
+    // manter valores já existentes em form.checklistResults quando possível
+    const base = { ...(form.checklistResults || {}) };
+    for (const item of strat.checklist) {
+      if (base[item.id] === undefined) base[item.id] = false;
+    }
+    setForm(prev => ({ ...prev, checklistResults: base }));
+  } else {
+    setForm(prev => ({ ...prev, checklistResults: {} }));
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [form.strategyId, strategies]);
 
   // Inicialização dos pesos
 useEffect(() => {
@@ -349,6 +364,9 @@ updatedForm.result_gross = totalGross; // ← Atualiza o form com o valor calcul
     accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
     accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
     tf_signal: updatedForm.tf_signal || '1h',
+    // incluir checklistResults
+    checklistResults: updatedForm.checklistResults ?? form.checklistResults ?? {},
+
      // ← ADICIONAR AQUI
   };
 
@@ -421,7 +439,8 @@ const filteredAccounts = useMemo(() => {
   if (!Array.isArray(activeAccounts)) return [];
   return activeAccounts.filter(acc => !filterType || acc.type === filterType);
 }, [activeAccounts, filterType]);
-
+//Para filtrar as checklists da estrategia
+const selectedStrategy = strategies.find(s => s.id === form.strategyId);
 
   return (
        <div className="modal-overlay" onClick={handleOverlayClick}>
@@ -590,29 +609,29 @@ const filteredAccounts = useMemo(() => {
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              
+              {selectedStrategy?.checklist && selectedStrategy.checklist.length > 0 && (
+  <div className="mt-4">
+    <label className="font-medium">Checklist</label>
+    <div className="flex flex-col gap-2 mt-2">
+      {selectedStrategy.checklist.map(item => (
+        <label key={item.id} className="flex items-center gap-2 px-3 py-2 bg-soft rounded-lg text-sm">
+          <input
+            type="checkbox"
+            checked={!!form.checklistResults?.[item.id]}
+            onChange={(e) => setForm(prev => ({
+              ...prev,
+              checklistResults: { ...(prev.checklistResults || {}), [item.id]: e.target.checked }
+            }))}
+          />
+          <span>{item.title}</span>
+        </label>
+      ))}
+      <div className="muted text-sm">Marque os itens cumpridos neste trade.</div>
+    </div>
+  </div>
+)}
             </div>
-
-            {/* Tags/Checklist */}
-            {Object.keys(form.tags || {}).length > 0 && (
-              <div className="mt-4">
-                <label className="font-medium">Checklist</label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {Object.entries(form.tags || {}).map(([k, v]) => (
-                    <label key={k} className="flex items-center gap-2 px-3 py-2 bg-soft rounded-lg text-sm">
-                      <input 
-                        type="checkbox" 
-                        checked={!!v} 
-                        onChange={e => setForm(prev => ({
-                          ...prev, 
-                          tags: { ...(prev.tags || {}), [k]: e.target.checked }
-                        }))} 
-                      />
-                      <span>{k}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
 

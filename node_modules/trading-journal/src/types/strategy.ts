@@ -6,6 +6,12 @@ export interface DefaultRiskSettings {
   stopLossR?: number;     // Stop em múltiplos de R (e.g., 1)
 }
 
+// Adicionar abaixo de DefaultRiskSettings
+export interface ChecklistItem {
+  id: string;
+  title: string;
+}
+
 export type StrategyCategory = 'Futures' | 'Forex' | 'Cripto' | 'Personal' | 'Todos';
 
 
@@ -15,7 +21,7 @@ export interface Strategy {
   description: string;
   category: StrategyCategory;
   // Checklist: itens obrigatórios antes de executar um trade
-  checklist: string[];
+  checklist?: ChecklistItem[];
   // Tags para categorização (e.g., 'Scalping', 'Reversão')
   tags: string[];
   // Configurações padrão para agilizar o TradeForm
