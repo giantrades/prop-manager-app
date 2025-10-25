@@ -78,4 +78,6 @@ export interface PartialExecution {
   result_R?: number;
   result_net?: number;
   result_gross?: number;
+  take_profit?: number;
+  stop_loss?: number;
 }

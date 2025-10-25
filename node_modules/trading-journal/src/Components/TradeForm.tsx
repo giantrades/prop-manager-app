@@ -154,6 +154,22 @@ useEffect(() => {
     setAccountWeights(newWeights)
   }
 }, [selectedAccounts, accounts])
+const totals = useMemo(() => {
+  const exs = form.PartialExecutions || [];
+  const sumGross = exs.reduce((s, e) => s + (e.result_gross || 0), 0);
+  const sumR = exs.reduce((s, e) => s + (e.result_R || 0), 0);
+  const avgR = exs.length ? sumR / exs.length : 0;
+  const firstEntry = exs
+    .map(e => e.entry_datetime)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0];
+  const lastExit = exs
+    .map(e => e.exit_datetime)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+  return { sumGross, sumR, avgR, firstEntry, lastExit };
+}, [JSON.stringify(form.PartialExecutions)]);
+
   // Computed: VWAP / PnL / R
   const computeVWAP = (execs: Execution[], side: 'entry' | 'exit') => {
     const arr = execs.filter(e => e.side === side);
@@ -263,11 +279,22 @@ const addPartial = () => {
     ...f,
     PartialExecutions: [
       ...(f.PartialExecutions || []),
-      { id: uuidv4(), entryPrice: 0, exitPrice: 0, volume: 0, result_gross: 0,entry_datetime: new Date().toISOString(), // ✅ ADICIONADO
-      exit_datetime: null, },
+      {
+        id: uuidv4(),
+        entryPrice: 0,
+        exitPrice: 0,
+        volume: 0,
+        result_gross: 0,
+        result_R: 0,
+        take_profit: 0,
+        stop_loss: 0,
+        entry_datetime: new Date().toISOString(),
+        exit_datetime: null,
+      },
     ],
   }));
 };
+
 
 const removePartial = (idx: number) => {
   setForm(f => ({
@@ -366,16 +393,11 @@ updatedForm.result_gross = totalGross; // ← Atualiza o form com o valor calcul
     tf_signal: updatedForm.tf_signal || '1h',
     // incluir checklistResults
     checklistResults: updatedForm.checklistResults ?? form.checklistResults ?? {},
-
-     // ← ADICIONAR AQUI
   };
-
-  // 🔹 Atualiza saldo das contas com impacto do P&L
 
 
   // 🔹 Salva trade
  try {
-  // 🔹 Salva trade (uma única vez)
   if (!tradeData.id) {
   tradeData.id = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
 }
@@ -477,128 +499,181 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
             </div>
           )}
 
-          {/* Basic Info */}
-          <div className="card ">
-            <h4 className="font-medium mb-4">Basic Info</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="field">
-                <label>Asset *</label>
-                <input 
-                  className="input" 
-                  value={form.asset || ''} 
-                  onChange={e => setForm({ ...form, asset: e.target.value })}
-                  placeholder="Ex: EURUSD, BTCUSD..." 
-                />
-              </div>
-              <div className="field ">
-                <label>Direção</label>
-                <select 
-                  className="input" 
-                  value={form.direction || ''} 
-                  onChange={e => setForm({ ...form, direction: e.target.value as any })}
-                >
-                  <option value=""> </option>
-                  <option value="Long">Long</option>
-                  <option value="Short">Short</option>
-                </select> </div>
-               <div className="grid grid-cols-2 gap-4">
-
-              {/* Campo Timeframe da Operação (tf_signal) - NOVO */}
-              <div>
-                <label className="form-label">Timeframe da Operação</label>
-                <input
-                  className="input w-full"
-                  value={form.tf_signal || ''}
-                  onChange={(e) => setForm({ ...form, tf_signal: e.target.value })}
-                  placeholder="Ex: H1, M15, Diário"
-                />
-              </div>
-              </div>
-            </div>
-          </div>
-          <div className="field">
-           <label>Categorias de Contas</label>
-          <select className="input" value={filterType} onChange={e => setFilterType(e.target.value)}>
-          <option value="">Todos</option>
-          <option value="Forex">Forex</option>
-          <option value="Futures">Futures</option>
-          <option value="Cripto">Cripto</option>
-         <option value="Personal">Personal</option>
-          </select>
-          </div>
-          {/* Account Selection */}
-          <div className="card">
-            <h4 className="font-medium mb-4">Seleção de Contas</h4>
-            <div className="field">
-              <label>Contas * (selecione múltiplas com Ctrl/Cmd)</label>
-              <select 
-                className="input"
-                multiple
-                size={Math.min(5, filteredAccounts.length)}
-                value={selectedAccounts}
-                onChange={e => setSelectedAccounts(Array.from(e.target.selectedOptions, o => o.value))}
-                style={{ height: 'auto', minHeight: 120 }}
-              >
-                {filteredAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
-                  </option>
-                ))}
-              </select>
-              {/* Multiplier do weight das contas */}
-          {selectedAccounts.map(id => {
-          const acc = accounts.find(a => a.id === id);
-          return (<div key={id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>{acc?.name}</span>
-          <input
-          type="number"
-          className="input"
-          placeholder="Peso"
-          value={accountWeights[id] ?? ''}
-          onChange={(e) =>setAccountWeights({...accountWeights,[id]: Number(e.target.value)})}
-      style={{ width: 72 }}
+     {/* Basic Info */}
+<div className="card">
+  <h4 className="font-medium mb-4">Basic Info</h4>
+  <div className="basic-info-grid">
+    <div className="field">
+      <label>Asset *</label>
+      <input 
+        className="input" 
+        value={form.asset || ''} 
+        onChange={e => setForm({ ...form, asset: e.target.value })}
+        placeholder="Ex: EURUSD, BTCUSD..." 
       />
     </div>
-  );
-})}
+    
+    <div className="field">
+      <label>Direção</label>
+      <select 
+        className="input" 
+        value={form.direction || ''} 
+        onChange={e => setForm({ ...form, direction: e.target.value as any })}
+      >
+        <option value="">Selecione</option>
+        <option value="Long">Long</option>
+        <option value="Short">Short</option>
+      </select>
+    </div>
 
+    <div className="field">
+      <label>Timeframe da Operação</label>
+      <input
+        className="input"
+        value={form.tf_signal || ''}
+        onChange={(e) => setForm({ ...form, tf_signal: e.target.value })}
+        placeholder="Ex: H1, M15, Diário"
+      />
+    </div>
+  </div>
+</div>
+         
+{/* Account Selection */}
+<div className="card account-selection-card">
+  <h4 className="font-medium mb-4 flex items-center gap-2">
+    🏦 Seleção de Contas
+    {selectedAccounts.length > 0 && (
+      <span className="badge-count">{selectedAccounts.length}</span>
+    )}
+  </h4>
+  
+  {/* Filtro de Categoria */}
+  <div className="account-filter">
+    <div className="field">
+      <label>📂 Categorias de Contas</label>
+      <select className="input" value={filterType} onChange={e => setFilterType(e.target.value)}>
+        <option value="">🌐 Todas as Categorias</option>
+        <option value="Forex">💱 Forex</option>
+        <option value="Futures">📈 Futures</option>
+        <option value="Cripto">₿ Cripto</option>
+        <option value="Personal">👤 Personal</option>
+      </select>
+    </div>
+  </div>
 
-              {/* Preview das contas selecionadas */}
-              {selectedAccounts.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  <div className="text-sm font-medium">Contas selecionadas:</div>
-                  {selectedAccounts.map(accountId => {
-                    const acc = accounts.find(a => a.id === accountId);
-                    return acc ? (
-                      <div key={accountId} className="flex items-center gap-3 p-2 bg-soft rounded">
-                        <span className={`pill ${getAccountTypeClass(acc.type)}`}>
-                          {acc.type}
-                        </span>
-                        <div className="flex-1">
-                          <div className="font-medium">{acc.name}</div>
-                          <div className="text-sm text-muted">
-                            ${acc.currentFunding?.toLocaleString()} • {acc.status}
-                          </div>
-                        </div>
-                        <button 
-                          className="btn ghost small"
-                          onClick={() => setSelectedAccounts(prev => prev.filter(id => id !== accountId))}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              )}
-            </div>
+  {/* Multi-select de Contas com botões de ação */}
+  <div className="field">
+    <div className="flex items-center justify-between mb-2">
+      <label className="mb-0">💼 Contas Disponíveis *</label>
+      <div className="account-actions">
+        <button
+          className="account-action-btn"
+          onClick={() => setSelectedAccounts(filteredAccounts.map(a => a.id))}
+          type="button"
+        >
+          ✓ Todas
+        </button>
+        <button
+          className="account-action-btn"
+          onClick={() => setSelectedAccounts([])}
+          type="button"
+        >
+          ✕ Limpar
+        </button>
+      </div>
+    </div>
+    <p className="text-xs text-muted mb-2">Selecione múltiplas com Ctrl/Cmd</p>
+    <select 
+      className="account-multiselect input"
+      multiple
+      size={Math.min(5, filteredAccounts.length)}
+      value={selectedAccounts}
+      onChange={e => setSelectedAccounts(Array.from(e.target.selectedOptions, o => o.value))}
+    >
+      {filteredAccounts.map(acc => (
+        <option key={acc.id} value={acc.id}>
+          {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
+        </option>
+      ))}
+    </select>
+  </div>
+
+ {/* Pesos das Contas - Grid 3 colunas scrollable */}
+{selectedAccounts.length > 0 && (
+  <div className="account-weights-section">
+    <div className="section-title">
+      ⚖️ Pesos das Contas
+      <span style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--muted)' }}>
+        (Defina o peso de cada conta)
+      </span>
+    </div>
+    <div className="account-weights-grid">
+      {selectedAccounts.map(id => {
+        const acc = accounts.find(a => a.id === id);
+        return (
+          <div key={id} className="account-weight-item">
+            <span title={acc?.name}>{acc?.name}</span>
+            <input
+              type="number"
+              className="input account-weight-input"
+              placeholder="Peso"
+              value={accountWeights[id] ?? ''}
+              onChange={(e) => setAccountWeights({...accountWeights, [id]: Number(e.target.value)})}
+              min="0"
+              step="0.1"
+            />
           </div>
+        );
+      })}
+    </div>
+  </div>
+)}
+
+  {/* Preview das Contas Selecionadas - Grid 2x2 scrollable */}
+  {selectedAccounts.length > 0 && (
+    <div className="selected-accounts-preview">
+      <div className="section-title">
+        ✅ Contas Selecionadas
+      </div>
+      <div className="selected-accounts-grid">
+        {selectedAccounts.map(accountId => {
+          const acc = accounts.find(a => a.id === accountId);
+          return acc ? (
+            <div key={accountId} className="selected-account-card">
+              <span className={`pill ${getAccountTypeClass(acc.type)}`}>
+                {acc.type}
+              </span>
+              <div className="selected-account-info">
+                <div className="font-medium">{acc.name}</div>
+                <div className="text-sm text-muted">
+                  ${acc.currentFunding?.toLocaleString()}
+                  {accountWeights[accountId] && (
+                    <span style={{ marginLeft: '4px', color: 'var(--primary)' }}>
+                      • Peso: {accountWeights[accountId]}x
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button 
+                className="account-remove-btn"
+                onClick={() => setSelectedAccounts(prev => prev.filter(id => id !== accountId))}
+                title="Remover conta"
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+          ) : null;
+        })}
+      </div>
+    </div>
+  )}
+</div>
 
           {/* Strategy */}
           <div className="card ">
             <h4 className="font-medium mb-4">Estratégia</h4>
             <div className="field">
-              <label>Estratégia</label>
               <select 
                 className="input" 
                 value={form.strategyId || ''} 
@@ -612,7 +687,7 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
               
               {selectedStrategy?.checklist && selectedStrategy.checklist.length > 0 && (
   <div className="mt-4">
-    <label className="font-medium">Checklist</label>
+    <h5 className="font-medium ">Checklist:</h5>
     <div className="flex flex-col gap-2 mt-2">
       {selectedStrategy.checklist.map(item => (
         <label key={item.id} className="flex items-center gap-2 px-3 py-2 bg-soft rounded-lg text-sm">
@@ -627,7 +702,7 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
           <span>{item.title}</span>
         </label>
       ))}
-      <div className="muted text-sm">Marque os itens cumpridos neste trade.</div>
+     
     </div>
   </div>
 )}
@@ -635,76 +710,59 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
           </div>
 
 
-          {/* Trade Details */}
-          <div className="card">
-            <h4 className="font-medium mb-4">Detalhes do Trade</h4>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-  <div className="card mt-3 md:col-span-4 p-0 overflow-x-auto">
-    <div className="p-4 border-b">
-      <h3 className="flex items-center gap-2 text-lg font-semibold">
-        📈 Execuções Parciais
+{/* ===================== EXECUÇÕES PARCIAIS ===================== */}
+<div className="grid grid-cols-1 gap-4 md:grid-cols-1">
+  <div className="card mt-3 md:col-span-1 p-0 overflow-hidden relative">
+    {/* Cabeçalho da Seção */}
+    <div className="p-4 border-b bg-panel">
+      <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-100">
+        📊 Execuções Parciais
       </h3>
     </div>
 
+    {/* Lista de Execuções */}
     {form.PartialExecutions?.length > 0 ? (
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
-              #
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Entrada
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Saída
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Volume
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[170px]">
-              Data &amp; Hora
-            </th>
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-              Gross ($)
-            </th>
-            <th className="px-3 py-2 w-12"></th> {/* Coluna para o botão de lixeira */}
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {form.PartialExecutions.map((exe, idx) => (
-            <tr key={exe.id}>
-              <td className="px-3 py-1.5 whitespace-nowrap text-sm text-gray-500">
-                {idx + 1}
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap">
+      <div className="p-4 space-y-5 bg-soft/30">
+        {form.PartialExecutions.map((exe, idx) => (
+          <div key={exe.id} className="exec-card relative">
+            {/* Cabeçalho da Execução */}
+            <div className="exec-card-header">
+              <div className="exec-card-header-left">
+                <div className="exec-card-number">{idx + 1}</div>
+                <span className="font-medium text-gray-200">
+                  Execução #{idx + 1}
+                </span>
+              </div>
+            </div>
+
+            {/* Botão “X” flutuante */}
+            <button
+              className="exec-remove-btn"
+              onClick={() => removePartial(idx)}
+              title="Remover execução"
+            >
+              ×
+            </button>
+
+            {/* === Linha 1 === */}
+            <div className="exec-grid cols-4">
+              <div>
+                <label>💰 Entrada</label>
                 <input
                   type="number"
-                  className="input block w-full text-sm p-1.5"
-                  value={exe.entryPrice || 0}
-                  onChange={e => updatePartial(idx, 'entryPrice', parseFloat(e.target.value))}
+                  className="input"
+                  value={exe.entryPrice || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "entryPrice", parseFloat(e.target.value) || 0)
+                  }
                 />
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap">
-                <input
-                  type="number"
-                  className="input block w-full text-sm p-1.5"
-                  value={exe.exitPrice || 0}
-                  onChange={e => updatePartial(idx, 'exitPrice', parseFloat(e.target.value))}
-                />
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap">
-                <input
-                  type="number"
-                  className="input block w-full text-sm p-1.5"
-                  value={exe.volume || 0}
-                  onChange={e => updatePartial(idx, 'volume', parseFloat(e.target.value))}
-                />
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap">
+              </div>
+
+              <div>
+                <label>📅 Data Entrada</label>
                 <input
                   type="datetime-local"
-                  className="input block w-full text-sm p-1.5"
+                  className="input"
                   value={exe.entry_datetime ? formatLocalDatetime(exe.entry_datetime) : ""}
                   onChange={(e) =>
                     updatePartial(
@@ -714,147 +772,161 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
                     )
                   }
                 />
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap">
+              </div>
+
+              <div>
+                <label>💵 Saída</label>
                 <input
                   type="number"
-                  className="input block w-full text-sm p-1.5"
-                  step="0.01"
+                  className="input"
+                  value={exe.exitPrice || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "exitPrice", parseFloat(e.target.value) || 0)
+                  }
+                />
+              </div>
+
+              <div>
+                <label>📅 Data Saída</label>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={exe.exit_datetime ? formatLocalDatetime(exe.exit_datetime) : ""}
+                  onChange={(e) =>
+                    updatePartial(
+                      idx,
+                      "exit_datetime",
+                      e.target.value ? toISOStringLocal(e.target.value) : ""
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            {/* === Linha 2 === */}
+            <div className="exec-grid cols-5">
+              <div>
+                <label>🎯 Take Profit</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={exe.take_profit || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "take_profit", parseFloat(e.target.value) || 0)
+                  }
+                />
+              </div>
+
+              <div>
+                <label>🛑 Stop Loss</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={exe.stop_loss || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "stop_loss", parseFloat(e.target.value) || 0)
+                  }
+                />
+              </div>
+
+              <div>
+                <label>📦 Volume</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={exe.volume || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "volume", parseFloat(e.target.value) || 0)
+                  }
+                />
+              </div>
+
+              <div>
+                <label>📈 R</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={exe.result_R || ""}
+                  onChange={(e) =>
+                    updatePartial(idx, "result_R", parseFloat(e.target.value) || 0)
+                  }
+                />
+              </div>
+
+              <div>
+                <label>💲 Gross ($)</label>
+                <input
+                  type="number"
+                  className="input"
                   value={exe.result_gross || ""}
                   onChange={(e) =>
                     updatePartial(idx, "result_gross", parseFloat(e.target.value) || 0)
                   }
                 />
-              </td>
-              <td className="px-3 py-1.5 whitespace-nowrap text-center">
-                <button
-                  className="text-gray-400 hover:text-red-500 p-1 rounded-full transition-colors duration-150"
-                  onClick={() => removePartial(idx)}
-                  title="Remover execução"
-                >
-                  X
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     ) : (
-      <p className="px-4 py-3 text-sm text-gray-500">Nenhuma execução parcial adicionada.</p>
+      <div className="p-8 text-center text-gray-400">
+        Nenhuma execução parcial adicionada
+      </div>
     )}
 
-    <div className="p-4 border-t">
+    {/* Botão Adicionar Execução */}
+    <div className="border-t border-soft">
       <button
-        className="btn ghost"
+        className="exec-add-btn"
         onClick={addPartial}
       >
-        + Adicionar Execução
+        <span className="icon">➕</span> Adicionar Execução
       </button>
     </div>
   </div>
-
-
-            
-
-<div className="field">
-  <label>Entry Date & Time *</label>
-  <input
-    type="datetime-local"
-    className="input"
-    value={form.entry_datetime ? form.entry_datetime.slice(0, 16) : ""}
-    onChange={e =>
-      setForm({
-        ...form,
-        entry_datetime: e.target.value ? e.target.value : "",
-      })
-    }
-  />
 </div>
 
-<div className="field">
-  <label>Exit Date & Time</label>
-  <input
-    type="datetime-local"
-    className="input"
-    value={form.exit_datetime ? form.exit_datetime.slice(0, 16) : ""}
-    onChange={e =>
-      setForm({
-        ...form,
-        exit_datetime: e.target.value ? e.target.value : "",
-      })
-    }
-  />
+
+
+{/* Risk & Costs */}
+<div className="card">
+  <h4 className="font-medium mb-4">Costs</h4>
+  <div className="costs-grid">
+    <div className="field">
+      <label>Comissão ($)</label>
+      <input 
+        className="input"
+        step="0.01" 
+        type="number" 
+        value={form.commission || ''} 
+        onChange={e => setForm({ ...form, commission: Number(e.target.value)||0 })} 
+        placeholder="0.00"
+      />
+    </div>
+    <div className="field">
+      <label>Fees ($)</label>
+      <input 
+        className="input"
+        step="0.01" 
+        type="number" 
+        value={form.fees || ''} 
+        onChange={e => setForm({ ...form, fees: Number(e.target.value)||0 })} 
+        placeholder="0.00"
+      />
+    </div>
+    <div className="field">
+      <label>Swap ($)</label>
+      <input
+        type="number"
+        step="0.01"
+        className="input"
+        value={form.swap || ''}
+        onChange={(e) => setForm({ ...form, swap: Number(e.target.value) || 0 })}
+        placeholder="0.00"
+      />
+    </div>
+  </div>
 </div>
-
-               <div className="field">
-                <label>Take Profit</label>
-                <input 
-                  className="input w-full" 
-                  type="number" 
-                  step="0.01"
-                  value={form.profit_target_price || ''} 
-                  onChange={e => setForm({ ...form, profit_target_price: Number(e.target.value)|| 0 })} 
-                />
-              </div>
-              <div className="field">
-                <label>Stop Loss</label>
-                <input 
-                  className="input w-full" 
-                  type="number" 
-                  step="0.01"
-                  value={form.stop_loss_price || ''} 
-                  onChange={e => setForm({ ...form, stop_loss_price: Number(e.target.value)|| 0 })} 
-                />
-              </div>
-             <div className="field flex items-center gap-2 mt-4">
-  <input
-    type="checkbox"
-    checked={!!form.isBreakeven}
-    onChange={(e) => setForm({ ...form, isBreakeven: e.target.checked })}
-  />
-  <label>Trade foi Break-even (sem ganho nem perda)</label>
-</div>
-
-            </div>
-          </div>
-
-          {/* Risk & Costs */}
-          <div className="card">
-            <h4 className="font-medium mb-4">Costs</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="field">
-                <label>Comissão ($)</label>
-                <input 
-                  className="input w-full"
-                  step="0.01" 
-                  type="number" 
-                  value={form.commission || ''} 
-                  onChange={e => setForm({ ...form, commission: Number(e.target.value)||0 })} 
-                />
-              </div>
-              <div className="field">
-                <label>Fees ($)</label>
-                <input 
-                  className="input w-full"
-                  step="0.01" 
-                  type="number" 
-                  value={form.fees || ''} 
-                  onChange={e => setForm({ ...form, fees: Number(e.target.value)||0 })} 
-                />
-              </div>
-              <div className="field">
-                <label>Swap ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input w-full"
-                  value={form.swap || ''}
-                  onChange={(e) => setForm({ ...form, swap: Number(e.target.value) || 0 })}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Notes */}
           <div className="card">
@@ -871,34 +943,49 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
           </div>
 
           {/* Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="card accent1">
-              <div className="muted">Entry VWAP</div>
-              <div className="stat">{fmt(form.entryVwap || 0)}</div>
-            </div>
-            <div className="card accent2">
-              <div className="muted">Exit VWAP</div>
-              <div className="stat">{fmt(form.exitVwap || 0)}</div>
-            </div>
-            <div className="card accent3">
-              <div className="muted">P&L Bruto</div>
-              <div className={`stat ${(form.result_gross || 0) >= 0 ? 'pos' : 'neg'}`}>
-                ${fmt(form.result_gross || 0)}
-              </div>
-            </div>
-            <div className="card accent4">
-              <div className="muted">P&L Líquido</div>
-              <div className={`stat ${(form.result_net || 0) >= 0 ? 'pos' : 'neg'}`}>
-                ${fmt(form.result_net || 0)}
-              </div>
-            </div>
-            <div className="card accent5">
-              <div className="muted">R</div>
-              <div className={`stat ${(form.result_R || 0) >= 0 ? 'pos' : 'neg'}`}>
-                {fmt(form.result_R || 0)}
-              </div>
-            </div>
-          </div>
+ <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+  <div className="card accent3">
+    <div className="muted text-xs">P&L Bruto</div>
+    <div className={`stat ${totals.sumGross >= 0 ? "pos" : "neg"}`}>
+      ${fmt(totals.sumGross)}
+    </div>
+  </div>
+
+  <div className="card accent4">
+    <div className="muted text-xs">R Total</div>
+    <div className={`stat ${totals.sumR >= 0 ? "pos" : "neg"}`}>
+      {totals.sumR.toFixed(2)} R
+    </div>
+  </div>
+
+  <div className="card accent5">
+    <div className="muted text-xs">R Médio</div>
+    <div className={`stat ${totals.avgR >= 0 ? "pos" : "neg"}`}>
+      {totals.avgR.toFixed(2)} R
+    </div>
+  </div>
+
+  <div className="card accent2">
+    <div className="muted text-xs">Período Execuções</div>
+    <div className="text-sm">
+      {totals.firstEntry
+        ? `${new Date(totals.firstEntry).toLocaleDateString()} → ${
+            totals.lastExit
+              ? new Date(totals.lastExit).toLocaleDateString()
+              : new Date(totals.firstEntry).toLocaleDateString()
+          }`
+        : "—"}
+    </div>
+  </div>
+
+  <div className="card accent1">
+    <div className="muted text-xs">P&L Líquido</div>
+    <div className={`stat ${(form.result_net || 0) >= 0 ? "pos" : "neg"}`}>
+      ${fmt(form.result_net || 0)}
+    </div>
+  </div>
+</div>
+
         </div>
           <div className="flex justify-end p-4 border-t border-soft">
           <button className="btn ghost mr-2" onClick={onClose}>Cancelar</button>

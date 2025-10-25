@@ -583,3 +583,442 @@ tr:hover td { background: rgba(39,48,68,0.24); }
 .stats-pill.blue { background: var(--blue); }
 .stats-pill.yellow { background: var(--yellow); }
 .stats-pill.gray { background: var(--gray); }
+
+
+/* === CARD: Execuções Parciais === */
+.exec-card {
+  position: relative;
+  background-color: var(--color-panel, #111827);
+  border: 1px solid var(--color-soft, #1f2937);
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 1.5rem;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.exec-card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Cabeçalho da Execução */
+.exec-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.exec-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.exec-card-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Botão de Remover */
+.exec-remove-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.exec-remove-btn:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* GRID */
+.exec-grid {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 1rem;
+}
+
+.exec-grid.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.exec-grid.cols-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.exec-grid input {
+  width: 100%;
+  background-color: rgba(17, 24, 39, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.exec-grid input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background-color: rgba(31, 41, 55, 0.9);
+}
+
+/* Labels */
+.exec-card label {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+/* === Botão Adicionar Execução === */
+.exec-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  background-color: #1342a7;
+  color: white;
+  font-weight: 700;
+  border: none;
+  border-radius: 12px 12px 12px 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-top: 10px;
+}
+
+.exec-add-btn:hover {
+  background-color: #1d4ed8;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
+}
+
+.exec-add-btn .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* === Espaçamento entre execuções === */
+.exec-card + .exec-card {
+  margin-top: 16px; /* espaço entre cards consecutivos */
+}
+
+/* ajuste opcional: animação de aparição suave */
+.exec-card {
+  animation: fadeInExec 0.25s ease-out;
+}
+
+@keyframes fadeInExec {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* === FIX: grid para Costs === */
+.costs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.costs-grid input,
+.costs-grid .input {
+  width: 100% !important;
+}
+/* === FIX: grid para Basic Info === */
+.basic-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.basic-info-grid input,
+.basic-info-grid select,
+.basic-info-grid .input {
+  width: 100% !important;
+}
+
+/* === Account Selection Styles === */
+.account-selection-card {
+  background: var(--panel);
+  border: 1px solid var(--soft);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.account-filter {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.account-multiselect {
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 140px;
+  max-height: 240px;
+}
+
+.account-multiselect option {
+  padding: 8px;
+  border-radius: 4px;
+  margin: 2px 0;
+  cursor: pointer;
+}
+
+.account-multiselect option:hover {
+  background: var(--soft);
+}
+
+/* Botões de ação (Todas/Limpar) */
+.account-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.account-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--soft);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.account-action-btn:hover {
+  background: var(--soft);
+  border-color: var(--primary, #2563eb);
+  color: var(--primary, #2563eb);
+}
+
+.account-weights-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--soft-alpha, rgba(255, 255, 255, 0.02));
+  border-radius: 8px;
+  border: 1px dashed var(--soft);
+}
+
+/* Grid 3 colunas para pesos - scrollable após 4 linhas (12 itens) */
+.account-weights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 208px; /* ~4 linhas × 52px */
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.account-weights-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.account-weights-grid::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.account-weights-grid::-webkit-scrollbar-thumb {
+  background: var(--soft);
+  border-radius: 4px;
+}
+
+.account-weights-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--primary, #2563eb);
+}
+
+/* Firefox */
+.account-weights-grid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--soft) var(--bg);
+}
+
+.account-weight-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--soft);
+  border-radius: 6px;
+  min-height: 44px;
+}
+
+.account-weight-item span {
+  flex: 1;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-weight-input {
+  width: 65px !important;
+  text-align: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.selected-accounts-preview {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--soft);
+}
+
+/* Grid responsivo para cards selecionados */
+.selected-accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.selected-accounts-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.selected-accounts-grid::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.selected-accounts-grid::-webkit-scrollbar-thumb {
+  background: var(--soft);
+  border-radius: 4px;
+}
+
+.selected-accounts-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--primary, #2563eb);
+}
+
+/* Firefox */
+.selected-accounts-grid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--soft) var(--bg);
+}
+
+.selected-account-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: var(--soft-alpha, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.selected-account-card:hover {
+  background: var(--soft);
+  transform: translateX(2px);
+}
+
+.selected-account-card .pill {
+  font-size: 10px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.selected-account-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-account-info .font-medium {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-account-info .text-sm {
+  font-size: 11px;
+}
+
+.account-remove-btn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.account-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--primary, #2563eb);
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
