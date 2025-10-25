@@ -222,7 +222,7 @@ const deleteTrade = useCallback(async (tradeId) => {
     return payload;
   }, []);
 
-  const deleteStrategy = useCallback(async (id) => {
+  const removeStrategy = useCallback(async (id) => {
     const db = await getDB();
     await db.delete('strategies', id);
     setStrategies(prev => prev.filter(s => s.id !== id));
@@ -312,7 +312,7 @@ function normalizeTrade(t) {
   return (
     <JournalCtx.Provider value={{
       ready, trades, saveTrade, deleteTrade, exportToDrive, importFromDrive,
-      strategies, saveStrategy, deleteStrategy 
+      strategies, saveStrategy, removeStrategy
     }}>
       {children}
     </JournalCtx.Provider>

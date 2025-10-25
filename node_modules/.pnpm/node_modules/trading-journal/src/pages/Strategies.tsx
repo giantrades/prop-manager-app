@@ -17,23 +17,37 @@ type Consistency = {
   byItem: Record<string, ConsistencyItem>;
   overall: number | null;
 };
-function computeConsistency(checklist: { id: string; title: string }[] = [], linkedTrades: Trade[] = []): Consistency {
+function computeConsistency(
+  checklist: { id: string; title: string }[] = [],
+  linkedTrades: Trade[] = []
+): Consistency {
+  // 🔹 Monta apenas o checklist da estratégia atual
   const byItem: Record<string, ConsistencyItem> = {};
-  checklist.forEach(it => {
-    byItem[it.id] = { title: it.title, percent: null, trueCount: 0, totalCount: 0 };
+  checklist.forEach((it) => {
+    if (!it || !it.id) return;
+    byItem[it.id] = {
+      title: it.title || "(sem título)",
+      percent: null,
+      trueCount: 0,
+      totalCount: 0,
+    };
   });
 
+  // 🔹 Preenche apenas se o checklist da estratégia tiver sido usado em trades dela
   for (const t of linkedTrades) {
     if (!t.checklistResults) continue;
-    Object.keys(t.checklistResults).forEach(cid => {
-      if (!byItem[cid]) byItem[cid] = { title: cid, percent: null, trueCount: 0, totalCount: 0 };
+    Object.keys(t.checklistResults).forEach((cid) => {
+      // ✅ Só conta se fizer parte do checklist dessa estratégia
+      if (!byItem[cid]) return;
+
       byItem[cid].totalCount += 1;
       if (t.checklistResults[cid]) byItem[cid].trueCount += 1;
     });
   }
 
+  // 🔹 Calcula percentuais por item
   const percents: number[] = [];
-  Object.values(byItem).forEach(it => {
+  Object.values(byItem).forEach((it) => {
     if (it.totalCount === 0) {
       it.percent = null;
     } else {
@@ -42,9 +56,14 @@ function computeConsistency(checklist: { id: string; title: string }[] = [], lin
     }
   });
 
-  const overall = percents.length === 0 ? null : percents.reduce((s, v) => s + v, 0) / percents.length;
+  const overall =
+    percents.length === 0
+      ? null
+      : percents.reduce((s, v) => s + v, 0) / percents.length;
+
   return { byItem, overall };
 }
+
 
 const categoryColors = {
   Futures: 'pink',
@@ -93,27 +112,19 @@ export const StrategyCard = ({ strategy, trades = [], onEdit, onDelete, currency
   }, [JSON.stringify(linkedTrades)]);
 
 const equitySeries = useMemo(() => {
-  const safeNumber = (n: any) =>
-    typeof n === "number" && !isNaN(n) ? n : Number(n) || 0;
+  let acc = 0;
+  const sorted = linkedTrades
+    .filter(t => t.entry_datetime) // ✅ usa o campo certo
+    .sort((a, b) => new Date(a.entry_datetime).getTime() - new Date(b.entry_datetime).getTime());
 
-  const sorted = (linkedTrades || [])
-    .filter((t: any) => t && t.date)
-    .sort(
-      (a: any, b: any) =>
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-  let cumulativePnL = 0;
-  const result = sorted.map((t: any) => {
-    cumulativePnL += safeNumber(t.result_net);
+  return sorted.map(t => {
+    acc += Number(t.result_net) || 0;
     return {
-      entry_datetime: new Date(t.date).toLocaleDateString("pt-BR"),
-      pnl: +cumulativePnL.toFixed(2),
+      entry_datetime: new Date(t.entry_datetime).toLocaleDateString("pt-BR"),
+      pnl: acc,
     };
   });
-
-  return result;
-}, [linkedTrades]);
+}, [JSON.stringify(linkedTrades)]);
 
 
   const tagsArray: string[] = Array.isArray(strategy.tags)
@@ -176,44 +187,7 @@ const consistency = computeConsistency(strategy.checklist || [], linkedTrades);
               <div className="muted text-xs">Break-evens</div>
               <div>{stats.breakevens}</div>
             </div>
-          </div>
-        </div>
-
-{/* Block 2 - descrição + tags + alvo/stop (em coluna) */}
-<div style={{ flex: 1, display:'flex', flexDirection:'column', gap:12 }}> 
-{/* Checklist - percentuais compactos lado a lado */}
-{Object.values(consistency.byItem || {}).length > 0 && (
-  <div style={{ marginBottom: 10 }}>
-    <div className="muted text-xs" style={{ marginBottom: 4 }}>Checklist:</div>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {Object.values(consistency.byItem).map((it, idx) => (
-        <div
-          key={idx}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            fontSize: 13,
-            color: '#ddd',
-            gap: 40,
-          }}
-        >
-          <span>{it.title}</span>
-          <span style={{ color: '#9CA3AF' }}>
-            {it.percent === null ? '—' : `${Math.round(it.percent)}%`}
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-
-  <div>
-    <div style={{ fontWeight:600 }} className="muted">Descrição</div>
-    <div style={{ marginTop:6, lineHeight:1.4 }}>{strategy.description || '—'}</div>
-  </div>
-
-  {/* tags abaixo da descrição */}
+            {/* tags abaixo da descrição */}
   <div>
     <div className="muted text-xs" style={{ marginBottom: 6 }}>Tags</div>
     <div className="flex flex-wrap gap-2">
@@ -224,6 +198,52 @@ const consistency = computeConsistency(strategy.checklist || [], linkedTrades);
       )) }
     </div>
   </div>
+          </div>
+        </div>
+
+{/* Block 2 - descrição + tags + alvo/stop (em coluna) */}
+<div style={{ flex: 1, display:'flex', flexDirection:'column', gap:12 }}> 
+{/* Checklist - percentuais compactos lado a lado */}
+<div style={{ marginBottom: 10 }}>
+  <div className="muted text-xs" style={{ marginBottom: 4 }}>
+    Checklist:
+  </div>
+
+  {strategy.checklist?.length > 0 ? (
+    Object.values(consistency.byItem || {}).length > 0 ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {Object.values(consistency.byItem).map((it, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              fontSize: 13,
+              color: "#ddd",
+              gap: 30, // 👈 Ajuste livre — você pode mudar aqui o espaço entre o nome e a %
+            }}
+          >
+            <span>{it.title || "(sem título)"}</span>
+            <span style={{ color: "#9CA3AF" }}>
+              {it.percent === null ? "—" : `${Math.round(it.percent)}%`}
+            </span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div style={{ color: "#9CA3AF", fontSize: 13 }}>Sem dados ainda</div>
+    )
+  ) : (
+    <div style={{ color: "#9CA3AF", fontSize: 13 }}>Sem checklist</div>
+  )}
+</div>
+
+{/* Descrição */}
+<div> 
+    <div style={{ fontWeight:600 }} className="muted">Descrição</div>
+    <div style={{ marginTop:6, lineHeight:1.4 }}>{strategy.description || '—'}</div>
+  </div>
+
 
   {/* alvo / stop mais abaixo */}
   <div style={{ marginTop: 'auto' }}>
