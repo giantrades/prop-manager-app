@@ -4,6 +4,8 @@ import { useJournal } from '@apps/journal-state';
 import { useCurrency } from '@apps/state';
 import { v4 as uuidv4 } from 'uuid';
 import {getAll, createAccount,getTrades, createTrade, updateTrade, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import RichTextEditor from '../Components/RichTextEditor';
+
 
 type Props = {
   onClose: () => void;
@@ -928,19 +930,21 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
   </div>
 </div>
 
-          {/* Notes */}
-          <div className="card">
-            <h4 className="font-medium mb-4">Observações</h4>
-            <div className="field">
-              <textarea 
-                className="input" 
-                rows={3} 
-                value={form.notes || ''} 
-                onChange={e => setForm({ ...form, notes: e.target.value })}
-                placeholder="Observações sobre o trade..."
-              />
-            </div>
-          </div>
+{/* Notes */}
+<div className="card">
+  <h4 className="font-medium mb-4">📝 Observações</h4>
+  <div className="field">
+    <RichTextEditor
+      value={form.notes || ''}
+      onChange={(content) => setForm({ ...form, notes: content })}
+      placeholder="Escreva suas observações sobre o trade... 
+      
+- Use / para comandos
+- Arraste blocos para reordenar  
+- Cole ou arraste imagens"
+    />
+  </div>
+</div>
 
           {/* Summary */}
  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">

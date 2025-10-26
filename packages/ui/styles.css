@@ -1022,3 +1022,81 @@ tr:hover td { background: rgba(39,48,68,0.24); }
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Adicione ao seu arquivo CSS principal */
+
+.rich-text-editor-wrapper {
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.rich-text-editor-wrapper .bn-container {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+}
+
+.rich-text-editor-wrapper .bn-editor {
+  min-height: 300px;
+  padding: 16px;
+}
+
+.rich-text-editor-wrapper .bn-block-content {
+  color: var(--text) !important;
+  
+}
+
+.rich-text-editor-wrapper .bn-inline-content {
+  caret-color: var(--primary, #2563eb);
+}
+
+/* Placeholder styling */
+.rich-text-editor-wrapper [data-placeholder]::before {
+  color: var(--muted, #6b7280) !important;
+}
+
+/* Drag handle */
+.rich-text-editor-wrapper .bn-drag-handle {
+  background: var(--soft) !important;
+}
+
+.rich-text-editor-wrapper .bn-drag-handle:hover {
+  background: var(--primary, #2563eb) !important;
+}
+
+/* Menus */
+.rich-text-editor-wrapper .bn-menu {
+  background: var(--panel) !important;
+  border: 1px solid var(--soft) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+.rich-text-editor-wrapper .bn-menu-item {
+  color: var(--text) !important;
+}
+
+.rich-text-editor-wrapper .bn-menu-item:hover {
+  background: var(--soft) !important;
+}
+
+/* Images */
+.rich-text-editor-wrapper img {
+  border-radius: 8px;
+  max-width: 100%;
+}
+
+/* Code blocks */
+.rich-text-editor-wrapper pre {
+  background: var(--bg) !important;
+  border: 1px solid var(--soft) !important;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.rich-text-editor-wrapper code {
+  background: var(--soft) !important;
+  color: var(--text) !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

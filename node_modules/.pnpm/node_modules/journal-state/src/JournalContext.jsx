@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { updateAccount as dsUpdateAccount } from '@apps/lib/dataStore.js';
-
+import { useDrive } from '@apps/state/DriveContext';
 
 
 const JournalCtx = createContext(null);
@@ -47,6 +47,7 @@ export default function JournalProvider({ children }) {
   const [trades, setTrades] = useState([]);
   const [strategies, setStrategies] = useState([]);
   const [ready, setReady] = useState(false);
+  const { logged: driveLogged, backup: driveBackup } = useDrive();
 
   useEffect(() => {
     let mounted = true;
@@ -83,6 +84,40 @@ setReady(true);
     })();
     return () => { mounted = false; };
   }, []);
+  // ✅ ADICIONAR ESTE USEEFFECT COMPLETO:
+// 🔹 Backup automático a cada 5 minutos (apenas se logado)
+useEffect(() => {
+  if (!driveLogged) {
+    console.log('ℹ️ Backup automático desabilitado - não conectado ao Drive');
+    return;
+  }
+
+  const interval = setInterval(async () => {
+    try {
+      console.log('🔄 Iniciando backup automático...');
+      const db = await getDB();
+      const allTrades = await db.getAll('trades');
+      const allStrategies = await db.getAll('strategies');
+      
+      const payload = { 
+        trades: allTrades, 
+        strategies: allStrategies,
+        meta: { exportedAt: new Date().toISOString() } 
+      };
+      
+      await driveBackup(payload);
+      console.log('✅ Backup automático concluído');
+    } catch (err) {
+      console.warn('⚠️ Falha no backup automático:', err);
+    }
+  }, 5 * 60 * 1000); // 5 minutos
+
+  console.log('✅ Backup automático ativado (5 minutos)');
+  return () => {
+    clearInterval(interval);
+    console.log('🛑 Backup automático desativado');
+  };
+}, [driveLogged, driveBackup]);
 
 // JournalContext.js
 const saveTrade = useCallback(async (trade) => {
@@ -157,11 +192,6 @@ console.log(`💰 Conta ${acc.name}:`, {
     }
   }
 
-  // 🔹 Exporta automaticamente para o Drive
-  if (typeof exportToDrive === "function") {
-    exportToDrive("journal_backup.json")
-      .catch(e => console.warn("⚠️ Falha ao exportar para o Drive:", e));
-  }
 
   return payload;
 }, []);
@@ -201,11 +231,7 @@ const deleteTrade = useCallback(async (tradeId) => {
     }
   }
 
-  // 🔹 Atualiza backup no Drive
-  if (typeof exportToDrive === "function") {
-    exportToDrive("journal_backup.json")
-      .catch(e => console.warn("⚠️ Falha ao exportar para o Drive:", e));
-  }
+
 }, []);
 
 
@@ -229,35 +255,30 @@ const deleteTrade = useCallback(async (tradeId) => {
   }, []);
 
 
-  const exportToDrive = useCallback(async (filename = 'journal_backup.json') => {
-    try {
-      const db = await getDB();
-      const allTrades = await db.getAll('trades');
-      const allStrategies = await db.getAll('strategies');
-      const allAccounts = await db.getAll('accounts');
-      const allFirms = await db.getAll('firms');
-      const allSettings = await db.getAll('settings');
-      const allPayouts = await db.getAll('payouts');
-      
-      const payload = { 
-          trades: allTrades, 
-          strategies: allStrategies,
-          accounts: allAccounts,
-          settings: allSettings,
-          payouts: allPayouts,
-          meta: { exportedAt: new Date().toISOString() } 
-      };
-      
-      if (isSignedIn && isSignedIn()) {
-        return uploadOrUpdateJSON(filename, payload);
-      } else {
-        return payload;
-      }
-    } catch (err) {
-      console.error('Export failed', err);
-      throw err;
+const exportToDrive = useCallback(async (filename = 'journal_backup.json') => {
+  try {
+    const db = await getDB();
+    const allTrades = await db.getAll('trades');
+    const allStrategies = await db.getAll('strategies');
+    
+    const payload = { 
+      trades: allTrades, 
+      strategies: allStrategies,
+      meta: { exportedAt: new Date().toISOString() } 
+    };
+    
+    if (driveLogged) {
+      await driveBackup(payload);
+      return payload;
+    } else {
+      console.log('ℹ️ Não conectado ao Drive - backup ignorado');
+      return payload;
     }
-  }, []);
+  } catch (err) {
+    console.error('Export failed', err);
+    throw err;
+  }
+}, [driveLogged, driveBackup]);
 
   const importFromDrive = useCallback(async () => {
     try {

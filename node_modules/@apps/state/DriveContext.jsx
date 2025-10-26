@@ -13,7 +13,10 @@ import {
   uploadFile,
   listFiles,
   onSignChange,
+  uploadOrUpdateJSON,
+  downloadLatestJSON, 
 } from "../utils/googleDrive";
+
 
 const DriveContext = createContext(null);
 
@@ -21,6 +24,7 @@ export function DriveProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [logged, setLogged] = useState(false);
   const channel = new BroadcastChannel("drive-sync");
+  const [initializing, setInitializing] = useState(true); 
 
   // ===========================================================
   // 🔹 Inicialização principal do Drive
@@ -35,21 +39,14 @@ export function DriveProvider({ children }) {
         if (!ok) console.warn("⚠️ Falha ao inicializar o gapi");
         setReady(true);
 
-        // 🔹 Restaura token local, se houver
-        const saved = localStorage.getItem("drive-token");
-        if (saved) {
-          try {
-            gapi.client.setToken(JSON.parse(saved));
-            setLogged(true);
-          } catch {
-            console.warn("Token inválido, limpando storage");
-            localStorage.removeItem("drive-token");
-          }
-        }
 
         // 🔹 Estado inicial
         const signed = isSignedIn();
         setLogged(signed);
+        // Estado inicial
+        setInitializing(false);
+
+        console.log(`✅ Google Drive inicializado. Logado: ${signed}`); // ← ADICIONAR
 
         // 🔹 Escuta mudanças internas no login
         onSignChange((status) => {
@@ -93,30 +90,27 @@ export function DriveProvider({ children }) {
   // ===========================================================
   // 🔐 Persistência + Broadcast global de status
   // ===========================================================
-  const persistStatus = (status) => {
-    const token = gapi.client.getToken();
-    if (status && token) {
-      localStorage.setItem("drive-token", JSON.stringify(token));
-    } else {
-      localStorage.removeItem("drive-token");
-    }
-
-    // 🔁 Atualiza outros apps/abas
-    channel.postMessage({ type: "drive-status", logged: status });
-    window.dispatchEvent(
-      new CustomEvent("drive:status-change", { detail: { logged: status } })
-    );
-  };
+const persistStatus = (status) => {
+  channel.postMessage({ type: "drive-status", logged: status });
+  window.dispatchEvent(
+    new CustomEvent("drive:status-change", { detail: { logged: status } })
+  );
+};
 
   // ===========================================================
   // 🔹 Login / Logout (com broadcast imediato)
   // ===========================================================
   const login = useCallback(async () => {
+     // ✅ ADICIONAR ESTAS LINHAS:
+  if (logged) {
+    console.log('ℹ️ Já está logado no Google Drive');
+    return;
+  }
     await signIn();
     persistStatus(true);
     setLogged(true);
     channel.postMessage({ type: "drive-status", logged: true });
-  }, []);
+  }, [logged]);
 
   const logout = useCallback(async () => {
     await signOut();
@@ -128,9 +122,22 @@ export function DriveProvider({ children }) {
   // ===========================================================
   // 🔹 Backup / Listagem
   // ===========================================================
-  const backup = useCallback(async (data) => {
-    return uploadFile("propmanager-backup.json", data);
-  }, []);
+const backup = useCallback(async (data) => {
+  if (!logged) {
+    console.warn('⚠️ Não conectado ao Google Drive - backup ignorado');
+    return null;
+  }
+
+  try {
+    const payload = typeof data === 'string' ? JSON.parse(data) : data;
+    await uploadOrUpdateJSON("propmanager-backup.json", payload);
+    console.log('✅ Backup salvo no Drive');
+    return payload;
+  } catch (error) {
+    console.error('❌ Erro ao fazer backup:', error);
+    throw error;
+  }
+}, [logged]);
 
   const files = useCallback(async () => {
     return listFiles();
@@ -139,18 +146,29 @@ export function DriveProvider({ children }) {
   // ===========================================================
   // 🔹 Carregar backup existente
   // ===========================================================
-  const loadBackup = useCallback(async () => {
-    try {
-      const files = await listFiles("propmanager-backup.json");
-      if (!files?.length) return null;
-      const fileId = files[0].id;
-      const res = await gapi.client.drive.files.get({ fileId, alt: "media" });
-      return JSON.parse(res.body);
-    } catch (e) {
-      console.error("Erro ao baixar backup:", e);
+const loadBackup = useCallback(async () => {
+  if (!logged) {
+    console.warn('❌ Você precisa estar conectado ao Google Drive');
+    alert('❌ Você precisa estar conectado ao Google Drive');
+    return null;
+  }
+
+  try {
+    const data = await downloadLatestJSON("propmanager-backup.json");
+    
+    if (!data) {
+      alert('ℹ️ Nenhum backup encontrado no Drive');
       return null;
     }
-  }, []);
+
+    console.log('✅ Backup carregado do Drive');
+    return data;
+  } catch (error) {
+    console.error('❌ Erro ao baixar backup:', error);
+    alert('Erro ao carregar backup do Drive');
+    return null;
+  }
+}, [logged]);
 
   // ===========================================================
   // 🔚 Render
@@ -160,6 +178,7 @@ export function DriveProvider({ children }) {
       value={{
         ready,
         logged,
+        initializing,
         login,
         logout,
         backup,
