@@ -483,35 +483,87 @@ useEffect(() => {
           <td colSpan={11} style={{ padding: 12, background: '#071023' }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               {t.PartialExecutions.map((e: any, i: number) => (
-                <div
-                  key={e.id || i}
-                  style={{
-                    minWidth: 170,
-                    maxWidth: 260,
-                    padding: 12,
-                    borderRadius: 8,
-                    background: '#0b1624',
-                    border: '1px solid rgba(255,255,255,0.03)'
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Exec #{i + 1} </div>
-                  <div className="muted" style={{ fontSize: 13 }}> 
-                    Entrada: <strong>{(e.entryPrice ?? e.entry_price ?? 0).toFixed?.(2) ?? e.entryPrice}</strong>
-                  </div>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    Saída: <strong>{(e.exitPrice ?? e.exit_price ?? 0).toFixed?.(2) ?? e.exitPrice}</strong>
-                  </div>
-                  
-                  <div className="muted" style={{ fontSize: 13 }}> 
-                    Vol: <strong>{(e.volume ?? 0).toLocaleString()}</strong>
-                  </div>
-                  <div style={{ height: 6 }} />
-                  <div  style={{ fontSize: 15 }}>
-                    PnL: <strong>{fmt( (e.result_gross ?? e.result_net ?? 0) )}</strong>
-                  </div>
-                  <div style={{ height: 6 }} />
-                  <div className="muted" style={{ fontSize: 9 }}>{e.entry_datetime ? new Date(e.entry_datetime).toLocaleString('pt-BR') : '-'}  →  {e.exit_datetime ? new Date(e.exit_datetime).toLocaleString('pt-BR') : '-'}</div>
-                </div>
+ <div
+  key={e.id || i}
+  style={{
+    minWidth: 240,
+    maxWidth: 280,
+    padding: 12,
+    borderRadius: 8,
+    background: '#0b1624',
+    border: '1px solid rgba(255,255,255,0.03)',
+  }}
+>
+  <div style={{ fontWeight: 700, marginBottom: 8 }}>Exec #{i + 1}</div>
+
+  {/* Linha 1 - Entrada + TP */}
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      fontSize: 13,
+      color: '#cbd5e1',
+      marginBottom: 2,
+    }}
+  >
+    <div>
+      Entrada: <strong>{(e.entryPrice ?? e.entry_price ?? 0).toFixed?.(2)}</strong>
+    </div>
+    <div style={{ opacity: 0.9 }}>
+      TP: <strong>{(e.take_profit ?? 0).toFixed(2)}</strong>
+    </div>
+  </div>
+
+  {/* Linha 2 - Saída + SL */}
+  <div
+    style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      fontSize: 13,
+      color: '#cbd5e1',
+      marginBottom: 2,
+    }}
+  >
+    <div>
+      Saída: <strong>{(e.exitPrice ?? e.exit_price ?? 0).toFixed?.(2)}</strong>
+    </div>
+    <div style={{ opacity: 0.9 }}>
+      SL: <strong>{(e.stop_loss ?? 0).toFixed(2)}</strong>
+    </div>
+  </div>
+
+  {/* Volume */}
+  <div className="muted" style={{ fontSize: 13 }}>
+    Vol: <strong>{(e.volume ?? 0).toLocaleString()}</strong>
+  </div>
+
+  {/* PnL */}
+  <div style={{ height: 6 }} />
+  <div style={{ fontSize: 15 }}>
+    PnL: <strong>{fmt(e.result_gross ?? e.result_net ?? 0)}</strong>
+  </div>
+
+  {/* Datas */}
+  <div
+    className="muted"
+    style={{
+      fontSize: 9,
+      marginTop: 6,
+      opacity: 0.8,
+    }}
+  >
+    {e.entry_datetime
+      ? new Date(e.entry_datetime).toLocaleString('pt-BR')
+      : '-'}{' '}
+    →{' '}
+    {e.exit_datetime
+      ? new Date(e.exit_datetime).toLocaleString('pt-BR')
+      : '-'}
+  </div>
+</div>
+
               ))}
             </div>
           </td>

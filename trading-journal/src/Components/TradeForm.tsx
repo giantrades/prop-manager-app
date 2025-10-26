@@ -252,29 +252,7 @@ if (initialRiskPriceDiff > 0) {
     form.slippage,
   ]);
   
- const save = () => {
-    // ... (Mesma lógica de recalculo que o useEffect para salvar)
-    const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
-    const result_gross = form.result_gross || 0;
-    const entry = form.entry_price || 0;
-    const stop = form.stop_loss_price || 0;
-    const riskInDollars = (form.volume || 0) * Math.abs(entry - stop);
-    const result_R = riskInDollars > 0 ? result_gross / riskInDollars : 0;
-    
-    const tradeToSave: Trade = {
-      ...form as Trade,
-      // ... (id, accounts, tags)
-      result_net: result_gross - costs,
-      result_R: result_R,
-      // @ts-ignore: Garante a remoção de campos indesejados (se existirem)
-      risk_per_R: undefined, 
-    };
-    
-    saveTrade(tradeToSave);
-    onClose();
-  };
-
-
+ 
   // 🧩 Execuções parciais
 const addPartial = () => {
   setForm(f => ({
@@ -321,110 +299,70 @@ const updatePartial = (
 
 
 const handleSave = async () => {
-  // Validações
-  if (!form.asset?.trim()) {
-    alert('Asset é obrigatório');
-    return;
+  try {
+    // 🔹 Recalcula antes de salvar
+    recalc();
+
+    // 🔹 Validações
+    if (!form.asset?.trim()) return alert('Asset é obrigatório');
+    if (!selectedAccounts.length) return alert('Selecione ao menos uma conta');
+    if (!form.entry_datetime) return alert('Entry Date & Time é obrigatório');
+    if (form.exit_datetime && form.exit_datetime < form.entry_datetime)
+      return alert('Exit Date não pode ser anterior à Entry Date');
+
+    // 🔹 Monta payload de contas
+    const accountsPayload = selectedAccounts.map(id => ({
+      accountId: id,
+      weight: accountWeights[id] ?? 1 / selectedAccounts.length,
+    }));
+
+    const primaryAccountId = selectedAccounts[0];
+
+    // 🔹 Atualiza médias e totais com base nas execuções parciais
+    let updatedForm = { ...form };
+    if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
+      const totalVol = updatedForm.PartialExecutions.reduce((sum, e) => sum + (e.volume || 0), 0);
+      const totalGross = updatedForm.PartialExecutions.reduce((sum, e) => sum + (Number(e.result_gross) || 0), 0);
+      const avgEntry =
+        totalVol > 0
+          ? updatedForm.PartialExecutions.reduce((sum, e) => sum + (e.entryPrice * e.volume), 0) / totalVol
+          : 0;
+      const avgExit =
+        totalVol > 0
+          ? updatedForm.PartialExecutions.reduce((sum, e) => sum + (e.exitPrice * e.volume), 0) / totalVol
+          : 0;
+
+      updatedForm.entry_price = avgEntry;
+      updatedForm.exit_price = avgExit;
+      updatedForm.result_gross = totalGross;
+      updatedForm.volume = totalVol;
+    }
+
+    // 🔹 Prepara tradeData final
+    const tradeData = {
+      ...updatedForm,
+      id: editing?.id || crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+      entry_datetime: updatedForm.entry_datetime,
+      exit_datetime: updatedForm.exit_datetime || null,
+      accounts: accountsPayload,
+      accountId: primaryAccountId,
+      accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
+      accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
+      tf_signal: updatedForm.tf_signal || '1h',
+      checklistResults: updatedForm.checklistResults ?? {},
+    };
+
+    console.log('💾 Salvando trade:', tradeData);
+
+    await saveTrade(tradeData);
+
+    onClose();
+  } catch (err) {
+    console.error('❌ Erro ao salvar trade:', err);
+    alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
   }
-  if (!selectedAccounts.length) {
-    alert('Selecione ao menos uma conta');
-    return;
-  }
-  if (!form.entry_datetime) {
-    alert("Entry Date & Time é obrigatório");
-    return;
-  }
-  if (form.exit_datetime && form.exit_datetime < form.entry_datetime) {
-    alert("Exit Date não pode ser anterior à Entry Date");
-    return;
-  }
-
-  // Garante shape accounts: [{accountId, weight}]
-  const accountsPayload = selectedAccounts.map(id => {
-    const defaultW = accountWeights[id];
-    const weight = (typeof defaultW === 'number' && !isNaN(defaultW)) ? defaultW : 1;
-    return { accountId: id, weight };
-  });
-
-  const primaryAccountId = selectedAccounts[0];
-
-  // 🔹 Processa Execuções Parciais (se existirem)
-  let updatedForm = { ...form };
-  // 🔹 Processa Execuções Parciais
-if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
-  const totalVol = updatedForm.PartialExecutions.reduce((acc, e) => acc + (e.volume || 0), 0);
-  
-  if (totalVol > 0) {
-    const avgEntry = updatedForm.PartialExecutions.reduce(
-      (acc, e) => acc + (e.entryPrice * e.volume), 0
-    ) / totalVol;
-
-    const avgExit = updatedForm.PartialExecutions.reduce(
-      (acc, e) => acc + (e.exitPrice * e.volume), 0
-    ) / totalVol;
-
-    const totalGross = updatedForm.PartialExecutions.reduce(
-      (acc, e) => acc + (Number(e.result_gross) || 0), 0
-    );
-
-    // ✅ Sempre sobrescreve com valores calculados
-    updatedForm.entry_price = avgEntry;
-    updatedForm.exit_price = avgExit;
-    updatedForm.result_gross = totalGross;
-    updatedForm.volume = totalVol;
-  }
-}
-// 🔹 Calcula P&L Gross total das execuções (ANTES de montar tradeData)
-const totalGross = (updatedForm.PartialExecutions || []).reduce(
-  (sum, exec) => sum + (Number(exec.result_gross) || 0),
-  0
-);
-updatedForm.result_gross = totalGross; // ← Atualiza o form com o valor calculado
-  // 🔹 Monta o tradeData FINAL
-  const tradeData = {
-    ...updatedForm,
-    id: editing?.id,
-    // ✅ CRÍTICO: Mantém ISO completo (não fatiar!)
-    entry_datetime: updatedForm.entry_datetime,
-    exit_datetime: updatedForm.exit_datetime || null,
-    isBreakeven: !!updatedForm.isBreakeven,
-    accounts: accountsPayload,
-    accountId: primaryAccountId,
-    accountName: accounts.find(a => a.id === primaryAccountId)?.name || '',
-    accountType: accounts.find(a => a.id === primaryAccountId)?.type || 'Unknown',
-    tf_signal: updatedForm.tf_signal || '1h',
-    // incluir checklistResults
-    checklistResults: updatedForm.checklistResults ?? form.checklistResults ?? {},
-  };
-
-
-  // 🔹 Salva trade
- try {
-  if (!tradeData.id) {
-  tradeData.id = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-}
- console.log('🚀 tradeData final:', tradeData);
-  const savedTrade = await saveTrade(tradeData);
-  
-console.log('💾 Enviando para saveTrade:', {
-  result_gross: tradeData.result_gross,
-  result_net: tradeData.result_net,
-  commission: tradeData.commission,
-  fees: tradeData.fees,
-  swap: tradeData.swap,
-  PartialExecutions: tradeData.PartialExecutions,
-});
-// 🔹 Salva trade (saveTrade já cuida de atualizar as contas)
-  await saveTrade(tradeData);
-
-  onClose();
-} catch (err) {
-  console.error("Erro ao salvar trade:", err);
-  alert("Erro ao salvar trade: " + (err?.message || "desconhecido"));
-}
-
-
 };
+
 
 
 
