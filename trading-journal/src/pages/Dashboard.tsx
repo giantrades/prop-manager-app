@@ -874,17 +874,22 @@ const TimeframeBar = ({ data = [], fmt }: any) => {
             />
 
             {/* linha média */}
-            <ReferenceLine
-              y={meanPnL}
-              stroke="#60a5fa"
-              strokeDasharray="4 4"
-              label={{
-                value: `Mean ${fmt ? fmt(meanPnL) : `$${meanPnL.toFixed(2)}`}`,
-                position: "top",
-                fill: "#9fbff6",
-                fontSize: 12,
-              }}
-            />
+           <ReferenceLine
+  y={meanPnL}
+  stroke="#60a5fa"
+  strokeWidth={2}
+  strokeDasharray="5 5"
+  label={{
+    value: `Mean ${fmt ? fmt(meanPnL) : `$${meanPnL.toFixed(2)}`}`,
+    position: "top",
+    fill: "#ffffff",
+    fontSize: 12,
+    fontWeight: 600,
+    style: {
+      textShadow: '0 0 8px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.9)',
+    }
+  }}
+/>
           </ComposedChart>
         </ResponsiveContainer>
       </div>
