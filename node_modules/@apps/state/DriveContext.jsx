@@ -1,22 +1,5 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-} from "react";
-import {
-  initGoogleDrive,
-  signIn,
-  signOut,
-  isSignedIn,
-  uploadFile,
-  listFiles,
-  onSignChange,
-  uploadOrUpdateJSON,
-  downloadLatestJSON, 
-} from "../utils/googleDrive";
-
+import React, {createContext,useContext,useEffect,useState,useCallback,} from "react";
+import {initGoogleDrive,signIn,signOut,isSignedIn,uploadFile,listFiles,onSignChange,uploadOrUpdateJSON,downloadLatestJSON, } from "../utils/googleDrive";
 
 const DriveContext = createContext(null);
 
@@ -40,16 +23,38 @@ export function DriveProvider({ children }) {
         setReady(true);
 
 
-        // 🔹 Estado inicial
-        const signed = isSignedIn();
-        setLogged(signed);
-        // Estado inicial
-        setInitializing(false);
+const savedStatus = localStorage.getItem('drive-logged');
+const signed = isSignedIn();
 
-        console.log(`✅ Google Drive inicializado. Logado: ${signed}`); // ← ADICIONAR
-        // 🔹 Se estiver logado, notifica outros apps imediatamente
-        if (signed) {
-         persistStatus(true);}
+// Se o gapi diz que está logado OU o localStorage indica que está
+const actualStatus = signed || savedStatus === 'true';
+
+if (actualStatus && !signed) {
+  // Tenta restaurar token do localStorage
+  const savedToken = localStorage.getItem('drive-token');
+  if (savedToken) {
+    try {
+      gapi.client.setToken(JSON.parse(savedToken));
+      setLogged(true);
+      console.log('✅ Token restaurado do localStorage');
+    } catch (e) {
+      console.warn('⚠️ Token inválido no localStorage');
+      localStorage.removeItem('drive-token');
+      localStorage.removeItem('drive-logged');
+      setLogged(false);
+    }
+  }
+} else {
+  setLogged(actualStatus);
+}
+
+setInitializing(false);
+console.log(`✅ Google Drive inicializado. Logado: ${actualStatus}`);
+
+// Notifica outros apps
+if (actualStatus) {
+  persistStatus(true);
+}
 
         // 🔹 Escuta mudanças internas no login
         onSignChange((status) => {
@@ -108,10 +113,52 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, [ready, logged]);
+// ===========================================================
+// 🔁 NOVO: Listener para mudanças no localStorage (sincroniza entre apps)
+// ===========================================================
+useEffect(() => {
+  const handleStorageChange = (e) => {
+    if (e.key === 'drive-logged') {
+      const newStatus = e.newValue === 'true';
+      console.log('🔄 localStorage mudou, sincronizando:', newStatus);
+      setLogged(newStatus);
+      
+      // Se ficar logado, restaura o token
+      if (newStatus) {
+        const savedToken = localStorage.getItem('drive-token');
+        if (savedToken && gapi?.client) {
+          try {
+            gapi.client.setToken(JSON.parse(savedToken));
+          } catch (e) {
+            console.warn('⚠️ Erro ao restaurar token');
+          }
+        }
+      }
+    }
+  };
+
+  window.addEventListener('storage', handleStorageChange);
+  return () => window.removeEventListener('storage', handleStorageChange);
+}, []);
   // ===========================================================
   // 🔐 Persistência + Broadcast global de status
   // ===========================================================
 const persistStatus = (status) => {
+  // Salva no localStorage
+  localStorage.setItem('drive-logged', String(status));
+  
+  // Salva o token se estiver logado
+  if (status) {
+    const token = gapi?.client?.getToken();
+    if (token) {
+      localStorage.setItem('drive-token', JSON.stringify(token));
+    }
+  } else {
+    localStorage.removeItem('drive-token');
+    localStorage.removeItem('drive-logged');
+  }
+  
+  // Notifica outras abas/apps
   channel.postMessage({ type: "drive-status", logged: status });
   window.dispatchEvent(
     new CustomEvent("drive:status-change", { detail: { logged: status } })
