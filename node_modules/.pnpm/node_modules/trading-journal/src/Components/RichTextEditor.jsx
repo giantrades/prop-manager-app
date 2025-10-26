@@ -42,5 +42,5 @@ export default function RichTextEditor({ value, onChange, placeholder = "Escreva
         data-theming-css-demo
       />
     </div>
-  );
+  );''
 }

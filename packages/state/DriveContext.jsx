@@ -47,9 +47,13 @@ export function DriveProvider({ children }) {
         setInitializing(false);
 
         console.log(`✅ Google Drive inicializado. Logado: ${signed}`); // ← ADICIONAR
+        // 🔹 Se estiver logado, notifica outros apps imediatamente
+        if (signed) {
+         persistStatus(true);}
 
         // 🔹 Escuta mudanças internas no login
         onSignChange((status) => {
+          console.log('🔄 Status de login mudou:', status);
           setLogged(status);
           persistStatus(status);
         });
@@ -57,6 +61,7 @@ export function DriveProvider({ children }) {
         // 🔹 Escuta mensagens vindas de outro app/aba
         channel.onmessage = (e) => {
           if (e.data?.type === "drive-status") {
+            console.log('📡 Sincronizando status entre apps:', e.data.logged);
             setLogged(e.data.logged);
           }
         };
@@ -86,7 +91,23 @@ export function DriveProvider({ children }) {
       window.removeEventListener("drive:status-change", handleDriveStatus);
     };
   }, []);
+// ===========================================================
+// 🔁 Verificação periódica de sincronização (fallback)
+// ===========================================================
+useEffect(() => {
+  if (!ready) return;
 
+  const interval = setInterval(() => {
+    const currentStatus = isSignedIn();
+    if (currentStatus !== logged) {
+      console.log('🔄 Ressincronizando status:', currentStatus);
+      setLogged(currentStatus);
+      persistStatus(currentStatus);
+    }
+  }, 3000); // Verifica a cada 3 segundos
+
+  return () => clearInterval(interval);
+}, [ready, logged]);
   // ===========================================================
   // 🔐 Persistência + Broadcast global de status
   // ===========================================================
@@ -101,22 +122,32 @@ const persistStatus = (status) => {
   // 🔹 Login / Logout (com broadcast imediato)
   // ===========================================================
   const login = useCallback(async () => {
-     // ✅ ADICIONAR ESTAS LINHAS:
+    
   if (logged) {
     console.log('ℹ️ Já está logado no Google Drive');
     return;
   }
+     
+  try {
+    console.log('🔐 Iniciando login...'); // ← ADICIONAR
     await signIn();
-    persistStatus(true);
     setLogged(true);
-    channel.postMessage({ type: "drive-status", logged: true });
-  }, [logged]);
+    persistStatus(true);
+    console.log('✅ Login realizado com sucesso'); // ← ADICIONAR
+  } catch (error) {
+    console.error('❌ Erro no login:', error); // ← ADICIONAR
+  }
+}, [logged]);
 
   const logout = useCallback(async () => {
+    try {
     await signOut();
-    persistStatus(false);
     setLogged(false);
-    channel.postMessage({ type: "drive-status", logged: false });
+    persistStatus(false);
+    console.log('✅ Logout realizado');
+  } catch (error) {
+    console.error('❌ Erro no logout:', error);
+  }
   }, []);
 
   // ===========================================================
