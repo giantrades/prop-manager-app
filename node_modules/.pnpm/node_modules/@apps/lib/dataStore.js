@@ -312,6 +312,41 @@ function calculateMetric(type, trades, accounts, config = {}) {
     case 'profit':
       return relevantTrades.reduce((sum, t) => sum + (Number(t.result_net) || 0), 0)
 
+    case 'profitWithConsistency': {
+  const consistencyLimit = Number(config.consistencyLimit || 50); // %
+  const targetProfit = Number(config.targetValue || 0);
+
+  // 🔹 agrupa lucros diários
+  const dailyProfits = {};
+  for (const t of relevantTrades) {
+    const d = (t.date || '').split('T')[0];
+    const profit = Number(t.result_net) || 0;
+    dailyProfits[d] = (dailyProfits[d] || 0) + profit;
+  }
+
+  const values = Object.values(dailyProfits);
+  const totalProfit = values.reduce((a, b) => a + b, 0);
+  const maxDayProfit = Math.max(0, ...values);
+  const percent = totalProfit > 0 ? (maxDayProfit / totalProfit) * 100 : 0;
+
+  // 🔹 progresso parcial (lucro e consistência)
+  const profitProgress = targetProfit > 0 ? Math.min(100, (totalProfit / targetProfit) * 100) : 0;
+  const consistencyProgress = percent > 0 ? Math.min(100, (consistencyLimit / percent) * 100) : 100;
+
+  // 🔹 progresso total ponderado
+  const progress = Math.min(100, (profitProgress * 0.6) + (consistencyProgress * 0.4));
+
+  return {
+    totalProfit,
+    percent,              // % do maior dia
+    consistencyLimit,
+    profitProgress,
+    consistencyProgress,
+    progress,
+    completed: progress >= 100,
+  };
+}
+
     case 'tradeCount':
       return relevantTrades.length
 
@@ -380,8 +415,21 @@ export function getGoalProgress(goalId) {
       }
 
       // Calcula métrica atual
-      const currentValue = calculateMetric(sub.type, trades, accounts, config);
-      const progress = sub.targetValue > 0 ? Math.min(100, (currentValue / sub.targetValue) * 100) : 0;
+     const metricResult = calculateMetric(sub.type, trades, accounts, config);
+let currentValue, progress;
+
+if (metricResult && typeof metricResult === "object" && "progress" in metricResult) {
+  // Caso profitWithConsistency (ou futuros tipos compostos)
+  currentValue = metricResult.totalProfit || 0;
+  progress = metricResult.progress || 0;
+} else {
+  currentValue = metricResult || 0;
+  progress =
+    sub.targetValue > 0
+      ? Math.min(100, (currentValue / sub.targetValue) * 100)
+      : 0;
+}
+
 
       // 🔹 Cálculo dos dias ativos (subgoal individual)
       let daysActive = 0;
@@ -463,8 +511,20 @@ export function getGoalProgress(goalId) {
 
   // 🔹 SE FOR GOAL SIMPLES (sem subgoals)
   const cfg = { ...goal };
-  const currentValue = calculateMetric(goal.type, trades, accounts, cfg);
-  const progress = goal.targetValue > 0 ? Math.min(100, (currentValue / goal.targetValue) * 100) : 0;
+  const result = calculateMetric(goal.type, trades, accounts, cfg);
+let currentValue, progress;
+
+// se o cálculo retornar objeto (caso do profitWithConsistency)
+if (result && typeof result === "object" && "progress" in result) {
+  currentValue = result.totalProfit || 0;
+  progress = result.progress || 0;
+} else {
+  currentValue = result || 0;
+  progress = goal.targetValue > 0
+    ? Math.min(100, (currentValue / goal.targetValue) * 100)
+    : 0;
+}
+
 
   return {
     currentValue,

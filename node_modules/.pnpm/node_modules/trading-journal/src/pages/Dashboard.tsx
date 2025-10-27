@@ -1,4 +1,4 @@
-import React, { useMemo,useEffect, useState } from "react";
+import React, { useMemo,useEffect, useState, useRef } from "react";
 import {ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, Legend,BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, Scatter, ScatterChart, ComposedChart, ReferenceLine} from "recharts";
 import { useJournal } from "@apps/journal-state";
 import { useCurrency } from "@apps/state";
@@ -45,6 +45,7 @@ function useIntegratedData() {
 useEffect(() => {
   setAccounts(getAll().accounts || []);
 }, []);
+
   
   // Map de contas por ID para facilitar lookup
   const accountsById = useMemo(() => {
@@ -1296,6 +1297,29 @@ export default function Dashboard() {
   const [timeframeFilter, setTimeframeFilter] = useState<string>("");
   const [rangeFilter, setRangeFilter] = useState<string>("all");
   const [strategyFilter, setStrategyFilter] = useState<string>("");
+  const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(["live", "funded"]); const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  // ref para o dropdown wrapper
+const statusDropdownRef = useRef<HTMLDivElement | null>(null);
+
+// fecha ao clicar fora
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!statusDropdownRef.current) return;
+    if (!statusDropdownRef.current.contains(e.target as Node)) {
+      setStatusDropdownOpen(false);
+    }
+  }
+  if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [statusDropdownOpen]);
+ 
+  // Pega todos os status únicos das contas disponíveis 
+const accountStatuses = useMemo<string[]>(() => {
+  const all = (accounts || [])
+    .map((a) => a.status?.toLowerCase() || "")
+    .filter((s): s is string => !!s);
+  return Array.from(new Set(all));
+}, [accounts]);
 
   // 🟩 Novo filtro de conta (busca e seleção)
 const [searchAccount, setSearchAccount] = useState("");
@@ -1318,17 +1342,35 @@ const visibleAccounts = useMemo(() => {
 }, [accounts, categoryFilter, searchAccount]);
 
 // 🔸 Contas e trades filtrados pela conta selecionada
+// 🔹 Contas filtradas por categoria, conta selecionada e status
 const filteredAccounts = useMemo(() => {
+  let accs = accounts || [];
+
+  // Se tem conta selecionada, ela tem prioridade
   if (selectedAccount) return [selectedAccount];
-  if (!categoryFilter) return accounts;
-  return accounts.filter(acc => acc.type === categoryFilter);
-}, [accounts, categoryFilter, selectedAccount]);
+
+  // Filtro de categoria
+  if (categoryFilter) {
+    accs = accs.filter(a => a.type === categoryFilter);
+  }
+
+  // ✅ Filtro de status (novo)
+  if (accountStatusFilter.length > 0) {
+    accs = accs.filter(a =>
+      accountStatusFilter.includes(a.status?.toLowerCase())
+    );
+  }
+
+  return accs;
+}, [accounts, categoryFilter, selectedAccount, accountStatusFilter]);
+
 
 // 🔹 Filtra trades e contas com base na conta selecionada
+// 🔹 Filtra trades com base nos filtros combinados
 const filteredTrades = useMemo(() => {
   let out = trades.slice();
 
-  // Filtro de categoria, timeframe e estratégia (já existentes)
+  // Categoria, timeframe e estratégia
   if (categoryFilter)
     out = out.filter((t) => (t.accountType || "Unknown") === categoryFilter);
   if (timeframeFilter)
@@ -1345,16 +1387,9 @@ const filteredTrades = useMemo(() => {
     out = out.filter((t) => new Date(t.entry_datetime) >= cutoff);
   }
 
-  // ✅ Filtro adicional: conta selecionada
-  if (selectedAccount) {
-    out = out.filter(
-      (t) =>
-        t.accountId === selectedAccount.id ||
-        t.accountName === selectedAccount.name ||
-        (Array.isArray(t.accounts) &&
-          t.accounts.some((a) => a.accountId === selectedAccount.id))
-    );
-  }
+  // ✅ Filtro adicional: conta selecionada OU status filtrado
+  const allowedIds = filteredAccounts.map(a => a.id);
+  out = out.filter((t) => allowedIds.includes(t.accountId));
 
   return out;
 }, [
@@ -1363,7 +1398,7 @@ const filteredTrades = useMemo(() => {
   timeframeFilter,
   strategyFilter,
   rangeFilter,
-  selectedAccount,
+  filteredAccounts,
 ]);
 
 
@@ -1464,6 +1499,122 @@ const filteredTrades = useMemo(() => {
               <option value="">All Strategies</option>
               {strategies.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+{/* 🔽 Filtro de Status da Conta */}
+<div style={{ position: 'relative' }} ref={statusDropdownRef}>
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+    className="input"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      minWidth: 180,
+      cursor: "pointer"
+    }}
+  >
+    {accountStatusFilter && accountStatusFilter.length > 0
+      ? `Status: ${accountStatusFilter.join(", ")}`
+      : "Filtrar Status"}
+    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+  </button>
+
+  {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+    <div
+      className="card"
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: 0,
+        zIndex: 9999,
+        background: "var(--card-bg, #1e1f2b)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        minWidth: 200,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        {accountStatuses.map((status) => {
+          const st = String(status || '');
+          const checked = accountStatusFilter.includes(st);
+          return (
+            <label
+              key={st}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 4px",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#e6e6e9",
+                textTransform: "capitalize",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? Array.from(new Set([...accountStatusFilter, st]))
+                    : accountStatusFilter.filter(s => s !== st);
+                  setAccountStatusFilter(next);
+                }}
+                style={{ width: 16, height: 16 }}
+              />
+              <span>{st}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(["live", "funded"])}
+        >
+          Resetar padrão
+        </button>
+
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+        >
+          Marcar todos
+        </button>
+      </div>
+    </div>
+  )}
+
+  {/* se quiser um fallback indicando que não há status */}
+  {statusDropdownOpen && (!accountStatuses || accountStatuses.length === 0) && (
+    <div
+      className="card"
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: 0,
+        zIndex: 9999,
+        background: "var(--card-bg, #1e1f2b)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        minWidth: 200,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ color: '#bbb' }}>Nenhum status disponível</div>
+    </div>
+  )}
+</div>
+
+
 {/* 🔍 Account Search + Selected Account Display */}
 <div style={{ position: "relative", minWidth: 260 }} className="account-search-container">
   <input

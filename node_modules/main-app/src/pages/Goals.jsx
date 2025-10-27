@@ -324,6 +324,12 @@ const [isFading, setIsFading] = useState(false)
 </span>
             <span className="muted">Período: <strong>{periodLabels[goal.period] || goal.period}</strong></span>
             <span className="muted">Conta(s): <strong>{accountDisplay}</strong></span>
+            {goal.type === 'profitWithConsistency' && (
+  <span className="muted">
+    Consistência Máx: <strong>{goal.consistencyLimit ?? 0}%</strong>
+  </span>
+)}
+
             {!goal.perpetual && goal.deadline && (
               <span className="muted">Prazo: <strong>{new Date(goal.deadline).toLocaleDateString()}</strong></span>
             )}
@@ -569,255 +575,343 @@ const addSubGoal = () => {
     onSave(form)
   }
 
-  return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-content">
-        <button className="modal-close" onClick={onClose}>×</button>
-        <h2>{goal ? 'Editar Meta' : 'Nova Meta'}</h2>
-
-        <div className="field">
-          <label>Título</label>
-          <input className="input" value={form.title} onChange={e => setForm({...form, title: e.target.value})}/>
-        </div>
-        <div className="field">
-  <label>Tag / Categoria</label>
-  <div className="flex items-center gap-2 mb-2">
-    <input
-      className="input"
-      list="tags-list"
-      placeholder="Digite ou selecione uma tag (ex: Pessoal, Payout...)"
-      value={form.tag.name}
-      onChange={(e) => {
-        const value = e.target.value
-        const existing = availableTags.find(t => t.name === value)
-        if (existing) {
-          setForm({ ...form, tag: existing })
-        } else {
-          setForm({ ...form, tag: { name: value, color: form.tag.color || '#6d4aff' } })
-        }
-      }}
-      style={{ flex: 1 }}
-    />
-    <datalist id="tags-list">
-      {availableTags.map(t => (
-        <option key={t.id} value={t.name} />
-      ))}
-    </datalist>
-
-    <input
-      type="color"
-      value={form.tag.color || '#6d4aff'}
-      onChange={(e) =>
-        setForm({ ...form, tag: { ...form.tag, color: e.target.value } })
-      }
-      title="Escolha uma cor"
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: 8,
-        cursor: 'pointer',
-        border: 'none',
-      }}
-    />
-  </div>
-
-  <button
-    className="btn ghost small"
-    onClick={() => {
-      const name = form.tag.name.trim()
-      if (!name) return alert('Digite o nome da tag para salvar.')
-      const newTag = createTag(form.tag)
-      setAvailableTags((prev) =>
-        prev.some((t) => t.id === newTag.id)
-          ? prev
-          : [...prev, newTag]
-      )
-      alert(`✅ Tag "${newTag.name}" criada e salva.`)
-    }}
+return (
+  <div
+    className="goals-modal-overlay"
+    onClick={(e) => e.target === e.currentTarget && onClose()}
   >
-    💾 Salvar nova tag
-  </button>
+    <div className="goals-modal-content">
+      {/* HEADER */}
+      <div className="goals-modal-header">
+        <h2>{goal ? "Editar Meta" : "Nova Meta"}</h2>
+        <button className="goals-modal-close" onClick={onClose}>
+          ×
+        </button>
+      </div>
 
-  <p className="muted small mt-1">
-    Digite para criar uma nova tag ou selecione uma existente.  
-    A cor será usada na borda e hover do card.
-  </p>
+      {/* TÍTULO */}
+      <div className="goals-field">
+        <label>Título</label>
+        <input
+          className="goals-input"
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
+      </div>
+
+      {/* TAG / CATEGORIA */}
+      <div className="goals-tag-section">
+        <div className="goals-tag-input-group">
+          <input
+            className="goals-input"
+            list="tags-list"
+            placeholder="Digite ou selecione uma tag (ex: Pessoal, Payout...)"
+            value={form.tag.name}
+            onChange={(e) => {
+              const value = e.target.value;
+              const existing = availableTags.find((t) => t.name === value);
+              if (existing) {
+                setForm({ ...form, tag: existing });
+              } else {
+                setForm({
+                  ...form,
+                  tag: { name: value, color: form.tag.color || "#6d4aff" },
+                });
+              }
+            }}
+            style={{ flex: 1 }}
+          />
+          <datalist id="tags-list">
+            {availableTags.map((t) => (
+              <option key={t.id} value={t.name} />
+            ))}
+          </datalist>
+          <input
+            type="color"
+            value={form.tag.color || "#6d4aff"}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                tag: { ...form.tag, color: e.target.value },
+              })
+            }
+            title="Escolha uma cor"
+            className="goals-color-picker"
+          />
         </div>
 
-        <div className="field">
-          <label>Descrição</label>
-          <textarea className="input" value={form.description} onChange={e => setForm({...form, description: e.target.value})}/>
-        </div>
+        <button
+          className="goals-btn goals-btn-ghost"
+          onClick={() => {
+            const name = form.tag.name.trim();
+            if (!name) return alert("Digite o nome da tag para salvar.");
+            const newTag = createTag(form.tag);
+            setAvailableTags((prev) =>
+              prev.some((t) => t.id === newTag.id)
+                ? prev
+                : [...prev, newTag]
+            );
+            alert(`✅ Tag "${newTag.name}" criada e salva.`);
+          }}
+        >
+          💾 Salvar nova tag
+        </button>
+        <p className="goals-hint">
+          Digite para criar uma nova tag ou selecione uma existente. A cor será
+          usada na borda e hover do card.
+        </p>
+      </div>
 
-        <div className="row">
-          <div className="field">
-            <label>Tipo</label>
-            <select className="input" value={form.type} onChange={e => setForm({...form, type: e.target.value})}>
-              <option value="profit">Profit</option>
-              <option value="roi">ROI %</option>
-              <option value="payout">Payout</option>
-              <option value="tradeCount">Trade Count</option>
-              <option value="winRate">winRate</option>
-              <option value="avgR">avgR</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Only considers Trades & Payouts from:</label>
-            <select className="input" value={form.period} onChange={e => setForm({...form, period: e.target.value})}>
-              <option value="daily">Today</option>
-              <option value="weekly">This Week</option>
-              <option value="monthly">This Month</option>
-              <option value="quarterly">This Quarter</option>
-              <option value="yearly">This Year</option>
-              <option value="allTime">Start</option>
-            </select>
-          </div>
-        </div>
+      {/* DESCRIÇÃO */}
+      <div className="goals-field">
+        <label>Descrição</label>
+        <textarea
+          className="goals-input"
+          value={form.description}
+          onChange={(e) =>
+            setForm({ ...form, description: e.target.value })
+          }
+        />
+      </div>
 
-        <div className="field">
-  <label>
-    <input 
-      type="checkbox" 
-      checked={form.perpetual} 
-      onChange={e => setForm({...form, perpetual: e.target.checked})}
-    /> 
-    Meta contínua (Global)
-  </label>
-</div>
-
-<div className="row" style={{ display: 'flex', gap: '16px', flexWrap: 'nowrap' }}>
-  <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
-    <label>Data Início</label>
-    <input 
-      type="date" 
-      className="input" 
-      value={form.startDate} 
-      onChange={e => setForm({...form, startDate: e.target.value})}
-    />
+    {/* 🔧 Tipo + Consistência + Período (substituir bloco antigo) */}
+{/*
+  Usamos duas classes diferentes:
+  - goals-field-group-3cols quando queremos mostrar o campo de consistency
+  - goals-field-group-2cols quando não mostramos
+*/}
+<div
+  className={`goals-field-group ${
+    form.type === 'profitWithConsistency'
+      ? 'goals-field-group-3cols'
+      : 'goals-field-group-2cols'
+  }`}
+  style={{ alignItems: 'center' }}
+>
+  {/* Tipo */}
+  <div className="goals-field">
+    <label>Tipo</label>
+    <select
+      className="goals-input"
+      value={form.type}
+      onChange={(e) => setForm({ ...form, type: e.target.value })}
+    >
+      <option value="profit">Profit</option>
+      <option value="profitWithConsistency">Profit + Consistency</option>
+      <option value="roi">ROI %</option>
+      <option value="payout">Payout</option>
+      <option value="tradeCount">Trade Count</option>
+      <option value="winRate">Win Rate</option>
+      <option value="avgR">Avg R</option>
+    </select>
   </div>
-  
-  {!form.perpetual && (
-    <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
-      <label>Data Limite</label>
-      <input 
-        type="date" 
-        className="input" 
-        value={form.deadline} 
-        onChange={e => setForm({...form, deadline: e.target.value})}
+
+  {/* Consistência (APENAS quando selecionado) */}
+  {form.type === 'profitWithConsistency' && (
+    <div className="goals-field" style={{ justifyContent: 'center', alignItems: 'center' }}>
+      <label style={{ textAlign: 'center', marginBottom: 8, fontSize: 13 }}>Consist. (%)</label>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        className="goals-input goals-input-inline"
+        value={form.consistencyLimit ?? 50}
+        onChange={(e) =>
+          setForm({ ...form, consistencyLimit: Number(e.target.value) })
+        }
       />
     </div>
   )}
-  
-  <div className="field" style={{ flex: '0 0 120px' }}>
-    <label>Prazo mínimo (dias)</label>
-    <input
-      type="number"
-      className="input"
-      min="0"
-      max="999"
-      style={{ textAlign: 'center' }}
-      value={form.minDays || 0}
-      onChange={e => setForm({ ...form, minDays: Number(e.target.value) })}
-    />
-  </div>
-</div>
 
-<p className="muted small" style={{ marginTop: '8px' }}>
-  💡 Dias de trades diferentes necessários para completar a meta, mesmo atingindo o valor alvo antes.
-</p>
-
-        {/* 🔍 Filtro e busca de contas */}
-<div className="field">
-  <label>Filtrar Contas</label>
-  <div className="flex items-center gap-2">
-    <input
-      className="input"
-      placeholder="Buscar por nome, equity ou empresa..."
-      value={query}
-      onChange={e => setQuery(e.target.value)}
-      style={{ flex: 1 }}
-    />
+  {/* Período */}
+  <div className="goals-field">
+    <label>Período considerado</label>
     <select
-      className="input"
-      value={filterType}
-      onChange={e => setFilterType(e.target.value)}
-      style={{ width: 180 }}
+      className="goals-input"
+      value={form.period}
+      onChange={(e) => setForm({ ...form, period: e.target.value })}
     >
-      <option value="">Todas categorias</option>
-      <option value="Forex">Forex</option>
-      <option value="Futures">Futures</option>
-      <option value="Cripto">Cripto</option>
-      <option value="Personal">Personal</option>
+      <option value="daily">Hoje</option>
+      <option value="weekly">Esta Semana</option>
+      <option value="monthly">Este Mês</option>
+      <option value="quarterly">Trimestre</option>
+      <option value="yearly">Ano</option>
+      <option value="allTime">Desde o Início</option>
     </select>
-    
-  </div>
+</div> 
 </div>
+    
 
-        {/* 🧾 Lista de contas filtradas */}
-        <div className="field">
-  <label>Contas vinculadas (Ctrl/Cmd múltipla)</label>
-  <select
-    multiple
-    className="input"
-    style={{ height: 120 }}
-    value={form.linkedAccounts}
-    onChange={e =>
-      setForm({
-        ...form,
-        linkedAccounts: Array.from(e.target.selectedOptions, o => o.value),
-      })
-    }
-  >
-   {filteredAccounts.map(a => (
-<option key={a.id} value={a.id}>
-  {a.name} ({a.type})
-  {a.currentFunding !== undefined ? ` — ${fmt(a.currentFunding)}` : ''}
-</option>
 
-    ))}
-  </select>
-  <p className="muted small">Se nenhuma conta for selecionada, esta meta se aplicará a todas as contas.</p>
+      {/* META CONTÍNUA */}
+      <label className="goals-checkbox-label">
+        <input
+          type="checkbox"
+          checked={form.perpetual}
+          onChange={(e) =>
+            setForm({ ...form, perpetual: e.target.checked })
+          }
+        />
+        Meta contínua (Global)
+      </label>
+
+      {/* DATAS */}
+      <div className="goals-field-group goals-field-group-3cols">
+        <div className="goals-field">
+          <label>Data Início</label>
+          <input
+            type="date"
+            className="goals-input"
+            value={form.startDate}
+            onChange={(e) =>
+              setForm({ ...form, startDate: e.target.value })
+            }
+          />
         </div>
 
-<div className="subgoals-section">
+        {!form.perpetual && (
+          <div className="goals-field">
+            <label>Data Limite</label>
+            <input
+              type="date"
+              className="goals-input"
+              value={form.deadline}
+              onChange={(e) =>
+                setForm({ ...form, deadline: e.target.value })
+              }
+            />
+          </div>
+        )}
+
+        <div className="goals-field">
+          <label>Prazo mínimo (dias)</label>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            className="goals-input text-center"
+            value={form.minDays || 0}
+            onChange={(e) =>
+              setForm({ ...form, minDays: Number(e.target.value) })
+            }
+          />
+        </div>
+      </div>
+
+      <p className="goals-hint">
+        💡 Dias de trades diferentes necessários para completar a meta, mesmo
+        atingindo o valor alvo antes.
+      </p>
+
+      {/* FILTRO DE CONTAS */}
+      <div className="goals-field">
+        <label>Filtrar Contas</label>
+        <div className="goals-field-group goals-field-group-2cols">
+          <input
+            className="goals-input"
+            placeholder="Buscar por nome, equity ou empresa..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select
+            className="goals-input"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+          >
+            <option value="">Todas categorias</option>
+            <option value="Forex">Forex</option>
+            <option value="Futures">Futures</option>
+            <option value="Cripto">Cripto</option>
+            <option value="Personal">Personal</option>
+          </select>
+        </div>
+      </div>
+
+      {/* SELETOR DE CONTAS */}
+      <div className="goals-field">
+        <label>Contas vinculadas (Ctrl/Cmd múltipla)</label>
+        <select
+          multiple
+          className="goals-input"
+          style={{ height: 120 }}
+          value={form.linkedAccounts}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              linkedAccounts: Array.from(
+                e.target.selectedOptions,
+                (o) => o.value
+              ),
+            })
+          }
+        >
+          {filteredAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name} ({a.type}){" "}
+              {a.currentFunding !== undefined
+                ? ` — ${fmt(a.currentFunding)}`
+                : ""}
+            </option>
+          ))}
+        </select>
+        <p className="goals-hint">
+          Se nenhuma conta for selecionada, esta meta se aplicará a todas as
+          contas.
+        </p>
+      </div>
+
+{/* SUBGOALS */}
+<div className="goals-tag-section">
   <h3>SubGoals</h3>
-  
-  <div className="field" style={{ marginBottom: '6px' }}>
-    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>
-      Modo de progresso
-    </label>
+
+  {/* Seleção de modo */}
+  <div className="goals-field">
+    <label>Modo de progresso</label>
     <select
-      className="input"
-      value={form.mode || 'parallel'}
-      onChange={e => setForm(f => ({ ...f, mode: e.target.value }))}
-      style={{ maxWidth: '400px' }}
+      className="goals-input"
+      value={form.mode || "parallel"}
+      onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))}
     >
       <option value="parallel">Ponderado (Subgoals independentes)</option>
       <option value="sequential">Sequencial (Subgoals em ordem)</option>
     </select>
-    <p className="muted small" style={{ marginTop: '6px', lineHeight: '1.5' }}>
-      {form.mode === 'parallel'
-        ? '💡 Todos os subgoals contribuem de forma ponderada para o progresso total.'
-        : '📋 Cada subgoal deve ser concluído antes do próximo começar.'}
+    <p className="goals-hint">
+      {form.mode === "parallel"
+        ? "💡 Todos os subgoals contribuem de forma ponderada para o progresso total."
+        : "📋 Cada subgoal deve ser concluído antes do próximo começar."}
     </p>
   </div>
 
+  {/* Lista de subgoals */}
   {form.subGoals.map((s, idx) => (
-    <div key={s.id} className="card subgoal-form">
-      <div className="field">
+    <div key={s.id} className="goals-subgoal-card">
+      <div className="goals-field">
         <label>Título</label>
-        <input className="input" value={s.title} onChange={e => updateSub(s.id, 'title', e.target.value)}/>
+        <input
+          className="goals-input"
+          value={s.title}
+          onChange={(e) => updateSub(s.id, "title", e.target.value)}
+        />
       </div>
 
-      <div className="row" style={{ display: 'flex', gap: '12px', flexWrap: 'nowrap' }}>
-        <div className="field" style={{ flex: '0 0 140px' }}>
+      {/* Grid Tipo / Consistência / Alvo */}
+      <div
+        className={`goals-field-group ${
+          s.type === "profitWithConsistency"
+            ? "goals-field-group-3cols"
+            : "goals-field-group-2cols"
+        }`}
+      >
+        {/* Tipo */}
+        <div className="goals-field">
           <label>Tipo</label>
           <select
-            className="input"
+            className="goals-input"
             value={s.type}
-            onChange={e => updateSub(s.id, 'type', e.target.value)}
+            onChange={(e) => updateSub(s.id, "type", e.target.value)}
           >
             <option value="profit">Profit</option>
+            <option value="profitWithConsistency">Profit + Consistency</option>
             <option value="roi">ROI %</option>
             <option value="payout">Payout</option>
             <option value="tradeCount">Trade Count</option>
@@ -826,75 +920,115 @@ const addSubGoal = () => {
           </select>
         </div>
 
-        <div className="field" style={{ flex: '1 1 auto', minWidth: '0' }}>
-          <label>Alvo ($)</label>
-          <input
-            type="number"
-            className="input"
-            value={s.targetValue}
-            onChange={e => updateSub(s.id, 'targetValue', Number(e.target.value))}
-          />
-        </div>
-
-        <div className="field" style={{ flex: '0 0 90px' }}>
-          <label>Peso - <small className="muted">{(() => {
-      const totalWeight = form.subGoals.reduce((sum, sg) => sum + (Number(sg.weight) || 0), 0)
-      const pct = totalWeight > 0 ? (s.weight / totalWeight) * 100 : 0
-      return `(${pct.toFixed(1)}%)`})()}</small></label>
-          <input
-            type="number"
-            step="0.1"
-            className="input"
-            value={s.weight}
-            onChange={e => updateSub(s.id, 'weight', Number(e.target.value))}
-            style={{ textAlign: 'center' }}
-          />
-        </div>
-
-        <div className="field" style={{ flex: '0 0 90px' }}>
-          <label>Dias mín.</label>
-          <input
-            type="number"
-            className="input"
-            min="0"
-            value={s.minDays || 0}
-            onChange={e => updateSub(s.id, 'minDays', Number(e.target.value))}
-            style={{ textAlign: 'center' }}
-          />
-        </div>
-      </div>
-
-      <button className="btn ghost small" onClick={() => removeSub(s.id)}>Remover SubGoal</button>
-      {/* Seta para o próximo subgoal */}
-    {form.mode === 'sequential' && idx < form.subGoals.length - 1 && (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        margin: '8px 0',
-        color: '#888'
-      }}>
-        <span style={{ fontSize: '18px' }}>↓</span>
-      </div>
-    )}
-  </div>
-  ))}
-
-          <button className="btn ghost" onClick={addSubGoal}>+ Adicionar SubGoal</button>
-        </div>
-
-        {(!form.subGoals || form.subGoals.length === 0) && (
-          <div className="field">
-            <label>Valor Alvo ($)</label>
-            <input type="number" className="input" value={form.targetValue} onChange={e => setForm({...form, targetValue: Number(e.target.value)})}/>
+        {/* Consistência */}
+        {s.type === "profitWithConsistency" && (
+          <div className="goals-field-inline">
+            <label>Consist. (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              className="goals-input goals-input-inline"
+              value={s.consistencyLimit ?? 50}
+              onChange={(e) =>
+                updateSub(s.id, "consistencyLimit", Number(e.target.value))
+              }
+            />
           </div>
         )}
 
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn" onClick={handleSubmit}>Salvar meta</button>
+        {/* Alvo */}
+        <div className="goals-field">
+          <label>Alvo ($)</label>
+          <input
+            type="number"
+            className="goals-input"
+            value={s.targetValue}
+            onChange={(e) =>
+              updateSub(s.id, "targetValue", Number(e.target.value))
+            }
+          />
         </div>
       </div>
+
+      {/* Linha Peso / Dias mín. / Remover */}
+      <div className="goals-field-group goals-field-group-3cols">
+        <div className="goals-field">
+          <label>Peso</label>
+          <input
+            type="number"
+            step="0.1"
+            className="goals-input text-center"
+            value={s.weight}
+            onChange={(e) =>
+              updateSub(s.id, "weight", Number(e.target.value))
+            }
+          />
+        </div>
+        <div className="goals-field">
+          <label>Dias mín.</label>
+          <input
+            type="number"
+            className="goals-input text-center"
+            min="0"
+            value={s.minDays || 0}
+            onChange={(e) =>
+              updateSub(s.id, "minDays", Number(e.target.value))
+            }
+          />
+        </div>
+        <div className="goals-field" style={{ display: "flex", alignItems: "end" }}>
+          <button
+            className="goals-btn goals-btn-ghost"
+            onClick={() => removeSub(s.id)}
+            style={{ width: "100%" }}
+          >
+            Remover
+          </button>
+        </div>
+      </div>
+
+      {/* seta entre subgoals */}
+      {form.mode === "sequential" && idx < form.subGoals.length - 1 && (
+        <div className="goals-subgoal-arrow">↓</div>
+      )}
     </div>
-  )
+  ))}
+
+  {/* botão adicionar */}
+  <button className="goals-btn goals-btn-add" onClick={addSubGoal}>
+    + Adicionar SubGoal
+  </button>
+</div>
+
+
+
+      {/* VALOR ALVO GERAL */}
+      {(!form.subGoals || form.subGoals.length === 0) && (
+        <div className="goals-field">
+          <label>Valor Alvo ($)</label>
+          <input
+            type="number"
+            className="goals-input"
+            value={form.targetValue}
+            onChange={(e) =>
+              setForm({ ...form, targetValue: Number(e.target.value) })
+            }
+          />
+        </div>
+      )}
+
+      {/* AÇÕES */}
+      <div className="goals-modal-actions">
+        <button className="goals-btn goals-btn-ghost" onClick={onClose}>
+          Cancelar
+        </button>
+        <button className="goals-btn goals-btn-primary" onClick={handleSubmit}>
+          Salvar Meta
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 }
