@@ -769,6 +769,19 @@ return (
           />
         </div>
 
+        <div className="goals-field">
+          <label>Min. de Dias</label>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            className="goals-input text-center"
+            value={form.minDays || 0}
+            onChange={(e) =>
+              setForm({ ...form, minDays: Number(e.target.value) })
+            }
+          />
+        </div>
         {!form.perpetual && (
           <div className="goals-field">
             <label>Data Limite</label>
@@ -783,19 +796,6 @@ return (
           </div>
         )}
 
-        <div className="goals-field">
-          <label>Prazo mínimo (dias)</label>
-          <input
-            type="number"
-            min="0"
-            max="999"
-            className="goals-input text-center"
-            value={form.minDays || 0}
-            onChange={(e) =>
-              setForm({ ...form, minDays: Number(e.target.value) })
-            }
-          />
-        </div>
       </div>
 
       <p className="goals-hint">
