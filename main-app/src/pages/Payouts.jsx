@@ -6,6 +6,7 @@ import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, cr
 // ---------------------------
 // Página de listagem + CRUD
 // ---------------------------
+
 export default function Payouts() {
   const [accounts, setAccounts] = useState([])
   const [payouts, setPayouts] = useState([])
@@ -509,7 +510,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       ? { ...edit }
       : {
           dateCreated: new Date().toISOString().slice(0, 10),
-          type: 'Forex',
+          type: 'Todas',
           method: (store.getSettings().methods[0] || 'Pix'),
           status: 'Pending',
           amountSolicited: 0,
@@ -521,7 +522,9 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
   const [methods, setMethods] = useState(store.getSettings().methods)
   const [newMethod, setNewMethod] = useState('')
 
-  const pool = accounts.filter(a => a.type === state.type)
+  const pool = state.type === 'Todas'
+  ? accounts
+  : accounts.filter(a => a.type === state.type)
   const selectedSet = new Set(state.accountIds)
   const selectedAccounts = pool.filter(a => selectedSet.has(a.id))
 
@@ -566,6 +569,11 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       setState({ ...state, method: updated.methods[0] || '' })
     }
   }
+const [searchTerm, setSearchTerm] = useState('')
+
+const filteredPool = pool.filter(a =>
+  a.name.toLowerCase().includes(searchTerm.toLowerCase())
+)
 
   return (
     <div className="card">
@@ -583,18 +591,19 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
         </div>
         <div className="field">
           <label>Tipo</label>
-          <select
-            className="select"
-            value={state.type}
-            onChange={(e) => {
-              const v = e.target.value
-              setState((s) => ({ ...s, type: v, accountIds: [] }))
-            }}
-          >
-            {['Futures', 'Forex', 'Cripto', 'Personal'].map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
+<select
+  className="select"
+  value={state.type}
+  onChange={(e) => {
+    const v = e.target.value
+    setState((s) => ({ ...s, type: v, accountIds: [] }))
+  }}
+>
+  {['Todas', 'Futures', 'Forex', 'Cripto', 'Personal'].map((t) => (
+    <option key={t} value={t}>{t}</option>
+  ))}
+</select>
+
         </div>
       </div>
 
@@ -624,15 +633,27 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
         </div>
       </div>
 
-      <div className="field">
-        <label>Contas ({pool.length})</label>
-        <div className="table-mini">
+<div className="field">
+  <label>Contas ({pool.length})</label>
+
+  {/* 🔍 Campo de busca de contas */}
+  <input
+    type="text"
+    className="input"
+    placeholder="Buscar conta..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+    style={{ marginBottom: 8 }}
+  />
+
+  <div className="table-mini">
+
           <table>
             <thead>
               <tr><th></th><th>Conta</th><th>Tipo</th><th>Funding</th><th>Split</th><th>Status</th></tr>
             </thead>
             <tbody>
-              {pool.map((a) => {
+              {filteredPool.map((a) => {
                 const checked = selectedSet.has(a.id)
                 return (
                   <tr key={a.id}>
