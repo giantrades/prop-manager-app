@@ -57,23 +57,53 @@ export function setSettings(patch){
   data.settings = { ...data.settings, ...patch }
   save(data); return data.settings
 }
-
-// 🔹 Fallback: garante que o dataStore possa puxar trades do IndexedDB (Journal)
-export async function ensureJournalSynced() {
+export async function getAllTradesSafe() {
   try {
+    const data = load();
+    if (data.trades && data.trades.length > 0) {
+      return data.trades;
+    }
+
+    console.log('📥 Carregando trades do Journal (IndexedDB) para dataStore...');
     const db = await openDB('journal-db', 2);
     const trades = await db.getAll('trades');
+    return trades || [];
+  } catch (err) {
+    console.warn('⚠️ Falha ao carregar trades via IndexedDB:', err);
+    return [];
+  }
+}
+// 🔹 Fallback: garante que o dataStore possa puxar trades do IndexedDB (Journal)
+// ✅ Evita loop infinito e só sincroniza quando necessário
+export async function ensureJournalSynced() {
+  try {
     const data = load();
-    if (!Array.isArray(data.trades) || data.trades.length === 0) {
-      console.log('📥 Carregando trades do Journal (IndexedDB) para dataStore...');
-      data.trades = trades || [];
+
+    // Se já tem trades no dataStore, não faz nada
+    if (Array.isArray(data.trades) && data.trades.length > 0) {
+      return;
+    }
+
+    console.log('📥 Carregando trades do Journal (IndexedDB) para dataStore...');
+    const db = await openDB('journal-db', 2);
+    const trades = await db.getAll('trades');
+
+    if (Array.isArray(trades) && trades.length > 0) {
+      data.trades = trades;
       save(data);
-      window.dispatchEvent(new CustomEvent('datastore:change'));
+      console.log(`✅ Trades sincronizados do Journal → dataStore: ${trades.length}`);
+      // Dispara um evento único, controlado
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'journal-sync' } }));
+      }, 100);
+    } else {
+      console.log('ℹ️ Nenhum trade encontrado no IndexedDB — nada a sincronizar.');
     }
   } catch (err) {
     console.warn('⚠️ Falha ao sincronizar journal no dataStore:', err);
   }
 }
+
 /* --------------------
    ACCOUNTS
    -------------------- */
@@ -318,7 +348,8 @@ function calculateMetric(type, trades, accounts, config = {}) {
   // Filtra trades relevantes
   const relevantTrades = (trades || []).filter(trade => {
     if (!trade) return false
-    if (!isInPeriod(trade.date, period, startDate)) return false
+     const tradeDate = trade.entry_datetime || trade.date
+    if (!isInPeriod(trade.entry_datetime || trade.date, period, startDate)) return false
     if (config.linkedAccounts && config.linkedAccounts.length) {
       if (!config.linkedAccounts.includes(trade.accountId)) return false
     }
@@ -339,7 +370,7 @@ function calculateMetric(type, trades, accounts, config = {}) {
   // 🔹 agrupa lucros diários
   const dailyProfits = {};
   for (const t of relevantTrades) {
-    const d = (t.date || '').split('T')[0];
+    const d = (t.entry_datetime || t.date || '').split('T')[0];
     const profit = Number(t.result_net) || 0;
     dailyProfits[d] = (dailyProfits[d] || 0) + profit;
   }
@@ -455,9 +486,9 @@ if (metricResult && typeof metricResult === "object" && "progress" in metricResu
       let daysActive = 0;
       if (sub.minDays && sub.minDays > 0) {
         const relevantTrades = (trades || []).filter(t =>
-          isInPeriod(t.date, config.period, config.startDate)
+           isInPeriod(t.entry_datetime || t.date, config.period, config.startDate)
         );
-        const uniqueDays = new Set(relevantTrades.map(t => new Date(t.date).toISOString().split("T")[0]));
+        const uniqueDays = new Set(relevantTrades.map(t => new Date(t.entry_datetime || t.date).toISOString().split("T")[0]));
         daysActive = uniqueDays.size;
       }
 
@@ -509,9 +540,9 @@ if (metricResult && typeof metricResult === "object" && "progress" in metricResu
     let daysActive = 0;
     if (goal.minDays && goal.minDays > 0) {
       const relevantTrades = (trades || []).filter(t =>
-        isInPeriod(t.date, goal.period, goal.startDate)
+        isInPeriod(t.entry_datetime || t.date, config.period, config.startDate)
       );
-      const uniqueDays = new Set(relevantTrades.map(t => new Date(t.date).toISOString().split("T")[0]));
+      const uniqueDays = new Set(relevantTrades.map(t => new Date(t.entry_datetime || t.date).toISOString().split("T")[0]));
       daysActive = uniqueDays.size;
     }
 
@@ -545,7 +576,6 @@ if (result && typeof result === "object" && "progress" in result) {
     : 0;
 }
 
-
   return {
     currentValue,
     progress,
@@ -553,11 +583,6 @@ if (result && typeof result === "object" && "progress" in result) {
   };
 }
 
-
-// getAllGoals retorna goals com progresso aplicado
-// agora aceita opção: getAllGoals({ includeArchived: false }) se quiser que inclua esses Goals em graficos botar "true"
-// getAllGoals retorna goals com progresso e status
-// agora aceita opção: getAllGoals({ includeArchived: false })
 export function getAllGoals(opts = { includeArchived: false }) {
   const data = load()
   let goals = data.goals || []
@@ -756,5 +781,5 @@ export default {
   getAccountStats,
   getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
   getTrades, createTrade, updateTrade, deleteTrade,
-  getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal, calculateMetric
+  getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal, calculateMetric, getAllTradesSafe,
 }

@@ -288,35 +288,28 @@ const updatePartial = (
   field: string,
   value: string | number | null
 ) => {
-  setForm((f) => ({
-    ...f,
-    PartialExecutions: f.PartialExecutions.map((p, i) =>
-      i === idx ? { ...p, [field]: value } : p
-    ),
-  }));
-};
-
-// 🔁 Calcula automaticamente o R quando campos relevantes mudam
-useEffect(() => {
-  setForm((prev) => {
-    const updatedPartials = (prev.PartialExecutions || []).map((exe) => {
-      const { entryPrice, exitPrice, stop_loss } = exe;
+  setForm((f) => {
+    const updated = f.PartialExecutions.map((p, i) => {
+      if (i !== idx) return p;
+      
+      const newExe = { ...p, [field]: value };
+      
+      // Recalcula R automaticamente
+      const { entryPrice, exitPrice, stop_loss } = newExe;
       if (entryPrice && stop_loss && exitPrice) {
         const isLong = stop_loss < entryPrice;
         const risk = Math.abs(entryPrice - stop_loss);
-        const diff = isLong
-          ? exitPrice - entryPrice
-          : entryPrice - exitPrice;
-        const autoR = risk > 0 ? diff / risk : 0;
-
-        return { ...exe, result_R: autoR };
+        const diff = isLong ? exitPrice - entryPrice : entryPrice - exitPrice;
+        newExe.result_R = risk > 0 ? diff / risk : 0;
       }
-      return exe;
+      
+      return newExe;
     });
-
-    return { ...prev, PartialExecutions: updatedPartials };
+    
+    return { ...f, PartialExecutions: updated };
   });
-}, [form.PartialExecutions?.map(e => [e.entryPrice, e.exitPrice, e.stop_loss].join())]);
+};
+
 
 
 const handleSave = async () => {
@@ -542,19 +535,28 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
       </div>
     </div>
     <p className="text-xs text-muted mb-2">Selecione múltiplas com Ctrl/Cmd</p>
-    <select 
-      className="account-multiselect input"
-      multiple
-      size={Math.min(5, filteredAccounts.length)}
-      value={selectedAccounts}
-      onChange={e => setSelectedAccounts(Array.from(e.target.selectedOptions, o => o.value))}
-    >
-      {filteredAccounts.map(acc => (
-        <option key={acc.id} value={acc.id}>
-          {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
-        </option>
-      ))}
-    </select>
+<select 
+  className="account-multiselect input"
+  multiple
+  size={Math.min(5, filteredAccounts.length)}
+  value={selectedAccounts}
+  onChange={e => {
+    const options = e.target.options;
+    const selected: string[] = [];
+    for (let i = 0; i < options.length; i++) {
+      if (options[i].selected) {
+        selected.push(options[i].value);
+      }
+    }
+    setSelectedAccounts(selected);
+  }}
+>
+  {filteredAccounts.map(acc => (
+    <option key={acc.id} value={String(acc.id)}>
+      {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
+    </option>
+  ))}
+</select>
   </div>
 
  {/* Pesos das Contas - Grid 3 colunas scrollable */}

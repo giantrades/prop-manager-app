@@ -31,20 +31,7 @@ export default function Goals() {
   const journal = useJournal();
   const trades = journal?.trades || [];
 
-useEffect(() => {
-  loadData();
-  const handler = () => loadData();
-  window.addEventListener('datastore:change', handler);
-  window.addEventListener('storage', handler);
-  window.addEventListener('journal:change', handler);
 
-  return () => {
-    window.removeEventListener('datastore:change', handler);
-    window.removeEventListener('storage', handler);
-    window.removeEventListener('journal:change', handler);
-    clearInterval(interval);
-  };
-}, [trades?.length]);
  
 
 // ✅ Função completa de cálculo
@@ -65,9 +52,16 @@ function updateGoalProgressFromTrades(goals = [], tradesList = []) {
       ? goal.linkedAccounts
       : null;
 
-    const relevantTrades = goalAccounts
-      ? tradesList.filter(t => goalAccounts.includes(t.accountId))
-      : tradesList.slice();
+const relevantTrades = goalAccounts
+  ? tradesList.filter(t => {
+      // Trade pode ter array de contas
+      if (Array.isArray(t.accounts)) {
+        return t.accounts.some(acc => goalAccounts.includes(acc.accountId))
+      }
+      // Ou pode ter accountId único (compatibilidade)
+      return goalAccounts.includes(t.accountId)
+    })
+  : tradesList.slice()
 
     // ---- Cálculo base ----
     const target = num(goal.targetValue || 0);
@@ -206,43 +200,67 @@ function updateGoalProgressFromTrades(goals = [], tradesList = []) {
   });
 }
 
-// ===============================
-// ✅ Função de carregamento global
-// ===============================
-function loadData() {
-  await ensureJournalSynced();
-  const d = getAll();
-  const g = getAllGoals({ includeArchived: true }) || [];
+// ✅ Evita loop infinito entre eventos e recarregamentos
+let isLoadingGoals = false;
+let lastLoadTime = 0;
 
-  setAccounts(d.accounts || []);
-  setStrategies(d.strategies || []);
+// ===============================
+// ✅ Função de carregamento global (corrigida)
+// ===============================
+async function loadData() {
+  const now = Date.now();
+  if (isLoadingGoals || now - lastLoadTime < 500) return; // evita spam rápido
+  isLoadingGoals = true;
 
-  // usa trades do Journal, se existirem, ou fallback para datastore
-  const sourceTrades = Array.isArray(trades) && trades.length > 0 ? trades : (d.trades || []);
-  const updated = updateGoalProgressFromTrades(g, sourceTrades);
-  setGoals(updated);
+  try {
+    await ensureJournalSynced();
+    const d = getAll();
+    const g = getAllGoals({ includeArchived: true }) || [];
+
+    setAccounts(d.accounts || []);
+    setStrategies(d.strategies || []);
+
+    const sourceTrades =
+      Array.isArray(trades) && trades.length > 0 ? trades : (d.trades || []);
+    const updated = updateGoalProgressFromTrades(g, sourceTrades);
+
+    setGoals(updated);
+  } catch (err) {
+    console.error("Erro ao carregar Goals:", err);
+  } finally {
+    isLoadingGoals = false;
+    lastLoadTime = Date.now();
+  }
 }
 
 // ===============================
-// ✅ useEffect
+// ✅ Efeito global para eventos
 // ===============================
 useEffect(() => {
   loadData();
 
-  const handler = () => loadData();
-  window.addEventListener('datastore:change', handler);
-  window.addEventListener('storage', handler);
-
-  // atualiza periodicamente a cada 15min (opcional)
-  const interval = setInterval(() => loadData(), 15 * 60 * 1000);
-
-  return () => {
-    window.removeEventListener('datastore:change', handler);
-    window.removeEventListener('storage', handler);
-    clearInterval(interval);
+  let timeout;
+  const handler = () => {
+    clearTimeout(timeout);
+    // debounce: evita múltiplos disparos em sequência
+    timeout = setTimeout(() => {
+      console.log("📡 Evento detectado → Recarregando Goals...");
+      loadData();
+    }, 600);
   };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [trades?.length]);
+
+  window.addEventListener("datastore:change", handler);
+  window.addEventListener("storage", handler);
+  window.addEventListener("journal:change", handler);
+ loadData(); // chama 1x inicial
+  return () => {
+    clearTimeout(timeout);
+    window.removeEventListener("datastore:change", handler);
+    window.removeEventListener("storage", handler);
+    window.removeEventListener("journal:change", handler);
+  };
+}, []);
+
 
 
 const filteredGoals = useMemo(() => {

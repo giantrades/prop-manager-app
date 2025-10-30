@@ -168,8 +168,8 @@ const saveTrade = useCallback(async (trade) => {
     const other = prev.filter(t => t.id !== id);
     return [payload, ...other];
   });
-  // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
-  window.dispatchEvent(new CustomEvent('journal:change'));
+  
+  
 // 🔹 Atualiza também o dataStore local
 try {
   const ds = await import("@apps/lib/dataStore.js");
@@ -183,6 +183,8 @@ try {
 
   await save({ ...all, trades: updatedTrades });
   window.dispatchEvent(new CustomEvent('datastore:change'));
+  // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
+  window.dispatchEvent(new CustomEvent('journal:change'));
 } catch (err) {
   console.warn("⚠️ Falha ao atualizar trades no dataStore:", err);
 }
@@ -242,8 +244,7 @@ const deleteTrade = useCallback(async (tradeId) => {
 
   await db.delete("trades", tradeId);
   setTrades(prev => prev.filter(t => t.id !== tradeId));
-// 🔔 Notifica listeners globais (Goals, Dashboard etc.)
-  window.dispatchEvent(new CustomEvent('journal:change'));
+
   // 🔹 Remove trade também do dataStore
 try {
   const ds = await import("@apps/lib/dataStore.js");
@@ -252,6 +253,8 @@ try {
   const remainingTrades = (all.trades || []).filter(t => t.id !== tradeId);
   await save({ ...all, trades: remainingTrades });
   window.dispatchEvent(new CustomEvent('datastore:change'));
+  // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
+  window.dispatchEvent(new CustomEvent('journal:change'));
 } catch (err) {
   console.warn("⚠️ Falha ao remover trade do dataStore:", err);
 }
