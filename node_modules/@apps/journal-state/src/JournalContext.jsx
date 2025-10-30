@@ -149,6 +149,8 @@ const saveTrade = useCallback(async (trade) => {
     const other = prev.filter(t => t.id !== id);
     return [payload, ...other];
   });
+  // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
+  window.dispatchEvent(new CustomEvent('journal:change'));
 
   // 🔹 Atualiza funding incremental com correção de delta
   if (Array.isArray(payload.accounts)) {
@@ -205,7 +207,8 @@ const deleteTrade = useCallback(async (tradeId) => {
 
   await db.delete("trades", tradeId);
   setTrades(prev => prev.filter(t => t.id !== tradeId));
-
+// 🔔 Notifica listeners globais (Goals, Dashboard etc.)
+  window.dispatchEvent(new CustomEvent('journal:change'));
   // 🔹 Reverte impacto do PnL nas contas
   if (Array.isArray(trade.accounts)) {
     try {

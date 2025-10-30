@@ -5,6 +5,7 @@ import { useCurrency } from '@apps/state'
 import { v4 as uuid } from 'uuid'
 import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { createTag, getAllTags } from '@apps/lib/dataStore'
+import { useJournal } from '@apps/journal-state'
 
 function hexToRgba(hex, alpha = 1) {
   const cleanHex = hex.replace('#', '')
@@ -25,19 +26,32 @@ export default function Goals() {
   const { currency, rate } = useCurrency()
   const [showArchived, setShowArchived] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
+ // ✅ Pega trades e estratégias diretamente do contexto do Journal
+  const journal = useJournal();
+  const trades = journal?.trades || [];
 
-  useEffect(() => {
-    loadData()
-    const handler = () => loadData()
-    window.addEventListener('datastore:change', handler)
-    window.addEventListener('storage', handler)
-    const interval = setInterval(() => loadData(), 15 * 60 * 1000) // atualiza a cada 15minutos
-    return () => {
-      window.removeEventListener('datastore:change', handler)
-      window.removeEventListener('storage', handler)
-      clearInterval(interval)
-    }
-  }, [])
+useEffect(() => {
+  loadData();
+  const handler = () => loadData();
+  window.addEventListener('datastore:change', handler);
+  window.addEventListener('storage', handler);
+  window.addEventListener('journal:change', handler);
+
+  // Atualiza também quando os trades mudarem
+  if (trades && trades.length > 0) {
+    loadData();
+  }
+
+  const interval = setInterval(() => loadData(), 15 * 60 * 1000);
+
+  return () => {
+    window.removeEventListener('datastore:change', handler);
+    window.removeEventListener('storage', handler);
+    window.addEventListener('journal:change', handler);
+    clearInterval(interval);
+  };
+}, [trades?.length]);
+ 
 
   function loadData() {
     const d = getAll()
@@ -45,6 +59,10 @@ export default function Goals() {
     setStrategies(d.strategies || [])
     const g = getAllGoals({ includeArchived: true })
     setGoals(g)
+     // 🔹 Se quiser usar os trades para progressos futuros
+  if (journal?.trades?.length) {
+    console.log("📈 Trades disponíveis:", journal.trades.length);
+  }
   }
 
 const filteredGoals = useMemo(() => {

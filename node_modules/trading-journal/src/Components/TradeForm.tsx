@@ -296,6 +296,27 @@ const updatePartial = (
   }));
 };
 
+// 🔁 Calcula automaticamente o R quando campos relevantes mudam
+useEffect(() => {
+  setForm((prev) => {
+    const updatedPartials = (prev.PartialExecutions || []).map((exe) => {
+      const { entryPrice, exitPrice, stop_loss } = exe;
+      if (entryPrice && stop_loss && exitPrice) {
+        const isLong = stop_loss < entryPrice;
+        const risk = Math.abs(entryPrice - stop_loss);
+        const diff = isLong
+          ? exitPrice - entryPrice
+          : entryPrice - exitPrice;
+        const autoR = risk > 0 ? diff / risk : 0;
+
+        return { ...exe, result_R: autoR };
+      }
+      return exe;
+    });
+
+    return { ...prev, PartialExecutions: updatedPartials };
+  });
+}, [form.PartialExecutions?.map(e => [e.entryPrice, e.exitPrice, e.stop_loss].join())]);
 
 
 const handleSave = async () => {
@@ -362,8 +383,6 @@ const handleSave = async () => {
     alert('Erro ao salvar trade: ' + (err?.message || 'desconhecido'));
   }
 };
-
-
 
 
   // Auto-populate tags when strategy changes
@@ -731,15 +750,20 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
                 <input
                   type="datetime-local"
                   className="input"
-                  value={exe.exit_datetime ? formatLocalDatetime(exe.exit_datetime) : ""}
-                  onChange={(e) =>
-                    updatePartial(
-                      idx,
-                      "exit_datetime",
-                      e.target.value ? toISOStringLocal(e.target.value) : ""
-                    )
-                  }
-                />
+min={
+    exe.entry_datetime
+      ? formatLocalDatetime(exe.entry_datetime)
+      : undefined
+  }
+  value={exe.exit_datetime ? formatLocalDatetime(exe.exit_datetime) : ""}
+  onChange={(e) =>
+    updatePartial(
+      idx,
+      "exit_datetime",
+      e.target.value ? toISOStringLocal(e.target.value) : ""
+    )
+  }
+/>
               </div>
             </div>
 
