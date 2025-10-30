@@ -521,10 +521,22 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
 
   const [methods, setMethods] = useState(store.getSettings().methods)
   const [newMethod, setNewMethod] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const { currency, rate } = useCurrency()
+  const fmt = (v) =>
+    currency === 'USD'
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate)
 
   const pool = state.type === 'Todas'
-  ? accounts
-  : accounts.filter(a => a.type === state.type)
+    ? accounts
+    : accounts.filter(a => a.type === state.type)
+  
+  const filteredPool = pool.filter(a =>
+    a.name.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   const selectedSet = new Set(state.accountIds)
   const selectedAccounts = pool.filter(a => selectedSet.has(a.id))
 
@@ -569,216 +581,291 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       setState({ ...state, method: updated.methods[0] || '' })
     }
   }
-const [searchTerm, setSearchTerm] = useState('')
-
-const filteredPool = pool.filter(a =>
-  a.name.toLowerCase().includes(searchTerm.toLowerCase())
-)
 
   return (
-    <div className="card">
-      <h3>{edit ? '✏️ Editar Payout' : '➕ Novo Payout'}</h3>
-
-      <div className="row">
-        <div className="field">
-          <label>Data</label>
-          <input
-            type="date"
-            className="input"
-            value={state.dateCreated}
-            onChange={(e) => setState({ ...state, dateCreated: e.target.value })}
-          />
+    <div className="payouts-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="payouts-modal-content">
+        
+        {/* Header */}
+        <div className="payouts-modal-header">
+          <h2>💰 {edit ? 'Editar Payout' : 'Novo Payout'}</h2>
+          <button className="payouts-modal-close" onClick={onClose}>×</button>
         </div>
-        <div className="field">
-          <label>Tipo</label>
-<select
-  className="select"
-  value={state.type}
-  onChange={(e) => {
-    const v = e.target.value
-    setState((s) => ({ ...s, type: v, accountIds: [] }))
-  }}
->
-  {['Todas', 'Futures', 'Forex', 'Cripto', 'Personal'].map((t) => (
-    <option key={t} value={t}>{t}</option>
-  ))}
-</select>
 
-        </div>
-      </div>
+        <div className="payouts-modal-body">
+          
+          {/* Informações Básicas */}
+          <div className="payouts-section">
+            <div className="payouts-section-title">Informações Básicas</div>
+            
+            <div className="payouts-field-row payouts-field-row-3">
+              <div className="payouts-field">
+                <label>📅 Data</label>
+                <input
+                  type="date"
+                  className="payouts-input"
+                  value={state.dateCreated}
+                  onChange={(e) => setState({ ...state, dateCreated: e.target.value })}
+                />
+              </div>
+              <div className="payouts-field">
+                <label>🏷️ Tipo</label>
+                <select
+                  className="payouts-input"
+                  value={state.type}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setState((s) => ({ ...s, type: v, accountIds: [] }))
+                  }}
+                >
+                  <option value="Todas">Todas</option>
+                  <option value="Futures">Futures</option>
+                  <option value="Forex">Forex</option>
+                  <option value="Cripto">Cripto</option>
+                  <option value="Personal">Personal</option>
+                </select>
+              </div>
+              <div className="payouts-field">
+                <label>📊 Status</label>
+                <select
+                  className="payouts-input"
+                  value={state.status}
+                  onChange={(e) => setState({ ...state, status: e.target.value })}
+                >
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+            </div>
 
-      <div className="row">
-        <div className="field">
-          <label>Valor solicitado (GROSS)</label>
-          <input
-            type="number"
-            className="input"
-            value={state.amountSolicited}
-            onChange={(e) =>
-              setState({ ...state, amountSolicited: parseFloat(e.target.value) || 0 })
-            }
-          />
-        </div>
-        <div className="field">
-          <label>Status</label>
-          <select
-            className="select"
-            value={state.status}
-            onChange={(e) => setState({ ...state, status: e.target.value })}
-          >
-            {['Cancelled', 'Pending', 'Completed'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+            <div className="payouts-field-row payouts-field-row-2">
+              <div className="payouts-field">
+                <label>💵 Valor Bruto (GROSS)</label>
+                <input
+                  type="number"
+                  className="payouts-input"
+                  value={state.amountSolicited}
+                  onChange={(e) =>
+                    setState({ ...state, amountSolicited: parseFloat(e.target.value) || 0 })
+                  }
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="payouts-field">
+                <label>✅ Data Aprovação</label>
+                <input
+                  type="date"
+                  className="payouts-input"
+                  value={state.approvedDate || ''}
+                  onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
+                />
+              </div>
+            </div>
+          </div>
 
-<div className="field">
-  <label>Contas ({pool.length})</label>
 
-  {/* 🔍 Campo de busca de contas */}
-  <input
-    type="text"
-    className="input"
-    placeholder="Buscar conta..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-    style={{ marginBottom: 8 }}
-  />
 
-  <div className="table-mini">
+          {/* Seleção de Contas */}
+          <div className="payouts-section">
+            <div className="payouts-section-title">Contas Vinculadas</div>
+            
+            <div className="payouts-search">
+              <input
+                type="text"
+                className="payouts-input"
+                placeholder="Buscar conta..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <p className="payouts-hint">
+              💡 {filteredPool.length} conta(s) disponível(eis) • {selectedAccounts.length} selecionada(s)
+            </p>
 
-          <table>
-            <thead>
-              <tr><th></th><th>Conta</th><th>Tipo</th><th>Funding</th><th>Split</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {filteredPool.map((a) => {
-                const checked = selectedSet.has(a.id)
-                return (
-                  <tr key={a.id}>
-                    <td className="center">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const next = new Set(state.accountIds)
-                          e.target.checked ? next.add(a.id) : next.delete(a.id)
-                          setState({ ...state, accountIds: Array.from(next) })
-                        }}
-                      />
-                    </td>
-                    <td>{a.name}</td>
-                    <td className="center"><span className="pill type">{a.type}</span></td>
-                    <td>{'$' + (a.currentFunding || 0).toLocaleString()}</td>
-                    <td className="center">{Math.round((a.profitSplit || 0) * 100)}%</td>
-                    <td className="center">
-                      <span
-                        className={
-                          'pill ' +
-                          (a.status === 'Live'
-                            ? 'green'
-                            : a.status === 'Funded'
-                            ? 'blue'
-                            : a.status === 'Challenge'
-                            ? 'yellow'
-                            : 'gray')
-                        }
-                      >
-                        {a.status}
-                      </span>
-                    </td>
+            <div className="payouts-table-wrapper">
+              <table className="payouts-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}></th>
+                    <th>Nome da Conta</th>
+                    <th className="center">Tipo</th>
+                    <th className="center">Funding</th>
+                    <th className="center">Split</th>
+                    <th className="center">Status</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="row">
-        <div className="field">
-          <label>Método</label>
-          <div className="flex">
-            <select
-              className="select"
-              value={state.method}
-              onChange={(e) => setState({ ...state, method: e.target.value })}
-            >
-              {methods.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <input
-              className="input"
-              placeholder="Novo método"
-              value={newMethod}
-              onChange={(e) => setNewMethod(e.target.value)}
-            />
-            <button className="btn" onClick={addMethod}>Adicionar</button>
+                </thead>
+                <tbody>
+                  {filteredPool.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                        Nenhuma conta encontrada.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPool.map((a) => {
+                      const checked = selectedSet.has(a.id)
+                      return (
+                        <tr key={a.id}>
+                          <td className="center">
+                            <input
+                              type="checkbox"
+                              className="payouts-checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = new Set(state.accountIds)
+                                e.target.checked ? next.add(a.id) : next.delete(a.id)
+                                setState({ ...state, accountIds: Array.from(next) })
+                              }}
+                            />
+                          </td>
+                          <td>{a.name}</td>
+                          <td className="center">
+                            <span className="payouts-pill payouts-pill-type">{a.type.toUpperCase()}</span>
+                          </td>
+                          <td className="center">{fmt(a.currentFunding || 0)}</td>
+                          <td className="center">{Math.round((a.profitSplit || 0) * 100)}%</td>
+                          <td className="center">
+                            <span
+                              className={
+                                'payouts-pill ' +
+                                (a.status === 'Live'
+                                  ? 'payouts-pill-green'
+                                  : a.status === 'Funded'
+                                  ? 'payouts-pill-blue'
+                                  : a.status === 'Challenge'
+                                  ? 'payouts-pill-yellow'
+                                  : 'payouts-pill-gray')
+                              }
+                            >
+                              {a.status.toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="muted" style={{ marginTop: 8 }}>
-            Remover:{' '}
-            {methods.map((m) => (
-              <button key={m} className="chip" onClick={() => removeMethod(m)}>
-                {m} ✕
-              </button>
-            ))}
+          {/* Método de Pagamento */}
+          <div className="payouts-section">
+            <div className="payouts-section-title">Método de Pagamento</div>
+            
+            <div className="payouts-field-row payouts-field-row-2">
+              <div className="payouts-field">
+                <label>Método Atual</label>
+                <select
+                  className="payouts-input"
+                  value={state.method}
+                  onChange={(e) => setState({ ...state, method: e.target.value })}
+                >
+                  {methods.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="payouts-field">
+                <label>Adicionar Novo</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="payouts-input"
+                    placeholder="Nome do método..."
+                    style={{ flex: 1 }}
+                    value={newMethod}
+                    onChange={(e) => setNewMethod(e.target.value)}
+                  />
+                  <button className="payouts-btn payouts-btn-ghost" onClick={addMethod}>+</button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Métodos Cadastrados
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {methods.map((m) => (
+                  <span key={m} className="payouts-chip" onClick={() => removeMethod(m)}>
+                    {m} ✕
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="field">
-          <label>Data aprovada</label>
-          <input
-            type="date"
-            className="input"
-            value={state.approvedDate || ''}
-            onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
-          />
-        </div>
-      </div>
+          {/* Preview */}
+          {preview.length > 0 && (
+            <div className="payouts-preview">
+              <div className="payouts-preview-header">
+                <div className="payouts-preview-title">💡 Prévia de Distribuição</div>
+                <div className="payouts-stats-mini">
+                  <div className="payouts-stat-mini">
+                    <div className="payouts-stat-mini-label">Total</div>
+                    <div className="payouts-stat-mini-value">{fmt(state.amountSolicited)}</div>
+                  </div>
+                  <div className="payouts-stat-mini">
+                    <div className="payouts-stat-mini-label">Taxa</div>
+                    <div className="payouts-stat-mini-value">{fmt(totals.fee)}</div>
+                  </div>
+                  <div className="payouts-stat-mini">
+                    <div className="payouts-stat-mini-label">Contas</div>
+                    <div className="payouts-stat-mini-value">{selectedAccounts.length}</div>
+                  </div>
+                  
+                </div>
+              </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <h3>💡 Prévia por conta</h3>
-        <table>
-          <thead>
-            <tr><th>Conta</th><th>Split</th><th>Share</th><th>Fee</th><th>Net</th></tr>
-          </thead>
-          <tbody>
-            {preview.map((r) => (
-              <tr key={r.id}>
-                <td>{r.name}</td>
-                <td className="center">{Math.round(r.split * 100)}%</td>
-                <td className="center">{'$' + r.share.toFixed(2)}</td>
-                <td className="center">{'$' + r.fee.toFixed(2)}</td>
-                <td className="center">{'$' + r.net.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3} style={{ textAlign: 'right' }}>Totals:</td>
-              <td className="center">{'$' + totals.fee.toFixed(2)}</td>
-              <td className="center">{'$' + totals.net.toFixed(2)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+              <div className="payouts-table-wrapper" style={{ maxHeight: 240 }}>
+                <table className="payouts-table">
+                  <thead>
+                    <tr>
+                      <th>Conta</th>
+                      <th className="center">Split</th>
+                      <th className="center">Base</th>
+                      <th className="center">Taxa</th>
+                      <th className="center">Líquido</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.name}</td>
+                        <td className="center">{Math.round(r.split * 100)}%</td>
+                        <td className="center">{fmt(r.share)}</td>
+                        <td className="center" style={{ color: 'var(--yellow)' }}>{fmt(r.fee)}</td>
+                        <td className="center" style={{ color: 'var(--green)', fontWeight: 700 }}>{fmt(r.net)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-        <button className="btn secondary" onClick={onClose}>Cancelar</button>
-        <button
-          className="btn"
-          onClick={() => {
-            const payload = {
-              ...state,
-              fee: totals.fee,
-              amountReceived: totals.net
-            }
-            onSave(payload)
-          }}
-        >
-          {edit ? 'Salvar' : 'Criar'}
-        </button>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="payouts-modal-footer">
+          <button className="payouts-btn payouts-btn-secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button
+            className="payouts-btn payouts-btn-primary"
+            onClick={() => {
+              const payload = {
+                ...state,
+                fee: totals.fee,
+                amountReceived: totals.net
+              }
+              onSave(payload)
+            }}
+          >
+            💾 {edit ? 'Salvar' : 'Criar Payout'}
+          </button>
+        </div>
+
       </div>
     </div>
   )
