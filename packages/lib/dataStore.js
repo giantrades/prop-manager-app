@@ -540,7 +540,7 @@ if (metricResult && typeof metricResult === "object" && "progress" in metricResu
     let daysActive = 0;
     if (goal.minDays && goal.minDays > 0) {
       const relevantTrades = (trades || []).filter(t =>
-        isInPeriod(t.entry_datetime || t.date, config.period, config.startDate)
+        isInPeriod(t.entry_datetime || t.date, goal.period, goal.startDate)
       );
       const uniqueDays = new Set(relevantTrades.map(t => new Date(t.entry_datetime || t.date).toISOString().split("T")[0]));
       daysActive = uniqueDays.size;
