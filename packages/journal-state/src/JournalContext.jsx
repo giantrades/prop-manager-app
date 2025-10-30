@@ -59,6 +59,25 @@ export default function JournalProvider({ children }) {
         
         if (!mounted) return;
         setTrades(allTrades || []);
+        // 🔹 Sincroniza trades com o dataStore
+try {
+  const ds = await import("@apps/lib/dataStore.js");
+  const { getAll, save } = ds;
+  const all = await getAll();
+
+  // Garante que os trades do journal fiquem no dataStore
+  if (JSON.stringify(all.trades || []) !== JSON.stringify(allTrades || [])) {
+    console.log('📦 Sincronizando trades com dataStore...');
+    await save({
+      ...all,
+      trades: allTrades || [],
+    });
+    window.dispatchEvent(new CustomEvent('datastore:change'));
+  }
+} catch (err) {
+  console.warn('⚠️ Falha ao sincronizar trades com dataStore:', err);
+}
+
         // Normaliza checklist (compatibilidade com dados antigos)
 const normalized = (allStrategies || []).map(s => {
   // Se checklist estiver em formato antigo (array de strings), convertê-la
@@ -151,6 +170,22 @@ const saveTrade = useCallback(async (trade) => {
   });
   // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
   window.dispatchEvent(new CustomEvent('journal:change'));
+// 🔹 Atualiza também o dataStore local
+try {
+  const ds = await import("@apps/lib/dataStore.js");
+  const { getAll, save } = ds;
+  const all = await getAll();
+
+  const updatedTrades = [
+    payload, 
+    ...(all.trades || []).filter(t => t.id !== payload.id)
+  ];
+
+  await save({ ...all, trades: updatedTrades });
+  window.dispatchEvent(new CustomEvent('datastore:change'));
+} catch (err) {
+  console.warn("⚠️ Falha ao atualizar trades no dataStore:", err);
+}
 
   // 🔹 Atualiza funding incremental com correção de delta
   if (Array.isArray(payload.accounts)) {
@@ -209,6 +244,18 @@ const deleteTrade = useCallback(async (tradeId) => {
   setTrades(prev => prev.filter(t => t.id !== tradeId));
 // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
   window.dispatchEvent(new CustomEvent('journal:change'));
+  // 🔹 Remove trade também do dataStore
+try {
+  const ds = await import("@apps/lib/dataStore.js");
+  const { getAll, save } = ds;
+  const all = await getAll();
+  const remainingTrades = (all.trades || []).filter(t => t.id !== tradeId);
+  await save({ ...all, trades: remainingTrades });
+  window.dispatchEvent(new CustomEvent('datastore:change'));
+} catch (err) {
+  console.warn("⚠️ Falha ao remover trade do dataStore:", err);
+}
+
   // 🔹 Reverte impacto do PnL nas contas
   if (Array.isArray(trade.accounts)) {
     try {

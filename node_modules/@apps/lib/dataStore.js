@@ -1,5 +1,9 @@
 // src/lib/dataStore.js
 import { v4 as uuid } from 'uuid'
+import { openDB } from 'idb';
+
+
+
 
 const LS_KEY = 'propmanager-data-v1'
 
@@ -54,6 +58,22 @@ export function setSettings(patch){
   save(data); return data.settings
 }
 
+// 🔹 Fallback: garante que o dataStore possa puxar trades do IndexedDB (Journal)
+export async function ensureJournalSynced() {
+  try {
+    const db = await openDB('journal-db', 2);
+    const trades = await db.getAll('trades');
+    const data = load();
+    if (!Array.isArray(data.trades) || data.trades.length === 0) {
+      console.log('📥 Carregando trades do Journal (IndexedDB) para dataStore...');
+      data.trades = trades || [];
+      save(data);
+      window.dispatchEvent(new CustomEvent('datastore:change'));
+    }
+  } catch (err) {
+    console.warn('⚠️ Falha ao sincronizar journal no dataStore:', err);
+  }
+}
 /* --------------------
    ACCOUNTS
    -------------------- */

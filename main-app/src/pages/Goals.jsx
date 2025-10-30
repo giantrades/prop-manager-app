@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid'
 import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { createTag, getAllTags } from '@apps/lib/dataStore'
 import { useJournal } from '@apps/journal-state'
+import { ensureJournalSynced } from '@apps/lib/dataStore';
 
 function hexToRgba(hex, alpha = 1) {
   const cleanHex = hex.replace('#', '')
@@ -37,33 +38,212 @@ useEffect(() => {
   window.addEventListener('storage', handler);
   window.addEventListener('journal:change', handler);
 
-  // Atualiza também quando os trades mudarem
-  if (trades && trades.length > 0) {
-    loadData();
-  }
-
-  const interval = setInterval(() => loadData(), 15 * 60 * 1000);
-
   return () => {
     window.removeEventListener('datastore:change', handler);
     window.removeEventListener('storage', handler);
-    window.addEventListener('journal:change', handler);
+    window.removeEventListener('journal:change', handler);
     clearInterval(interval);
   };
 }, [trades?.length]);
  
 
-  function loadData() {
-    const d = getAll()
-    setAccounts(d.accounts || [])
-    setStrategies(d.strategies || [])
-    const g = getAllGoals({ includeArchived: true })
-    setGoals(g)
-     // 🔹 Se quiser usar os trades para progressos futuros
-  if (journal?.trades?.length) {
-    console.log("📈 Trades disponíveis:", journal.trades.length);
-  }
-  }
+// ✅ Função completa de cálculo
+// ===============================
+function updateGoalProgressFromTrades(goals = [], tradesList = []) {
+  if (!Array.isArray(goals)) return [];
+  if (!Array.isArray(tradesList)) tradesList = [];
+
+  // função de segurança numérica
+  const num = v => Number(v || 0);
+
+  return goals.map(goal => {
+    // ignora metas inválidas
+    if (!goal || !goal.type) return goal;
+
+    // ---- Filtra trades relevantes ----
+    const goalAccounts = Array.isArray(goal.linkedAccounts) && goal.linkedAccounts.length > 0
+      ? goal.linkedAccounts
+      : null;
+
+    const relevantTrades = goalAccounts
+      ? tradesList.filter(t => goalAccounts.includes(t.accountId))
+      : tradesList.slice();
+
+    // ---- Cálculo base ----
+    const target = num(goal.targetValue || 0);
+    let currentValue = 0;
+
+    switch (goal.type) {
+      case 'profit':
+      case 'profitWithConsistency':
+        currentValue = relevantTrades.reduce((s, t) => s + num(t.result_net), 0);
+        break;
+
+      case 'roi':
+        const pnl = relevantTrades.reduce((s, t) => s + num(t.result_net), 0);
+        const invested = relevantTrades.reduce((s, t) => s + num(t.volume), 0);
+        currentValue = invested > 0 ? (pnl / invested) * 100 : 0;
+        break;
+
+      case 'tradeCount':
+        currentValue = relevantTrades.length;
+        break;
+
+      case 'winRate': {
+        const wins = relevantTrades.filter(t => num(t.result_net) > 0).length;
+        currentValue = relevantTrades.length ? (wins / relevantTrades.length) * 100 : 0;
+        break;
+      }
+
+      case 'avgR': {
+        const rVals = relevantTrades.map(t => num(t.result_R ?? t.R ?? t.rMultiple ?? t.result_R_multiple))
+          .filter(v => !Number.isNaN(v));
+        currentValue = rVals.length ? rVals.reduce((a,b)=>a+b,0) / rVals.length : 0;
+        break;
+      }
+
+      // payout e outros casos
+      default:
+        currentValue = goal.currentValue ?? 0;
+        break;
+    }
+
+    // ---- SubGoals ----
+    let subProgresses = [];
+    let combinedProgress = 0;
+
+    if (Array.isArray(goal.subGoals) && goal.subGoals.length > 0) {
+      const totalWeight = goal.subGoals.reduce((s, sg) => s + num(sg.weight || 1), 0);
+
+      subProgresses = goal.subGoals.map((sg, idx) => {
+        // filtra trades relevantes ao subgoal
+        const subAccs = Array.isArray(sg.linkedAccounts) && sg.linkedAccounts.length
+          ? sg.linkedAccounts
+          : goalAccounts;
+
+        const subTrades = subAccs
+          ? relevantTrades.filter(t => subAccs.includes(t.accountId))
+          : relevantTrades.slice();
+
+        let subValue = 0;
+        const targetSub = num(sg.targetValue || 0);
+
+        switch (sg.type || goal.type) {
+          case 'profit':
+          case 'profitWithConsistency':
+            subValue = subTrades.reduce((s, t) => s + num(t.result_net), 0);
+            break;
+          case 'roi':
+            const roiPnL = subTrades.reduce((s, t) => s + num(t.result_net), 0);
+            const roiVol = subTrades.reduce((s, t) => s + num(t.volume), 0);
+            subValue = roiVol > 0 ? (roiPnL / roiVol) * 100 : 0;
+            break;
+          case 'tradeCount':
+            subValue = subTrades.length;
+            break;
+          case 'winRate':
+            const subWins = subTrades.filter(t => num(t.result_net) > 0).length;
+            subValue = subTrades.length ? (subWins / subTrades.length) * 100 : 0;
+            break;
+          case 'avgR':
+            const subR = subTrades.map(t => num(t.result_R ?? t.R ?? t.rMultiple ?? t.result_R_multiple)).filter(v => !Number.isNaN(v));
+            subValue = subR.length ? subR.reduce((a,b)=>a+b,0)/subR.length : 0;
+            break;
+          default:
+            subValue = 0;
+        }
+
+        let subProgress = targetSub > 0 ? (subValue / targetSub) * 100 : 0;
+        if (subProgress > 100) subProgress = 100;
+
+        // calcula dias ativos únicos (para metas com minDays)
+        const uniqueDays = [...new Set(subTrades.map(t => new Date(t.entry_datetime).toDateString()))];
+        const daysActive = uniqueDays.length;
+
+        return {
+          ...sg,
+          currentValue: subValue,
+          progress: subProgress,
+          completed: subProgress >= 100,
+          daysActive,
+          uniqueDays
+        };
+      });
+
+      // ---- Combina subProgresses ----
+      if (goal.mode === 'sequential') {
+        // encontra o primeiro subgoal não completo
+        const firstIncomplete = subProgresses.findIndex(sg => !sg.completed);
+        combinedProgress = subProgresses.reduce((acc, sg, idx) => {
+          if (idx < firstIncomplete) return acc + (100 / subProgresses.length);
+          if (idx === firstIncomplete) return acc + (sg.progress / subProgresses.length);
+          return acc;
+        }, 0);
+      } else {
+        // modo parallel (ponderado)
+        combinedProgress = subProgresses.reduce((acc, sg) => acc + (num(sg.weight || 1) * (sg.progress || 0)), 0) / totalWeight;
+      }
+    }
+
+    // ---- Progress principal ----
+    let progress = 0;
+    if (subProgresses.length > 0) {
+      progress = combinedProgress;
+    } else if (target > 0) {
+      progress = (currentValue / target) * 100;
+    }
+
+    if (progress > 100) progress = 100;
+    if (progress < 0) progress = 0;
+
+    return {
+      ...goal,
+      currentValue,
+      progress,
+      completed: progress >= 100,
+      subProgresses
+    };
+  });
+}
+
+// ===============================
+// ✅ Função de carregamento global
+// ===============================
+function loadData() {
+  await ensureJournalSynced();
+  const d = getAll();
+  const g = getAllGoals({ includeArchived: true }) || [];
+
+  setAccounts(d.accounts || []);
+  setStrategies(d.strategies || []);
+
+  // usa trades do Journal, se existirem, ou fallback para datastore
+  const sourceTrades = Array.isArray(trades) && trades.length > 0 ? trades : (d.trades || []);
+  const updated = updateGoalProgressFromTrades(g, sourceTrades);
+  setGoals(updated);
+}
+
+// ===============================
+// ✅ useEffect
+// ===============================
+useEffect(() => {
+  loadData();
+
+  const handler = () => loadData();
+  window.addEventListener('datastore:change', handler);
+  window.addEventListener('storage', handler);
+
+  // atualiza periodicamente a cada 15min (opcional)
+  const interval = setInterval(() => loadData(), 15 * 60 * 1000);
+
+  return () => {
+    window.removeEventListener('datastore:change', handler);
+    window.removeEventListener('storage', handler);
+    clearInterval(interval);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [trades?.length]);
+
 
 const filteredGoals = useMemo(() => {
   let list = goals
