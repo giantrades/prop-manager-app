@@ -341,103 +341,105 @@ function isInPeriod(dateToCheckISO, period, startDateISO) {
   return checkDate >= Math.max(start, cutoffDate) && checkDate <= now
 }
 
-// calcula métricas a partir de trades/accounts/payouts
+// ===============================
+// ✅ CÁLCULO DE MÉTRICAS REVISADO
+// ===============================
 function calculateMetric(type, trades, accounts, config = {}) {
-  const period = config.period || 'allTime'
-  const startDate = config.startDate || null
-  // Filtra trades relevantes
+  const period = config.period || "allTime";
+  const startDate = config.startDate || null;
+
+  // 🔹 Filtra trades válidos dentro do período
   const relevantTrades = (trades || []).filter(trade => {
-    if (!trade) return false
-     const tradeDate = trade.entry_datetime || trade.date
-    if (!isInPeriod(trade.entry_datetime || trade.date, period, startDate)) return false
-    if (config.linkedAccounts && config.linkedAccounts.length) {
-      if (!config.linkedAccounts.includes(trade.accountId)) return false
-    }
-    if (config.linkedStrategies && config.linkedStrategies.length) {
-      if (!config.linkedStrategies.includes(trade.strategyId)) return false
-    }
-    return true
-  })
+    if (!trade) return false;
+    if (!isInPeriod(trade.entry_datetime || trade.date, period, startDate)) return false;
 
-  switch(type) {
-    case 'profit':
-      return relevantTrades.reduce((sum, t) => sum + (Number(t.result_net) || 0), 0)
-
-    case 'profitWithConsistency': {
-  const consistencyLimit = Number(config.consistencyLimit || 50); // %
-  const targetProfit = Number(config.targetValue || 0);
-
-  // 🔹 agrupa lucros diários
-  const dailyProfits = {};
-  for (const t of relevantTrades) {
-    const d = (t.entry_datetime || t.date || '').split('T')[0];
-    const profit = Number(t.result_net) || 0;
-    dailyProfits[d] = (dailyProfits[d] || 0) + profit;
-  }
-
-  const values = Object.values(dailyProfits);
-  const totalProfit = values.reduce((a, b) => a + b, 0);
-  const maxDayProfit = Math.max(0, ...values);
-  const percent = totalProfit > 0 ? (maxDayProfit / totalProfit) * 100 : 0;
-
-  // 🔹 progresso parcial (lucro e consistência)
-  const profitProgress = targetProfit > 0 ? Math.min(100, (totalProfit / targetProfit) * 100) : 0;
-  const consistencyProgress = percent > 0 ? Math.min(100, (consistencyLimit / percent) * 100) : 100;
-
-  // 🔹 progresso total ponderado
-  const progress = Math.min(100, (profitProgress * 0.6) + (consistencyProgress * 0.4));
-
-  return {
-    totalProfit,
-    percent,              // % do maior dia
-    consistencyLimit,
-    profitProgress,
-    consistencyProgress,
-    progress,
-    completed: progress >= 100,
-  };
-}
-
-    case 'tradeCount':
-      return relevantTrades.length
-
-    case 'winRate': {
-      const wins = relevantTrades.filter(t => (Number(t.result_R) || 0) > 0).length
-      const total = relevantTrades.length
-      return total > 0 ? (wins / total) * 100 : 0
+    // filtro por contas
+    if (config.linkedAccounts?.length && !config.linkedAccounts.includes(trade.accountId)) {
+      return false;
     }
 
-    case 'avgR': {
-      const totalR = relevantTrades.reduce((s,t)=> s + (Number(t.result_R) || 0), 0)
-      return relevantTrades.length > 0 ? totalR / relevantTrades.length : 0
+    // filtro por estratégia
+    if (config.linkedStrategies?.length && !config.linkedStrategies.includes(trade.strategyId)) {
+      return false;
     }
 
-    case 'roi': {
-      const linked = (config.linkedAccounts && config.linkedAccounts.length) 
-        ? accounts.filter(acc=> config.linkedAccounts.includes(acc.id))
-        : accounts
-      const totalInitial = linked.reduce((s, a) => s + (Number(a.initialFunding)||0), 0)
-      const totalCurrent = linked.reduce((s, a) => s + (Number(a.currentFunding)||0), 0)
-      return totalInitial > 0 ? ((totalCurrent - totalInitial) / totalInitial) * 100 : 0
+    return true;
+  });
+
+  switch (type) {
+    case "profit": {
+      const total = relevantTrades.reduce((s, t) => s + (Number(t.result_net) || 0), 0);
+      return total;
     }
 
-    case 'payout': {
-      const payouts = load().payouts || []
-      const relevantPayouts = payouts.filter(p => {
-        // p.accountIds may be array; consider any matching account
-        const anyMatch = !config.linkedAccounts?.length || (p.accountIds || []).some(id => config.linkedAccounts.includes(id))
-        const inPeriod = isInPeriod(p.dateCreated || p.approvedDate || p.date, period, startDate)
-        return anyMatch && inPeriod
-      })
-      return relevantPayouts.reduce((s,p)=> s + (Number(p.amountReceived || p.amountSolicited || 0)), 0)
+    case "profitWithConsistency": {
+      const consistencyLimit = Number(config.consistencyLimit || 50); // % limite desejado
+      const targetProfit = Number(config.targetValue || 0);
+
+      // 🔹 Agrupa lucros diários
+      const dailyProfits = {};
+      for (const t of relevantTrades) {
+        const d = (t.entry_datetime || t.date || "").split("T")[0];
+        const p = Number(t.result_net) || 0;
+        dailyProfits[d] = (dailyProfits[d] || 0) + p;
+      }
+
+      const values = Object.values(dailyProfits);
+      const totalProfit = values.reduce((a, b) => a + b, 0);
+      const maxDay = Math.max(0, ...values);
+      const ratio = totalProfit > 0 ? (maxDay / totalProfit) * 100 : 0;
+
+      // 🔹 Cálculo de progresso
+      const profitProgress =
+        targetProfit > 0 ? Math.min(100, (totalProfit / targetProfit) * 100) : 0;
+      const consistencyProgress =
+        ratio > 0 ? Math.min(100, (consistencyLimit / ratio) * 100) : 100;
+
+      // Combinação ponderada
+      const progress = Math.min(100, profitProgress * 0.7 + consistencyProgress * 0.3);
+
+      return {
+        totalProfit,
+        ratio,
+        progress,
+        completed: progress >= 100,
+        profitProgress,
+        consistencyProgress,
+        consistencyLimit,
+      };
+    }
+
+    case "tradeCount":
+      return relevantTrades.length;
+
+    case "winRate": {
+      const wins = relevantTrades.filter(t => Number(t.result_R || 0) > 0).length;
+      const total = relevantTrades.length;
+      return total > 0 ? (wins / total) * 100 : 0;
+    }
+
+    case "avgR": {
+      const totalR = relevantTrades.reduce((s, t) => s + (Number(t.result_R) || 0), 0);
+      return relevantTrades.length > 0 ? totalR / relevantTrades.length : 0;
+    }
+
+    case "roi": {
+      const linked = config.linkedAccounts?.length
+        ? accounts.filter(a => config.linkedAccounts.includes(a.id))
+        : accounts;
+      const totalInit = linked.reduce((s, a) => s + (Number(a.initialFunding) || 0), 0);
+      const totalNow = linked.reduce((s, a) => s + (Number(a.currentFunding) || 0), 0);
+      return totalInit > 0 ? ((totalNow - totalInit) / totalInit) * 100 : 0;
     }
 
     default:
-      return 0
+      return 0;
   }
 }
 
-// getGoalProgress
+// ===============================
+// ✅ PROGRESSO DE GOAL REVISADO
+// ===============================
 export function getGoalProgress(goalId) {
   const data = load();
   const goals = data.goals || [];
@@ -447,52 +449,42 @@ export function getGoalProgress(goalId) {
   const trades = data.trades || [];
   const accounts = data.accounts || [];
 
-  // 🔹 SE TEM SUBGOALS
-  if (goal.subGoals && goal.subGoals.length) {
-    const subProgresses = goal.subGoals.map(sub => {
-      const config = {
+  // ---------------------------
+  // 📍 SE EXISTEM SUBGOALS
+  // ---------------------------
+  if (Array.isArray(goal.subGoals) && goal.subGoals.length > 0) {
+    const subProgresses = goal.subGoals.map((sub, index) => {
+      const cfg = {
         ...sub,
         period: sub.period || goal.period,
         startDate: sub.startDate || goal.startDate,
+        linkedAccounts: sub.linkedAccounts?.length
+          ? sub.linkedAccounts
+          : goal.linkedAccounts || [],
       };
 
-      // Herda contas se o sub não tiver suas próprias
-      if (
-        (!sub.linkedAccounts || !sub.linkedAccounts.length) &&
-        goal.linkedAccounts &&
-        goal.linkedAccounts.length
-      ) {
-        config.linkedAccounts = goal.linkedAccounts;
-      }
+      const metric = calculateMetric(sub.type, trades, accounts, cfg);
+      const isComplex = typeof metric === "object" && "progress" in metric;
 
-      // Calcula métrica atual
-     const metricResult = calculateMetric(sub.type, trades, accounts, config);
-let currentValue, progress;
+      const currentValue = isComplex ? metric.totalProfit || 0 : metric || 0;
+      let progress = isComplex
+        ? metric.progress
+        : sub.targetValue > 0
+        ? Math.min(100, (currentValue / sub.targetValue) * 100)
+        : 0;
 
-if (metricResult && typeof metricResult === "object" && "progress" in metricResult) {
-  // Caso profitWithConsistency (ou futuros tipos compostos)
-  currentValue = metricResult.totalProfit || 0;
-  progress = metricResult.progress || 0;
-} else {
-  currentValue = metricResult || 0;
-  progress =
-    sub.targetValue > 0
-      ? Math.min(100, (currentValue / sub.targetValue) * 100)
-      : 0;
-}
-
-
-      // 🔹 Cálculo dos dias ativos (subgoal individual)
+      // ⏳ Cálculo dos dias ativos
       let daysActive = 0;
       if (sub.minDays && sub.minDays > 0) {
-        const relevantTrades = (trades || []).filter(t =>
-           isInPeriod(t.entry_datetime || t.date, config.period, config.startDate)
+        const relevant = trades.filter(t =>
+          isInPeriod(t.entry_datetime || t.date, cfg.period, cfg.startDate)
         );
-        const uniqueDays = new Set(relevantTrades.map(t => new Date(t.entry_datetime || t.date).toISOString().split("T")[0]));
-        daysActive = uniqueDays.size;
+        const unique = new Set(
+          relevant.map(t => (t.entry_datetime || t.date || "").split("T")[0])
+        );
+        daysActive = unique.size;
       }
 
-      // 🔹 Condições de conclusão
       const meetsValue = progress >= 100;
       const meetsDays = !sub.minDays || daysActive >= sub.minDays;
       const completed = meetsValue && meetsDays;
@@ -511,70 +503,73 @@ if (metricResult && typeof metricResult === "object" && "progress" in metricResu
       };
     });
 
-    // 🔹 Cálculo de progresso total conforme o modo
+    // ---------------------------
+    // 🧩 APLICA MODO DE PROGRESSO
+    // ---------------------------
     let totalProgress = 0;
 
     if (goal.mode === "sequential") {
-      // ✅ MODO SEQUENCIAL — cada sub depende do anterior
+      // ✅ Cada sub só progride após o anterior estar completo
       for (let i = 0; i < subProgresses.length; i++) {
-        const s = subProgresses[i];
+        const prev = subProgresses[i - 1];
+        const cur = subProgresses[i];
+
         if (i === 0) {
-          totalProgress += s.progress / subProgresses.length;
+          totalProgress += cur.progress / subProgresses.length;
+        } else if (prev?.completed) {
+          totalProgress += cur.progress / subProgresses.length;
         } else {
-          const prev = subProgresses[i - 1];
-          if (prev.completed) {
-            totalProgress += s.progress / subProgresses.length;
-          } else {
-            break; // interrompe se o anterior não estiver completo
-          }
+          // bloqueia progresso de subgoals futuros
+          cur.progress = 0;
+          cur.locked = true;
         }
       }
     } else {
-      // ✅ MODO PARALELO (ponderado)
+      // ✅ Modo paralelo ponderado
       const totalWeight = subProgresses.reduce((s, sg) => s + (sg.weight || 1), 0);
-      const weightedSum = subProgresses.reduce((s, sg) => s + sg.progress * (sg.weight || 1), 0);
+      const weightedSum = subProgresses.reduce(
+        (s, sg) => s + (sg.progress * (sg.weight || 1)),
+        0
+      );
       totalProgress = totalWeight > 0 ? weightedSum / totalWeight : 0;
     }
 
-    // 🔹 Cálculo dos dias ativos do goal principal
-    let daysActive = 0;
-    if (goal.minDays && goal.minDays > 0) {
-      const relevantTrades = (trades || []).filter(t =>
-        isInPeriod(t.entry_datetime || t.date, goal.period, goal.startDate)
-      );
-      const uniqueDays = new Set(relevantTrades.map(t => new Date(t.entry_datetime || t.date).toISOString().split("T")[0]));
-      daysActive = uniqueDays.size;
-    }
-
-    // 🔹 Condições para completar o goal
+    // ---------------------------
+    // 🎯 Goal principal
+    // ---------------------------
     const meetsValue = totalProgress >= 100;
-    const meetsDays = !goal.minDays || daysActive >= goal.minDays;
+    const relevantTrades = trades.filter(t =>
+      isInPeriod(t.entry_datetime || t.date, goal.period, goal.startDate)
+    );
+    const uniqueDays = new Set(
+      relevantTrades.map(t => (t.entry_datetime || t.date || "").split("T")[0])
+    );
+
+    const meetsDays = !goal.minDays || uniqueDays.size >= goal.minDays;
     const completed = meetsValue && meetsDays;
 
     return {
       progress: totalProgress,
       completed,
-      daysActive,
+      daysActive: uniqueDays.size,
       minDays: goal.minDays || 0,
       subProgresses,
     };
   }
 
-  // 🔹 SE FOR GOAL SIMPLES (sem subgoals)
+  // ---------------------------
+  // 🎯 GOAL SIMPLES
+  // ---------------------------
   const cfg = { ...goal };
   const result = calculateMetric(goal.type, trades, accounts, cfg);
-let currentValue, progress;
+  const isComplex = typeof result === "object" && "progress" in result;
 
-// se o cálculo retornar objeto (caso do profitWithConsistency)
-if (result && typeof result === "object" && "progress" in result) {
-  currentValue = result.totalProfit || 0;
-  progress = result.progress || 0;
-} else {
-  currentValue = result || 0;
-  progress = goal.targetValue > 0
+  const currentValue = isComplex ? result.totalProfit || 0 : result || 0;
+  const progress = isComplex
+    ? result.progress
+    : goal.targetValue > 0
     ? Math.min(100, (currentValue / goal.targetValue) * 100)
     : 0;
-}
 
   return {
     currentValue,
@@ -582,6 +577,7 @@ if (result && typeof result === "object" && "progress" in result) {
     completed: progress >= 100,
   };
 }
+
 
 export function getAllGoals(opts = { includeArchived: false }) {
   const data = load()
