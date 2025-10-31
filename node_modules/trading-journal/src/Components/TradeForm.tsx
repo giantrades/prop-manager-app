@@ -95,7 +95,7 @@ export default function TradeForm({ onClose, editing }: Props) {
 
   // Filtrar contas ativas
   const activeAccounts = useMemo(() => 
-    accounts.filter(acc => ['Live', 'Funded', 'Challenge'].includes(acc.status)),
+    accounts.filter(acc => ['Live', 'Funded', 'Challenge', 'Challenge Concluido'].includes(acc.status)),
     [accounts]
   );
 // Logo após o useMemo de activeAccounts

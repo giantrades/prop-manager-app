@@ -164,7 +164,7 @@ function SummaryCards(){
   const totalNetPayouts = payouts.reduce((s,p)=> s + (p.amountReceived||0), 0) 
   const roi = totalFunding>0 ? (totalNetPayouts / totalFunding) : 0 
   const relevantAccounts = allAccounts.filter(a=> categorySet.has(a.type)) 
-  const activeCount = relevantAccounts.filter(a=> ['Funded','Challenge','Live'].includes(a.status)).length 
+  const activeCount = relevantAccounts.filter(a=> ['Funded','Challenge','Challenge Concluido','Live'].includes(a.status)).length 
   const standbyCount = relevantAccounts.filter(a=> a.status==='Standby').length 
   const fmt = (v)=> currency==='USD' ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v||0) : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((v||0)*rate) 
   return ( 
@@ -1219,7 +1219,7 @@ function AccountsOverview(){
             <tr key={a.id}>
               <td>{a.name}</td>
               <td><span className={'pill ' +(a.type=== 'Forex' ? 'lavander':a.type === 'Cripto' ? 'orange': a.type === 'Futures' ? 'pink': a.type === 'Personal' ? 'purple' : 'gray')}>{a.type}</span></td>
-              <td><span className={'pill '+(a.status==='Live'?'green':a.status==='Funded'?'blue':a.status==='Challenge'?'yellow':'gray')}>{a.status}</span></td>
+              <td><span className={'pill '+(a.status==='Live'?'green':a.status==='Funded'?'blue':a.status==='Challenge'?'yellow':a.status==='Challenge Concluido'?'yellow':'gray')}>{a.status}</span></td>
               <td>${a.currentFunding.toLocaleString()}</td>
             </tr>
           ))}

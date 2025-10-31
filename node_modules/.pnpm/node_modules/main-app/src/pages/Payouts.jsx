@@ -735,6 +735,8 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                                   ? 'payouts-pill-blue'
                                   : a.status === 'Challenge'
                                   ? 'payouts-pill-yellow'
+                                  :a.status ==='Challenge Concluido'
+                                  ? 'payouts-pill-yellow'
                                   : 'payouts-pill-gray')
                               }
                             >

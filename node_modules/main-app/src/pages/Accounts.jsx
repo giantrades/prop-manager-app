@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { useCurrency } from '@apps/state'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { X } from "lucide-react"; // ícone de fechar
-const statuses = ['Live','Funded','Challenge','Standby']
+const statuses = ['Live','Funded','Challenge','Challenge Concluido','Standby']
 const types = ['Futures', 'Forex','Personal' ,'Cripto' ]
 
 export default function Accounts() {
@@ -121,6 +121,8 @@ const summary = useMemo(() => {
         ? 'blue'
         : status === 'Challenge'
         ? 'yellow'
+        : status === 'Challenge Concluido'
+        ? 'yellow'
         : 'gray',
   }))
 
@@ -234,6 +236,7 @@ const summary = useMemo(() => {
         status === 'Live' ? 'green' :
         status === 'Funded' ? 'blue' :
         status === 'Challenge' ? 'yellow' :
+        status === 'Challenge Concluido' ? 'yellow' :
         status === 'Standby' ? 'gray' :
         'gray'
 
@@ -343,7 +346,7 @@ const summary = useMemo(() => {
             </thead>
             <tbody>
               {sortedAccounts.map(a => {
-                const pill = a.status === 'Live' ? 'green' : a.status === 'Funded' ? 'blue' : a.status === 'Challenge' ? 'yellow' : 'gray'
+                const pill = a.status === 'Live' ? 'green' : a.status === 'Funded' ? 'blue' : a.status === 'Challenge' ? 'yellow' : a.status === 'Challenge Concluido'? 'yellow' : 'gray'
                 const typePill = a.type === 'Forex' ? 'lavander' : a.type === 'Cripto' ? 'orange' : a.type === 'Futures' ? 'pink' : a.type === 'Personal' ? 'purple' : 'gray';
                 const s = getAccountStats(a.id) || { roi: 0, totalPayouts: 0 }
                 const roiPct = (s.roi * 100).toFixed(2)

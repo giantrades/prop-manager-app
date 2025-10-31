@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import TradeTable from '../Components/TradeTable';
 import TradeForm from '../Components/TradeForm';
 import { useJournal } from '@apps/journal-state';
@@ -23,6 +23,10 @@ const [filters, setFilters] = useState({
 
   const [searchAccount, setSearchAccount] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
+  // Após os estados existentes (depois de selectedAccount)
+const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(["live", "funded"]);
+const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+const statusDropdownRef = useRef<HTMLDivElement | null>(null);
   const [accounts, setAccounts] = useState(() => {
     try {
       return getAll().accounts || [];
@@ -56,7 +60,17 @@ const [filters, setFilters] = useState({
     };
   }, []);
 
-
+// Após o useEffect existente de accounts
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!statusDropdownRef.current) return;
+    if (!statusDropdownRef.current.contains(e.target as Node)) {
+      setStatusDropdownOpen(false);
+    }
+  }
+  if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [statusDropdownOpen]);
   // usecurrency para mudar o rate
   
 const { currency, rate } = useCurrency();
@@ -124,7 +138,7 @@ const filteredTrades = useMemo(() => {
     );
   }
   
-  // ✅ 4. ADICIONAR: Filtro por Conta Selecionada (busca)
+  // 4. Filtro por Conta Selecionada (busca)
   if (selectedAccount) {
     filtered = filtered.filter(t =>
       t.accountId === selectedAccount.id ||
@@ -134,11 +148,33 @@ const filteredTrades = useMemo(() => {
     );
   }
   
+  // ✅ 5. NOVO: Filtro por Status de Conta
+  if (accountStatusFilter.length > 0) {
+    // Primeiro, pega IDs das contas que correspondem aos status filtrados
+    const allowedAccountIds = accounts
+      .filter(acc => accountStatusFilter.includes(acc.status?.toLowerCase()))
+      .map(acc => acc.id);
+    
+    // Filtra trades que pertencem a essas contas
+    filtered = filtered.filter(t => {
+      // Verifica se o trade tem accountId direto
+      if (t.accountId && allowedAccountIds.includes(t.accountId)) {
+        return true;
+      }
+      // Verifica se o trade tem array de accounts
+      if (Array.isArray(t.accounts)) {
+        return t.accounts.some(acc => allowedAccountIds.includes(acc.accountId));
+      }
+      // Se não tem conta definida, não passa no filtro
+      return false;
+    });
+  }
+  
   // Retorna ordenado por data
   return filtered.sort((a, b) => 
     new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime()
   );
-}, [enrichedTrades, filters, selectedAccount]); // ✅ Adicionar selectedAccount nas dependências
+}, [enrichedTrades, filters, selectedAccount, accountStatusFilter, accounts]); // ✅ Adicionar accountStatusFilter e accounts nas dependências
 
   // Calcular estatísticas dos trades filtrados (sua lógica estava correta)
   const filteredStats = useMemo(() => {
@@ -180,12 +216,33 @@ const filteredTrades = useMemo(() => {
   }, [trades]);
 
   // Contas ativas para filtro
-  const activeAccounts = useMemo(() => 
-    accounts.filter(acc => ['Live', 'Funded', 'Challenge'].includes(acc.status)),
-    [accounts]
-  );
+const activeAccounts = useMemo(() => {
+  let accs = accounts || [];
+  
+  // Filtro de status
+  if (accountStatusFilter.length > 0) {
+    accs = accs.filter(a =>
+      accountStatusFilter.includes(a.status?.toLowerCase())
+    );
+  }
+  
+  return accs;
+}, [accounts, accountStatusFilter]);
+  // Após o useMemo de activeAccounts
+const accountStatuses = useMemo<string[]>(() => {
+  const all = (accounts || [])
+    .map((a) => a.status?.toLowerCase() || "")
+    .filter((s): s is string => !!s);
+  return Array.from(new Set(all));
+}, [accounts]);
+
 const visibleAccounts = useMemo(() => {
-  let accs = activeAccounts || [];
+  let accs = accounts || [];
+  
+  // ✅ Filtro de status
+  if (accountStatusFilter.length > 0) {
+    accs = accs.filter(a => accountStatusFilter.includes(a.status?.toLowerCase()));
+  }
   
   // Filtra por categoria (se selecionada)
   if (filters.category) {
@@ -202,9 +259,11 @@ const visibleAccounts = useMemo(() => {
   }
   
   return accs;
-}, [activeAccounts, filters.category, searchAccount]);
+}, [accounts, accountStatusFilter, filters.category, searchAccount]); // ✅ Adicionar accountStatusFilter
+
   const clearFilters = () => {
     setFilters({ account: '', category: '', timeframe: '', strategyId: ''});
+    setAccountStatusFilter(["live", "funded"]);
   };
 
   // Custom Tooltip para o gráfico (mantido, pois estava correto)
@@ -308,7 +367,98 @@ const visibleAccounts = useMemo(() => {
       <option key={s.id} value={s.id}>{s.name}</option>
     ))}
   </select>
+{/* 🔽 Filtro de Status da Conta */}
+<div style={{ position: 'relative' }} ref={statusDropdownRef}>
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+    className="input"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      minWidth: 180,
+      cursor: "pointer"
+    }}
+  >
+    {accountStatusFilter && accountStatusFilter.length > 0
+      ? `Status: ${accountStatusFilter.join(", ")}`
+      : "Filtrar Status"}
+    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+  </button>
 
+  {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+    <div
+      className="card"
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: 0,
+        zIndex: 9999,
+        background: "var(--card-bg, #1e1e2b)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        minWidth: 200,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        {accountStatuses.map((status) => {
+          const st = String(status || '');
+          const checked = accountStatusFilter.includes(st);
+          return (
+            <label
+              key={st}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 4px",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#e6e6e9",
+                textTransform: "capitalize",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? Array.from(new Set([...accountStatusFilter, st]))
+                    : accountStatusFilter.filter(s => s !== st);
+                  setAccountStatusFilter(next);
+                }}
+                style={{ width: 16, height: 16 }}
+              />
+              <span>{st}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(["live", "funded"])}
+        >
+          Resetar padrão
+        </button>
+
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+        >
+          Marcar todos
+        </button>
+      </div>
+    </div>
+  )}
+</div>
   {/* ✅ 3. NOVO: Busca de Conta */}
   <div style={{ position: "relative", minWidth: 260 }} className="account-search-container">
     <input

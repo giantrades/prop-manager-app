@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo,useEffect, useRef } from 'react';
 import { useJournal } from "@apps/journal-state";
 import { useCurrency } from "@apps/state";
 import StrategyForm from '../Components/StrategyForm';
 import { Strategy } from '../types/strategy';
 import { Trade } from '../types/trade';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import {getAll} from '@apps/lib/dataStore';
+
 
 type ConsistencyItem = {
   title: string;
@@ -83,8 +85,29 @@ const pillClass = {
 };
 
 
-export const StrategyCard = ({ strategy, trades = [], onEdit, onDelete, currency, rate }) => {
-  const linkedTrades = trades.filter(t => t.strategyId === strategy.id);
+export const StrategyCard = ({ strategy, trades = [], onEdit, onDelete, currency, rate, accountStatusFilter, accounts}) => {
+  const linkedTrades = useMemo(() => {
+    let filtered = trades.filter(t => t.strategyId === strategy.id);
+    
+    // ✅ Aplicar filtro de status de conta
+    if (accountStatusFilter.length > 0 && accounts.length > 0) {
+      const allowedAccountIds = accounts
+        .filter(acc => accountStatusFilter.includes(acc.status?.toLowerCase()))
+        .map(acc => acc.id);
+      
+      filtered = filtered.filter(t => {
+        if (t.accountId && allowedAccountIds.includes(t.accountId)) {
+          return true;
+        }
+        if (Array.isArray(t.accounts)) {
+          return t.accounts.some(acc => allowedAccountIds.includes(acc.accountId));
+        }
+        return false;
+      });
+    }
+    
+    return filtered;
+  }, [trades, strategy.id, accountStatusFilter, accounts]);
 
   const fmt = (v: number) => {
     const value = currency === 'USD' ? (v || 0) : (v || 0) * rate;
@@ -382,11 +405,153 @@ export default function StrategiesPage() {
       removeStrategy(id);
     }
   };
+// Dentro do componente StrategiesPage, após os estados existentes:
+const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(["live", "funded"]);
+const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+const statusDropdownRef = useRef<HTMLDivElement | null>(null);
 
+// Estado para buscar contas
+const [accounts, setAccounts] = useState(() => {
+  try {
+    return getAll().accounts || [];
+  } catch {
+    return [];
+  }
+});
+
+useEffect(() => {
+  try {
+    const data = getAll();
+    setAccounts(data.accounts || []);
+  } catch (err) {
+    console.error('Erro ao atualizar contas:', err);
+  }
+}, []);
+
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!statusDropdownRef.current) return;
+    if (!statusDropdownRef.current.contains(e.target as Node)) {
+      setStatusDropdownOpen(false);
+    }
+  }
+  if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [statusDropdownOpen]);
+
+const accountStatuses = useMemo<string[]>(() => {
+  const all = (accounts || [])
+    .map((a) => a.status?.toLowerCase() || "")
+    .filter((s): s is string => !!s);
+  return Array.from(new Set(all));
+}, [accounts]);
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">📈 Gerenciamento de Estratégias</h2>
+        {/* Filtros */}
+<div className="card p-3 flex gap-4 items-center">
+  <span className="text-sm font-medium text-muted">🔎 Filtros:</span>
+  
+  {/* Filtro de Status da Conta */}
+  <div style={{ position: 'relative' }} ref={statusDropdownRef}>
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+      className="input"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        minWidth: 180,
+        cursor: "pointer"
+      }}
+    >
+      {accountStatusFilter && accountStatusFilter.length > 0
+        ? `Status: ${accountStatusFilter.join(", ")}`
+        : "Filtrar Status"}
+      <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+    </button>
+
+    {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+      <div
+        className="card"
+        style={{
+          position: "absolute",
+          top: "110%",
+          left: 0,
+          zIndex: 9999,
+          background: "var(--card-bg, #1e1e2b)",
+          border: "1px solid rgba(255,255,255,0.06)",
+          borderRadius: 8,
+          padding: "8px 10px",
+          boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+          minWidth: 200,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+          {accountStatuses.map((status) => {
+            const st = String(status || '');
+            const checked = accountStatusFilter.includes(st);
+            return (
+              <label
+                key={st}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "6px 4px",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  color: "#e6e6e9",
+                  textTransform: "capitalize",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? Array.from(new Set([...accountStatusFilter, st]))
+                      : accountStatusFilter.filter(s => s !== st);
+                    setAccountStatusFilter(next);
+                  }}
+                  style={{ width: 16, height: 16 }}
+                />
+                <span>{st}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+          <button
+            className="btn ghost small"
+            style={{ flex: 1 }}
+            onClick={() => setAccountStatusFilter(["live", "funded"])}
+          >
+            Resetar padrão
+          </button>
+
+          <button
+            className="btn ghost small"
+            style={{ flex: 1 }}
+            onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+          >
+            Marcar todos
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <button className="btn ghost" onClick={() => {
+    setAccountStatusFilter(["live", "funded"]);
+  }}>
+    🧹 Limpar
+  </button>
+</div>
         <button className="btn" onClick={() => { setEditingStrategy(null); setOpen(true); }}>
           ➕ Nova Estratégia
         </button>
@@ -402,6 +567,8 @@ export default function StrategiesPage() {
             onDelete={handleDelete}
             currency={currency}
             rate={rate}
+            accountStatusFilter={accountStatusFilter} // ✅ passar prop
+            accounts={accounts} // ✅ passar prop
           />
         ))}
       </div>
