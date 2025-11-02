@@ -1814,24 +1814,113 @@ const filteredTrades = useMemo(() => {
               </div>
             </div>
 
-            {/* Expected R */}
-            <div style={{
-              gridColumn: 'span 4',
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%)',
-              border: '1px solid rgba(139, 92, 246, 0.2)',
-              borderRadius: 10,
-              padding: 20
-            }}>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Expected R (Average R per trade)
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#f9fafb', marginBottom: 4 }}>
-                {basic.expectedR ? basic.expectedR : basic.avgR.toFixed(2)}
-              </div>
-              <div style={{ fontSize: 12, color: '#6b7280' }}>
-                Avg Winning R: {basic.avgWinR || '-'} | Avg Losing R: {basic.avgLossR || '-'}
-              </div>
-            </div>
+{/* Expected R */}
+<div style={{
+  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%)',
+  border: '1px solid rgba(139, 92, 246, 0.2)',
+  borderRadius: 10,
+  padding: 20
+}}>
+  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    Expected R
+  </div>
+  <div style={{ fontSize: 28, fontWeight: 700, color: '#f9fafb', marginBottom: 4 }}>
+    {basic.expectedR ? basic.expectedR : basic.avgR.toFixed(2)}
+  </div>
+  <div style={{ fontSize: 12, color: '#6b7280' }}>
+    Avg Win: {basic.avgWinR || '-'} | Avg Loss: {basic.avgLossR || '-'}
+  </div>
+</div>
+
+{/* Best Trade */}
+<div style={{
+  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%)',
+  border: '1px solid rgba(16, 185, 129, 0.2)',
+  borderRadius: 10,
+  padding: 20
+}}>
+  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    Best Trade
+  </div>
+  <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981', marginBottom: 4 }}>
+    {(() => {
+      const best = filteredTrades.reduce((max, t) => 
+        (t.result_net || 0) > (max.result_net || 0) ? t : max, 
+        filteredTrades[0] || { result_net: 0 }
+      );
+      return fmt(best.result_net || 0);
+    })()}
+  </div>
+  <div style={{ fontSize: 12, color: '#6b7280' }}>
+    {(() => {
+      const best = filteredTrades.reduce((max, t) => 
+        (t.result_net || 0) > (max.result_net || 0) ? t : max, 
+        filteredTrades[0] || {}
+      );
+      return best.asset ? `${best.asset} (${best.direction || 'N/A'})` : 'No trades';
+    })()}
+  </div>
+</div>
+
+{/* Best R */}
+<div style={{
+  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%)',
+  border: '1px solid rgba(34, 197, 94, 0.2)',
+  borderRadius: 10,
+  padding: 20
+}}>
+  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    Biggest R:R Trade
+  </div>
+  <div style={{ fontSize: 28, fontWeight: 700, color: '#22c55e', marginBottom: 4 }}>
+    {(() => {
+      const bestR = filteredTrades.reduce((max, t) => 
+        (t.result_R || 0) > (max.result_R || 0) ? t : max, 
+        filteredTrades[0] || { result_R: 0 }
+      );
+      return (bestR.result_R || 0).toFixed(2) + 'R';
+    })()}
+  </div>
+  <div style={{ fontSize: 12, color: '#6b7280' }}>
+    {(() => {
+      const bestR = filteredTrades.reduce((max, t) => 
+        (t.result_R || 0) > (max.result_R || 0) ? t : max, 
+        filteredTrades[0] || {}
+      );
+      return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades';
+    })()}
+  </div>
+</div>
+
+{/* Worst Trade */}
+<div style={{
+  background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%)',
+  border: '1px solid rgba(239, 68, 68, 0.2)',
+  borderRadius: 10,
+  padding: 20
+}}>
+  <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    Worst Trade
+  </div>
+  <div style={{ fontSize: 28, fontWeight: 700, color: '#ef4444', marginBottom: 4 }}>
+    {(() => {
+      const worst = filteredTrades.reduce((min, t) => 
+        (t.result_net || 0) < (min.result_net || 0) ? t : min, 
+        filteredTrades[0] || { result_net: 0 }
+      );
+      return fmt(worst.result_net || 0);
+    })()}
+  </div>
+  <div style={{ fontSize: 12, color: '#6b7280' }}>
+    {(() => {
+      const worst = filteredTrades.reduce((min, t) => 
+        (t.result_net || 0) < (min.result_net || 0) ? t : min, 
+        filteredTrades[0] || {}
+      );
+      return worst.asset ? `${worst.asset} (${worst.direction || 'N/A'})` : 'No trades';
+    })()}
+  </div>
+</div>
 
             {/* Advanced Metrics */}
             <div style={{ gridColumn: 'span 4' }}>
