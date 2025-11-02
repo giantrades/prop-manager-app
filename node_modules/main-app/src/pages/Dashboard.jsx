@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useCurrency } from '@apps/state'
 import { useFilters } from '@apps/state'
 import {
@@ -11,7 +11,15 @@ import { getAllGoals } from '@apps/lib/dataStore';
 /* =========================================================
    1) Barra de filtros (categorias + range)
    ========================================================= */
-function FiltersBar({ categories }) {
+function FiltersBar({ 
+  categories, 
+  accountStatusFilter, 
+  setAccountStatusFilter,
+  statusDropdownOpen,
+  setStatusDropdownOpen,
+  statusDropdownRef,
+  accountStatuses 
+}) {
   const {
     categories: sel,
     toggleCategory,
@@ -50,43 +58,159 @@ function FiltersBar({ categories }) {
   })
 
   return (
-    <div className="filters sticky-filters">
-      <span>🔎 Filtros:</span>
-      <div style={{ display:'inline-flex', gap:8, flexWrap:'wrap' }}>
-        {categories.map(item=>{
-          const active = sel.includes(item)
-          return (
-            <button key={item}
-              className={`chip ${active?'active':''}`}
-              style={chipStyle(item, active)}
-              onClick={()=>toggleCategory(item)}
-            >
-              {active &&
-                <span style={{
-                  display:'inline-block', width:8, height:8, borderRadius:'50%',
-                  backgroundColor: catColors[item] || 'var(--primary)', marginRight:6
-                }}/>}
-              {item}
-            </button>
-          )
-        })}
+    <div className="filters sticky-filters" style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 24,
+      flexWrap: 'wrap'
+    }}>
+      {/* ESQUERDA: Filtros de Categoria */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 auto' }}>
+        <span>🔎 Filtros:</span>
+        <div style={{ display:'inline-flex', gap:8, flexWrap:'wrap' }}>
+          {categories.map(item=>{
+            const active = sel.includes(item)
+            return (
+              <button key={item}
+                className={`chip ${active?'active':''}`}
+                style={chipStyle(item, active)}
+                onClick={()=>toggleCategory(item)}
+              >
+                {active &&
+                  <span style={{
+                    display:'inline-block', width:8, height:8, borderRadius:'50%',
+                    backgroundColor: catColors[item] || 'var(--primary)', marginRight:6
+                  }}/>}
+                {item}
+              </button>
+            )
+          })}
+        </div>
+
+        <button
+          className={`chip ${isMarkAllActive ? 'active' : ''}`}
+          style={{
+            borderColor:'var(--primary)',
+            backgroundColor: isMarkAllActive ? 'var(--primary)20' : 'transparent',
+            color:'var(--primary)'
+          }}
+          onClick={()=>markAll(categories)}
+        >
+          ✅ Marcar todas
+        </button>
+
+        <button className="chip" onClick={clearCategories}>🧹 Limpar</button>
       </div>
 
-      <button
-        className={`chip ${isMarkAllActive ? 'active' : ''}`}
-        style={{
-          borderColor:'var(--primary)',
-          backgroundColor: isMarkAllActive ? 'var(--primary)20' : 'transparent',
-          color:'var(--primary)'
-        }}
-        onClick={()=>markAll(categories)}
-      >
-        ✅ Marcar todas
-      </button>
+{/* ========== CENTRO: Filtro de Status de Conta ========== */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 8,
+        flex: '0 0 auto',
+        justifyContent: 'center'
+      }}>
+        <div style={{ position: 'relative' }} ref={statusDropdownRef}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+            className="input"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              minWidth: 180,
+              cursor: "pointer"
+            }}
+          >
+            {accountStatusFilter && accountStatusFilter.length > 0
+              ? `Status: ${accountStatusFilter.join(", ")}`
+              : "Filtrar Status"}
+            <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+          </button>
 
-      <button className="chip" onClick={clearCategories}>🧹 Limpar</button>
+          {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+            <div
+              className="card"
+              style={{
+                position: "absolute",
+                top: "110%",
+                left: 0,
+                zIndex: 9999,
+                background: "var(--card-bg, #1e1e2b)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderRadius: 8,
+                padding: "8px 10px",
+                boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                minWidth: 200,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                {accountStatuses.map((status) => {
+                  const st = String(status || '');
+                  const checked = accountStatusFilter.includes(st);
+                  return (
+                    <label
+                      key={st}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "6px 4px",
+                        cursor: "pointer",
+                        fontSize: 14,
+                        color: "#e6e6e9",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? Array.from(new Set([...accountStatusFilter, st]))
+                            : accountStatusFilter.filter(s => s !== st);
+                          setAccountStatusFilter(next);
+                        }}
+                        style={{ width: 16, height: 16 }}
+                      />
+                      <span>{st}</span>
+                    </label>
+                  );
+                })}
+              </div>
 
-      <div className="range">
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <button
+                  className="btn ghost small"
+                  style={{ flex: 1 }}
+                  onClick={() => setAccountStatusFilter(["live", "funded"])}
+                >
+                  Resetar padrão
+                </button>
+
+                <button
+                  className="btn ghost small"
+                  style={{ flex: 1 }}
+                  onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+                >
+                  Marcar todos
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* DIREITA: Filtros de Range Temporal */}
+      <div className="range" style={{ 
+        display: 'flex', 
+        gap: 8,
+        flex: '0 0 auto',
+        justifyContent: 'flex-end'
+      }}>
         {['7','30','180','365','all'].map(r=>(
           <button key={r}
             className={'chip '+(timeRange===r?'active':'')}
@@ -103,17 +227,17 @@ function FiltersBar({ categories }) {
 /* =========================================================
    2) Hook para filtrar contas/payouts e trazer firms
    ========================================================= */
-function useFiltered() {
- const [accounts, setAccounts] = useState([])
+function useFiltered(accountStatusFilter = ["live", "funded"]) {
+  const [accounts, setAccounts] = useState([])
   const [payouts, setPayouts] = useState([])
-  const [firms, setFirms] = useState ([])
+  const [firms, setFirms] = useState([])
  
-   useEffect(() => {
-   const data = getAll()
-   setAccounts(data.accounts || [])
-   setPayouts(data.payouts || [])
-   setFirms(data.firms || [])
-   }, [])
+  useEffect(() => {
+    const data = getAll()
+    setAccounts(data.accounts || [])
+    setPayouts(data.payouts || [])
+    setFirms(data.firms || [])
+  }, [])
 
   const { categories: selCats, timeRange, isMarkAllActive } = useFilters()
 
@@ -130,35 +254,59 @@ function useFiltered() {
   const accById   = Object.fromEntries(accounts.map(a => [a.id, a]))
   const accByName = Object.fromEntries(accounts.map(a => [a.name, a]))
 
-  const filteredAccounts = accounts.filter(a =>
-    catSet.has(a.type) && new Date(a.dateCreated) >= start
-  )
+  // ✅ APLICAR filtro de categoria, data E status
+  const filteredAccounts = accounts.filter(a => {
+    const matchesCategory = catSet.has(a.type);
+    const matchesDate = new Date(a.dateCreated) >= start;
+    const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
+                         accountStatusFilter.includes(a.status?.toLowerCase());
+    return matchesCategory && matchesDate && matchesStatus;
+  });
 
   const payoutBelongs = (p) => {
     const d = new Date(p.dateCreated || p.date)
     if (isNaN(+d) || d < start) return false
+    
     const direct = p.type || p.category
-    if (direct && catSet.has(direct)) return true
-    if (Array.isArray(p.accountIds) && p.accountIds.some(id => catSet.has(accById[id]?.type))) return true
-    if (p.accountId && catSet.has(accById[p.accountId]?.type)) return true
-    if (Array.isArray(p.accounts) && p.accounts.some(n => catSet.has(accByName[n]?.type))) return true
-    if (p.accountName && catSet.has(accByName[p.accountName]?.type)) return true
-    return false
+    if (direct && catSet.has(direct)) {
+      // Se tem categoria direta, ainda precisa verificar status
+      // mas como não tem conta associada, deixa passar se tem a categoria
+      return true;
+    }
+    
+    // Helper para verificar se uma conta passa no filtro de status
+    const checkAccountStatus = (acc) => {
+      if (!acc) return false;
+      const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
+                           accountStatusFilter.includes(acc.status?.toLowerCase());
+      return catSet.has(acc.type) && matchesStatus;
+    };
+    
+    if (Array.isArray(p.accountIds) && p.accountIds.some(id => checkAccountStatus(accById[id]))) return true;
+    if (p.accountId && checkAccountStatus(accById[p.accountId])) return true;
+    
+    if (Array.isArray(p.accounts)) {
+      return p.accounts.some(n => checkAccountStatus(accByName[n]));
+    }
+    
+    if (p.accountName && checkAccountStatus(accByName[p.accountName])) return true;
+    
+    return false;
   }
 
   return {
     accounts: filteredAccounts,
     payouts: payouts.filter(payoutBelongs),
     allAccounts: accounts,
-    firms,                // <-- agora disponível p/ FundingPerFirmChart e PayoutsPerFirmChart
+    firms,
     categorySet: catSet,
     timeRange
   }
 }
 
 /*========================================================= 3) Cards resumo ========================================================= */ 
-function SummaryCards(){ 
-  const { accounts, payouts, allAccounts, categorySet } = useFiltered() 
+function SummaryCards({ accountStatusFilter = ["live", "funded"] }){ 
+  const { accounts, payouts, allAccounts, categorySet } = useFiltered(accountStatusFilter) 
   const { currency, rate } = useCurrency() 
   const totalFunding = accounts.reduce((s,a)=> s + (a.currentFunding||0), 0) 
   const totalNetPayouts = payouts.reduce((s,p)=> s + (p.amountReceived||0), 0) 
@@ -173,17 +321,10 @@ function SummaryCards(){
   <div className="card accent2"><h3>🏦 Funding</h3><div className="stat">{fmt(totalFunding)}</div></div> 
   <div className="card accent3"><h3>📈  %</h3><div className="stat">{(roi*100).toFixed(2)}%</div></div> 
   <div className="card accent4"> <h3>🧮 Contas</h3> <div style={{display:'flex',justifyContent:'center',gap:40}}> <div><div className="thin">Ativas</div><div className="stat center">{activeCount}</div></div> <div style={{width:1,background:'#ccc'}}/> <div><div className="thin">Standby</div><div className="stat center">{standbyCount}</div></div> </div> </div> </div> ) }
-/* =========================================================
-   4) (Gráficos e outros subcomponentes) – mantidos iguais,
-       apenas com cores/estilo já modernizado no seu snippet
-   ========================================================= */
-// -- PatrimonioLine, FundingPerAccount, FundingPerCategory,
-//    RecentPayouts, AccountsOverview
-// (Cole exatamente os mesmos que você já tinha – não houve
-//  mudança de lógica, apenas de estilo no seu passo 7.)
 
-function PatrimonioLine(){
-  const { accounts, payouts, allAccounts } = useFiltered()
+
+function PatrimonioLine({ accountStatusFilter = ["live", "funded"] }){
+  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter)
   const { currency, rate } = useCurrency()
   const { categories: selected, timeRange } = useFilters()
 
@@ -408,8 +549,8 @@ function PatrimonioLine(){
 }
 
 
-function FundingPerAccount(){
-  const { accounts } = useFiltered()
+function FundingPerAccount({ accountStatusFilter = ["live", "funded"] }){
+  const { accounts } = useFiltered(accountStatusFilter)
   const { currency, rate } = useCurrency()
   
   const data = accounts.map((a, index) => ({ 
@@ -619,12 +760,20 @@ function FundingPerAccount(){
   )
 }
 
-function FundingPerCategory(){
+function FundingPerCategory({ accountStatusFilter = ["live", "funded"] }){
   const [accounts, setAccounts] = useState([])
-   useEffect(() => {
-   const data = getAll()
-   setAccounts(data.accounts || [])
-   }, [])
+  useEffect(() => {
+    const data = getAll()
+    let accs = data.accounts || []
+    
+    // ✅ Aplicar filtro de status
+    if (accountStatusFilter.length > 0) {
+      accs = accs.filter(a => accountStatusFilter.includes(a.status?.toLowerCase()))
+    }
+    
+    setAccounts(accs)
+  }, [accountStatusFilter]) // ✅ adicionar dependência
+   
   const { currency, rate } = useCurrency();
   const [categoryColors, setCategoryColors] = useState({});
 
@@ -868,8 +1017,8 @@ const stats = {
   )
 }
 
-function RecentPayouts(){
-  const { payouts } = useFiltered()
+function RecentPayouts({ accountStatusFilter = ["live", "funded"] }){
+  const { payouts } = useFiltered(accountStatusFilter)
   const { currency, rate } = useCurrency()
   const fmt = (v)=> currency==='USD'
     ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v||0)
@@ -895,8 +1044,8 @@ function RecentPayouts(){
   )
 }
 
-function FundingPerFirmChart() {
-  const { accounts = [] } = useFiltered() || {};
+function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
+  const { accounts = [] } = useFiltered(accountStatusFilter) || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
   const [firms, setFirms] = useState ([])
  
@@ -1032,8 +1181,8 @@ function FundingPerFirmChart() {
   );
 }
 
-function PayoutsPerFirmChart() {
-  const { payouts = [], accounts = [] } = useFiltered() || {};
+function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
+  const { payouts = [], accounts = [] } = useFiltered(accountStatusFilter) || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
   const [firms, setFirms] = useState ([])
    useEffect(() => {
@@ -1202,8 +1351,8 @@ function PayoutsPerFirmChart() {
 }
 
 
-function AccountsOverview(){
-  const { accounts } = useFiltered()
+function AccountsOverview({ accountStatusFilter = ["live", "funded"] }){
+  const { accounts } = useFiltered(accountStatusFilter)
   
   const recentAccounts = accounts
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
@@ -1233,31 +1382,70 @@ function AccountsOverview(){
    5) Página principal
    ========================================================= */
 export default function Dashboard(){
-  const { allAccounts } = useFiltered()
+  // ✅ PASSO 1: Estados para filtro de status de conta
+  const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded"]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef(null);
+
+  // Pega todas as contas para montar os filtros
+  const [allAccountsData, setAllAccountsData] = useState([]);
+  
+  useEffect(() => {
+    const data = getAll();
+    setAllAccountsData(data.accounts || []);
+  }, []);
+
   const cats = useMemo(
-    () => Array.from(new Set(allAccounts.map(a => a.type))),
-    [allAccounts]
-  )
+    () => Array.from(new Set(allAccountsData.map(a => a.type))),
+    [allAccountsData]
+  );
+
+  // ✅ Obter todos os status disponíveis (SEM type annotation)
+  const accountStatuses = useMemo(() => {
+    const all = (allAccountsData || [])
+      .map((a) => a.status?.toLowerCase() || "")
+      .filter((s) => !!s); // remove o ": s is string"
+    return Array.from(new Set(all));
+  }, [allAccountsData]);
+
+  // ✅ Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function onDocClick(e) { // remove type annotation
+      if (!statusDropdownRef.current) return;
+      if (!statusDropdownRef.current.contains(e.target)) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [statusDropdownOpen]);
 
   return (
     <div className="grid" style={{gap:20}}>
-      <FiltersBar categories={cats}/>
-      <SummaryCards/>
+      <FiltersBar 
+        categories={cats} 
+        accountStatusFilter={accountStatusFilter}
+        setAccountStatusFilter={setAccountStatusFilter}
+        statusDropdownOpen={statusDropdownOpen}
+        setStatusDropdownOpen={setStatusDropdownOpen}
+        statusDropdownRef={statusDropdownRef}
+        accountStatuses={accountStatuses}
+      />
+      <SummaryCards accountStatusFilter={accountStatusFilter} />
       <div className="grid" style={{gridTemplateColumns:'2fr 1fr', gap:16}}>
-        <PatrimonioLine/>
-        <FundingPerCategory/>
+        <PatrimonioLine accountStatusFilter={accountStatusFilter} />
+        <FundingPerCategory accountStatusFilter={accountStatusFilter} />
         <GoalsDistributionChart />
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:16}}>
-        <FundingPerAccount/>
-        <RecentPayouts/>
+        <FundingPerAccount accountStatusFilter={accountStatusFilter} />
+        <RecentPayouts accountStatusFilter={accountStatusFilter} />
       </div>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <FundingPerFirmChart />
-        <PayoutsPerFirmChart />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <FundingPerFirmChart accountStatusFilter={accountStatusFilter} />
+        <PayoutsPerFirmChart accountStatusFilter={accountStatusFilter} />
       </div>
-
-      <AccountsOverview/>
+      <AccountsOverview accountStatusFilter={accountStatusFilter} />
     </div>
   )
 }

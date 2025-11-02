@@ -1,5 +1,5 @@
 // main-app/src/pages/Accounts.jsx
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { useCurrency } from '@apps/state'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { X } from "lucide-react"; // ícone de fechar
@@ -9,10 +9,16 @@ const types = ['Futures', 'Forex','Personal' ,'Cripto' ]
 export default function Accounts() {
   const [accounts, setAccounts] = useState([])
   const [firms, setFirms] = useState([])
+  // ✅ NOVO: Estados para filtro de status
+  const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded", "challenge"]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef(null);
+
   useEffect(() => {
   const data = getAll()
   setAccounts(data.accounts || [])
   setFirms(data.firms || [])}, []) 
+
   const { currency, rate } = useCurrency()
   const [selected, setSelected] = useState(null) // 'new' or accountId
   const [query, setQuery] = useState('')
@@ -28,8 +34,15 @@ export default function Accounts() {
     return () => window.removeEventListener('storage', sync)
   }, [])
   // Filter accounts based on search query
-  const filteredAccounts = accounts.filter(a => (a.name || '').toLowerCase().includes(query.toLowerCase()))
-
+// ✅ MODIFICADO: Filtrar por busca E status
+  const filteredAccounts = useMemo(() => {
+    return accounts.filter(a => {
+      const matchesSearch = (a.name || '').toLowerCase().includes(query.toLowerCase());
+      const matchesStatus = accountStatusFilter.length === 0 || 
+                           accountStatusFilter.includes(a.status?.toLowerCase());
+      return matchesSearch && matchesStatus;
+    });
+  }, [accounts, query, accountStatusFilter]);
   // Sort accounts based on current sort configuration
   const sortedAccounts = useMemo(() => {
     if (!sortConfig.key) return filteredAccounts
@@ -129,9 +142,28 @@ const summary = useMemo(() => {
   return { total, byType, byStatus }
 }, [accounts])
 
+// ✅ NOVO: Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!statusDropdownRef.current) return;
+      if (!statusDropdownRef.current.contains(e.target)) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [statusDropdownOpen]);
+
+  // ✅ NOVO: Obter todos os status disponíveis
+  const accountStatuses = useMemo(() => {
+    const all = (accounts || [])
+      .map((a) => a.status?.toLowerCase() || "")
+      .filter((s) => !!s);
+    return Array.from(new Set(all));
+  }, [accounts]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-{/* ==== SUMMARY CARDS ==== */}
 {/* === CARDS DE RESUMO === */}
 <div
   style={{
@@ -273,37 +305,194 @@ const summary = useMemo(() => {
 </div>
 
 
-      {/* FORM APPEARS ABOVE THE TABLE SO IT PUSHES THE TABLE DOWN */}
+{/* ✅ FORMS COMO POPUPS MODAIS */}
       {selected && (
-        <div>
-          {selected === 'new' ? (
-            <NewAccountForm
-              firms={firms}
-              onCreate={(accountData) => {
-                const newAccount = createAccount(accountData)
-                setAccounts(getAll().accounts)
-                setSelected(newAccount.id)
-
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            maxWidth: 800,
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            position: 'relative'
+          }}>
+            {/* Botão X para fechar */}
+            <button
+              onClick={() => setSelected(null)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                fontSize: 24,
+                cursor: 'pointer',
+                zIndex: 1001,
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'background 0.2s'
               }}
-              onCancel={() => setSelected(null)}
-            />
-          ) : (
-            <AccountDetail
-              id={selected}
-              update={updateAccount}
-              getStats={getAccountStats}
-              firms={firms}
-              onClose={() => setSelected(null)}
-            />
-          )}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              ×
+            </button>
+
+            {selected === 'new' ? (
+              <NewAccountForm
+                firms={firms}
+                onCreate={(accountData) => {
+                  const newAccount = createAccount(accountData)
+                  setAccounts(getAll().accounts)
+                  setSelected(null) // ✅ Fecha o popup após criar
+                }}
+                onCancel={() => setSelected(null)}
+              />
+            ) : (
+              <AccountDetail
+                id={selected}
+                update={updateAccount}
+                getStats={getAccountStats}
+                firms={firms}
+                onClose={() => setSelected(null)}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* Toolbar + Create */}
+{/* Toolbar + Filtro + Create */}
       <div>
-        <div className="toolbar" style={{ marginBottom: 12 }}>
-          <input className="input" placeholder="Search accounts..." value={query} onChange={e => setQuery(e.target.value)} />
-          <button className="btn" onClick={() => setSelected('new')}>+ Create Account</button>
+        <div className="toolbar" style={{ 
+          marginBottom: 12, 
+          display: 'flex', 
+          gap: 12, 
+          alignItems: 'center',
+          flexWrap: 'wrap' 
+        }}>
+          {/* Busca */}
+          <input 
+            className="input" 
+            placeholder="Search accounts..." 
+            value={query} 
+            onChange={e => setQuery(e.target.value)}
+            style={{ flex: '1 1 200px' }}
+          />
+          
+          {/* ✅ NOVO: Filtro de Status */}
+          <div style={{ position: 'relative', flex: '0 0 auto' }} ref={statusDropdownRef}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+              className="input"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                minWidth: 200,
+                cursor: "pointer"
+              }}
+            >
+              {accountStatusFilter && accountStatusFilter.length > 0
+                ? `Status: ${accountStatusFilter.join(", ")}`
+                : "Filtrar Status"}
+              <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+            </button>
+
+            {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+              <div
+                className="card"
+                style={{
+                  position: "absolute",
+                  top: "110%",
+                  left: 0,
+                  zIndex: 9999,
+                  background: "var(--card-bg, #1e1e2b)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                  minWidth: 200,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {accountStatuses.map((status) => {
+                    const st = String(status || '');
+                    const checked = accountStatusFilter.includes(st);
+                    return (
+                      <label
+                        key={st}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "6px 4px",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          color: "#e6e6e9",
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? Array.from(new Set([...accountStatusFilter, st]))
+                              : accountStatusFilter.filter(s => s !== st);
+                            setAccountStatusFilter(next);
+                          }}
+                          style={{ width: 16, height: 16 }}
+                        />
+                        <span>{st}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn ghost small"
+                    style={{ flex: 1 }}
+                    onClick={() => setAccountStatusFilter(["live", "funded", "challenge"])}
+                  >
+                    Resetar padrão
+                  </button>
+
+                  <button
+                    className="btn ghost small"
+                    style={{ flex: 1 }}
+                    onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+                  >
+                    Marcar todos
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botão Criar */}
+          <button className="btn" onClick={() => setSelected('new')} style={{ flex: '0 0 auto' }}>
+            + Create Account
+          </button>
         </div>
 
         {/* Accounts table */}
