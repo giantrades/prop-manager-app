@@ -165,9 +165,22 @@ function computeSplit(amount, accounts){
   return { totalNet: Number(totalNet.toFixed(2)), totalFee: Number(totalFee.toFixed(2)), splitMap, deductions }
 }
 
+// --------------------
+// PAYOUTS (com attachments por conta)
+// --------------------
 export function createPayout(partial){
   const data = load()
-  const p = { id: uuid(), dateCreated: new Date().toISOString(), amountSolicited:0, method:'Rise', status:'Pending', accountIds: [], splitByAccount: {}, ...partial }
+  const p = {
+    id: uuid(),
+    dateCreated: new Date().toISOString(),
+    amountSolicited:0,
+    method:'Rise',
+    status:'Pending',
+    accountIds: [],
+    splitByAccount: {},
+    attachments: {}, // novo: mapa accountId -> { folderPath, fileId, fileName, url, uploadedAt }
+    ...partial
+  }
   if (p.accountIds && p.accountIds.length){
     const accounts = p.accountIds.map(id=> data.accounts.find(a=>a.id===id)).filter(Boolean)
     const c = computeSplit(p.amountSolicited, accounts)
@@ -178,10 +191,13 @@ export function createPayout(partial){
   save(data)
   return p
 }
+
 export function updatePayout(id, patch){
   const data = load()
   const idx = data.payouts.findIndex(p=>p.id===id); if (idx===-1) return null
-  data.payouts[idx] = { ...data.payouts[idx], ...patch }
+  // preserve existing attachments when updating
+  const existing = data.payouts[idx]
+  data.payouts[idx] = { ...existing, ...patch, attachments: { ...(existing.attachments||{}), ...(patch.attachments||{}) } }
   // recompute split if accountIds/amount changed
   const p = data.payouts[idx]
   if (p.accountIds && p.amountSolicited !== undefined) {
@@ -192,6 +208,24 @@ export function updatePayout(id, patch){
   }
   save(data); return data.payouts[idx]
 }
+
+/**
+ * Anexa/atualiza um arquivo (attachment) para uma conta dentro de um payout.
+ * attachment: { folderPath, folderId(optional), fileId, fileName, url, uploadedAt }
+ */
+export function setPayoutAttachment(payoutId, accountId, attachment) {
+  const data = load();
+  const idx = data.payouts.findIndex(p => p.id === payoutId);
+  if (idx === -1) return null;
+  if (!data.payouts[idx].attachments) data.payouts[idx].attachments = {};
+  data.payouts[idx].attachments[accountId] = {
+    ...(data.payouts[idx].attachments[accountId] || {}),
+    ...attachment,
+  };
+  save(data);
+  return data.payouts[idx].attachments[accountId];
+}
+
 export function deletePayout(id){
   const data = load()
   data.payouts = data.payouts.filter(p=>p.id!==id)

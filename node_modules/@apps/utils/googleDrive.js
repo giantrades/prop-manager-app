@@ -255,6 +255,116 @@ export async function downloadFile(fileId) {
   return response.result;
 }
 
+// -------------------------
+// DRIVE HELPERS (pasta + upload binário)
+// -------------------------
+/**
+ * Procura uma pasta pelo nome e parentId. Se não existir, cria.
+ * Retorna o folderId.
+ */
+export async function getOrCreateFolderByName(name, parentId = null) {
+  await ensureValidToken();
+  const parentQ = parentId ? `'${parentId}' in parents and ` : '';
+  const q = `${parentQ}name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await gapi.client.drive.files.list({ q, fields: 'files(id, name)' });
+  const files = res.result.files || [];
+  if (files.length > 0) return files[0].id;
+
+  // cria a pasta
+  const body = {
+    name,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: parentId ? [parentId] : undefined,
+  };
+  const create = await gapi.client.drive.files.create({
+    resource: body,
+    fields: 'id'
+  });
+  return create.result.id;
+}
+
+/**
+ * Cria (ou garante) uma árvore de pastas a partir de um array de segmentos.
+ * Ex: ['payouts','Futures','FTMO','Conta01','1500_2025-01-20']
+ * Retorna o folderId da última pasta criada/encontrada.
+ */
+export async function getOrCreateFolderByPath(segments = []) {
+  await ensureValidToken();
+  if (!Array.isArray(segments) || segments.length === 0) throw new Error('segments required');
+  let parent = null;
+  for (const seg of segments) {
+    parent = await getOrCreateFolderByName(seg, parent);
+  }
+  return parent;
+}
+
+/**
+ * Upload de arquivo binário (File/Blob) para uma pasta específica.
+ * Retorna o objeto result (contendo id e webViewLink quando possível).
+ */
+export async function uploadFileToFolder(folderId, file, fileName = null) {
+  await ensureValidToken();
+  if (!folderId) throw new Error('folderId required');
+  const name = fileName || file.name || `file_${Date.now()}`;
+
+  const boundary = '-------314159265358979323846';
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const close = `\r\n--${boundary}--`;
+
+  const metadata = {
+    name,
+    parents: [folderId],
+  };
+
+  // read file as ArrayBuffer
+  const blob = file instanceof Blob ? file : new Blob([file]);
+  const reader = new FileReader();
+  const arrayBuffer = await new Promise((resolve, reject) => {
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(blob);
+  });
+
+  const base64Data = (() => {
+    // convert ArrayBuffer to base64 string
+    let binary = '';
+    const bytes = new Uint8Array(arrayBuffer);
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const slice = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, slice);
+    }
+    return btoa(binary);
+  })();
+
+  const multipartRequestBody =
+    delimiter +
+    'Content-Type: application/json\r\n\r\n' +
+    JSON.stringify(metadata) +
+    delimiter +
+    'Content-Transfer-Encoding: base64\r\n' +
+    'Content-Type: application/octet-stream\r\n\r\n' +
+    base64Data +
+    close;
+
+  const response = await gapi.client.request({
+    path: '/upload/drive/v3/files',
+    method: 'POST',
+    params: { uploadType: 'multipart' },
+    headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
+    body: multipartRequestBody,
+  });
+
+  // Tenta obter webViewLink (pode requerer permissões)
+  try {
+    const fileId = response.result.id;
+    const metadataRes = await gapi.client.drive.files.get({ fileId, fields: 'id, name, webViewLink, webContentLink' });
+    return metadataRes.result;
+  } catch (e) {
+    return response.result;
+  }
+}
+
 // ============================================================
 // 🔹 JSON helpers — mantidos do original
 // ============================================================

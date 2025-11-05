@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import { getOrCreateFolderByPath, uploadFileToFolder, initGoogleDrive } from '@apps/utils/googleDrive'; 
 
 // ---------------------------
 // Página de listagem + CRUD
@@ -16,7 +17,16 @@ useEffect(() => {
   setAccounts(data.accounts || [])
   setPayouts(data.payouts || [])
 }, [])
-
+useEffect(() => {
+  const idToOpen = localStorage.getItem('openPayoutId');
+  if (idToOpen && payouts.length > 0) {
+    const found = payouts.find(p => p.id === idToOpen);
+    if (found) {
+      setShowForm({ edit: found }); // abre o modal com dados do payout
+      localStorage.removeItem('openPayoutId'); // não repetir
+    }
+  }
+}, [payouts]);
   // Mantém sincronizado com o localStorage quando outros componentes/páginas alteram
   useEffect(() => {
     const sync = () => {
@@ -455,7 +465,9 @@ useEffect(() => {
     if (acc) {
       const updatedFunding = Math.max((acc.currentFunding || 0) - netPerAccount, 0)
       updateAccount(acc.id, { ...acc, currentFunding: updatedFunding })
-    }
+    if (!payload.attachments) payload.attachments = {};
+}
+  
   })
 
   // Atualiza o estado local
@@ -581,6 +593,66 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       setState({ ...state, method: updated.methods[0] || '' })
     }
   }
+// estado local para acompanhar uploads (opcional: para UI)
+const [uploadingMap, setUploadingMap] = useState({}) // { accountId: boolean }
+
+// helper: upload file and attach metadata to payout (creates folder path then upload)
+async function handleUploadForAccount(accountId, file) {
+  try {
+    if (!file) return null;
+
+    // inicializa gdrive (se necessário) - não força prompt
+    await initGoogleDrive();
+
+    // monta a árvore de pastas: payouts > tipo > empresa > nomeConta > valor_data
+    const account = accounts.find(a => a.id === accountId);
+    const company = (account && account.firmId && (getAll().firms || []).find(f => f.id === account.firmId)?.name) || (account && account.company) || (state.company || 'UnknownCompany');
+    const tipo = state.type || (account && account.type) || 'Other';
+    const nomeConta = account ? account.name.replace(/\s+/g,'_') : 'Conta';
+    const dataPart = (state.amountSolicited || 0).toString().replace(/\./g,'').trim() + '_' + (state.dateCreated || new Date().toISOString().slice(0,10));
+    const folderSegments = ['payouts', tipo, company || 'Unknown', nomeConta, dataPart];
+
+    setUploadingMap(m => ({ ...m, [accountId]: true }));
+
+    // garante pasta final
+    const folderId = await getOrCreateFolderByPath(folderSegments);
+
+    // nome do arquivo exibido: 'payout_{valor_data}.{ext}' (exibido na UI)
+    const ext = (file.name.split('.').pop() || 'png');
+    const displayName = `payout_${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0,10)}.${ext}`;
+
+    // faz upload físico para a pasta
+    const uploaded = await uploadFileToFolder(folderId, file, displayName);
+
+    // monta metadados
+    const attachment = {
+      folderPath: folderSegments.join('/'),
+      folderId,
+      fileId: uploaded.id,
+      fileName: uploaded.name || displayName,
+      url: uploaded.webViewLink || `https://drive.google.com/file/d/${uploaded.id}/view`,
+      uploadedAt: new Date().toISOString()
+    };
+
+    // salva referência no dataStore
+    // se payout ainda não existe (criando novo), guardamos em state e depois quando salvar o payout chamamos update/create
+    if (!state.id) {
+      // mantemos num map temporário
+      setState(s => ({ ...s, attachments: { ...(s.attachments || {}), [accountId]: attachment } }));
+    } else {
+      // já tem payout id salvo (edit mode) -> atualiza no datastore
+      store.setPayoutAttachment(state.id, accountId, attachment);
+    }
+
+    setUploadingMap(m => ({ ...m, [accountId]: false }));
+    return attachment;
+  } catch (err) {
+    console.error('Upload failed:', err);
+    setUploadingMap(m => ({ ...m, [accountId]: false }));
+    alert('Erro ao enviar comprovante: ' + (err.message || err));
+    return null;
+  }
+}
 
   return (
     <div className="payouts-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -751,6 +823,73 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
               </table>
             </div>
           </div>
+          {/* Upload de comprovantes por conta selecionada */}
+{selectedAccounts.length > 0 && (
+  <div className="payouts-section" style={{ marginTop: 20 }}>
+    <div className="payouts-section-title">📎 Comprovantes por Conta</div>
+
+    {selectedAccounts.map((acc) => {
+      // Verifica se já existe anexo no estado atual (novo payout) ou no banco (editando payout)
+      const existingAttachment =
+        (state.attachments && state.attachments[acc.id]) ||
+        (state.id &&
+          store.getAll().payouts.find((p) => p.id === state.id)?.attachments?.[acc.id])
+
+      return (
+        <div
+          key={acc.id}
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '10px 0',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          {/* Nome da conta e infos */}
+          <div>
+            <strong>{acc.name}</strong>
+            <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {acc.type?.toUpperCase()} • {acc.status}
+            </p>
+          </div>
+
+          {/* Botões de Upload / Ver / Trocar */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {/* Botão de upload */}
+            <label className="btn secondary small" style={{ cursor: 'pointer' }}>
+              {existingAttachment ? '📤 Trocar Comprovante' : '📎 Anexar Comprovante'}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+onChange={async (e) => {
+  const file = e?.target?.files?.[0] || e?.dataTransfer?.files?.[0];
+  if (!file) return;
+  await handleUploadForAccount(acc.id, file);
+}}
+
+              />
+            </label>
+
+            {/* Se já existir comprovante */}
+            {existingAttachment && (
+              <a
+                href={existingAttachment.url}
+                target="_blank"
+                rel="noreferrer"
+                className="btn small"
+              >
+                📁 Ver Arquivo
+              </a>
+            )}
+          </div>
+        </div>
+      )
+    })}
+  </div>
+)}
+
           {/* Método de Pagamento */}
           <div className="payouts-section">
             <div className="payouts-section-title">Método de Pagamento</div>
@@ -853,19 +992,21 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
           <button className="payouts-btn payouts-btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button
-            className="payouts-btn payouts-btn-primary"
-            onClick={() => {
-              const payload = {
-                ...state,
-                fee: totals.fee,
-                amountReceived: totals.net
-              }
-              onSave(payload)
-            }}
-          >
-            💾 {edit ? 'Salvar' : 'Criar Payout'}
-          </button>
+<button
+  className="payouts-btn payouts-btn-primary"
+  onClick={() => {
+    const payload = {
+      ...state,
+      fee: totals.fee,
+      amountReceived: totals.net,
+      attachments: state.attachments || {}   // ✅ garante que os arquivos enviados sejam salvos junto
+    }
+    onSave(payload) // quem salva de verdade é a função enviada pelo componente Payouts
+  }}
+>
+  💾 {edit ? 'Salvar' : 'Criar Payout'}
+</button>
+
         </div>
 
       </div>

@@ -907,6 +907,112 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
           </div>
         </div>
       </div>
+      <div style={{ marginTop: 12, marginBottom: 8 }}>
+  <h4 style={{ margin: '6px 0' }}>📂 Payouts & Comprovantes</h4>
+
+  {(() => {
+    const allData = getAll();
+    const accountPayouts = (allData.payouts || []).filter((p) =>
+      (p.splitByAccount && p.splitByAccount[id]) ||
+      (p.accountIds && p.accountIds.includes(id))
+    );
+
+    if (accountPayouts.length === 0) {
+      return (
+        <div style={{ color: 'var(--muted)', padding: 8 }}>
+          Nenhum payout registrado para esta conta.
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'grid', gap: 8 }}>
+{accountPayouts.map((p) => {
+  const part = p.splitByAccount?.[id] || {};
+
+  const net = part.net ?? 0;                          
+  const gross = part.gross ?? p.amountSolicited ?? 0; 
+  const fee = part.fee ?? (gross - net);             
+
+  const formattedGross = fmt(gross || 0);
+  const formattedFee = fmt(fee || 0);
+
+  const rawDate = p.approvedDate || p.dateCreated || p.date || '';
+  const formattedDate = rawDate
+    ? new Date(rawDate).toLocaleDateString('pt-BR')
+    : '';
+
+  const displayName = `Payout: ${fmt(net || 0)} (${formattedDate})`;
+
+  const attachment = p.attachments?.[id] || null;
+
+  // ✅ Função para abrir automaticamente o payout na página Payouts
+  const openPayoutPage = () => {
+    localStorage.setItem('openPayoutId', p.id); // será lido em Payouts.jsx
+    window.location.href = '/payouts';          // ajuste se sua rota for diferente
+  };
+
+  return (
+    <div
+      key={p.id}
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 8,
+        borderRadius: 8,
+        background: 'var(--card-bg)',
+      }}
+    >
+      <div>
+        {/* ✅ Título clicável */}
+        <div
+          style={{ fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+          onClick={openPayoutPage}
+        >
+          {displayName}
+        </div>
+
+        {/* ✅ Subtexto apenas com Gross e Fee */}
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          Gross: {formattedGross} • Fee: {formattedFee}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {attachment ? (
+          <>
+            <button
+              className="btn ghost small"
+              onClick={() =>
+                window.open(attachment.url, '_blank', 'noopener,noreferrer')
+              }
+            >
+              📁 Ver
+            </button>
+            <a
+              className="btn small"
+              href={attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              download
+            >
+              ⬇️ Baixar
+            </a>
+          </>
+        ) : (
+          <div style={{ fontSize: 13, color: 'var(--muted)' }}>Sem comprovante</div>
+        )}
+      </div>
+    </div>
+  );
+})}
+
+      </div>
+    );
+  })()}
+</div>
+
 
       <div className="toolbar">
         <button className="btn" onClick={save}>
