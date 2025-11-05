@@ -339,6 +339,7 @@ const handleSave = async () => {
     if (!selectedAccounts.length) return alert('Selecione ao menos uma conta');
     if (!form.entry_datetime) return alert('Entry Date & Time é obrigatório');
     if (form.exit_datetime && form.exit_datetime < form.entry_datetime)
+      
       return alert('Exit Date não pode ser anterior à Entry Date');
 
     // 🔹 Monta payload de contas
@@ -368,6 +369,31 @@ const handleSave = async () => {
       updatedForm.result_gross = totalGross;
       updatedForm.volume = totalVol;
     }
+// ✅ Garante que entry_datetime e exit_datetime do trade
+// sempre reflitam o período total das PartialExecutions
+if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
+  const validEntries = updatedForm.PartialExecutions
+    .map(e => e.entry_datetime)
+    .filter(d => !!d);
+  const validExits = updatedForm.PartialExecutions
+    .map(e => e.exit_datetime)
+    .filter(d => !!d);
+
+  if (validEntries.length > 0) {
+    updatedForm.entry_datetime = validEntries.sort(
+      (a, b) => new Date(a).getTime() - new Date(b).getTime()
+    )[0];
+  }
+
+  if (validExits.length > 0) {
+    updatedForm.exit_datetime = validExits.sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime()
+    )[0];
+  } else {
+    // Ainda sem saída? então mantemos null para dashboard entender como trade em aberto
+    updatedForm.exit_datetime = null;
+  }
+}
 
     // 🔹 Prepara tradeData final
     const tradeData = {
@@ -382,6 +408,7 @@ const handleSave = async () => {
       tf_signal: updatedForm.tf_signal || '1h',
       checklistResults: updatedForm.checklistResults ?? {},
     };
+    
 
     console.log('💾 Salvando trade:', tradeData);
 

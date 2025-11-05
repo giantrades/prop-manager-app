@@ -968,31 +968,55 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
   const kde = React.useMemo(() => computeKDE(filteredTrades.map(t => Number(t.result_R) || 0), 40), [filteredTrades]);
 
   // --- métricas dinâmicas (remove EV, Worst R, Winrate conforme pediu) ---
-  const R_values = React.useMemo(() => filteredTrades.map(t => Number(t.result_R) || 0), [filteredTrades]);
+ // ✅ Calcula R real de cada trade (usa partialExecutions, risk, result_net etc.)
+const R_values = React.useMemo(() => {
+  return filteredTrades.map(t => {
+    try {
+      // use a função que VOCÊ já tem (getTotalR ou getRealR)
+      if (typeof getTotalR === "function") return getTotalR(t);
 
-  const avgR = React.useMemo(() => {
-    if (!R_values.length) return 0;
-    return R_values.reduce((s, r) => s + r, 0) / R_values.length;
-  }, [R_values]);
+      // fallback seguro (ainda melhor do que usar result_R direto)
+      if (t.partialExecutions?.length > 0) {
+        const totalPnL = t.partialExecutions.reduce((s, p) => s + (Number(p.net) || 0), 0);
+        return t.risk ? totalPnL / t.risk : 0;
+      }
+      if (t.result_net && t.risk) return t.result_net / t.risk;
 
-  const medianR = React.useMemo(() => {
-    if (!R_values.length) return 0;
-    const s = [...R_values].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
-  }, [R_values]);
+      return Number(t.result_R) || 0;
+    } catch {
+      return 0;
+    }
+  }).filter(v => Number.isFinite(v));
+}, [filteredTrades]);
 
-  const stdR = React.useMemo(() => {
-    if (!R_values.length) return 0;
-    const mean = avgR;
-    const variance = R_values.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / (R_values.length || 1);
-    return Math.sqrt(variance);
-  }, [R_values, avgR]);
+// ✅ Média
+const avgR = React.useMemo(() => {
+  if (!R_values.length) return 0;
+  return R_values.reduce((s, r) => s + r, 0) / R_values.length;
+}, [R_values]);
 
-  const bestR = React.useMemo(() => {
-    if (!R_values.length) return 0;
-    return Math.max(...R_values);
-  }, [R_values]);
+// ✅ Mediana
+const medianR = React.useMemo(() => {
+  if (!R_values.length) return 0;
+  const s = [...R_values].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+}, [R_values]);
+
+// ✅ Desvio padrão
+const stdR = React.useMemo(() => {
+  if (!R_values.length) return 0;
+  const mean = avgR;
+  const variance = R_values.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / R_values.length;
+  return Math.sqrt(variance);
+}, [R_values, avgR]);
+
+// ✅ Melhor trade (em R real)
+const bestR = React.useMemo(() => {
+  if (!R_values.length) return 0;
+  return Math.max(...R_values);
+}, [R_values]);
+
 
   // formato (R não é currency — manter 2 casas)
   const fmtR = (v: number) => Number(v || 0).toFixed(2);
@@ -2019,7 +2043,7 @@ return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades
   <HeatMapSection trades={filteredTrades} />
   </div>
    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-  <DurationAnalysis trades={filteredTrades} />
+  <DurationAnalysis trades={filteredTrades}  />
 
   
   <DrawdownSection trades={filteredTrades} accounts={filteredAccounts}/>
