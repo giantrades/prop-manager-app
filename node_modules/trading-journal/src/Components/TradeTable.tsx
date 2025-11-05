@@ -435,26 +435,41 @@ useEffect(() => {
   )}
 </td>
 
-<td className={`font-medium ${(t.result_net || 0) >= 0 ? 'pos' : 'neg'}`} >
-    
-  {fmt(t.result_net || 0)}  <span className={`font-medium ${(t.result_R || 0) >= 0 ? 'pos' : 'neg'}`} 
-    style={{
-      fontSize: 10,
-      marginTop: 1,
-      opacity: 0.9,
-    }}>({t.result_R.toFixed(2) || 0} R)</span>
-  {t.PartialExecutions && t.PartialExecutions.length > 1 && (
-    <div><span className="muted text-xs ml-1"style={{
-      fontSize: 10,
-      marginTop: 1,
-      opacity: 0.9,
-    }}>  (Avg {fmt(
-        t.PartialExecutions.reduce((acc, p) => acc + (p.result_gross || 0), 0) /
-        t.PartialExecutions.length
-      )})
-    </span></div>
-  )}
+<td className="font-medium">
+  {(() => {
+    const partials = t.PartialExecutions || [];
+    // Soma do R de todas as execuções
+    const totalR = partials.reduce((acc, p) => acc + (Number(p.result_R) || 0), 0);
+    // Soma do gross para calcular média (se quiser manter)
+    const avgGross = partials.length > 0
+      ? partials.reduce((acc, p) => acc + (Number(p.result_gross) || 0), 0) / partials.length
+      : 0;
+
+    const pnl = fmt(Number(t.result_net || 0));
+    const pnlClass = Number(t.result_net || 0) >= 0 ? 'pos' : 'neg';
+    const rClass = totalR >= 0 ? 'pos' : 'neg';
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* PnL */}
+        <span className={pnlClass}>{pnl}</span>
+
+        {/* R baseado apenas em PartialExecutions */}
+        <span className={`${rClass}`} style={{ fontSize: 10, opacity: 0.9 }}>
+          ({totalR.toFixed(2)} R)
+        </span>
+
+        {/* Se houver mais de 1 execução, mostrar Avg */}
+        {partials.length > 1 && (
+          <span className="muted text-xs ml-1" style={{ fontSize: 10, opacity: 0.8 }}>
+            (Avg {fmt(avgGross)})
+          </span>
+        )}
+      </div>
+    );
+  })()}
 </td>
+
 
        
 
