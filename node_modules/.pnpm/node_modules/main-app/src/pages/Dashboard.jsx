@@ -305,22 +305,52 @@ function useFiltered(accountStatusFilter = ["live", "funded"]) {
 }
 
 /*========================================================= 3) Cards resumo ========================================================= */ 
-function SummaryCards({ accountStatusFilter = ["live", "funded"] }){ 
-  const { accounts, payouts, allAccounts, categorySet } = useFiltered(accountStatusFilter) 
-  const { currency, rate } = useCurrency() 
-  const totalFunding = accounts.reduce((s,a)=> s + (a.currentFunding||0), 0) 
-  const totalNetPayouts = payouts.reduce((s,p)=> s + (p.amountReceived||0), 0) 
-  const roi = totalFunding>0 ? (totalNetPayouts / totalFunding) : 0 
-  const relevantAccounts = allAccounts.filter(a=> categorySet.has(a.type)) 
-  const activeCount = relevantAccounts.filter(a=> ['Funded','Challenge','Challenge Concluido','Live'].includes(a.status)).length 
-  const standbyCount = relevantAccounts.filter(a=> a.status==='Standby').length 
-  const fmt = (v)=> currency==='USD' ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v||0) : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((v||0)*rate) 
-  return ( 
-  <div className="grid cards"> 
-  <div className="card accent1"><h3>💰 Payouts</h3><div className="stat">{fmt(totalNetPayouts)}</div></div> 
-  <div className="card accent2"><h3>🏦 Funding</h3><div className="stat">{fmt(totalFunding)}</div></div> 
-  <div className="card accent3"><h3>📈  %</h3><div className="stat">{(roi*100).toFixed(2)}%</div></div> 
-  <div className="card accent4"> <h3>🧮 Contas</h3> <div style={{display:'flex',justifyContent:'center',gap:40}}> <div><div className="thin">Ativas</div><div className="stat center">{activeCount}</div></div> <div style={{width:1,background:'#ccc'}}/> <div><div className="thin">Standby</div><div className="stat center">{standbyCount}</div></div> </div> </div> </div> ) }
+function SummaryCards({ accountStatusFilter = [] }) {
+  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter)
+  const { currency, rate } = useCurrency()
+
+  const totalFunding = accounts.reduce((s, a) => s + (a.currentFunding || 0), 0)
+  const totalNetPayouts = payouts.reduce((s, p) => s + (p.amountReceived || 0), 0)
+  const roi = totalFunding > 0 ? (totalNetPayouts / totalFunding) : 0
+
+  const fmt = (v) =>
+    currency === 'USD'
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate)
+
+  // ✅ Todos os status possíveis (com base no que realmente existe nas contas)
+  const allPossibleStatuses = Array.from(new Set(allAccounts.map(a => a.status?.toLowerCase()).filter(Boolean)))
+
+  // ✅ Nenhum status marcado = filtro vazio = mostrar 0 contas
+  const noStatusSelected = accountStatusFilter.length === 0
+
+  // ✅ Todos os status possíveis selecionados = "Todas as contas"
+  const allSelected =
+    accountStatusFilter.length > 0 &&
+    accountStatusFilter.length === allPossibleStatuses.length &&
+    allPossibleStatuses.every(s => accountStatusFilter.includes(s))
+
+  return (
+    <div className="grid cards">
+      <div className="card accent1"><h3>💰 Payouts</h3><div className="stat">{fmt(totalNetPayouts)}</div></div>
+      <div className="card accent2"><h3>🏦 Funding</h3><div className="stat">{fmt(totalFunding)}</div></div>
+      <div className="card accent3"><h3>📈 %</h3><div className="stat">{(roi * 100).toFixed(2)}%</div></div>
+
+      <div className="card accent4">
+        <h3>🧮 Contas Ativas</h3>
+        <div className="stat center">{noStatusSelected ? 0 : accounts.length}</div>
+
+        <div className="muted" style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+          {noStatusSelected
+            ? 'Nenhum status selecionado'
+            : allSelected
+              ? 'Todas as contas'
+              : `Filtradas: ${accountStatusFilter.join(', ')}`}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 
 function PatrimonioLine({ accountStatusFilter = ["live", "funded"] }){
