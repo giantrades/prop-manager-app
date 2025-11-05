@@ -306,77 +306,95 @@ const summary = useMemo(() => {
 
 
 {/* ✅ FORMS COMO POPUPS MODAIS */}
-      {selected && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.7)',
+{selected && (
+  <div
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: 20,
+      backdropFilter: 'blur(4px)',
+    }}
+    // ✅ Se clicar no fundo (overlay), fecha o modal
+    onClick={(e) => {
+      if (e.target === e.currentTarget) {
+        setSelected(null);
+      }
+    }}
+  >
+    <div
+      style={{
+        maxWidth: 800,
+        width: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        position: 'relative',
+        background: 'var(--card-bg)',
+        borderRadius: 12,
+        padding: 16,
+      }}
+      // ✅ Impede que cliques dentro fechem o modal
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Botão X para fechar */}
+      <button
+        onClick={() => setSelected(null)}
+        style={{
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          background: 'transparent',
+          border: 'none',
+          color: '#fff',
+          fontSize: 24,
+          cursor: 'pointer',
+          zIndex: 1001,
+          width: 32,
+          height: 32,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
-          padding: 20,
-          backdropFilter: 'blur(4px)'
-        }}>
-          <div style={{
-            maxWidth: 800,
-            width: '100%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            position: 'relative'
-          }}>
-            {/* Botão X para fechar */}
-            <button
-              onClick={() => setSelected(null)}
-              style={{
-                position: 'absolute',
-                top: 16,
-                right: 16,
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                fontSize: 24,
-                cursor: 'pointer',
-                zIndex: 1001,
-                width: 32,
-                height: 32,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '50%',
-                transition: 'background 0.2s'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-            >
-              ×
-            </button>
+          borderRadius: '50%',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={(e) =>
+          (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')
+        }
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+      >
+        ×
+      </button>
 
-            {selected === 'new' ? (
-              <NewAccountForm
-                firms={firms}
-                onCreate={(accountData) => {
-                  const newAccount = createAccount(accountData)
-                  setAccounts(getAll().accounts)
-                  setSelected(null) // ✅ Fecha o popup após criar
-                }}
-                onCancel={() => setSelected(null)}
-              />
-            ) : (
-              <AccountDetail
-                id={selected}
-                update={updateAccount}
-                getStats={getAccountStats}
-                firms={firms}
-                onClose={() => setSelected(null)}
-              />
-            )}
-          </div>
-        </div>
+      {selected === 'new' ? (
+        <NewAccountForm
+          firms={firms}
+          onCreate={(accountData) => {
+            const newAccount = createAccount(accountData);
+            setAccounts(getAll().accounts);
+            setSelected(null); // ✅ Fecha após criar
+          }}
+          onCancel={() => setSelected(null)}
+        />
+      ) : (
+        <AccountDetail
+          id={selected}
+          update={updateAccount}
+          getStats={getAccountStats}
+          firms={firms}
+          onClose={() => setSelected(null)} // ✅ mantém compatibilidade
+        />
       )}
+    </div>
+  </div>
+)}
+
 
 {/* Toolbar + Filtro + Create */}
       <div>
@@ -907,7 +925,7 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
           </div>
         </div>
       </div>
-      <div style={{ marginTop: 12, marginBottom: 8 }}>
+<div style={{ marginTop: 12, marginBottom: 8 }}>
   <h4 style={{ margin: '6px 0' }}>📂 Payouts & Comprovantes</h4>
 
   {(() => {
@@ -916,6 +934,55 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
       (p.splitByAccount && p.splitByAccount[id]) ||
       (p.accountIds && p.accountIds.includes(id))
     );
+
+    // calcular totais (Gross / Fee / Net) desta conta
+    const totals = accountPayouts.reduce(
+      (acc, p) => {
+        const part = p.splitByAccount?.[id] || {};
+        acc.gross += Number(part.gross ?? p.amountSolicited ?? 0);
+        // fee pode estar explicitado no part, se não, tenta calcular
+        const partFee = Number(part.fee ?? ((part.gross ?? p.amountSolicited ?? 0) - (part.net ?? 0)));
+        acc.fee += partFee;
+        acc.net += Number(part.net ?? 0);
+        return acc;
+      },
+      { gross: 0, fee: 0, net: 0 }
+    );
+
+    // mostra Totais primeiro
+    if (accountPayouts.length > 0) {
+      // nota: fmt() está disponível no AccountDetail (você já a tinha definido)
+      const formattedGrossTotal = fmt(totals.gross || 0);
+      const formattedFeeTotal = fmt(totals.fee || 0);
+      const formattedNetTotal = fmt(totals.net || 0);
+
+      // renderiza o card de totais
+      var totalsCard = (
+        <div style={{
+          background: 'var(--card-bg)',
+          padding: 12,
+          borderRadius: 8,
+          marginBottom: 12,
+        }}>
+<strong> Total:</strong>
+<div
+  style={{
+    marginTop: 6,
+    fontSize: 13,
+    display: 'flex',
+    gap: 16,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  }}
+>
+  <div> <b>Gross:</b> {formattedGrossTotal}</div>
+  <div> <b>Fee:</b> {formattedFeeTotal}</div>
+  <div>✅ <b>Net:</b> {formattedNetTotal}</div>
+</div>
+
+        </div>
+      );
+    }
 
     if (accountPayouts.length === 0) {
       return (
@@ -927,91 +994,95 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
 
     return (
       <div style={{ display: 'grid', gap: 8 }}>
-{accountPayouts.map((p) => {
-  const part = p.splitByAccount?.[id] || {};
+        {/* Totais (se existirem) */}
+        {totalsCard}
 
-  const net = part.net ?? 0;                          
-  const gross = part.gross ?? p.amountSolicited ?? 0; 
-  const fee = part.fee ?? (gross - net);             
+        {/* Lista de payouts */}
+        {accountPayouts.map((p) => {
+          const part = p.splitByAccount?.[id] || {};
 
-  const formattedGross = fmt(gross || 0);
-  const formattedFee = fmt(fee || 0);
+          const net = Number(part.net ?? 0);                          
+          const gross = Number(part.gross ?? p.amountSolicited ?? 0); 
+          const fee = Number(part.fee ?? (gross - net));             
 
-  const rawDate = p.approvedDate || p.dateCreated || p.date || '';
-  const formattedDate = rawDate
-    ? new Date(rawDate).toLocaleDateString('pt-BR')
-    : '';
+          const formattedGross = fmt(gross || 0);
+          const formattedFee = fmt(fee || 0);
+          const formattedNet = fmt(net || 0);
 
-  const displayName = `Payout: ${fmt(net || 0)} (${formattedDate})`;
+          const rawDate = p.approvedDate || p.dateCreated || p.date || '';
+          const formattedDate = rawDate
+            ? new Date(rawDate).toLocaleDateString('pt-BR')
+            : '';
 
-  const attachment = p.attachments?.[id] || null;
+          // Título principal mostra o Net (como você pediu)
+          const displayName = `Payout: ${formattedNet} (${formattedDate})`;
 
-  // ✅ Função para abrir automaticamente o payout na página Payouts
-  const openPayoutPage = () => {
-    localStorage.setItem('openPayoutId', p.id); // será lido em Payouts.jsx
-    window.location.href = '/payouts';          // ajuste se sua rota for diferente
-  };
+          const attachment = p.attachments?.[id] || null;
 
-  return (
-    <div
-      key={p.id}
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 8,
-        borderRadius: 8,
-        background: 'var(--card-bg)',
-      }}
-    >
-      <div>
-        {/* ✅ Título clicável */}
-        <div
-          style={{ fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
-          onClick={openPayoutPage}
-        >
-          {displayName}
-        </div>
+          // abrir na página de payouts (já implementado no seu fluxo)
+          const openPayoutPage = () => {
+            localStorage.setItem('openPayoutId', p.id);
+            window.location.href = '/payouts';
+          };
 
-        {/* ✅ Subtexto apenas com Gross e Fee */}
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-          Gross: {formattedGross} • Fee: {formattedFee}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {attachment ? (
-          <>
-            <button
-              className="btn ghost small"
-              onClick={() =>
-                window.open(attachment.url, '_blank', 'noopener,noreferrer')
-              }
+          return (
+            <div
+              key={p.id}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 8,
+                borderRadius: 8,
+                background: 'var(--card-bg)',
+              }}
             >
-              📁 Ver
-            </button>
-            <a
-              className="btn small"
-              href={attachment.url}
-              target="_blank"
-              rel="noreferrer"
-              download
-            >
-              ⬇️ Baixar
-            </a>
-          </>
-        ) : (
-          <div style={{ fontSize: 13, color: 'var(--muted)' }}>Sem comprovante</div>
-        )}
-      </div>
-    </div>
-  );
-})}
+              <div>
+                <div
+                  style={{ fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={openPayoutPage}
+                >
+                  {displayName}
+                </div>
 
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  Gross: {formattedGross} • Fee: {formattedFee}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {attachment ? (
+                  <>
+                    <button
+                      className="btn ghost small"
+                      onClick={() =>
+                        window.open(attachment.url, '_blank', 'noopener,noreferrer')
+                      }
+                    >
+                      📁 Ver
+                    </button>
+                    <a
+                      className="btn small"
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      download
+                    >
+                      ⬇️ Baixar
+                    </a>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>Sem comprovante</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   })()}
 </div>
+
 
 
       <div className="toolbar">
