@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { Trade, Execution, PartialExecution } from '../types/trade';
 import { useJournal } from '@apps/journal-state';
 import { useCurrency } from '@apps/state';
@@ -33,11 +33,15 @@ function fmt(v: number) {
   return (v || 0).toFixed(2);
 }
 
+
 export default function TradeForm({ onClose, editing }: Props) {
   const { strategies = [], saveTrade } = useJournal();
   const { currency, rate } = useCurrency();
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [accountWeights, setAccountWeights] = useState<Record<string, number>>({});
+  const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(["live", "funded", "challenge"]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement | null>(null);
   // Pegar contas do main-app
   const [accounts, setAccounts] = useState(() => {  try {
         return getAll().accounts || [];
@@ -94,13 +98,26 @@ export default function TradeForm({ onClose, editing }: Props) {
   }));
 
   // Filtrar contas ativas
-  const activeAccounts = useMemo(() => 
-    accounts.filter(acc => ['Live', 'Funded', 'Challenge', 'Challenge Concluido'].includes(acc.status)),
-    [accounts]
-  );
+const activeAccounts = useMemo(() => {
+  let accs = accounts.filter(acc => ['Live', 'Funded', 'Challenge', 'Challenge Concluido'].includes(acc.status));
+  
+  // ✅ NOVO: Filtro por status selecionados
+  if (accountStatusFilter.length > 0) {
+    accs = accs.filter(acc => accountStatusFilter.includes(acc.status?.toLowerCase()));
+  }
+  
+  return accs;
+}, [accounts, accountStatusFilter]); // adicionar accountStatusFilter nas dependências
 // Logo após o useMemo de activeAccounts
 console.log('✅ Active Accounts:', activeAccounts.length, activeAccounts);
 console.log('📊 All Accounts:', accounts.length, accounts);
+// Extrair todos os status únicos das contas
+const accountStatuses = useMemo<string[]>(() => {
+  const all = (accounts || [])
+    .map((a) => a.status?.toLowerCase() || "")
+    .filter((s): s is string => !!s);
+  return Array.from(new Set(all));
+}, [accounts]);
 
   // Sincronizar selectedAccounts com form.accounts
   useEffect(() => {
@@ -416,6 +433,18 @@ const filteredAccounts = useMemo(() => {
 //Para filtrar as checklists da estrategia
 const selectedStrategy = strategies.find(s => s.id === form.strategyId);
 
+// Fechar dropdown ao clicar fora
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!statusDropdownRef.current) return;
+    if (!statusDropdownRef.current.contains(e.target as Node)) {
+      setStatusDropdownOpen(false);
+    }
+  }
+  if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [statusDropdownOpen]);
+
   return (
        <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-content ">
@@ -511,6 +540,104 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
         <option value="Personal">👤 Personal</option>
       </select>
     </div>
+    {/* Logo após o select de Categorias de Contas */}
+
+{/* Dropdown de Status */}
+<div className="field" style={{ position: 'relative' }} ref={statusDropdownRef}>
+  <label>📊 Status das Contas</label>
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+    className="input"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      cursor: "pointer",
+      textAlign: "left"
+    }}
+  >
+    {accountStatusFilter.length > 0
+      ? `${accountStatusFilter.length} status selecionados`
+      : "Selecionar status"}
+    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+  </button>
+
+  {statusDropdownOpen && accountStatuses.length > 0 && (
+    <div
+      className="card"
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: 0,
+        zIndex: 9999,
+        background: "var(--card-bg, #1e1e2b)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        minWidth: "100%",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+        {accountStatuses.map((status) => {
+          const st = String(status || '');
+          const checked = accountStatusFilter.includes(st);
+          return (
+            <label
+              key={st}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 4px",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#e6e6e9",
+                textTransform: "capitalize",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? Array.from(new Set([...accountStatusFilter, st]))
+                    : accountStatusFilter.filter(s => s !== st);
+                  setAccountStatusFilter(next);
+                }}
+                style={{ width: 16, height: 16 }}
+              />
+              <span>{st}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          className="btn ghost small"
+          style={{ flex: 1, fontSize: 12 }}
+          onClick={() => setAccountStatusFilter(["live", "funded", "challenge"])}
+        >
+          Padrão
+        </button>
+
+        <button
+          type="button"
+          className="btn ghost small"
+          style={{ flex: 1, fontSize: 12 }}
+          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+        >
+          Todos
+        </button>
+      </div>
+    </div>
+  )}
+</div>
   </div>
 
   {/* Multi-select de Contas com botões de ação */}
@@ -553,7 +680,7 @@ const selectedStrategy = strategies.find(s => s.id === form.strategyId);
 >
   {filteredAccounts.map(acc => (
     <option key={acc.id} value={String(acc.id)}>
-      {acc.name} ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
+      {acc.name} [{acc.status}] ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
     </option>
   ))}
 </select>
