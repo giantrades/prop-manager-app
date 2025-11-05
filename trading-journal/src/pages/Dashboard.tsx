@@ -162,33 +162,48 @@ function useFormatter() {
 }
 
 function safeNumber(n: any) { return typeof n === "number" && !isNaN(n) ? n : 0; }
+function getTotalR(trade) {
+  if (!trade) return 0;
+  if (!Array.isArray(trade.PartialExecutions)) return trade.result_R || 0;
+  return trade.PartialExecutions.reduce(
+    (acc, p) => acc + (Number(p.result_R) || 0), 
+    0
+  );
+}
 
 function calcBasicStats(trades: any[]) {
   const total = trades.length;
-  const wins = trades.filter(t => safeNumber(t.result_R) > 0).length;
+
+  // ✅ Winrate usando soma correta de R (PartialExecutions)
+  const wins = trades.filter(t => getTotalR(t) > 0).length;
   const losses = total - wins;
   const winrate = total ? wins / total : 0;
-  
-  // 1. Médias de R
-  const R_values = trades.map(t => safeNumber(t.result_R));
+
+  // ✅ Vetor de R consolidado (sempre vindo das partials)
+  const R_values = trades.map(t => getTotalR(t));
+
+  // ✅ Média de R
   const avgR = total ? R_values.reduce((s, r) => s + r, 0) / total : 0;
 
-  // 2. Cálculo Detalhado de Expected Value (EV em R)
-  const winningTrades = trades.filter(t => safeNumber(t.result_R) > 0);
-  const losingTrades = trades.filter(t => safeNumber(t.result_R) <= 0);
+  // ✅ Trades com R positivo e negativo
+  const winningTrades = trades.filter(t => getTotalR(t) > 0);
+  const losingTrades = trades.filter(t => getTotalR(t) <= 0);
 
-  const avgWinR = winningTrades.length 
-    ? winningTrades.reduce((s, t) => s + safeNumber(t.result_R), 0) / winningTrades.length 
+  const avgWinR = winningTrades.length
+    ? winningTrades.reduce((s, t) => s + getTotalR(t), 0) / winningTrades.length
     : 0;
 
-  const avgLossR = losingTrades.length 
-    ? losingTrades.reduce((s, t) => s + safeNumber(t.result_R), 0) / losingTrades.length 
+  const avgLossR = losingTrades.length
+    ? losingTrades.reduce((s, t) => s + getTotalR(t), 0) / losingTrades.length
     : 0;
-    
+
+  // ✅ Expected R (EV)
   const expectedR = (winrate * avgWinR) + ((1 - winrate) * avgLossR);
 
+  // ✅ PnL continua igual (já está correto)
   const pnl = trades.reduce((s, t) => s + safeNumber(t.result_net), 0);
-  
+
+  // ✅ Profit Factor (mantido como antes)
   const profitFactor = (() => {
     const profits = trades.filter(t => safeNumber(t.result_net) > 0).reduce((s, t) => s + t.result_net, 0);
     const losses = Math.abs(trades.filter(t => safeNumber(t.result_net) < 0).reduce((s, t) => s + t.result_net, 0));
@@ -196,46 +211,46 @@ function calcBasicStats(trades: any[]) {
     return profits / losses;
   })();
 
-  // Sharpe (simple) usando retornos diários
+  // ✅ Sharpe, skew, kurtosis mantidos (com result_net)
   const returns = trades.map(t => (safeNumber(t.result_net) / 10000)); 
   const mean = returns.reduce((s, r) => s + r, 0) / (returns.length || 1);
   const variance = returns.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / (returns.length || 1);
   const std = Math.sqrt(variance) || 0;
   const sharpe = std === 0 ? 0 : (mean / std) * Math.sqrt(252);
 
-  // skewness & kurtosis
   const m2 = variance;
   const m3 = returns.reduce((s, r) => s + Math.pow(r - mean, 3), 0) / (returns.length || 1);
   const m4 = returns.reduce((s, r) => s + Math.pow(r - mean, 4), 0) / (returns.length || 1);
   const skew = m2 === 0 ? 0 : m3 / Math.pow(m2, 1.5);
   const kurt = m2 === 0 ? 0 : m4 / (m2 * m2) - 3;
 
-  // Risk of Ruin (approx)
+  // ✅ Risk of Ruin com R correto
   const RoR = (() => {
     const p = winrate;
     const q = 1 - p;
-    const b = avgR || 0; 
+    const b = avgR || 0;
     if (p === 0 || b <= 0) return 100;
     return Math.min(100, Math.max(0, (1 - Math.pow((p - q) / (p + q), 1)) * 100));
   })();
 
-  return { 
-    total, 
-    wins, 
-    losses, 
-    winrate, 
+  return {
+    total,
+    wins,
+    losses,
+    winrate,
     avgR,
     avgWinR: avgWinR.toFixed(2),
     avgLossR: avgLossR.toFixed(2),
     expectedR: expectedR.toFixed(2),
-    pnl, 
-    profitFactor, 
-    sharpe, 
-    skew, 
-    kurt, 
-    RoR 
+    pnl,
+    profitFactor,
+    sharpe,
+    skew,
+    kurt,
+    RoR
   };
 }
+
 
 // equity series (cumulative) - agora inclui rawDate (ISO) + date (label) + equity numérico
 function buildEquitySeries(trades: any[], start = 10000) {
@@ -262,8 +277,6 @@ function buildEquitySeries(trades: any[], start = 10000) {
     };
   });
 }
-
-
 
 
 // group helpers
@@ -335,9 +348,9 @@ function winRateByTimeframe(trades: any[]) {
 }
 
 
-// Histogram R function (suporta bins dinâmicos)
+// ✅ Histogram R – agora usa o R REAL vindo das PartialExecutions
 function histogramR(trades: any[], bins = 20) {
-  const arr = trades.map(t => Number(t.result_R) || 0);
+  const arr = trades.map(t => getTotalR(t)); // <-- corrigido aqui
   if (arr.length === 0) return [];
 
   const min = Math.min(...arr);
@@ -361,10 +374,16 @@ function histogramR(trades: any[], bins = 20) {
   }));
 }
 
-// Curva de densidade (KDE)
-function computeKDE(values: number[], bins = 40) {
+// ✅ Curva de densidade (KDE) também usando o R correto
+function computeKDE(valuesOrTrades: any[], bins = 40) {
+  // Se mandarem trades, converto. Se já for array de números, uso direto.
+  const values = Array.isArray(valuesOrTrades[0])
+    ? valuesOrTrades
+    : valuesOrTrades.map((t: any) => getTotalR(t));
+
   if (!values || values.length < 2) return [];
-  const min = Math.min(...values), max = Math.max(...values);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   const step = (max - min) / bins || 1;
   const bandwidth = (max - min) / Math.cbrt(values.length) || 1;
   const kernel = (x: number) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
@@ -375,6 +394,7 @@ function computeKDE(values: number[], bins = 40) {
     return { label: x.toFixed(2), density: y };
   });
 }
+
 
 
 // 📈 PnL Growth Curve (Total Net P&L por filtros/contas)
@@ -1252,7 +1272,7 @@ const RecentTrades = ({ trades, fmt }: any) => {
                 </span>
               </td>
               <td style={{ padding: "6px", textAlign: "right" }}>
-                {(Number(t.result_R) || 0).toFixed(2)}
+                {getTotalR(t).toFixed(2)}
               </td>
               <td
                 style={{
@@ -1874,20 +1894,22 @@ const filteredTrades = useMemo(() => {
   </div>
   <div style={{ fontSize: 28, fontWeight: 700, color: '#22c55e', marginBottom: 4 }}>
     {(() => {
-      const bestR = filteredTrades.reduce((max, t) => 
-        (t.result_R || 0) > (max.result_R || 0) ? t : max, 
-        filteredTrades[0] || { result_R: 0 }
-      );
-      return (bestR.result_R || 0).toFixed(2) + 'R';
+const bestR = filteredTrades.reduce((max, t) =>
+  getTotalR(t) > getTotalR(max) ? t : max,
+  filteredTrades[0] || {}
+);
+return getTotalR(bestR).toFixed(2) + 'R';
+
     })()}
   </div>
   <div style={{ fontSize: 12, color: '#6b7280' }}>
     {(() => {
-      const bestR = filteredTrades.reduce((max, t) => 
-        (t.result_R || 0) > (max.result_R || 0) ? t : max, 
-        filteredTrades[0] || {}
-      );
-      return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades';
+     const bestR = filteredTrades.reduce((max, t) => 
+  getTotalR(t) > getTotalR(max) ? t : max,
+  filteredTrades[0] || {}
+);
+return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades';
+
     })()}
   </div>
 </div>
@@ -1903,13 +1925,19 @@ const filteredTrades = useMemo(() => {
     Worst Trade
   </div>
   <div style={{ fontSize: 28, fontWeight: 700, color: '#ef4444', marginBottom: 4 }}>
-    {(() => {
-      const worst = filteredTrades.reduce((min, t) => 
-        (t.result_net || 0) < (min.result_net || 0) ? t : min, 
-        filteredTrades[0] || { result_net: 0 }
-      );
-      return fmt(worst.result_net || 0);
-    })()}
+   {(() => {
+  const worst = filteredTrades.reduce((min, t) =>
+    (t.result_net || 0) < (min.result_net || 0) ? t : min,
+    filteredTrades[0] || { result_net: 0 }
+  );
+  const net = worst.result_net || 0;
+  const color = net >= 0 ? '#10b981' : '#ef4444'; // verde se for positivo!
+  return (
+    <div style={{ fontSize: 28, fontWeight: 700, color, marginBottom: 4 }}>
+      {fmt(net)}
+    </div>
+  );
+})()}
   </div>
   <div style={{ fontSize: 12, color: '#6b7280' }}>
     {(() => {

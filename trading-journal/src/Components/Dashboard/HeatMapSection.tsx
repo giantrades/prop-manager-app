@@ -60,7 +60,7 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
       if (!dt) return;
       const day = dt.getDay();
       const hour = dt.getHours();
-      const val = safeNumber(t.result_net ?? t.result_R ?? 0);
+      const val = safeNumber(t.result_net);
       const cell = matrix[day][hour];
       cell.sum += val;
       cell.count++;

@@ -14,6 +14,19 @@ import {
   Legend,
 } from "recharts";
 
+function getRealR(trade: any) {
+  // usa partialExecutions ou result_net / risk
+  if (trade.partialExecutions?.length > 0) {
+    const totalPnL = trade.partialExecutions.reduce((sum, p) => sum + (Number(p.net) || 0), 0);
+    const risk = Number(trade.risk) || 0;
+    return risk !== 0 ? totalPnL / risk : 0;
+  }
+  if (trade.result_net && trade.risk) {
+    return trade.result_net / trade.risk;
+  }
+  return Number(trade.result_R) || 0;
+}
+
 /* Helpers */
 const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
 
@@ -221,7 +234,7 @@ const stats = useMemo(() => {
 
   // --- FASTEST WIN (corrigido) ---
   const winDurations = parsed
-    .filter((p: any) => safeNumber(p.result_R) > 0)
+    .filter((p: any) => getRealR(p) > 0)
     .map((p: any) => p.duration)
     .filter((d: any) => Number.isFinite(d) && d >= 0)
     .sort((a: number, b: number) => a - b);
@@ -231,7 +244,7 @@ const stats = useMemo(() => {
   // --- SWEET SPOT: bucket mais comum entre WINS (se preferir entre todas, mude para durationsAll) ---
   const counts: Record<string, number> = {};
   // usar wins para sweet spot:
-  const sourceForSweet = parsed.filter((p: any) => safeNumber(p.result_R) > 0);
+  const sourceForSweet = parsed.filter((p: any) => getRealR(p) > 0);
   // se quiser sweet entre todas as trades, use: const sourceForSweet = parsed;
   sourceForSweet.forEach((p: any) => {
     const b = bucketLabel(p.duration || 0);
@@ -256,7 +269,7 @@ const stats = useMemo(() => {
       const b = p.bucket || bucketLabel(p.duration || 0);
       if (!map[b]) map[b] = { bucket: b, wins: 0, losses: 0, total: 0 };
       map[b].total++;
-      if (safeNumber(p.result_R) > 0) map[b].wins++;
+      if (getRealR(p) > 0) map[b].wins++;
       else map[b].losses++;
     });
     
@@ -272,7 +285,7 @@ const stats = useMemo(() => {
       .filter((p: any) => Number.isFinite(p.duration) && p.duration >= 0 && typeof p.result_R === "number")
       .map((p: any) => ({
         duration: p.duration,
-        result_R: safeNumber(p.result_R),
+        result_R: getRealR(p),
         asset: p.asset,
         strategyName: p.strategyName || p.strategyId || p.strategy || null,
       }));
