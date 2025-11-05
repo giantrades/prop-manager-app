@@ -435,7 +435,7 @@ useEffect(() => {
   )}
 </td>
 
-  <td className={`font-medium ${(t.result_net || 0) >= 0 ? 'pos' : 'neg'}`} >
+<td className={`font-medium ${(t.result_net || 0) >= 0 ? 'pos' : 'neg'}`} >
     
   {fmt(t.result_net || 0)}  <span className={`font-medium ${(t.result_R || 0) >= 0 ? 'pos' : 'neg'}`} 
     style={{
