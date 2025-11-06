@@ -376,7 +376,7 @@ function histogramR(trades: any[], bins = 20) {
 
 // ✅ Curva de densidade (KDE) também usando o R correto
 function computeKDE(valuesOrTrades: any[], bins = 40) {
-  // Se mandarem trades, converto. Se já for array de números, uso direto.
+// Se mandarem trades, converto. Se já for array de números, uso direto.
   const values = Array.isArray(valuesOrTrades[0])
     ? valuesOrTrades
     : valuesOrTrades.map((t: any) => getTotalR(t));
@@ -394,8 +394,6 @@ function computeKDE(valuesOrTrades: any[], bins = 40) {
     return { label: x.toFixed(2), density: y };
   });
 }
-
-
 
 // 📈 PnL Growth Curve (Total Net P&L por filtros/contas)
 const EquityArea = ({ trades = [], selectedAccount, fmt }: any) => {
@@ -954,6 +952,7 @@ const TimeframeBar = ({ data = [], fmt }: any) => {
 
 
 // 🔥 HistogramR atualizado — usa filteredTrades reais e legenda dinâmica
+// 🔥 HistogramR atualizado — usa filteredTrades reais e legenda dinâmica
 const HistogramR = ({ trades = [] }: { trades: any[] }) => {
   const [mode, setMode] = React.useState<"hist" | "density">("hist");
 
@@ -963,63 +962,110 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
     return trades.filter(t => t && (t.result_R !== undefined) && !isNaN(Number(t.result_R)));
   }, [trades]);
 
+  // 🔥 Bins dinâmicos: usa regra de Sturges para calcular número ideal
+  const numBins = React.useMemo(() => {
+    if (filteredTrades.length < 2) return 10;
+    return Math.ceil(Math.log2(filteredTrades.length) + 1);
+  }, [filteredTrades.length]);
+
   // histograma e kde (como você já tinha)
-  const dataHist = React.useMemo(() => histogramR(filteredTrades, 20), [filteredTrades]);
+  const dataHist = React.useMemo(() => histogramR(filteredTrades, numBins), [filteredTrades, numBins]);
   const kde = React.useMemo(() => computeKDE(filteredTrades.map(t => Number(t.result_R) || 0), 40), [filteredTrades]);
 
   // --- métricas dinâmicas (remove EV, Worst R, Winrate conforme pediu) ---
- // ✅ Calcula R real de cada trade (usa partialExecutions, risk, result_net etc.)
-const R_values = React.useMemo(() => {
-  return filteredTrades.map(t => {
-    try {
-      // use a função que VOCÊ já tem (getTotalR ou getRealR)
-      if (typeof getTotalR === "function") return getTotalR(t);
+  // ✅ Calcula R real de cada trade (usa partialExecutions, risk, result_net etc.)
+  const R_values = React.useMemo(() => {
+    return filteredTrades.map(t => {
+      try {
+        // use a função que VOCÊ já tem (getTotalR ou getRealR)
+        if (typeof getTotalR === "function") return getTotalR(t);
 
-      // fallback seguro (ainda melhor do que usar result_R direto)
-      if (t.partialExecutions?.length > 0) {
-        const totalPnL = t.partialExecutions.reduce((s, p) => s + (Number(p.net) || 0), 0);
-        return t.risk ? totalPnL / t.risk : 0;
+        // fallback seguro (ainda melhor do que usar result_R direto)
+        if (t.partialExecutions?.length > 0) {
+          const totalPnL = t.partialExecutions.reduce((s, p) => s + (Number(p.net) || 0), 0);
+          return t.risk ? totalPnL / t.risk : 0;
+        }
+        if (t.result_net && t.risk) return t.result_net / t.risk;
+
+        return Number(t.result_R) || 0;
+      } catch {
+        return 0;
       }
-      if (t.result_net && t.risk) return t.result_net / t.risk;
+    }).filter(v => Number.isFinite(v));
+  }, [filteredTrades]);
 
-      return Number(t.result_R) || 0;
-    } catch {
-      return 0;
-    }
-  }).filter(v => Number.isFinite(v));
-}, [filteredTrades]);
+  // ✅ Média
+  const avgR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    return R_values.reduce((s, r) => s + r, 0) / R_values.length;
+  }, [R_values]);
 
-// ✅ Média
-const avgR = React.useMemo(() => {
-  if (!R_values.length) return 0;
-  return R_values.reduce((s, r) => s + r, 0) / R_values.length;
-}, [R_values]);
+  // ✅ Mediana
+  const medianR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    const s = [...R_values].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+  }, [R_values]);
 
-// ✅ Mediana
-const medianR = React.useMemo(() => {
-  if (!R_values.length) return 0;
-  const s = [...R_values].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
-}, [R_values]);
+  // ✅ Desvio padrão
+  const stdR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    const mean = avgR;
+    const variance = R_values.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / R_values.length;
+    return Math.sqrt(variance);
+  }, [R_values, avgR]);
 
-// ✅ Desvio padrão
-const stdR = React.useMemo(() => {
-  if (!R_values.length) return 0;
-  const mean = avgR;
-  const variance = R_values.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / R_values.length;
-  return Math.sqrt(variance);
-}, [R_values, avgR]);
-
-// ✅ Melhor trade (em R real)
-const bestR = React.useMemo(() => {
-  if (!R_values.length) return 0;
-  return Math.max(...R_values);
-}, [R_values]);
-
+  // ✅ Melhor trade (em R real)
+  const bestR = React.useMemo(() => {
+    if (!R_values.length) return 0;
+    return Math.max(...R_values);
+  }, [R_values]);
 
   // formato (R não é currency — manter 2 casas)
   const fmtR = (v: number) => Number(v || 0).toFixed(2);
+
+  // 🎨 Tooltip customizado com melhor legibilidade
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload || !payload.length) return null;
+    
+    return (
+      <div style={{
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+        border: "1px solid rgba(167,139,250,0.3)",
+        borderRadius: 10,
+        padding: "12px 16px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+        minWidth: 160
+      }}>
+        <div style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#a78bfa",
+          marginBottom: 8,
+          borderBottom: "1px solid rgba(167,139,250,0.2)",
+          paddingBottom: 6
+        }}>
+          {mode === "hist" ? `Intervalo: ${label}R` : `R: ${label}`}
+        </div>
+        <div style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: "#e5e7eb"
+        }}>
+          {mode === "hist" 
+            ? `${payload[0].value} trades` 
+            : `${Number(payload[0].value).toFixed(3)}`
+          }
+        </div>
+        {mode === "density" && (
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+            Densidade
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -1072,7 +1118,7 @@ const bestR = React.useMemo(() => {
         <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
             {mode === "hist" ? (
-              <BarChart data={dataHist} margin={{ top: 10, right: 10, left: 5, bottom: 15 }}>
+              <BarChart data={dataHist} margin={{ top: 10, right: 10, left: 5, bottom: 20 }}>
                 <defs>
                   <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.9} />
@@ -1081,21 +1127,113 @@ const bestR = React.useMemo(() => {
                 </defs>
 
                 <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} interval={Math.floor(dataHist.length / 8)} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                <ReTooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
-                  formatter={(v: any) => [`${v} trades`, "Frequência"]} />
+                
+                {/* ✅ Eixo X com label */}
+                <XAxis 
+                  dataKey="label" 
+                  tick={{ fill: "#94a3b8", fontSize: 10 }} 
+                  label={{ 
+                    value: "R (múltiplos de risco)", 
+                    position: "insideBottom", 
+                    offset: -8, 
+                    fill: "#64748b", 
+                    fontSize: 11 
+                  }}
+                />
+                
+                {/* ✅ Eixo Y com label */}
+                <YAxis 
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  label={{ 
+                    value: "Frequência (trades)", 
+                    angle: -90, 
+                    position: "insideLeft", 
+                    fill: "#64748b", 
+                    fontSize: 11 
+                  }}
+                />
+                
+                {/* ✅ Tooltip customizado */}
+                <ReTooltip content={<CustomTooltip />} />
+                
+                {/* ✅ Linha de referência em R=0 */}
+                <ReferenceLine 
+                  x="0.00" 
+                  stroke="#ef4444" 
+                  strokeWidth={1.5} 
+                  strokeDasharray="3 3" 
+                  label={{ 
+                    value: "Break-even", 
+                    fill: "#ef4444", 
+                    fontSize: 10, 
+                    position: "top" 
+                  }} 
+                />
+                
+                {/* ✅ Linha da média */}
+                <ReferenceLine 
+                  x={avgR.toFixed(2)} 
+                  stroke="#10b981" 
+                  strokeWidth={1.5} 
+                  strokeDasharray="5 5" 
+                  label={{ 
+                    value: `Média: ${fmtR(avgR)}R`, 
+                    fill: "#10b981", 
+                    fontSize: 10, 
+                    position: "top" 
+                  }} 
+                />
+                
                 <Bar dataKey="count" fill="url(#barGrad)" radius={[4,4,0,0]} barSize={20} />
               </BarChart>
             ) : (
-              <LineChart data={kde} margin={{ top: 10, right: 10, left: 5, bottom: 15 }}>
+              <LineChart data={kde} margin={{ top: 10, right: 10, left: 5, bottom: 20 }}>
                 <CartesianGrid stroke="#374151" strokeOpacity={0.25} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                <ReTooltip
-                  contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
-                  formatter={(value: any) => [typeof value === "number" ? value.toFixed(3) : value, "Density"]}
-                  labelFormatter={(label) => `R: ${label}`} />
+                
+                {/* ✅ Eixo X com label */}
+                <XAxis 
+                  dataKey="label" 
+                  tick={{ fill: "#94a3b8", fontSize: 10 }}
+                  label={{ 
+                    value: "R (múltiplos de risco)", 
+                    position: "insideBottom", 
+                    offset: -8, 
+                    fill: "#64748b", 
+                    fontSize: 11 
+                  }}
+                />
+                
+                {/* ✅ Eixo Y com label */}
+                <YAxis 
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  label={{ 
+                    value: "Densidade de probabilidade", 
+                    angle: -90, 
+                    position: "insideLeft", 
+                    fill: "#64748b", 
+                    fontSize: 11 
+                  }}
+                />
+                
+                {/* ✅ Tooltip customizado */}
+                <ReTooltip content={<CustomTooltip />} />
+                
+                {/* ✅ Linha de referência em R=0 */}
+                <ReferenceLine 
+                  x={0} 
+                  stroke="#ef4444" 
+                  strokeWidth={1.5} 
+                  strokeDasharray="3 3" 
+                />
+                
+                {/* ✅ Linha da média */}
+                <ReferenceLine 
+                  x={avgR} 
+                  stroke="#10b981" 
+                  strokeWidth={1.5} 
+                  strokeDasharray="5 5" 
+                />
+                
                 <Line type="monotone" dataKey="density" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
               </LineChart>
             )}
@@ -1136,7 +1274,6 @@ const bestR = React.useMemo(() => {
     </div>
   );
 };
-
 
 
 // Recent trades table with account info
@@ -2043,7 +2180,7 @@ return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades
   <HeatMapSection trades={filteredTrades} />
   </div>
    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-  <DurationAnalysis trades={filteredTrades}  />
+  <DurationAnalysis trades={filteredTrades} />
 
   
   <DrawdownSection trades={filteredTrades} accounts={filteredAccounts}/>
