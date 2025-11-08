@@ -691,12 +691,12 @@ useEffect(() => {
       </div>
     </div>
     <p className="text-xs text-muted mb-2">Selecione múltiplas com Ctrl/Cmd</p>
-<select 
-  className="account-multiselect input"
+<select
+  className="account-multiselect"
   multiple
   size={Math.min(5, filteredAccounts.length)}
   value={selectedAccounts}
-  onChange={e => {
+  onChange={(e) => {
     const options = e.target.options;
     const selected: string[] = [];
     for (let i = 0; i < options.length; i++) {
@@ -706,13 +706,34 @@ useEffect(() => {
     }
     setSelectedAccounts(selected);
   }}
+  style={{
+    width: '100%',
+    display: 'block',
+    background: 'var(--card-bg)',
+    color: 'var(--text-primary)',
+    border: '1px solid var(--soft-border, rgba(255,255,255,0.1))',
+    borderRadius: 8,
+    padding: '6px 8px',
+    minHeight: 120,
+    overflowY: 'auto',
+    fontSize: 14,
+  }}
 >
-  {filteredAccounts.map(acc => (
-    <option key={acc.id} value={String(acc.id)}>
-      {acc.name} [{acc.status}] ({acc.type}) - ${acc.currentFunding?.toLocaleString()}
+  {filteredAccounts.map((acc) => (
+    <option
+      key={acc.id}
+      value={String(acc.id)}
+      style={{
+        padding: '4px 6px',
+        background: 'var(--card-bg)',
+        color: 'var(--text-primary)',
+      }}
+    >
+      {acc.name} [{acc.status}] ({acc.type}) — ${acc.currentFunding?.toLocaleString()}
     </option>
   ))}
 </select>
+
   </div>
 
  {/* Pesos das Contas - Grid 3 colunas scrollable */}
