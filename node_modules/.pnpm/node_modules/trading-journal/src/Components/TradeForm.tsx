@@ -102,9 +102,11 @@ const activeAccounts = useMemo(() => {
   let accs = accounts.filter(acc => ['Live', 'Funded', 'Challenge', 'Challenge Concluido'].includes(acc.status));
   
   // ✅ NOVO: Filtro por status selecionados
-  if (accountStatusFilter.length > 0) {
-    accs = accs.filter(acc => accountStatusFilter.includes(acc.status?.toLowerCase()));
-  }
+if (accountStatusFilter.length > 0) {
+  accs = accs.filter(acc => 
+    accountStatusFilter.map(s => s.toLowerCase()).includes(acc.status?.toLowerCase())
+  );
+}
   
   return accs;
 }, [accounts, accountStatusFilter]); // adicionar accountStatusFilter nas dependências
