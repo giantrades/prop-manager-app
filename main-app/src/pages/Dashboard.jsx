@@ -18,7 +18,12 @@ function FiltersBar({
   statusDropdownOpen,
   setStatusDropdownOpen,
   statusDropdownRef,
-  accountStatuses 
+  accountStatuses,
+  dateFilter = {start:null,end:null},
+  setDateFilter,
+  showCalendar,
+  setShowCalendar,
+  calendarRef, 
 }) {
   const {
     categories: sel,
@@ -220,6 +225,79 @@ function FiltersBar({
           </button>
         ))}
       </div>
+      {/* Calendário */}
+<div style={{ position: 'relative', flex: '0 0 auto' }} ref={calendarRef}>
+  <button
+    className={`calendar-btn ${(dateFilter.start || dateFilter.end) ? 'active' : ''}`}
+    onClick={(e) => { e.stopPropagation(); setShowCalendar(v => !v); }}
+    title="Filtrar por data"
+  >
+    <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  </button>
+
+  {showCalendar && (
+    <div className="calendar-dropdown">
+      <div className="calendar-header">
+        <h4 style={{ margin: 0, fontSize: 14, color: 'var(--text)' }}>Filtrar por Data</h4>
+        {(dateFilter.start || dateFilter.end) && (
+          <button
+            className="btn ghost small"
+            onClick={() => setDateFilter({ start: null, end: null })}
+            style={{ fontSize: 11 }}
+          >
+            Limpar
+          </button>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div className="calendar-label">Data Início</div>
+        <input
+          type="date"
+          className="calendar-input"
+          value={dateFilter.start || ''}
+          onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <div className="calendar-label">Data Fim</div>
+        <input
+          type="date"
+          className="calendar-input"
+          value={dateFilter.end || ''}
+          onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+        />
+      </div>
+
+      <div className="calendar-actions">
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => {
+            const today = new Date().toISOString().split('T')[0];
+            const lastMonth = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
+            setDateFilter({ start: lastMonth, end: today });
+          }}
+        >
+          Último mês
+        </button>
+        <button
+          className="btn primary small"
+          style={{ flex: 1 }}
+          onClick={() => setShowCalendar(false)}
+        >
+          Aplicar
+        </button>
+      </div>
+    </div>
+  )}
+</div>
     </div>
   )
 }
@@ -227,7 +305,7 @@ function FiltersBar({
 /* =========================================================
    2) Hook para filtrar contas/payouts e trazer firms
    ========================================================= */
-function useFiltered(accountStatusFilter = ["live", "funded"]) {
+function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) {
   const [accounts, setAccounts] = useState([])
   const [payouts, setPayouts] = useState([])
   const [firms, setFirms] = useState([])
@@ -254,27 +332,44 @@ function useFiltered(accountStatusFilter = ["live", "funded"]) {
   const accById   = Object.fromEntries(accounts.map(a => [a.id, a]))
   const accByName = Object.fromEntries(accounts.map(a => [a.name, a]))
 
-  // ✅ APLICAR filtro de categoria, data E status
+  // ✅ APLICAR todos os filtros de uma vez (categoria, timeRange, status E data)
   const filteredAccounts = accounts.filter(a => {
     const matchesCategory = catSet.has(a.type);
-    const matchesDate = new Date(a.dateCreated) >= start;
+    const matchesTimeRange = new Date(a.dateCreated) >= start;
     const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
                          accountStatusFilter.includes(a.status?.toLowerCase());
-    return matchesCategory && matchesDate && matchesStatus;
+    
+    let matchesDateFilter = true;
+    if (dateFilter?.start || dateFilter?.end) {
+      const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01');
+      const endDate = dateFilter.end ? new Date(dateFilter.end) : new Date();
+      endDate.setHours(23, 59, 59, 999);
+      
+      const createdDate = new Date(a.dateCreated);
+      matchesDateFilter = createdDate >= startDate && createdDate <= endDate;
+    }
+    
+    return matchesCategory && matchesTimeRange && matchesStatus && matchesDateFilter;
   });
 
   const payoutBelongs = (p) => {
     const d = new Date(p.dateCreated || p.date)
     if (isNaN(+d) || d < start) return false
     
+    // Filtro de data do calendário
+    if (dateFilter?.start || dateFilter?.end) {
+      const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01');
+      const endDate = dateFilter.end ? new Date(dateFilter.end) : new Date();
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (d < startDate || d > endDate) return false;
+    }
+    
     const direct = p.type || p.category
     if (direct && catSet.has(direct)) {
-      // Se tem categoria direta, ainda precisa verificar status
-      // mas como não tem conta associada, deixa passar se tem a categoria
       return true;
     }
     
-    // Helper para verificar se uma conta passa no filtro de status
     const checkAccountStatus = (acc) => {
       if (!acc) return false;
       const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
@@ -305,8 +400,8 @@ function useFiltered(accountStatusFilter = ["live", "funded"]) {
 }
 
 /*========================================================= 3) Cards resumo ========================================================= */ 
-function SummaryCards({ accountStatusFilter = [] }) {
-  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter)
+function SummaryCards({ accountStatusFilter = [], dateFilter = {} }) {
+  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
 
   const totalFunding = accounts.reduce((s, a) => s + (a.currentFunding || 0), 0)
@@ -353,8 +448,8 @@ function SummaryCards({ accountStatusFilter = [] }) {
 }
 
 
-function PatrimonioLine({ accountStatusFilter = ["live", "funded"] }){
-  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter)
+function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
+  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
   const { categories: selected, timeRange } = useFilters()
 
@@ -579,8 +674,8 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"] }){
 }
 
 
-function FundingPerAccount({ accountStatusFilter = ["live", "funded"] }){
-  const { accounts } = useFiltered(accountStatusFilter)
+function FundingPerAccount({ accountStatusFilter = ["live", "funded"],dateFilter = {} }){
+  const { accounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
   
   const data = accounts.map((a, index) => ({ 
@@ -790,7 +885,7 @@ function FundingPerAccount({ accountStatusFilter = ["live", "funded"] }){
   )
 }
 
-function FundingPerCategory({ accountStatusFilter = ["live", "funded"] }){
+function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
   const [accounts, setAccounts] = useState([])
   useEffect(() => {
     const data = getAll()
@@ -1047,8 +1142,8 @@ const stats = {
   )
 }
 
-function RecentPayouts({ accountStatusFilter = ["live", "funded"] }){
-  const { payouts } = useFiltered(accountStatusFilter)
+function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
+  const { payouts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
   const fmt = (v)=> currency==='USD'
     ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v||0)
@@ -1074,8 +1169,8 @@ function RecentPayouts({ accountStatusFilter = ["live", "funded"] }){
   )
 }
 
-function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
-  const { accounts = [] } = useFiltered(accountStatusFilter) || {};
+function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
+  const { accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
   const [firms, setFirms] = useState ([])
  
@@ -1211,8 +1306,8 @@ function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
   );
 }
 
-function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
-  const { payouts = [], accounts = [] } = useFiltered(accountStatusFilter) || {};
+function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
+  const { payouts = [], accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {};
   const { currency = 'USD', rate = 1 } = useCurrency() || {};
   const [firms, setFirms] = useState ([])
    useEffect(() => {
@@ -1381,8 +1476,8 @@ function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"] }) {
 }
 
 
-function AccountsOverview({ accountStatusFilter = ["live", "funded"] }){
-  const { accounts } = useFiltered(accountStatusFilter)
+function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
+  const { accounts } = useFiltered(accountStatusFilter, dateFilter)
   
   const recentAccounts = accounts
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
@@ -1416,7 +1511,10 @@ export default function Dashboard(){
   const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded"]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef(null);
-
+// Logo após accountStatusFilter
+const [dateFilter, setDateFilter] = useState({ start: null, end: null });
+const [showCalendar, setShowCalendar] = useState(false);
+const calendarRef = useRef(null);
   // Pega todas as contas para montar os filtros
   const [allAccountsData, setAllAccountsData] = useState([]);
   
@@ -1449,7 +1547,17 @@ export default function Dashboard(){
     if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [statusDropdownOpen]);
-
+// Logo após o useEffect do statusDropdown
+useEffect(() => {
+  function onDocClick(e) {
+    if (!calendarRef.current) return;
+    if (!calendarRef.current.contains(e.target)) {
+      setShowCalendar(false);
+    }
+  }
+  if (showCalendar) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [showCalendar]);
   return (
     <div className="grid" style={{gap:20}}>
       <FiltersBar 
@@ -1460,22 +1568,27 @@ export default function Dashboard(){
         setStatusDropdownOpen={setStatusDropdownOpen}
         statusDropdownRef={statusDropdownRef}
         accountStatuses={accountStatuses}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+        showCalendar={showCalendar}
+        setShowCalendar={setShowCalendar}
+        calendarRef={calendarRef}
       />
-      <SummaryCards accountStatusFilter={accountStatusFilter} />
+      <SummaryCards accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
       <div className="grid" style={{gridTemplateColumns:'2fr 1fr', gap:16}}>
-        <PatrimonioLine accountStatusFilter={accountStatusFilter} />
-        <FundingPerCategory accountStatusFilter={accountStatusFilter} />
-        <GoalsDistributionChart />
+        <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
+        <FundingPerCategory accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
+        <GoalsDistributionChart dateFilter={dateFilter} />
       </div>
       <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:16}}>
-        <FundingPerAccount accountStatusFilter={accountStatusFilter} />
-        <RecentPayouts accountStatusFilter={accountStatusFilter} />
+        <FundingPerAccount accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
+        <RecentPayouts accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <FundingPerFirmChart accountStatusFilter={accountStatusFilter} />
-        <PayoutsPerFirmChart accountStatusFilter={accountStatusFilter} />
+        <FundingPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
+        <PayoutsPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
       </div>
-      <AccountsOverview accountStatusFilter={accountStatusFilter} />
+      <AccountsOverview accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
     </div>
   )
 }

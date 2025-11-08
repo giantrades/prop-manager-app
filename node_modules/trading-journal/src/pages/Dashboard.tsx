@@ -952,7 +952,6 @@ const TimeframeBar = ({ data = [], fmt }: any) => {
 
 
 // 🔥 HistogramR atualizado — usa filteredTrades reais e legenda dinâmica
-// 🔥 HistogramR atualizado — usa filteredTrades reais e legenda dinâmica
 const HistogramR = ({ trades = [] }: { trades: any[] }) => {
   const [mode, setMode] = React.useState<"hist" | "density">("hist");
 
@@ -1481,7 +1480,9 @@ export default function Dashboard() {
   const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(["live", "funded"]); const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   // ref para o dropdown wrapper
 const statusDropdownRef = useRef<HTMLDivElement | null>(null);
-
+const [dateFilter, setDateFilter] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+const [showCalendar, setShowCalendar] = useState(false);
+const calendarRef = useRef<HTMLDivElement>(null);
 // fecha ao clicar fora
 useEffect(() => {
   function onDocClick(e: MouseEvent) {
@@ -1493,7 +1494,17 @@ useEffect(() => {
   if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
   return () => document.removeEventListener('mousedown', onDocClick);
 }, [statusDropdownOpen]);
- 
+ // Logo após o useEffect do statusDropdown
+useEffect(() => {
+  function onDocClick(e) {
+    if (!calendarRef.current) return;
+    if (!calendarRef.current.contains(e.target)) {
+      setShowCalendar(false);
+    }
+  }
+  if (showCalendar) document.addEventListener('mousedown', onDocClick);
+  return () => document.removeEventListener('mousedown', onDocClick);
+}, [showCalendar]);
   // Pega todos os status únicos das contas disponíveis 
 const accountStatuses = useMemo<string[]>(() => {
   const all = (accounts || [])
@@ -1567,6 +1578,17 @@ const filteredTrades = useMemo(() => {
     const cutoff = new Date(Date.now() - days * 24 * 3600 * 1000);
     out = out.filter((t) => new Date(t.entry_datetime) >= cutoff);
   }
+  // Filtro de data
+if (dateFilter.start || dateFilter.end) {
+  const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01');
+  const endDate = dateFilter.end ? new Date(dateFilter.end) : new Date();
+  endDate.setHours(23, 59, 59, 999);
+  
+  out = out.filter((t) => {
+    const tradeDate = new Date(t.entry_datetime);
+    return tradeDate >= startDate && tradeDate <= endDate;
+  });
+}
 
   // ✅ Filtro adicional: conta selecionada OU status filtrado
   const allowedIds = filteredAccounts.map(a => a.id);
@@ -1579,6 +1601,7 @@ const filteredTrades = useMemo(() => {
   timeframeFilter,
   strategyFilter,
   rangeFilter,
+  dateFilter,
   filteredAccounts,
 ]);
 
@@ -1913,7 +1936,79 @@ const filteredTrades = useMemo(() => {
               setRangeFilter("all"); 
             }}>Reset</button>
           </div>
+{/* Calendário */}
+<div style={{ position: 'relative', flex: '0 0 auto' }} ref={calendarRef}>
+  <button
+    className={`calendar-btn ${(dateFilter.start || dateFilter.end) ? 'active' : ''}`}
+    onClick={(e) => { e.stopPropagation(); setShowCalendar(v => !v); }}
+    title="Filtrar por data"
+  >
+    <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  </button>
 
+  {showCalendar && (
+    <div className="calendar-dropdown">
+      <div className="calendar-header">
+        <h4 style={{ margin: 0, fontSize: 14, color: 'var(--text)' }}>Filtrar por Data</h4>
+        {(dateFilter.start || dateFilter.end) && (
+          <button
+            className="btn ghost small"
+            onClick={() => setDateFilter({ start: null, end: null })}
+            style={{ fontSize: 11 }}
+          >
+            Limpar
+          </button>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div className="calendar-label">Data Início</div>
+        <input
+          type="date"
+          className="calendar-input"
+          value={dateFilter.start || ''}
+          onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <div className="calendar-label">Data Fim</div>
+        <input
+          type="date"
+          className="calendar-input"
+          value={dateFilter.end || ''}
+          onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+        />
+      </div>
+
+      <div className="calendar-actions">
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => {
+            const today = new Date().toISOString().split('T')[0];
+            const lastMonth = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
+            setDateFilter({ start: lastMonth, end: today });
+          }}
+        >
+          Último mês
+        </button>
+        <button
+          className="btn primary small"
+          style={{ flex: 1 }}
+          onClick={() => setShowCalendar(false)}
+        >
+          Aplicar
+        </button>
+      </div>
+    </div>
+  )}
+</div>
 
         </div>
       </div>
