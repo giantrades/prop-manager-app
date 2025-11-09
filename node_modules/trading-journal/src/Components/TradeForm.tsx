@@ -671,68 +671,83 @@ useEffect(() => {
 
   {/* Multi-select de Contas com botões de ação */}
   <div className="field">
-    <div className="flex items-center justify-between mb-2">
-      <label className="mb-0">💼 Contas Disponíveis *</label>
-      <div className="account-actions">
-        <button
-          className="account-action-btn"
-          onClick={() => setSelectedAccounts(filteredAccounts.map(a => a.id))}
-          type="button"
-        >
-          ✓ Todas
-        </button>
-        <button
-          className="account-action-btn"
-          onClick={() => setSelectedAccounts([])}
-          type="button"
-        >
-          ✕ Limpar
-        </button>
-      </div>
-    </div>
     <p className="text-xs text-muted mb-2">Selecione múltiplas com Ctrl/Cmd</p>
-<select
-  className="account-multiselect"
-  multiple
-  size={Math.min(5, filteredAccounts.length)}
-  value={selectedAccounts}
-  onChange={(e) => {
-    const options = e.target.options;
-    const selected: string[] = [];
-    for (let i = 0; i < options.length; i++) {
-      if (options[i].selected) {
-        selected.push(options[i].value);
-      }
-    }
-    setSelectedAccounts(selected);
-  }}
-  style={{
-    width: '100%',
-    display: 'block',
-    background: 'var(--card-bg)',
-    color: 'var(--text-primary)',
-    border: '1px solid var(--soft-border, rgba(255,255,255,0.1))',
-    borderRadius: 8,
-    padding: '6px 8px',
-    minHeight: 120,
-    overflowY: 'auto',
-    fontSize: 14,
-  }}
->
-  {filteredAccounts.map((acc) => (
-    <option
-      key={acc.id}
-      value={String(acc.id)}
-      style={{
-        padding: '4px 6px',
-        background: 'var(--card-bg)',
-        color: 'var(--text-primary)',
-      }}
-    >
-      {acc.name} [{acc.status}] ({acc.type}) — ${acc.currentFunding?.toLocaleString()}
-    </option>
-  ))}
-</select>
+{/* ====== Account multi-select (fake select) ====== */}
+<div className="account-multiselect-wrapper">
+  <div className="account-multiselect-header">
+    <div className="account-multiselect-title">
+      <strong>{filteredAccounts.length}</strong> disponíveis
+      <span style={{ marginLeft: 8, color: 'var(--muted)' }}>•</span>
+      <span style={{ marginLeft: 8, color: 'var(--muted)' }}>
+        <strong>{selectedAccounts.length}</strong> selecionadas
+      </span>
+    </div>
+
+<div className="account-multiselect-actions">
+  <button
+    type="button"
+    className={`btn ghost small ${selectedAccounts.length === filteredAccounts.length && filteredAccounts.length > 0 ? 'all-selected' : ''}`}
+    onClick={() => setSelectedAccounts(filteredAccounts.map(a => a.id))}
+  >
+    ✓ Todas
+  </button>
+  <button
+    type="button"
+    className="btn ghost small"
+    onClick={() => setSelectedAccounts([])}
+  >
+    ✕ Limpar
+  </button>
+</div>
+
+  </div>
+
+  <div className="account-multiselect-list" role="list">
+    {filteredAccounts.length === 0 ? (
+      <div className="account-multiselect-empty">
+        Nenhuma conta disponível com os filtros atuais.
+      </div>
+    ) : (
+      filteredAccounts.map(acc => {
+        const selected = selectedAccounts.includes(acc.id);
+        return (
+          <label
+            key={acc.id}
+            className={`account-option ${selected ? 'selected' : ''}`}
+            title={`${acc.name} — ${acc.status} — ${acc.type}`}
+            role="listitem"
+          >
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => {
+                const next = e.target.checked
+                  ? Array.from(new Set([...selectedAccounts, acc.id]))
+                  : selectedAccounts.filter(id => id !== acc.id);
+                setSelectedAccounts(next);
+              }}
+            />
+            <div className="account-option-body">
+              <div className="account-option-line1">
+                <span className="account-option-name">{acc.name}</span>
+                <span className="account-option-funding">
+                  — {acc.currentFunding ? `$${acc.currentFunding.toLocaleString()}` : '$0.00'}
+                </span>
+              </div>
+              <div className="account-option-line2">
+                <span className="muted" style={{ fontSize: 13 }}>
+                  [{acc.status}] • {acc.type}
+                </span>
+              </div>
+            </div>
+          </label>
+        );
+      })
+    )}
+  </div>
+</div>
+{/* ====== fim account-multiselect ====== */}
+
 
   </div>
 

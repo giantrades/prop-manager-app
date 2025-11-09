@@ -886,19 +886,8 @@ function FundingPerAccount({ accountStatusFilter = ["live", "funded"],dateFilter
 }
 
 function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
-  const [accounts, setAccounts] = useState([])
-  useEffect(() => {
-    const data = getAll()
-    let accs = data.accounts || []
-    
-    // ✅ Aplicar filtro de status
-    if (accountStatusFilter.length > 0) {
-      accs = accs.filter(a => accountStatusFilter.includes(a.status?.toLowerCase()))
-    }
-    
-    setAccounts(accs)
-  }, [accountStatusFilter]) // ✅ adicionar dependência
-   
+  // ✅ Usar useFiltered em vez de getAll() manual
+  const { accounts } = useFiltered(accountStatusFilter, dateFilter);
   const { currency, rate } = useCurrency();
   const [categoryColors, setCategoryColors] = useState({});
 
@@ -949,7 +938,7 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
       return (
         <div style={{
           background: '#0f1218',
-          border: `1px solid ${color}`, // Borda com a cor da categoria
+          border: `1px solid ${color}`,
           color: '#e7eaf0',
           padding: '10px',
           borderRadius: '4px'

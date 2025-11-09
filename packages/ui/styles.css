@@ -2214,3 +2214,122 @@ select.payouts-input {
   width: 18px;
   height: 18px;
 }
+
+/* container do fake-select */
+.account-multiselect-wrapper {
+  background: var(--card-bg, #0f1724);
+  border: 1px solid var(--soft-border, rgba(255,255,255,0.06));
+  border-radius: 10px;
+  padding: 10px;
+  min-height: 160px;    /* altura mínima */
+  max-height: 320px;    /* altura máxima, depois aparece scroll */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* header com contador + ações */
+.account-multiselect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.account-multiselect-title {
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-multiselect-actions .btn {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+/* área rolável com itens */
+.account-multiselect-list {
+  overflow-y: auto;
+  padding-right: 6px; /* evita cortar conteúdo atrás da scrollbar */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* estilo do item (label) */
+.account-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  background: transparent;
+}
+
+/* forcando font-size maior para o texto do item */
+.account-option .account-option-body,
+.account-option .account-option-name,
+.account-option .account-option-line1,
+.account-option .account-option-line2 {
+  font-size: 15px !important;   /* força tamanho maior */
+  line-height: 1.2 !important;
+  color: var(--text) !important;
+}
+
+.account-option input[type="checkbox"] {
+  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+}
+
+/* hover / seleção */
+.account-option:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.account-option.selected {
+  background: rgba(0,122,255,0.12);
+  border-left: 3px solid var(--accent, #007aff);
+}
+
+/* segunda linha (muted) */
+.account-option-line2 {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* mensagem quando está vazio */
+.account-multiselect-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* scroll custom (opcional) */
+.account-multiselect-list::-webkit-scrollbar {
+  width: 10px;
+}
+.account-multiselect-list::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+
+.account-multiselect-actions {
+  display: flex;
+  gap: 10px; /* 🔹 espaçamento entre os botões */
+}
+
+/* 🔹 deixa o texto do botão “Todas” verdinho quando todas as contas estão selecionadas */
+.account-multiselect-actions .btn.all-selected {
+  color: #4ade80 !important; /* verde suave */
+  font-weight: 600;
+}
