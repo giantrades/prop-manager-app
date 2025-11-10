@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
-import { useDrive } from "@apps/state/DriveContext"; // ✅ usa o contexto global
+import { useDrive } from "@apps/state/DriveContext";
 
 function CurrencyBox() {
   const { currency, setCurrency, rate } = useCurrency();
@@ -27,8 +27,8 @@ function CurrencyBox() {
 
 export default function Navbar() {
   const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const [menuOpen, setMenuOpen] = useState(false);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
-
   const journalUrl = import.meta.env.VITE_JOURNAL_URL || "/journal/";
 
   const onBackup = async () => {
@@ -51,96 +51,75 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <div className="nav-logo">
-        📊 <span>PropManager</span>
+      <div className="nav-left">
+        <div className="nav-logo">📊 <span>PropManager</span></div>
       </div>
 
-      <div className="nav-links">
-        <NavLink to="/" className={({ isActive }) => (isActive ? "active" : "")}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/accounts" className={({ isActive }) => (isActive ? "active" : "")}>
-          Accounts
-        </NavLink>
-        <NavLink to="/payouts" className={({ isActive }) => (isActive ? "active" : "")}>
-          Payouts
-        </NavLink>
-        <NavLink to="/goals" className={({ isActive }) => (isActive ? "active" : "")}>
-          Goals
-        </NavLink>
-        <NavLink to="/firms" className={({ isActive }) => (isActive ? "active" : "")}>
-          Firms
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          Settings
-        </NavLink>
-      </div>
-
-      <div className="spacer" />
-
-      {/* Botão para o Journal */}
-      <a
-        href={journalUrl}
-        style={{
-          color: "#fff",
-          padding: "8px 14px",
-          border: "2px solid var(--color-border-soft, #ffffffff)",
-          borderRadius: "16px",
-          fontWeight: "600",
-          fontSize: "1.1rem",
-          textDecoration: "none",
-          display: "inline-flex",
-          alignItems: "center",
-          transition: "background-color 0.2s",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.borderColor = "var(--color-accent-2, #161725ff)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.borderColor = "var(--color-accent-1, 15, 18, 24, 0.85)")
-        }
+      {/* BOTÃO HAMBÚRGUER */}
+      <button
+        className={`hamburger ${menuOpen ? "active" : ""}`}
+        onClick={() => setMenuOpen(!menuOpen)}
       >
-        <span style={{ fontSize: "1rem" }}></span>Trading Journal
-      </a>
+        <span />
+        <span />
+        <span />
+      </button>
 
-      <CurrencyBox />
+      {/* LINKS E AÇÕES */}
+      <div className={`nav-content ${menuOpen ? "open" : ""}`}>
+        <div className="nav-links">
+          <NavLink to="/" onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
+          <NavLink to="/accounts" onClick={() => setMenuOpen(false)}>Accounts</NavLink>
+          <NavLink to="/payouts" onClick={() => setMenuOpen(false)}>Payouts</NavLink>
+          <NavLink to="/goals" onClick={() => setMenuOpen(false)}>Goals</NavLink>
+          <NavLink to="/firms" onClick={() => setMenuOpen(false)}>Firms</NavLink>
+          <NavLink to="/settings" onClick={() => setMenuOpen(false)}>Settings</NavLink>
+        </div>
 
-      {/* Drive Status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 16 }}>
-        <span
-          title={
-            !driveReady
-              ? "Drive não inicializado"
-              : logged
-              ? "Conectado ao Google"
-              : "Desconectado do Google"
-          }
-          style={{
-            width: 12,
-            height: 12,
-            borderRadius: "50%",
-            backgroundColor: dotColor,
-            display: "inline-block",
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
-          }}
-        />
-        {logged ? (
-          <>
-            <button className="btn ghost small" onClick={logout}>
-              Logout
-            </button>
-            <button className="btn ghost small" onClick={onBackup}>
-              Backup
-            </button>
-            <button className="btn ghost small" onClick={onList}>
-              Listar
-            </button>
-          </>
-        ) : (
-          <button className="btn ghost small" onClick={login}>
-            Login Google
-          </button>
-        )}
+        <div className="nav-actions">
+          <a href={journalUrl} className="journal-link">
+            Trading Journal
+          </a>
+
+          <CurrencyBox />
+
+          <div className="drive-status">
+            <span
+              title={
+                !driveReady
+                  ? "Drive não inicializado"
+                  : logged
+                  ? "Conectado ao Google"
+                  : "Desconectado do Google"
+              }
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                backgroundColor: dotColor,
+                display: "inline-block",
+                boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
+              }}
+            />
+            {logged ? (
+              <>
+                <button className="btn ghost small" onClick={logout}>
+                  Logout
+                </button>
+                <button className="btn ghost small" onClick={onBackup}>
+                  Backup
+                </button>
+                <button className="btn ghost small" onClick={onList}>
+                  Listar
+                </button>
+              </>
+            ) : (
+              <button className="btn ghost small" onClick={login}>
+                Login Google
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </nav>
   );

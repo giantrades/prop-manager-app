@@ -2444,3 +2444,497 @@ select.payouts-input {
     line-height: 1.4;
   }
 }
+
+/* ======== PAYOUTS PAGE RESPONSIVE TABLE ======== */
+.payouts-page table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payouts-page th,
+.payouts-page td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+@media (max-width: 820px) {
+  .payouts-page thead {
+    display: none;
+  }
+
+  .payouts-page table,
+  .payouts-page tbody,
+  .payouts-page tr,
+  .payouts-page td {
+    display: block;
+    width: 100%;
+  }
+
+  .payouts-page tr {
+    margin-bottom: 12px;
+    background: var(--background-secondary, #0b1018);
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    padding: 10px;
+  }
+
+  .payouts-page td {
+    text-align: right;
+    position: relative;
+    padding-left: 50%;
+    border: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .payouts-page td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 12px;
+    top: 8px;
+    font-weight: 600;
+    text-transform: capitalize;
+    color: var(--text-muted, #b4b8c0);
+    text-align: left;
+  }
+
+  .payouts-page .btn {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}
+
+/* ---================= PAGINA DASHBOARD =================--- */
+
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 40px;
+}
+
+/* === GRID BASE === */
+.dashboard-page .grid {
+  display: grid;
+  gap: 16px;
+}
+
+.dashboard-page .grid.cards {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-page .card {
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.dashboard-page .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+
+/* === TÍTULOS E TEXTOS === */
+.dashboard-page h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #e7eaf0);
+  margin-bottom: 10px;
+}
+
+.dashboard-page .stat {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  text-align: center;
+}
+
+.dashboard-page .muted {
+  color: var(--muted, #9ca3af);
+}
+
+/* === CORES DE ACENTO PARA CARDS === */
+.dashboard-page .accent1 { border-top: 3px solid #22c55e; }
+.dashboard-page .accent2 { border-top: 3px solid #3b82f6; }
+.dashboard-page .accent3 { border-top: 3px solid #f59e0b; }
+.dashboard-page .accent4 { border-top: 3px solid #8b5cf6; }
+
+/* === FILTROS (compacto e responsivo) === */
+.dashboard-page .filters {
+  position: sticky;
+  top: 64px; /* distância do topo (ajuste conforme navbar) */
+  z-index: 50;
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Menos “peso visual” nos chips */
+.dashboard-page .chip {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--text-secondary, #c9ced6);
+  font-size: 13px;
+  border-radius: 16px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.dashboard-page .chip.active {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* === DROPDOWN DE STATUS === */
+.dashboard-page .input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e6e6e9;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* === BOTÃO DO CALENDÁRIO === */
+.dashboard-page .calendar-btn {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary, #e7eaf0);
+  border-radius: 6px;
+  padding: 5px 8px;
+  transition: all 0.2s ease;
+}
+.dashboard-page .calendar-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.dashboard-page .calendar-btn.active {
+  color: var(--primary, #6366f1);
+  border-color: var(--primary);
+}
+
+/* === MOBILE: filtros empilhados e sem sticky === */
+@media (max-width: 900px) {
+  .dashboard-page .filters {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+}
+
+
+/* === CHARTS === */
+.dashboard-page .card svg {
+  overflow: visible;
+}
+.dashboard-page .card .recharts-tooltip-wrapper {
+  z-index: 9999;
+}
+
+/* === TABLES === */
+.dashboard-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.dashboard-page th,
+.dashboard-page td {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--text-secondary, #d1d5db);
+}
+
+.dashboard-page tbody tr:hover {
+  background: rgba(255,255,255,0.04);
+  transition: background 0.2s ease;
+}
+
+/* === RESPONSIVIDADE === */
+@media (max-width: 900px) {
+  .dashboard-page {
+    gap: 12px;
+  }
+
+
+
+  .dashboard-page .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .dashboard-page table,
+  .dashboard-page thead,
+  .dashboard-page tbody,
+  .dashboard-page th,
+  .dashboard-page td,
+  .dashboard-page tr {
+    display: block;
+    width: 100%;
+  }
+
+  .dashboard-page thead {
+    display: none;
+  }
+
+  .dashboard-page tbody tr {
+    background: var(--card-bg);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .dashboard-page tbody td {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+
+  .dashboard-page tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+  }
+}
+
+/* ---================= PAGINA FIRMS ============--- */
+
+.firms-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ==== Layout base ==== */
+.firms-page .card {
+  width: 100%;
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* ==== Tabela ==== */
+.firms-page table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.firms-page th,
+.firms-page td {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.firms-page th {
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.firms-page tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+/* ==== Responsividade ==== */
+@media (max-width: 900px) {
+  .firms-page table,
+  .firms-page thead,
+  .firms-page tbody,
+  .firms-page th,
+  .firms-page td,
+  .firms-page tr {
+    display: block;
+    width: 100%;
+  }
+
+  .firms-page thead {
+    display: none; /* esconde cabeçalhos */
+  }
+
+  .firms-page tbody tr {
+    background: var(--card-bg);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+  }
+
+  .firms-page tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+
+  .firms-page tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+    margin-right: 10px;
+    flex: 1;
+  }
+
+  .firms-page tbody td:last-child {
+    justify-content: flex-end;
+  }
+}
+
+/* === Cores personalizadas dos cards === */
+.firms-page .accent14 { border-top: 3px solid #f59e0b; } /* Cripto */
+.firms-page .accent15 { border-top: 3px solid #a855f7; } /* Personal */
+.firms-page .accent16 { border-top: 3px solid #22c55e; } /* Futures */
+.firms-page .accent17 { border-top: 3px solid #3b82f6; } /* Forex */
+
+/* === NAVBAR BASE === */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-primary, #0f1017);
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-logo span {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+/* LINKS E AÇÕES DESKTOP */
+.nav-content {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.nav-links a {
+  color: var(--text-secondary, #d1d5db);
+  text-decoration: none;
+  font-weight: 500;
+  margin-right: 16px;
+}
+
+.nav-links a.active {
+  color: var(--primary, #6366f1);
+}
+
+/* HAMBURGUER DESATIVADO NO DESKTOP */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.hamburger span {
+  width: 22px;
+  height: 2px;
+  background: #fff;
+  transition: all 0.3s ease;
+}
+
+/* === MOBILE === */
+@media (max-width: 900px) {
+  .hamburger {
+    display: flex;
+  }
+
+  .nav-content {
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: var(--card-bg, #1e1e2b);
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    transform: translateY(-120%);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+  }
+
+  .nav-content.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nav-links {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .nav-links a {
+    padding: 8px 0;
+    width: 100%;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .nav-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .currency-toggle {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .journal-link {
+    text-decoration: none;
+    color: #fff;
+    background: var(--primary, #6366f1);
+    padding: 8px 14px;
+    border-radius: 10px;
+    text-align: center;
+    width: 100%;
+  }
+}
+
+/* === HAMBURGUER ANIMATION === */
+.hamburger.active span:nth-child(1) {
+  transform: rotate(45deg) translate(4px, 4px);
+}
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+}
+.hamburger.active span:nth-child(3) {
+  transform: rotate(-45deg) translate(4px, -4px);
+}

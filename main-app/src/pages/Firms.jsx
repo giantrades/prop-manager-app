@@ -104,7 +104,7 @@ export default function FirmsPage() {
   };
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="firms-page" style={{ display: "grid", gap: 16 }}>
 {/* ==== RESUMO DE EMPRESAS ==== */}
 <div
   style={{
@@ -282,39 +282,41 @@ export default function FirmsPage() {
             )}
             {firms.map((f) => {
               const s = getFirmStats(f.id);
-              return (
-                <tr key={f.id}>
-                  <td style={{ width: 110 }}>
-                    {f.logo ? (
-                      <img
-                        src={f.logo}
-                        alt={f.name}
-                        style={{ width: 80, height: 30, objectFit: "contain" }}
-                      />
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td>{f.name}</td>
-                  <td>{f.type}</td>
-                 <td>{fmt(s.totalFunding)}</td>
-                <td>{fmt(s.totalPayouts)}</td>
-
-                  <td>{s.accountCount}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button className="btn ghost small" onClick={() => onEdit(f)}>
-                      Editar
-                    </button>
-                    <button className="btn ghost small" onClick={() => onDelete(f.id)}>
-                      Excluir
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+return (
+              <tr key={f.id}>
+                <td data-label="Logo">
+                  {f.logo ? (
+                    <img
+                      src={f.logo}
+                      alt={f.name}
+                      style={{ width: 80, height: 30, objectFit: "contain" }}
+                    />
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td data-label="Nome">{f.name}</td>
+                <td data-label="Tipo">{f.type}</td>
+                <td data-label="Funding total">{fmt(s.totalFunding)}</td>
+                <td data-label="Payouts total">{fmt(s.totalPayouts)}</td>
+                <td data-label="Contas">{s.accountCount}</td>
+                <td data-label="Ações" style={{ textAlign: "right" }}>
+                  <button className="btn ghost small" onClick={() => onEdit(f)}>
+                    Editar
+                  </button>
+                  <button
+                    className="btn ghost small"
+                    onClick={() => onDelete(f.id)}
+                  >
+                    Excluir
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
-  );
+  </div>
+);
 }

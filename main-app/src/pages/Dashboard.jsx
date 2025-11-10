@@ -1548,7 +1548,7 @@ useEffect(() => {
   return () => document.removeEventListener('mousedown', onDocClick);
 }, [showCalendar]);
   return (
-    <div className="grid" style={{gap:20}}>
+    <div className="dashboard-page"  style={{ gap: 20 }}>
       <FiltersBar 
         categories={cats} 
         accountStatusFilter={accountStatusFilter}

@@ -127,7 +127,7 @@ useEffect(() => {
   useEffect(() => setCurrentPage(1), [filter])
 
   return (
-    <div className="grid" style={{ gap: 16 }}>
+      <div className="payouts-page grid" style={{ gap: 16 }}>
 
       {/* ==== DASHBOARD DE RESUMO DE PAYOUTS ==== */}
 <div
@@ -337,64 +337,62 @@ useEffect(() => {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            {currentPageData.map((p) => (
-              <tr key={p.id}>
-                <td>{p.dateCreated}</td>
-                <td className="center">{(p.accountIds || []).length}</td>
-                <td className="center"><span className="pill type">{p.type}</span></td>
-                <td className="center">
-                  <span
-                    className={
-                      'pill ' +
-                      (p.status === 'Completed'
-                        ? 'greenpayout'
-                        : p.status === 'Pending'
-                        ? 'yellowpayout'
-                        : 'gray')
-                    }
-                  >
-                    {p.status}
-                  </span>
-                </td>
-                <td className="center">{p.method}</td>
-                <td className="center">{fmt(p.amountSolicited)}</td>
-                <td className="neg">- {fmt(p.fee)}</td>
-                <td className="pos">+ {fmt(p.amountReceived)}</td>
-                <td className="right">
-                  <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
-                    Edit
-                  </button>{' '}
-                 <button
-  className="btn secondary"
-  onClick={() => {
-    const data = getAll()
-    const payout = data.payouts.find(pp => pp.id === p.id)
-    if (payout?.accountIds?.length) {
-      const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
-      payout.accountIds.forEach(accId => {
-        const acc = data.accounts.find(a => a.id === accId)
-        if (acc) {
-          // devolve o valor retirado antes
-          const revertedFunding = (acc.currentFunding || 0) + netPerAccount
-          updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
-        }
-      })
-    }
-    deletePayout(p.id)
-    const fresh = getAll()
-    setPayouts(fresh.payouts)
-    setAccounts(fresh.accounts)
-  }}
->
-  Delete
-</button>
+<tbody>
+  {currentPageData.map((p) => (
+    <tr key={p.id}>
+      <td data-label="Data">{p.dateCreated}</td>
+      <td data-label="Contas" className="center">{(p.accountIds || []).length}</td>
+      <td data-label="Tipo" className="center"><span className="pill type">{p.type}</span></td>
+      <td data-label="Status" className="center">
+        <span
+          className={
+            'pill ' +
+            (p.status === 'Completed'
+              ? 'greenpayout'
+              : p.status === 'Pending'
+              ? 'yellowpayout'
+              : 'gray')
+          }
+        >
+          {p.status}
+        </span>
+      </td>
+      <td data-label="Método" className="center">{p.method}</td>
+      <td data-label="Gross" className="center">{fmt(p.amountSolicited)}</td>
+      <td data-label="Fee" className="neg">- {fmt(p.fee)}</td>
+      <td data-label="Net" className="pos">+ {fmt(p.amountReceived)}</td>
+      <td className="right" data-label="Ações">
+        <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
+          Edit
+        </button>{' '}
+        <button
+          className="btn secondary"
+          onClick={() => {
+            const data = getAll()
+            const payout = data.payouts.find(pp => pp.id === p.id)
+            if (payout?.accountIds?.length) {
+              const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
+              payout.accountIds.forEach(accId => {
+                const acc = data.accounts.find(a => a.id === accId)
+                if (acc) {
+                  const revertedFunding = (acc.currentFunding || 0) + netPerAccount
+                  updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+                }
+              })
+            }
+            deletePayout(p.id)
+            const fresh = getAll()
+            setPayouts(fresh.payouts)
+            setAccounts(fresh.accounts)
+          }}
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
 
-
-                </td>
-              </tr>
-            ))}
-          </tbody>
         </table>
 
         {currentPageData.length === 0 && (
