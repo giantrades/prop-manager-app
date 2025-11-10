@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
@@ -30,7 +30,18 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
   const journalUrl = import.meta.env.VITE_JOURNAL_URL || "/journal/";
+ const navRef = useRef(null); // ✅ sem tipagem
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuOpen && navRef.current && !navRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
   const onBackup = async () => {
     try {
       const { getAll } = await import("@apps/lib/dataStore.js");
@@ -50,7 +61,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="navbar">
+<nav className="navbar" ref={navRef}>
       <div className="nav-left">
         <div className="nav-logo">📊 <span>PropManager</span></div>
       </div>

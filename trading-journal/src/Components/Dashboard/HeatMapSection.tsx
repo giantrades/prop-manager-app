@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useCurrency } from "@apps/state"; // se não existir, pode remover
 
 const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
+const isMobile = window.innerWidth < 768;
 
 const daysFull = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -97,6 +98,14 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
     const maxY = window.innerHeight - h - pad;
     return { x: Math.max(pad, Math.min(x, maxX)), y: Math.max(pad, Math.min(y, maxY)) };
   };
+// Fecha tooltip no mobile ao clicar fora
+React.useEffect(() => {
+  const handleClickOutside = () => {
+    if (window.innerWidth <= 768) setTooltip(null);
+  };
+  window.addEventListener("click", handleClickOutside);
+  return () => window.removeEventListener("click", handleClickOutside);
+}, []);
 
   return (
     <div
@@ -126,95 +135,228 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
           <strong style={{ color: "#4ade80", fontSize: 16 }}>{heatmap.bestHour}</strong>
         </div>
       </div>
+      
+{/* GRID */}
+{!isMobile ? (
+  // === DESKTOP ===
+  <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-around",
+        paddingRight: 8,
+        fontSize: 11,
+        color: "#9ca3af",
+      }}
+    >
+      {daysShort.map((d) => (
+        <div key={d} style={{ height: 24, display: "flex", alignItems: "center" }}>{d}</div>
+      ))}
+    </div>
 
-      {/* Grid */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-around", paddingRight: 8, fontSize: 11, color: "#9ca3af" }}>
-          {daysShort.map((d) => (
-            <div key={d} style={{ height: 24, display: "flex", alignItems: "center" }}>{d}</div>
-          ))}
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 2, marginBottom: 6, fontSize: 9, color: "#6b7280", textAlign: "center" }}>
-            {Array.from({ length: 24 }).map((_, i) => <div key={i}>{i}</div>)}
-          </div>
-
-          <div style={{ display: "grid", gap: 2 }}>
-            {heatmap.matrix.map((row, day) => (
-              <div key={day} style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 2 }}>
-                {row.map((cell, hour) => (
-                  <div
-                    key={hour}
-                    onMouseEnter={(e) => {
-                      const pos = constrainTooltip(e.clientX + 12, e.clientY + 12, 320, 160);
-                      setTooltip({
-                        x: pos.x,
-                        y: pos.y,
-                        day,
-                        hour,
-                        ...cell,
-                        color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
-                      });
-                    }}
-                    onMouseLeave={() => setTooltip(null)}
-                    style={{
-                      aspectRatio: "1",
-                      borderRadius: 6,
-                      background: color(heatmap.norm[day][hour]),
-                      transition: "transform 0.12s, box-shadow 0.12s",
-                      cursor: cell.count ? "pointer" : "default",
-                      boxShadow: cell.count ? "0 6px 18px rgba(0,0,0,0.35)" : "none",
-                      border: "1px solid rgba(255,255,255,0.02)",
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+    <div style={{ flex: 1, minWidth: 600 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(24, 1fr)",
+          gap: 2,
+          marginBottom: 6,
+          fontSize: 9,
+          color: "#6b7280",
+          textAlign: "center",
+        }}
+      >
+        {Array.from({ length: 24 }).map((_, i) => (
+          <div key={i}>{i}</div>
+        ))}
       </div>
 
-      {/* Tooltip */}
-      {tooltip && (
-        <div
-          style={{
-            position: "fixed",
-            top: tooltip.y,
-            left: tooltip.x,
-            background: "rgba(10,14,22,0.95)",
-            border: `1px solid ${tooltip.color}`,
-            padding: "12px 14px",
-            borderRadius: 10,
-            color: "#f3f4f6",
-            minWidth: 260,
-            zIndex: 9999,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontWeight: 800, marginBottom: 8, color: tooltip.color }}>
-            {daysFull[tooltip.day]}
+      <div style={{ display: "grid", gap: 2 }}>
+        {heatmap.matrix.map((row, day) => (
+          <div
+            key={day}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(24, 1fr)",
+              gap: 2,
+            }}
+          >
+            {row.map((cell, hour) => (
+              <div
+                key={hour}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setTooltip({
+                    x: rect.left + rect.width / 2,
+                    y: rect.top - 10,
+                    day,
+                    hour,
+                    ...cell,
+                    color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
+                  });
+                }}
+                onMouseLeave={() => setTooltip(null)}
+                style={{
+                  aspectRatio: "1",
+                  borderRadius: 6,
+                  background: color(heatmap.norm[day][hour]),
+                  border: "1px solid rgba(255,255,255,0.02)",
+                  cursor: "pointer",
+                }}
+              />
+            ))}
           </div>
-          <div style={{ color: "#9ca3af", marginBottom: 8 }}>⏰ {fmtHourRange(tooltip.hour)}</div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ color: "#cbd5e1" }}>Lucro líquido:</div>
-            <div style={{ fontWeight: 800, color: tooltip.sum > 0 ? "#4ade80" : tooltip.sum < 0 ? "#f87171" : "#e5e7eb" }}>
-              {fmtCurrency(tooltip.sum)}
-            </div>
+        ))}
+      </div>
+    </div>
+  </div>
+) : (
+  // === MOBILE === (inversão eixo)
+  <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
+    {/* Cabeçalho dias */}
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(7, 1fr)",
+        gap: 2,
+        fontSize: 10,
+        color: "#9ca3af",
+        textAlign: "center",
+      }}
+    >
+      {daysShort.map((d) => (
+        <div key={d}>{d}</div>
+      ))}
+    </div>
+
+    {/* Linhas: uma por hora */}
+    <div style={{ display: "grid", gap: 4 }}>
+      {Array.from({ length: 24 }).map((_, hour) => (
+        <div key={hour}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              fontSize: 10,
+              color: "#6b7280",
+              marginBottom: 2,
+            }}
+          >
+            {hour}
           </div>
-          <div style={{ color: "#9ca3af" }}>
-            {tooltip.count > 0 ? (
-              <div>
-                <div><strong style={{ color: "#fff" }}>{tooltip.count}</strong> trades</div>
-                <div style={{ marginTop: 4 }}>({tooltip.wins}W / {tooltip.losses}L)</div>
-              </div>
-            ) : (
-              <div style={{ color: "#6b7280" }}>Sem trades neste horário</div>
-            )}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, 1fr)",
+              gap: 2,
+            }}
+          >
+            {Array.from({ length: 7 }).map((_, day) => {
+              const cell = heatmap.matrix[day][hour];
+              return (
+                <div
+                  key={day}
+onClick={(e) => {
+  e.stopPropagation();
+  if (window.innerWidth > 768) return; // desktop usa hover, ignora click
+
+  setTooltip((prev) =>
+    prev && prev.day === day && prev.hour === hour
+      ? null // se clicar na mesma célula, fecha
+      : {
+          x: window.innerWidth / 2, // centro da tela
+          y: window.innerHeight / 2, // meio do viewport visível
+          day,
+          hour,
+          ...cell,
+          color:
+            cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
+        }
+  );
+}}
+
+                  style={{
+                    aspectRatio: "1",
+                    borderRadius: 6,
+                    background: color(heatmap.norm[day][hour]),
+                    border: "1px solid rgba(255,255,255,0.02)",
+                    cursor: "pointer",
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
+      ))}
+    </div>
+  </div>
+)}
+
+      {/* Tooltip */}
+{tooltip && (
+  <div
+    style={{
+      position: "fixed",
+      top:
+        window.innerWidth <= 768
+          ? "50%" // mobile: centralizada vertical
+          : `${tooltip.y}px`, // desktop: onde o mouse passou
+      left:
+        window.innerWidth <= 768
+          ? "50%" // mobile: centralizada horizontal
+          : `${tooltip.x}px`,
+      transform:
+        window.innerWidth <= 768
+          ? "translate(-50%, -50%)"
+          : "translate(-50%, -110%)",
+      background: "rgba(10,14,22,0.95)",
+      border: `1px solid ${tooltip.color}`,
+      padding: "12px 14px",
+      borderRadius: 10,
+      color: "#f3f4f6",
+      minWidth: window.innerWidth <= 768 ? "80%" : 260,
+      zIndex: 9999,
+      boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+      fontSize: 13,
+      pointerEvents: "auto",
+    }}
+  >
+    <div style={{ fontWeight: 800, marginBottom: 8, color: tooltip.color }}>
+      {daysFull[tooltip.day]}
+    </div>
+    <div style={{ color: "#9ca3af", marginBottom: 8 }}>
+      ⏰ {fmtHourRange(tooltip.hour)}
+    </div>
+    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+      <div style={{ color: "#cbd5e1" }}>Lucro líquido:</div>
+      <div
+        style={{
+          fontWeight: 800,
+          color:
+            tooltip.sum > 0 ? "#4ade80" : tooltip.sum < 0 ? "#f87171" : "#e5e7eb",
+        }}
+      >
+        {fmtCurrency(tooltip.sum)}
+      </div>
+    </div>
+    <div style={{ color: "#9ca3af" }}>
+      {tooltip.count > 0 ? (
+        <div>
+          <div>
+            <strong style={{ color: "#fff" }}>{tooltip.count}</strong> trades
+          </div>
+          <div style={{ marginTop: 4 }}>
+            ({tooltip.wins}W / {tooltip.losses}L)
+          </div>
+        </div>
+      ) : (
+        <div style={{ color: "#6b7280" }}>Sem trades neste horário</div>
       )}
+    </div>
+  </div>
+)}
+
     </div>
   );
 };

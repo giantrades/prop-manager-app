@@ -3516,6 +3516,131 @@ select.payouts-input {
   }
 }
 
+/* === HEATMAP BASE === */
+.heatmap-container {
+  background: linear-gradient(180deg, #1a1f2e 0%, #151a27 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 24px;
+  color: #e5e7eb;
+  position: relative;
+  overflow-x: auto;
+}
+
+.heatmap-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.heatmap-days {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  padding-right: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+}
+
+.heatmap-hours {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+  font-size: 9px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.heatmap-cells {
+  display: grid;
+  gap: 2px;
+}
+
+.heatmap-row {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+.heatmap-cell:hover {
+  transform: scale(1.1);
+  z-index: 2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* === TOOLTIP BASE === */
+.heatmap-tooltip {
+  position: fixed;
+  background: rgba(10, 14, 22, 0.95);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #f3f4f6;
+  min-width: 260px;
+  z-index: 9999;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  pointer-events: none;
+  transform: translate(-50%, -120%);
+  transition: opacity 0.15s ease;
+}
+
+/* === MOBILE ADAPTATION === */
+@media (max-width: 768px) {
+  .heatmap-grid {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .heatmap-days {
+    flex-direction: row;
+    justify-content: space-between;
+    padding-right: 0;
+    width: 100%;
+    order: 2;
+  }
+
+  .heatmap-hours {
+    grid-template-columns: repeat(7, 1fr);
+    font-size: 10px;
+    order: 1;
+  }
+
+  .heatmap-row {
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .heatmap-cell {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+  }
+
+  /* Tooltip centralizada no mobile */
+  .heatmap-tooltip {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+    min-width: 80%;
+    max-width: 90%;
+  }
+}
+
+/* === RESET DESKTOP === */
+@media (min-width: 769px) {
+  .heatmap-grid {
+    flex-direction: row;
+  }
+}
 
 /* ---================= PAGINA FIRMS ============--- */
 

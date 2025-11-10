@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect, useRef  } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
@@ -28,7 +28,18 @@ function CurrencyBox() {
 export default function Navbar() {
   const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef(null); // ✅ sem tipagem
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuOpen && navRef.current && !navRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
   const mainAppUrl =
     import.meta.env.DEV
@@ -54,7 +65,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="navbar">
+<nav className="navbar" ref={navRef}>
       {/* Logo + botão mobile */}
       <div className="nav-logo">
         📈 <span>Trading Journal</span>
@@ -73,16 +84,19 @@ export default function Navbar() {
       {/* Conteúdo geral */}
       <div className={`nav-content ${menuOpen ? "open" : ""}`}>
         <div className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
             Dashboard
+            
           </NavLink>
-          <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
             Trades
+           
           </NavLink>
-          <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
             Strategies
+            
           </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
             Settings
           </NavLink>
         </div>
