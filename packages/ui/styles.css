@@ -3104,3 +3104,234 @@ select.payouts-input {
 .hamburger.active span:nth-child(3) {
   transform: rotate(-45deg) translate(4px, -4px);
 }
+/* ============================= */
+/* === STRATEGIES PAGE GLOBAL === */
+/* ============================= */
+
+/* Base do card */
+.strategy-card {
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: linear-gradient(180deg, rgba(15,20,30,0.6), rgba(10,12,16,0.6));
+  overflow: hidden;
+}
+
+.strategy-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* Cabeçalho da estratégia */
+.strategy-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.strategy-header h4 {
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+/* Corpo principal */
+.strategy-body {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  gap: 8px;
+}
+
+/* ================================== */
+/* === COLAPSE STRUCTURE (MOBILE) === */
+/* ================================== */
+
+.strategy-collapse-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Cabeçalho da seção colapsável */
+.strategy-collapse-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(25, 28, 38, 0.9);
+  color: #e5e7eb;
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.25s ease;
+}
+
+.strategy-collapse-header:hover {
+  background: rgba(35, 40, 52, 0.95);
+}
+
+/* Conteúdo interno das seções */
+.strategy-collapse-content {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  background: rgba(20, 22, 30, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-top: 4px;
+  padding: 0 14px;
+  transition: all 0.3s ease;
+}
+
+.strategy-collapse-content.open {
+  max-height: 800px; /* suficiente p/ qualquer conteúdo */
+  opacity: 1;
+  transform: translateY(0);
+  padding: 12px 14px;
+}
+
+/* Títulos e texto */
+.strategy-collapse-content .muted {
+  color: #9ca3af;
+}
+
+.strategy-collapse-content .text-xs {
+  font-size: 0.8rem;
+}
+
+/* Pílulas (mantém o estilo padrão) */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* ===================================== */
+/* === CORES DAS PÍLULAS (estratégias) === */
+/* ===================================== */
+.pill.pink {
+  background: rgba(236, 72, 153, 0.15);
+  color: #ec4899;
+}
+.pill.lavander {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+}
+.pill.orange {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+}
+.pill.purple {
+  background: rgba(147, 51, 234, 0.15);
+  color: #9333ea;
+}
+.pill.white {
+  background: rgba(255, 255, 255, 0.15);
+  color: #e5e7eb;
+}
+.pill.gray {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9ca3af;
+}
+
+/* ===================================== */
+/* === MOBILE RESPONSIVE BEHAVIOUR ==== */
+/* ===================================== */
+
+@media (min-width: 900px) {
+  /* No desktop, layout mantém 3 colunas e não usa collapse */
+  .strategy-collapse-header {
+    display: none;
+  }
+
+  .strategy-collapse-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .strategy-collapse-content {
+    display: block !important;
+    opacity: 1 !important;
+    transform: none !important;
+    padding: 10px 12px !important;
+    max-height: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(18, 20, 28, 0.4);
+  }
+}
+
+@media (max-width: 899px) {
+  .strategy-card {
+    padding: 12px;
+  }
+
+  .strategy-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .strategy-body {
+    flex-direction: column;
+  }
+
+  .strategy-collapse-header span:last-child {
+    font-size: 1.2rem;
+  }
+}
+
+/* === Layout desktop otimizado === */
+.strategy-desktop-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.5fr;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.strategy-stats-section,
+.strategy-description-section,
+.strategy-chart-section {
+  background: rgba(12,18,28,0.5);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.strategy-stats-section h5,
+.strategy-description-section h5,
+.strategy-chart-section h5 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+
+/* Gráfico destacado */
+.strategy-chart-section {
+  background: rgba(18,25,40,0.65);
+  border: 1px solid rgba(60,60,80,0.3);
+  padding: 10px 16px 6px 16px;
+  border-radius: 12px;
+  height: 280px;
+}
+
+/* Responsividade */
+@media (max-width: 900px) {
+  .strategy-desktop-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .strategy-chart-section {
+    height: 220px;
+  }
+}
