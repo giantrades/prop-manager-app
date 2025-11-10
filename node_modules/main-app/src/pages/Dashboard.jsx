@@ -50,7 +50,7 @@ function FiltersBar({
       const span = document.createElement('span')
       span.className = `pill ${cls}`
       document.body.appendChild(span)
-      map[cat] = getComputedStyle(span).backgroundColor
+      map[cat] = getComputedStyle(span).color
       document.body.removeChild(span)
     })
     setCatColors(map)
@@ -494,7 +494,7 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
       const el = document.createElement('span')
       el.className = `pill ${cls(c)}`
       document.body.appendChild(el)
-      map[c] = getComputedStyle(el).backgroundColor
+      map[c] = getComputedStyle(el).color
       document.body.removeChild(el)
     }
     setCatColors(map)
@@ -698,7 +698,7 @@ function FundingPerAccount({ accountStatusFilter = ["live", "funded"],dateFilter
     const tempDiv = document.createElement('div');
     tempDiv.className = `pill ${cssClass}`;
     document.body.appendChild(tempDiv);
-    const computedBgColor = window.getComputedStyle(tempDiv).backgroundColor;
+    const computedBgColor = window.getComputedStyle(tempDiv).color;
     document.body.removeChild(tempDiv);
     
     if (computedBgColor && computedBgColor !== 'rgba(0, 0, 0, 0)' && computedBgColor !== 'transparent') {
@@ -904,7 +904,7 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
       const temp = document.createElement('span');
       temp.className = `pill ${className}`;
       document.body.appendChild(temp);
-      const bg = getComputedStyle(temp).backgroundColor;
+      const bg = getComputedStyle(temp).color;
       document.body.removeChild(temp);
       colors[cat] = bg;
     });
@@ -1179,7 +1179,7 @@ function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
     const span = document.createElement('span');
     span.className = `pill ${cls}`;
     document.body.appendChild(span);
-    const c = getComputedStyle(span).backgroundColor || '#888';
+    const c = getComputedStyle(span).color || '#888';
     document.body.removeChild(span);
     return c;
   }, []);
@@ -1315,7 +1315,7 @@ function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
     const span = document.createElement('span');
     span.className = `pill ${cls}`;
     document.body.appendChild(span);
-    const c = getComputedStyle(span).backgroundColor || '#888';
+    const c = getComputedStyle(span).color || '#888';
     document.body.removeChild(span);
     return c;
   }, []);

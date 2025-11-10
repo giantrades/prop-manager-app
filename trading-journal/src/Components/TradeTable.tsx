@@ -16,6 +16,7 @@ export default function TradeTable({ trades, onEdit, onDelete }: Props) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
+const isMobile = useMemo(() => window.innerWidth < 768, []);
 
 useEffect(() => {
   setAccounts(getAll().accounts || []);
@@ -169,56 +170,167 @@ useEffect(() => {
 
   return (
 <div className="w-full space-y-4">
-    <div className="flex items-center gap-4">
-      {/* Left: search */}
-      <div className="flex-shrink-0">
-        <input
-          className="input"
-          style={{ width: 300 }}
-          placeholder="Buscar por asset, conta, direção..."
-          value={query}
-          onChange={e => { setQuery(e.target.value); setCurrentPage(1) }}
-        />
-      </div>
+<div className="trade-table-header">
+  {/* Campo de busca */}
+  <input
+    className="input trade-search"
+    placeholder="Buscar por asset, conta, direção..."
+    value={query}
+    onChange={(e) => {
+      setQuery(e.target.value);
+      setCurrentPage(1);
+    }}
+  />
 
-      {/* Spacer - FORÇAR com inline style */}
-      <div style={{ flex: '1 1 0%', minWidth: 0 }}></div>
-
-      {/* Right: contador + paginação */}
-      <div className="flex flex-col items-end gap-2 flex-shrink-0">
-        <div style={{ fontSize: 13, color: 'var(--muted)', opacity: 0.85 }}>
-          {filtered.length > 0
-            ? `${(currentPage - 1) * rowsPerPage + 1}–${Math.min(currentPage * rowsPerPage, filtered.length)} de ${filtered.length} trades`
-            : 'Nenhum trade'}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            className="btn ghost small"
-            style={{ padding: '6px 8px' }}
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-          >
-            ←
-          </button>
-
-          <div style={{ fontSize: 13, color: 'var(--muted)', opacity: 0.85 }}>
-            Página {currentPage} / {totalPages}
-          </div>
-
-          <button
-            className="btn ghost small"
-            style={{ padding: '6px 8px' }}
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-          >
-            →
-          </button>
-        </div>
-      </div>
+  {/* Paginação e contador */}
+  <div className="trade-pagination">
+    <div className="trade-count">
+      {filtered.length > 0
+        ? `${(currentPage - 1) * rowsPerPage + 1}–${Math.min(
+            currentPage * rowsPerPage,
+            filtered.length
+          )} de ${filtered.length} trades`
+        : "Nenhum trade"}
     </div>
 
+    <div className="trade-page-controls">
+      <button
+        className="btn ghost small"
+        style={{ padding: "6px 8px" }}
+        disabled={currentPage === 1}
+        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+      >
+        ←
+      </button>
+
+      <div className="trade-page-label">
+        Página {currentPage} / {totalPages}
+      </div>
+
+      <button
+        className="btn ghost small"
+        style={{ padding: "6px 8px" }}
+        disabled={currentPage >= totalPages}
+        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+      >
+        →
+      </button>
+    </div>
+  </div>
+</div>
+
+
       {/* Table */}
+{isMobile ? (
+  <div className="trade-cards">
+    {paginated.map((t) => (
+      <div
+        key={t.id}
+        className="trade-card"
+        onClick={() => setExpanded((prev) => ({ ...prev, [t.id]: !prev[t.id] }))}
+      >
+        {/* Header resumido */}
+        <div className="trade-header">
+          <div className="trade-header-top">
+            <div className="trade-asset">
+              {t.asset} <span className="muted">• {t.tf_signal || ""}</span>
+            </div>
+            <div className={`pill direction-${t.direction?.toLowerCase()}`}>
+              {t.direction}
+            </div>
+          </div>
+
+          <div className="trade-date">
+            {t.entry_datetime?.slice(0, 10)} →{" "}
+            {t.exit_datetime?.slice(0, 10) || "—"}
+          </div>
+
+          <div
+            className={`trade-pnl ${
+              Number(t.result_net) >= 0 ? "pos" : "neg"
+            }`}
+          >
+            {fmt(Number(t.result_net))}
+          </div>
+        </div>
+
+        {/* Conteúdo expandido */}
+        {expanded[t.id] && (
+          <div className="trade-body">
+            <div className="trade-info">
+              <span>📊 Strategy:</span>{" "}
+              <strong>{t.strategyName || "—"}</strong>
+            </div>
+            <div className="trade-info">
+              <span>💼 Account:</span>{" "}
+              <strong>{t.accountName || resolveAccountNames(t.accounts)}</strong>
+            </div>
+            <div className="trade-info">
+              <span>🎯 Volume:</span> <strong>{t.volume || 0}</strong>
+            </div>
+            <div className="trade-info">
+              <span>💰 Entry:</span>{" "}
+              <strong>{(t.entry_price || 0).toFixed(2)}</strong>
+            </div>
+            <div className="trade-info">
+              <span>📉 Exit:</span>{" "}
+              <strong>{(t.exit_price || 0).toFixed(2)}</strong>
+            </div>
+
+            {/* Execuções */}
+            {t.PartialExecutions?.length > 0 && (
+              <div className="exec-section">
+                <div className="exec-title">Execuções:</div>
+                {t.PartialExecutions.map((e: any, i: number) => (
+                  <div key={i} className="exec-card">
+                    <div className="exec-header">
+                      <strong>Exec #{i + 1}</strong>
+                    </div>
+                    <div>Entrada: {e.entryPrice?.toFixed(2) || "—"}</div>
+                    <div>Saída: {e.exitPrice?.toFixed(2) || "—"}</div>
+                    <div>Vol: {e.volume}</div>
+                    <div
+                      className={`pnl ${
+                        Number(e.result_gross || e.result_net) >= 0
+                          ? "pos"
+                          : "neg"
+                      }`}
+                    >
+                      {fmt(e.result_gross ?? e.result_net ?? 0)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Botões */}
+            <div className="flex gap-2 mt-3 justify-end">
+              <button
+                className="btn ghost small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit && onEdit(t);
+                }}
+              >
+                ✏️ Editar
+              </button>
+              <button
+                className="btn ghost small"
+                style={{ color: "#ef4444" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete && onDelete(t.id);
+                }}
+              >
+                🗑️ Excluir
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+) : (
       <div className="table-mini">
         <table>
           <thead>
@@ -278,7 +390,7 @@ useEffect(() => {
           />
         </td>
 
-<td>
+<td data-label="Date">
   {(() => {
     const entry = t.entry_datetime?.slice(0, 10);
     const exit = t.exit_datetime?.slice(0, 10);
@@ -348,11 +460,11 @@ useEffect(() => {
 </td>
 
 
-        <td style={{ padding: "6px" }}>
+        <td data-label="Asset/TF">
           {t.asset} <span className="muted">• {t.tf_signal || ''}</span>
         </td>
 
-        <td style={{ padding: "6px" }}>
+        <td data-label="Market/Accounts">
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {t.accountType && (
               <span
@@ -366,15 +478,15 @@ useEffect(() => {
           </div>
         </td>
 
-        <td><div className="text-sm">{t.strategyName || '-'}</div></td>
+        <td data-label="Strategy"><div className="text-sm">{t.strategyName || '-'}</div></td>
 
-        <td>
+        <td data-label="DIR">
           <span className={`pill type ${t.direction === 'Long' ? 'direction-long' : 'direction-short'}`}>
             {t.direction}
           </span>
         </td>
 
-        <td>
+        <td data-label="VOL">
   {t.PartialExecutions && t.PartialExecutions.length > 1 ? (
     <>
       <span>{t.PartialExecutions.reduce((acc, p) => acc + (p.volume || 0), 0).toFixed(2)} </span>
@@ -395,7 +507,7 @@ useEffect(() => {
 </td>
 
 
-        <td>
+        <td data-label="Entry">
   {t.PartialExecutions && t.PartialExecutions.length > 1 ? (
     <>
       {(
@@ -415,7 +527,7 @@ useEffect(() => {
   )}
 </td>
 
-<td>
+<td data-label="Exit">
   {t.PartialExecutions && t.PartialExecutions.length > 1 ? (
     <>
       {(
@@ -435,7 +547,7 @@ useEffect(() => {
   )}
 </td>
 
-<td className="font-medium">
+<td data-label="PNL" className="font-medium">
   {(() => {
     const partials = t.PartialExecutions || [];
     // Soma do R de todas as execuções
@@ -470,10 +582,7 @@ useEffect(() => {
   })()}
 </td>
 
-
-       
-
-        <td>
+        <td data-label="Actions">
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
             <button
               className="btn ghost small"
@@ -589,7 +698,7 @@ useEffect(() => {
 </tbody>
 
         </table>
-      </div>
+      </div>)}
 
       {filtered.length === 0 && query && (
         <div className="text-center py-8">
