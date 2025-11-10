@@ -2879,6 +2879,643 @@ select.payouts-input {
     color: var(--muted);
   }
 }
+/* ============================================
+   JOURNAL DASHBOARD - RESPONSIVE LAYOUT
+   ============================================ */
+.journal-dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  padding-bottom: 40px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* === GRID BASE === */
+.journal-dashboard-page .grid {
+  display: grid;
+  gap: 16px;
+}
+
+.journal-dashboard-page .grid.cards {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.journal-dashboard-page .card {
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.journal-dashboard-page .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+
+/* === TÍTULOS === */
+.journal-dashboard-page h2,
+.journal-dashboard-page h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #e7eaf0);
+  margin-bottom: 12px;
+}
+
+.journal-dashboard-page .stat {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+}
+
+.journal-dashboard-page .muted {
+  color: var(--muted, #9ca3af);
+  font-size: 0.875rem;
+}
+
+/* === CORES DE ACENTO === */
+.journal-dashboard-page .accent1 { border-top: 3px solid #22c55e; }
+.journal-dashboard-page .accent2 { border-top: 3px solid #3b82f6; }
+.journal-dashboard-page .accent3 { border-top: 3px solid #f59e0b; }
+.journal-dashboard-page .accent4 { border-top: 3px solid #8b5cf6; }
+
+/* ============================================================
+   🧩 FILTROS — REESTRUTURADO (mesmo estilo do main-app)
+   ============================================================ */
+.journal-dashboard-page .filters {
+  position: sticky;
+  top: 64px;
+  z-index: 50;
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  Overflow: visible !important;
+}
+
+.journal-dashboard-page .status-dropdown {
+  position: relative;
+}
+.journal-dashboard-page .status-dropdown .card {
+  left: 0 !important;
+  right: auto !important;
+}
+/* Grupos laterais */
+.journal-dashboard-page .filters-left,
+.journal-dashboard-page .filters-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.journal-dashboard-page .filters-left {
+  flex: 1;
+  min-width: 300px;
+}
+.journal-dashboard-page .filters-right {
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 300px;
+}
+
+/* Chips */
+.journal-dashboard-page .chip {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--text-secondary, #c9ced6);
+  font-size: 13px;
+  border-radius: 16px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.journal-dashboard-page .chip:hover {
+  background: rgba(255,255,255,0.05);
+}
+.journal-dashboard-page .chip.active {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Inputs */
+.journal-dashboard-page .input {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e6e6e9;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.journal-dashboard-page .input:hover {
+  background: rgba(255,255,255,0.07);
+}
+
+/* Range */
+.journal-dashboard-page .range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.journal-dashboard-page .range .chip {
+  min-width: 46px;
+  text-align: center;
+}
+
+/* Calendário */
+.journal-dashboard-page .calendar {
+  position: relative;
+}
+.journal-dashboard-page .calendar-btn {
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary, #e7eaf0);
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+.journal-dashboard-page .calendar-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.journal-dashboard-page .calendar-btn.active {
+  color: var(--primary, #6366f1);
+  border-color: var(--primary);
+}
+.journal-dashboard-page .calendar-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Dropdown */
+.journal-dashboard-page .calendar-dropdown {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  z-index: 9999;
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  min-width: 280px;
+}
+.journal-dashboard-page .calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.journal-dashboard-page .calendar-label {
+  font-size: 12px;
+  color: var(--muted, #9ca3af);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.journal-dashboard-page .calendar-input {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e6e6e9;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.journal-dashboard-page .calendar-input:focus {
+  outline: none;
+  border-color: var(--primary, #6366f1);
+}
+.journal-dashboard-page .calendar-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ============================================
+   RESPONSIVIDADE (Tablet / Mobile)
+   ============================================ */
+@media (max-width: 1024px) {
+  .journal-dashboard-page .filters {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .journal-dashboard-page .filters-left,
+  .journal-dashboard-page .filters-right {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .journal-dashboard-page .category-chips {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .journal-dashboard-page .chip {
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .journal-dashboard-page .range {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .journal-dashboard-page .range .chip {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .journal-dashboard-page .calendar-btn {
+    width: 100%;
+    padding: 10px;
+  }
+
+  /* Calendário fullscreen */
+  .journal-dashboard-page .calendar-dropdown {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: calc(100vw - 32px);
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .journal-dashboard-page .status-filter,
+  .journal-dashboard-page .account-search-container {
+    width: 100%;
+     position: relative;
+  z-index: 200;
+  }
+}
+.account-search-container .selected-account {
+  margin-top: 8px;
+  background: linear-gradient(90deg, #1a1f2e 0%, #151a27 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: fadeIn 0.2s ease;
+}
+/* ============================================================
+   2️⃣ SUMMARY CARDS - igual no desktop, melhor no mobile
+   ============================================================ */
+@media (max-width: 768px) {
+  .journal-dashboard-page .grid.cards {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .journal-dashboard-page .card {
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  .journal-dashboard-page .stat {
+    font-size: 1.3rem;
+  }
+}
+
+/* ============================================================
+   3️⃣ ADVANCED METRICS - fluido em mobile, intocado no desktop
+   ============================================================ */
+@media (max-width: 768px) {
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-card {
+    padding: 14px;
+    border-radius: 8px;
+  }
+
+  .metric-value {
+    font-size: 1.2rem;
+  }
+}
+/* ============================================================
+   AJUSTES FINAIS — CATEGORIA E LAYOUT COMPACTO (DESKTOP)
+   ============================================================ */
+
+/* --- 1️⃣ Pill de categoria ativa (iguais às do main dashboard) --- */
+.journal-dashboard-page .filters .chip.active .pill {
+  background: #6366f1; /* mesma cor principal */
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+.journal-dashboard-page .filters .chip.active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #fff;
+  border-color: #6366f1;
+  font-weight: 600;
+}
+
+.journal-dashboard-page .filters .pill {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: rgba(255,255,255,0.15);
+}
+
+/* --- 2️⃣ Compactar altura e alinhar tudo na mesma linha (desktop) --- */
+@media (min-width: 1024px) {
+  .journal-dashboard-page .filters {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px; /* menor altura */
+    min-height: 52px; /* altura consistente */
+  }
+
+  .journal-dashboard-page .filters-left,
+  .journal-dashboard-page .filters-right {
+    flex: 1;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Mantém os inputs e selects mais finos */
+  .journal-dashboard-page .input,
+  .journal-dashboard-page select.input {
+    padding: 5px 8px;
+    font-size: 13px;
+    height: 32px;
+    max-width:140px
+  }
+
+  /* Range alinhado */
+  .journal-dashboard-page .range {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Chips menores */
+  .journal-dashboard-page .chip {
+    padding: 5px 10px;
+    font-size: 13px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Ajuste de botão de calendário */
+  .journal-dashboard-page .calendar-btn {
+    height: 32px;
+    padding: 5px 8px;
+  }
+
+  /* Filtro de status e busca de conta lado a lado */
+  .journal-dashboard-page .status-filter {
+    flex: 0 0 200px;
+  }
+
+  .journal-dashboard-page .account-search-container {
+    flex: 0 0 240px;
+  }
+}
+/* Corrige visual dos dropdowns (select) */
+.journal-dashboard-page select.input {
+  color: #f9fafb; /* texto claro */
+}
+
+.journal-dashboard-page select.input option {
+  background: #1e1e2b;
+  color: #e5e7eb;
+}
+/* ============================================================
+   🎯 SUMMARY CARDS — layout fluido no desktop e mobile
+   ============================================================ */
+
+.journal-dashboard-page .summary-section {
+  background: linear-gradient(180deg, #1a1f2e 0%, #151a27 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 32px 24px;
+}
+
+.journal-dashboard-page .summary-section .grid.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.journal-dashboard-page .summary-section .grid.cards > div {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.journal-dashboard-page .summary-section .grid.cards > div:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+
+/* MOBILE - cards empilhados, espaçamento suave */
+@media (max-width: 768px) {
+  .journal-dashboard-page .summary-section {
+    padding: 20px 14px;
+  }
+
+  .journal-dashboard-page .summary-section .grid.cards {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .journal-dashboard-page .summary-section .grid.cards > div {
+    padding: 16px !important;
+    border-radius: 10px;
+  }
+
+  .journal-dashboard-page .summary-section .grid.cards > div div {
+    text-align: left;
+  }
+
+  .journal-dashboard-page .summary-section h2 {
+    font-size: 1rem;
+  }
+}
+
+/* ============================================================
+   🧠 ADVANCED METRICS — fluido e consistente no mobile
+   ============================================================ */
+
+.journal-dashboard-page .advanced-metrics {
+  margin-top: 24px;
+}
+
+.journal-dashboard-page .advanced-metrics h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.journal-dashboard-page .advanced-metrics .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.journal-dashboard-page .advanced-metrics .metric-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.journal-dashboard-page .advanced-metrics .metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+}
+
+.journal-dashboard-page .advanced-metrics .metric-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.journal-dashboard-page .advanced-metrics .metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+/* Responsividade */
+@media (max-width: 1024px) {
+  .journal-dashboard-page .advanced-metrics .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .journal-dashboard-page .advanced-metrics .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-dashboard-page .advanced-metrics .metric-card {
+    padding: 14px;
+  }
+
+  .journal-dashboard-page .advanced-metrics .metric-value {
+    font-size: 20px;
+  }
+}
+/* ============================================================
+   📱 MOBILE COLLAPSIBLE FILTERS — mesmo estilo do main-app
+   ============================================================ */
+@media (max-width: 900px) {
+  .journal-dashboard-page .filters {
+    position: static;
+    background: var(--card-bg, #1e1e2b);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  /* Cabeçalho com botão de toggle */
+  .filters-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .filters-toggle button {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #fff;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+  }
+
+  .filters-toggle button:hover {
+    background: rgba(255,255,255,0.08);
+  }
+
+  /* Container colapsável */
+  .filters-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .filters-content.open {
+    max-height: 2000px;
+    opacity: 1;
+  }
+
+  /* conteúdo empilhado e bem espaçado */
+  .filters-content > div {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .journal-dashboard-page .chip,
+  .journal-dashboard-page select.input,
+  .journal-dashboard-page .input,
+  .journal-dashboard-page .calendar-btn {
+    width: 100%;
+  }
+
+  .journal-dashboard-page .range {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 
 /* ---================= PAGINA FIRMS ============--- */
 

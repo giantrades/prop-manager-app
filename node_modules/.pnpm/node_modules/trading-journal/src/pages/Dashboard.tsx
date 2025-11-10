@@ -1317,138 +1317,126 @@ const RecentTrades = ({ trades, fmt }: any) => {
     return 'N/A';
   };
 
-  return (
-    <div className="card">
-      <h3>📝 Recent Trades</h3>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: "left", color: "#94a3b8" }}>
-            <th style={{ padding: "8px 6px" }}>Date</th>
-            <th style={{ padding: "8px 6px" }}>Asset / TF</th>
-            <th style={{ padding: "8px 6px" }}>Markets / Accounts</th>
-            <th style={{ padding: "8px 6px" }}>Direction</th>
-            <th style={{ padding: "8px 6px", textAlign: "right" }}>R</th>
-            <th style={{ padding: "8px 6px", textAlign: "right" }}>PnL</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t: any) => (
-            <tr
-              key={t.id}
-              style={{ cursor: "pointer", borderTop: "1px solid rgba(255,255,255,0.04)" }}
-              onClick={() => window.location.href = `/journal/trades#${t.id}`}
-            >
-<td style={{ padding: "6px" }}>
-  {(() => {
-    const entry = t.entry_datetime?.slice(0, 10);
-    const exit = t.exit_datetime?.slice(0, 10);
-    const sameDay = !exit || entry === exit;
+return (
+  <div className="card">
+    <h3>📝 Recent Trades</h3>
+    <table className="responsive-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Asset / TF</th>
+          <th>Markets / Accounts</th>
+          <th>Direction</th>
+          <th>R</th>
+          <th>PnL</th>
+        </tr>
+      </thead>
 
-    const formatDate = (iso?: string) =>
-      iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
-
-    const entryDate = formatDate(t.entry_datetime);
-    const exitDate = formatDate(t.exit_datetime);
-
-    const formatTime = (iso?: string) =>
-      iso
-        ? new Date(iso).toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "";
-
-    const entryTime = formatTime(t.entry_datetime);
-    const exitTime = formatTime(t.exit_datetime);
-
-    const duration =
-      t.exit_datetime && t.entry_datetime
-        ? calculateDuration(t.entry_datetime, t.exit_datetime)
-        : "";
-
-    return (
-      <>
-        <div
-          style={{
-            fontSize: sameDay ? 15 : 12,
-            lineHeight: sameDay ? "18px" : "14px",
-            fontWeight: 500,
-          }}
-        >
-          {sameDay ? entryDate : `${entryDate} → ${exitDate}`}
-        </div>
-
-        <div
-          className="muted"
-          style={{
-            fontSize: sameDay ? 11 : 10,
-            marginTop: sameDay ? 0 : 1,
-          }}
-        >
-          {entryTime}
-          {exitTime && ` → ${exitTime}`}
-        </div>
-
-        {duration && (
-          <div
-            className="muted"
-            style={{
-              fontSize: 9,
-              marginTop: 1,
-              opacity: 0.7,
-            }}
+      <tbody>
+        {rows.map((t: any) => (
+          <tr
+            key={t.id}
+            onClick={() => (window.location.href = `/journal/trades#${t.id}`)}
+            style={{ cursor: "pointer" }}
           >
-            ({duration})
-          </div>
-        )}
-      </>
-    );
-  })()}
-</td>
+            {/* Date */}
+            <td data-label="Date">
+              {(() => {
+                const entry = t.entry_datetime?.slice(0, 10);
+                const exit = t.exit_datetime?.slice(0, 10);
+                const sameDay = !exit || entry === exit;
 
-              
-              <td style={{ padding: "6px" }}>
-                {t.asset} <span className="muted">• {t.tf_signal || t.timeframe || ''}</span>
-              </td>
-              <td style={{ padding: "6px" }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {t.accountType && (
-                    <span
-                      className={`pill ${getAccountTypeClass(t.accountType)}`}
-                      style={{ fontSize: 8, padding: '2px 4px' }}
-                    >
-                      {t.accountType}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 11 }}>{resolveAccountDisplay(t)}</span>
-                </div>
-              </td>
-              <td style={{ padding: "6px" }}>
-                <span
-                  className={`pill ${t.direction === "Long" ? "lavander" : "orange"}`}
-                  style={{ padding: "4px 10px" }}
-                >
-                  {t.direction}
-                </span>
-              </td>
-              <td style={{ padding: "6px", textAlign: "right" }}>
-                {getTotalR(t).toFixed(2)}
-              </td>
-              <td
-                style={{
-                  padding: "6px",
-                  textAlign: "right",
-                  color: Number(t.result_net) >= 0 ? "#4ade80" : "#f87171",
-                }}
+                const formatDate = (iso?: string) =>
+                  iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
+                const entryDate = formatDate(t.entry_datetime);
+                const exitDate = formatDate(t.exit_datetime);
+
+                const formatTime = (iso?: string) =>
+                  iso
+                    ? new Date(iso).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "";
+
+                const entryTime = formatTime(t.entry_datetime);
+                const exitTime = formatTime(t.exit_datetime);
+
+                const duration =
+                  t.exit_datetime && t.entry_datetime
+                    ? calculateDuration(t.entry_datetime, t.exit_datetime)
+                    : "";
+
+                return (
+                  <>
+                    <div style={{ fontWeight: 500, paddingRight:10 }}>
+                      {sameDay ? entryDate : `${entryDate} → ${exitDate}`}
+                    </div>
+                    <div className="muted" style={{ fontSize: 11, paddingRight:3 }}>
+                      {entryTime}
+                      {exitTime && ` → ${exitTime}`}
+                    </div>
+                    {duration && (
+                      <div className="muted" style={{ fontSize: 10 }}>
+                        ({duration})
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </td>
+
+            {/* Asset / TF */}
+            <td data-label="Asset / TF">
+              {t.asset} <span className="muted">• {t.tf_signal || t.timeframe || ""}</span>
+            </td>
+
+            {/* Accounts */}
+            <td data-label="Markets / Accounts">
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {t.accountType && (
+                  <span
+                    className={`pill ${getAccountTypeClass(t.accountType)}`}
+                    style={{ fontSize: 9, padding: "2px 4px" }}
+                  >
+                    {t.accountType}
+                  </span>
+                )}
+                <span style={{ fontSize: 11 }}>{resolveAccountDisplay(t)}</span>
+              </div>
+            </td>
+
+            {/* Direction */}
+            <td data-label="Direction">
+              <span
+                className={`pill ${t.direction === "Long" ? "lavander" : "orange"}`}
+                style={{ padding: "4px 10px" }}
               >
-                {fmt(Number(t.result_net) || 0)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+                {t.direction}
+              </span>
+            </td>
+
+            {/* R */}
+            <td data-label="R">
+              {getTotalR(t).toFixed(2)}
+            </td>
+
+            {/* PnL */}
+            <td
+              data-label="PnL"
+              style={{
+                color: Number(t.result_net) >= 0 ? "#4ade80" : "#f87171",
+              }}
+            >
+              {fmt(Number(t.result_net) || 0)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
 };
 
 
@@ -1614,9 +1602,6 @@ if (dateFilter.start || dateFilter.end) {
   }, [trades]);
   
 
-
-
-
   // metrics and series
   const basic = useMemo(() => calcBasicStats(filteredTrades), [filteredTrades]);
   const equitySeries = useMemo(() => buildEquitySeries(filteredTrades, 10000), [filteredTrades]);
@@ -1639,10 +1624,11 @@ if (dateFilter.start || dateFilter.end) {
 
   // UI toggles
   const [showDrawdown, setShowDrawdown] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
 
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      {/* Status de integração */}
+      <div className="journal-dashboard-page">
+     {/* Status de integração */}
       {!integratedData.hasRealData && (
         <div className="card" style={{ 
           background: 'linear-gradient(180deg, #2e2b12 0%, #1b2010 100%)',
@@ -1658,369 +1644,317 @@ if (dateFilter.start || dateFilter.end) {
         </div>
       )}
 
-      {/* Enhanced Filters Bar with Account Types */}
-      <div className="card">
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <strong>Filters:</strong>
-            
-            {/* Category filter with colors - CORRIGIDO */}
-            <div style={{ display: 'flex', gap: 4 }}>
-              {availableCategories.map((cat: string) => {
-                const active = categoryFilter === cat;
-                const className = cat === 'Forex' ? 'lavander'
-                              : cat === 'Cripto' ? 'orange'
-                              : cat === 'Futures' ? 'pink'
-                              : cat === 'Personal' ? 'purple'
-                              : 'gray';
+{/* FILTERS SECTION */}
+<div className="filters">
+  <div className="filters-toggle">
+    <button onClick={() => setFiltersOpen((v: boolean) => !v)}>
+      {filtersOpen ? "Ocultar Filtros ▲" : "Mostrar Filtros ▼"}
+    </button>
+  </div>
 
-                              
-                return (
-                  <button key={cat}
-                    className={`chip ${active ? 'active' : ''}`}
-                    onClick={() => setCategoryFilter(active ? '' : cat)}
-                  >
-                    <span className={`pill ${className}`} style={{ 
-                      display: 'inline-block', 
-                      width: 8, 
-                      height: 8, 
-                      borderRadius: '50%', 
-                      marginRight: 6,
-                      padding: 0,
-                      fontSize: 0
-                    }}></span>
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
-            
-            <select value={timeframeFilter} onChange={e => setTimeframeFilter(e.target.value)} className="input">
-              <option value="">All Timeframes</option>
-              {timeframes.map((t: string) => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <select value={strategyFilter} onChange={e => setStrategyFilter(e.target.value)} className="input">
-              <option value="">All Strategies</option>
-              {strategies.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-{/* 🔽 Filtro de Status da Conta */}
-<div style={{ position: 'relative' }} ref={statusDropdownRef}>
-  <button
-    type="button"
-    onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
-    className="input"
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      minWidth: 180,
-      cursor: "pointer"
-    }}
-  >
-    {accountStatusFilter && accountStatusFilter.length > 0
-      ? `Status: ${accountStatusFilter.join(", ")}`
-      : "Filtrar Status"}
-    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
-  </button>
+  <div className={`filters-content ${filtersOpen ? "open" : ""}`}>
+  {/* === LEFT GROUP: Category, Timeframe, Strategy === */}
+  <div className="filters-left">
+    <span style={{ fontWeight: 600, fontSize: 14 }}>Filtros:</span>
 
-  {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
-    <div
-      className="card"
-      style={{
-        position: "absolute",
-        top: "110%",
-        left: 0,
-        zIndex: 9999,
-        background: "var(--card-bg, #1e1f2b)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        borderRadius: 8,
-        padding: "8px 10px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-        minWidth: 200,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-        {accountStatuses.map((status) => {
-          const st = String(status || '');
-          const checked = accountStatusFilter.includes(st);
-          return (
-            <label
-              key={st}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "6px 4px",
-                cursor: "pointer",
-                fontSize: 14,
-                color: "#e6e6e9",
-                textTransform: "capitalize",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) => {
-                  const next = e.target.checked
-                    ? Array.from(new Set([...accountStatusFilter, st]))
-                    : accountStatusFilter.filter(s => s !== st);
-                  setAccountStatusFilter(next);
-                }}
-                style={{ width: 16, height: 16 }}
-              />
-              <span>{st}</span>
-            </label>
-          );
-        })}
-      </div>
+    {/* Category filter with colors */}
+    <div className="category-chips">
+      {availableCategories.map((cat: string) => {
+        const active = categoryFilter === cat;
+        const className =
+          cat === "Forex"
+            ? "lavander"
+            : cat === "Cripto"
+            ? "orange"
+            : cat === "Futures"
+            ? "pink"
+            : cat === "Personal"
+            ? "purple"
+            : "gray";
 
-      <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => setAccountStatusFilter(["live", "funded"])}
-        >
-          Resetar padrão
-        </button>
-
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
-        >
-          Marcar todos
-        </button>
-      </div>
-    </div>
-  )}
-
-  {/* se quiser um fallback indicando que não há status */}
-  {statusDropdownOpen && (!accountStatuses || accountStatuses.length === 0) && (
-    <div
-      className="card"
-      style={{
-        position: "absolute",
-        top: "110%",
-        left: 0,
-        zIndex: 9999,
-        background: "var(--card-bg, #1e1f2b)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        borderRadius: 8,
-        padding: "8px 10px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-        minWidth: 200,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ color: '#bbb' }}>Nenhum status disponível</div>
-    </div>
-  )}
-</div>
-
-
-{/* 🔍 Account Search + Selected Account Display */}
-<div style={{ position: "relative", minWidth: 260 }} className="account-search-container">
-  <input
-    type="text"
-    placeholder="Buscar conta..."
-    className="input w-full"
-    value={searchAccount}
-    onChange={(e) => setSearchAccount(e.target.value)}
-  />
-
-  {/* Dropdown de resultados */}
-  {searchAccount && (
-    <div
-      style={{
-        position: "absolute",
-        top: "110%",
-        left: 0,
-        width: "100%",
-        background: "#0f172a",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 8,
-        zIndex: 50,
-        maxHeight: 200,
-        overflowY: "auto",
-      }}
-    >
-      {visibleAccounts.length === 0 ? (
-        <div
-          style={{
-            padding: 10,
-            fontSize: 12,
-            color: "#94a3b8",
-            textAlign: "center",
-          }}
-        >
-          Nenhuma conta encontrada
-        </div>
-      ) : (
-        visibleAccounts.map((acc) => (
-          <div
-            key={acc.id}
-            onClick={() => {
-              setSelectedAccount(acc);
-              setSearchAccount(""); // Fecha dropdown
-            }}
-            style={{
-              padding: "10px 12px",
-              cursor: "pointer",
-              borderBottom: "1px solid rgba(255,255,255,0.05)",
-              background: "#0f172a",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1e293b")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#0f172a")}
+        return (
+          <button
+            key={cat}
+            className={`chip ${active ? "active" : ""}`}
+            onClick={() => setCategoryFilter(active ? "" : cat)}
           >
-            <div style={{ fontWeight: 600, color: "#f9fafb" }}>{acc.name}</div>
-            <div style={{ fontSize: 12, color: "#94a3b8" }}>
-              {acc.type} • Balance: {fmt(acc.currentFunding || acc.balance || 0)}
-            </div>
+            <span
+              className={`pill ${className}`}
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                marginRight: 6,
+              }}
+            />
+            {cat}
+          </button>
+        );
+      })}
+    </div>
+
+    <select
+      value={timeframeFilter}
+      onChange={(e) => setTimeframeFilter(e.target.value)}
+      className="input"
+    >
+      <option value="">All Timeframes</option>
+      {timeframes.map((t: string) => (
+        <option key={t} value={t}>
+          {t}
+        </option>
+      ))}
+    </select>
+
+    <select
+      value={strategyFilter}
+      onChange={(e) => setStrategyFilter(e.target.value)}
+      className="input"
+    >
+      <option value="">All Strategies</option>
+      {strategies.map((s: any) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </select>
+  </div>
+
+  {/* === RIGHT GROUP: Status Filter + Search + Range + Calendar === */}
+  <div className="filters-right">
+    {/* Account Status Filter */}
+    <div className="status-dropdown" ref={statusDropdownRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setStatusDropdownOpen((v) => !v);
+        }}
+        className="input"
+        style={{ display: "flex", justifyContent: "space-between", minWidth: 160 }}
+      >
+        {accountStatusFilter?.length > 0
+          ? `Status: ${accountStatusFilter.join(", ")}`
+          : "Filtrar Status"}
+        <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+      </button>
+
+      {statusDropdownOpen && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            top: "110%",
+            left: 0,
+            zIndex: 9999,
+            background: "var(--card-bg, #1e1f2b)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 8,
+            padding: "8px 10px",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+            minWidth: 200,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            {accountStatuses.map((status) => {
+              const st = String(status || "");
+              const checked = accountStatusFilter.includes(st);
+              return (
+                <label
+                  key={st}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "6px 4px",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#e6e6e9",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? Array.from(new Set([...accountStatusFilter, st]))
+                        : accountStatusFilter.filter((s) => s !== st);
+                      setAccountStatusFilter(next);
+                    }}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span>{st}</span>
+                </label>
+              );
+            })}
           </div>
-        ))
+
+          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <button
+              className="btn ghost small"
+              style={{ flex: 1 }}
+              onClick={() => setAccountStatusFilter(["live", "funded"])}
+            >
+              Resetar padrão
+            </button>
+
+            <button
+              className="btn ghost small"
+              style={{ flex: 1 }}
+              onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+            >
+              Marcar todos
+            </button>
+          </div>
+        </div>
       )}
     </div>
-  )}
 
-  {/* ✅ Conta selecionada (filtro ativo) */}
-  {selectedAccount && (
-    <div
-      style={{
-        marginTop: 8,
-        background: "linear-gradient(90deg, #1a1f2e 0%, #151a27 100%)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 8,
-        padding: "10px 12px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        animation: "fadeIn 0.2s ease",
-      }}
-    >
-      <div>
-        <div style={{ fontWeight: 600, color: "#f9fafb" }}>{selectedAccount.name}</div>
-        <div style={{ fontSize: 12, color: "#94a3b8" }}>
-          {selectedAccount.type} • Balance: {fmt(selectedAccount.currentFunding || selectedAccount.balance || 0)}
-        </div>
-      </div>
-      <button
-        onClick={() => setSelectedAccount(null)}
-        style={{
-          fontSize: 12,
-          color: "#f87171",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-        }}
-      >
-        Limpar conta ✕
-      </button>
-    </div>
-  )}
-</div>
-
-
-         <div className="range">
-        {['7','30','180','365','all'].map(r=>(
-          <button key={r}
-            className={'chip '+(rangeFilter===r?'active':'')}
-            onClick={()=>setRangeFilter(r)}>
-            {r==='7'?'7d':r==='30'?'30d':r==='180'?'180d':r==='365'?'1y':'All'}
-          </button>))}
-           </div>
-            <button className="chip" onClick={() => { 
-              setCategoryFilter(""); 
-              setTimeframeFilter(""); 
-              setStrategyFilter(""); 
-              setRangeFilter("all"); 
-            }}>Reset</button>
-          </div>
-{/* Calendário */}
-<div style={{ position: 'relative', flex: '0 0 auto' }} ref={calendarRef}>
-  <button
-    className={`calendar-btn ${(dateFilter.start || dateFilter.end) ? 'active' : ''}`}
-    onClick={(e) => { e.stopPropagation(); setShowCalendar(v => !v); }}
-    title="Filtrar por data"
-  >
-    <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/>
-      <line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-  </button>
-
-  {showCalendar && (
-    <div className="calendar-dropdown">
-      <div className="calendar-header">
-        <h4 style={{ margin: 0, fontSize: 14, color: 'var(--text)' }}>Filtrar por Data</h4>
-        {(dateFilter.start || dateFilter.end) && (
-          <button
-            className="btn ghost small"
-            onClick={() => setDateFilter({ start: null, end: null })}
-            style={{ fontSize: 11 }}
-          >
-            Limpar
-          </button>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div className="calendar-label">Data Início</div>
-        <input
-          type="date"
-          className="calendar-input"
-          value={dateFilter.start || ''}
-          onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <div className="calendar-label">Data Fim</div>
-        <input
-          type="date"
-          className="calendar-input"
-          value={dateFilter.end || ''}
-          onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
-        />
-      </div>
-
-      <div className="calendar-actions">
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => {
-            const today = new Date().toISOString().split('T')[0];
-            const lastMonth = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
-            setDateFilter({ start: lastMonth, end: today });
+    {/* Account Search */}
+<div className="account-search-container" style={{ position: "relative", minWidth: 260, flexShrink: 0 }}>
+      <input
+        type="text"
+        placeholder="Buscar conta..."
+        className="input"
+        value={searchAccount}
+        onChange={(e) => setSearchAccount(e.target.value)}
+      />
+      {searchAccount && (
+        <div
+          style={{
+            position: "absolute",
+            top: "110%",
+            left: 0,
+            width: "100%",
+            background: "#0f172a",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 8,
+            zIndex: 50,
+            maxHeight: 200,
+            overflowY: "auto",
           }}
         >
-          Último mês
-        </button>
-        <button
-          className="btn primary small"
-          style={{ flex: 1 }}
-          onClick={() => setShowCalendar(false)}
-        >
-          Aplicar
-        </button>
-      </div>
-    </div>
-  )}
-</div>
-
+          {visibleAccounts.length === 0 ? (
+            <div style={{ padding: 10, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+              Nenhuma conta encontrada
+            </div>
+          ) : (
+            visibleAccounts.map((acc) => (
+              <div
+                key={acc.id}
+                onClick={() => {
+                  setSelectedAccount(acc);
+                  setSearchAccount("");
+                }}
+                style={{
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  background: "#0f172a",
+                }}
+              >
+                <div style={{ fontWeight: 600, color: "#f9fafb" }}>{acc.name}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                  {acc.type} • Balance: {fmt(acc.currentFunding || acc.balance || 0)}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </div>
+      )}
+    </div>
+
+    {/* Range Buttons */}
+    <div className="range">
+      {["7", "30", "180", "365", "all"].map((r) => (
+        <button
+          key={r}
+          className={`chip ${rangeFilter === r ? "active" : ""}`}
+          onClick={() => setRangeFilter(r)}
+        >
+          {r === "7" ? "7d" : r === "30" ? "30d" : r === "180" ? "180d" : r === "365" ? "1y" : "All"}
+        </button>
+      ))}
+    </div>
+
+    {/* Calendar */}
+    <div className="calendar" ref={calendarRef}>
+      <button
+        className={`calendar-btn ${dateFilter.start || dateFilter.end ? "active" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowCalendar((v) => !v);
+        }}
+        title="Filtrar por data"
+      >
+        <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+
+      {showCalendar && (
+        <div className="calendar-dropdown">
+          <div className="calendar-header">
+            <h4>Filtrar por Data</h4>
+            {(dateFilter.start || dateFilter.end) && (
+              <button className="btn ghost small" onClick={() => setDateFilter({ start: null, end: null })}>
+                Limpar
+              </button>
+            )}
+          </div>
+
+          <div>
+            <div className="calendar-label">Data Início</div>
+            <input
+              type="date"
+              className="calendar-input"
+              value={dateFilter.start || ""}
+              onChange={(e) => setDateFilter((prev) => ({ ...prev, start: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <div className="calendar-label">Data Fim</div>
+            <input
+              type="date"
+              className="calendar-input"
+              value={dateFilter.end || ""}
+              onChange={(e) => setDateFilter((prev) => ({ ...prev, end: e.target.value }))}
+            />
+          </div>
+
+          <div className="calendar-actions">
+            <button
+              className="btn ghost small"
+              onClick={() => {
+                const today = new Date().toISOString().split("T")[0];
+                const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+                  .toISOString()
+                  .split("T")[0];
+                setDateFilter({ start: lastMonth, end: today });
+              }}
+            >
+              Último mês
+            </button>
+            <button className="btn primary small" onClick={() => setShowCalendar(false)}>
+              Aplicar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+</div>
         {/* SUMMARY CARDS */}
-        <div style={{ 
-          background: 'linear-gradient(180deg, #1a1f2e 0%, #151a27 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: 12,
-          padding: '32px 24px'
-        }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
-            
+<div className="summary-section">
+        <div className="grid cards">            
             {/* Total P&L */}
             <div style={{
               background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.15) 0%, rgba(74, 222, 128, 0.05) 100%)',
@@ -2207,11 +2141,11 @@ return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades
 </div>
 
             {/* Advanced Metrics */}
-            <div style={{ gridColumn: 'span 4' }}>
-              <h2 style={{ fontSize: 18, marginBottom: 16, color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: 8 }}>
+<div className="advanced-metrics">
+                <h2 style={{ fontSize: 18, marginBottom: 16, color: '#f3f4f6', display: 'flex', alignItems: 'center', gap: 8 }}>
                 🧠 Advanced Metrics
               </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+    <div className="metrics-grid">
                 <div style={{
                   background: 'rgba(0, 0, 0, 0.3)',
                   border: '1px solid rgba(255, 255, 255, 0.05)',
@@ -2259,7 +2193,7 @@ return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades
         </div>
 
       {/* Grid with main charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
+<div className="grid two-cols">
         <div style={{ display: "grid", gap: 16 }}>
        <EquityArea trades={filteredTrades} selectedAccount={selectedAccount} fmt={fmt} />
         <HistogramR trades={filteredTrades} />
@@ -2274,10 +2208,8 @@ return bestR.asset ? `${bestR.asset} (${bestR.direction || 'N/A'})` : 'No trades
 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
   <HeatMapSection trades={filteredTrades} />
   </div>
-   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+<div className="grid two-cols">  
   <DurationAnalysis trades={filteredTrades} />
-
-  
   <DrawdownSection trades={filteredTrades} accounts={filteredAccounts}/>
 </div>
 
