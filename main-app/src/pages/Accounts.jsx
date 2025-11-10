@@ -91,13 +91,20 @@ export default function Accounts() {
     return sortConfig.direction === 'asc' ? ' ↑' : ' ↓'
   }
 
-  // Handle account deletion
-  const handleDelete = (e, accountId) => {
-    e.stopPropagation() // Prevent row selection when clicking delete
-    deleteAccount(accountId)
-    setAccounts(getAll().accounts)
-    if (selected === accountId) setSelected(null)
-  }
+// Handle account deletion (com confirmação)
+const handleDelete = (e, accountId) => {
+  e.stopPropagation(); // evita abrir detalhes
+  const acc = accounts.find(a => a.id === accountId);
+  const confirmed = window.confirm(
+    `⚠️ Deseja realmente excluir a conta "${acc?.name || 'sem nome'}"?\nEsta ação não poderá ser desfeita.`
+  );
+  if (!confirmed) return;
+
+  deleteAccount(accountId);
+  setAccounts(getAll().accounts);
+  if (selected === accountId) setSelected(null);
+};
+
 
   const fmt = (v) => currency === 'USD'
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
@@ -163,16 +170,16 @@ const summary = useMemo(() => {
   }, [accounts]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-{/* === CARDS DE RESUMO === */}
-<div
-  style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 16,
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  }}
+        <div className="accounts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* === CARDS DE RESUMO === */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 16,
+          marginBottom: 16,
+          flexWrap: 'wrap',
+        }}
 >
   {/* --- TOTAL --- */}
   <div
@@ -305,44 +312,42 @@ const summary = useMemo(() => {
 </div>
 
 
-{/* ✅ FORMS COMO POPUPS MODAIS */}
-{selected && (
-  <div
-    style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-      padding: 20,
-      backdropFilter: 'blur(4px)',
-    }}
-    // ✅ Se clicar no fundo (overlay), fecha o modal
-    onClick={(e) => {
-      if (e.target === e.currentTarget) {
-        setSelected(null);
-      }
-    }}
-  >
-    <div
-      style={{
-        maxWidth: 800,
-        width: '100%',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        position: 'relative',
-        background: 'var(--card-bg)',
-        borderRadius: 12,
-        padding: 16,
-      }}
-      // ✅ Impede que cliques dentro fechem o modal
-      onClick={(e) => e.stopPropagation()}
-    >
+      {/* ✅ FORMS COMO POPUPS MODAIS */}
+      {selected && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 20,
+            backdropFilter: 'blur(4px)',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelected(null);
+            }
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 800,
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative',
+              background: 'var(--card-bg)',
+              borderRadius: 12,
+              padding: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
       {/* Botão X para fechar */}
       <button
         onClick={() => setSelected(null)}
@@ -559,35 +564,56 @@ const summary = useMemo(() => {
                 const roiPct = (s.roi * 100).toFixed(2)
                 const roiClass = s.roi >= 0 ? 'value-green' : 'value-red'
                 const firm = findFirm(a.firmId)
-                return (
-                  <tr key={a.id} onClick={() => setSelected(a.id)} style={{ cursor: 'pointer' }}>
-                    <td>{new Date(a.dateCreated).toLocaleDateString('pt-BR')}</td>
-                    <td>{a.name}</td>
-                    <td className="center"><span className={'pill ' + typePill}>{a.type}</span></td>
+return (
+  <tr key={a.id} onClick={() => setSelected(a.id)} style={{ cursor: 'pointer' }}>
+    <td data-label="Data Criada">{new Date(a.dateCreated).toLocaleDateString('pt-BR')}</td>
+    <td data-label="Conta">{a.name}</td>
+    <td data-label="Categoria" className="center">
+      <span className={'pill ' + typePill}>{a.type}</span>
+    </td>
 
-                    {/* Firm column with small logo + name */}
-                    <td>
-                      {firm ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {firm.logo ? <img src={firm.logo} alt={firm.name} style={{ width: 36, height: 20, objectFit: 'contain' }} /> : null}
-                          <span>{firm.name}</span>
-                        </div>
-                      ) : <span className="muted">—</span>}
-                    </td>
+    {/* Firm column with small logo + name */}
+    <td data-label="Empresa">
+      {firm ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {firm.logo ? (
+            <img
+              src={firm.logo}
+              alt={firm.name}
+              style={{ width: 36, height: 20, objectFit: 'contain' }}
+            />
+          ) : null}
+          <span>{firm.name}</span>
+        </div>
+      ) : (
+        <span className="muted">—</span>
+      )}
+    </td>
 
-                    <td className="center"><span className={'pill ' + pill}>{a.status}</span></td>
-                    <td className={"center " + roiClass}>{roiPct}%</td>
-                    <td className="center">{Math.round((a.profitSplit || 0) * 100)}%</td>
-                    <td className="center">{fmt(s.totalPayouts)}</td>
-                    <td>{fmt(a.initialFunding)}</td>
-                    <td>{fmt(a.currentFunding)}</td>
-                    <td className="center">
-                      <button
-                        className="btn ghost"
-                        onClick={(e) => handleDelete(e, a.id)}
-                        style={{ padding: '4px 8px', fontSize: '14px', color: '#e74c3c', minWidth: 'auto' }}
-                        title="Excluir conta"
-                      >
+    <td data-label="Status" className="center">
+      <span className={'pill ' + pill}>{a.status}</span>
+    </td>
+    <td data-label="ROI" className={'center ' + roiClass}>{roiPct}%</td>
+    <td data-label="Split" className="center">
+      {Math.round((a.profitSplit || 0) * 100)}%
+    </td>
+    <td data-label="Payouts" className="center">
+      {fmt(s.totalPayouts)}
+    </td>
+    <td data-label="Inicial">{fmt(a.initialFunding)}</td>
+    <td data-label="Atual">{fmt(a.currentFunding)}</td>
+    <td data-label="Ações" className="center">
+      <button
+        className="btn ghost"
+        onClick={(e) => handleDelete(e, a.id)}
+        style={{
+          padding: '4px 8px',
+          fontSize: '14px',
+          color: '#e74c3c',
+          minWidth: 'auto',
+        }}
+        title="Excluir conta"
+      >
                         X
                       </button>
                     </td>

@@ -2333,3 +2333,114 @@ select.payouts-input {
   color: #4ade80 !important; /* verde suave */
   font-weight: 600;
 }
+/* ---=================PAGINA ACCOUNTS ============--- */
+
+/* --- Escopo para página de contas --- */
+.accounts-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Responsividade e layout dos cards/tabelas */
+.accounts-page .hover-card,
+.accounts-page .card {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .accounts-page .toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .accounts-page table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .accounts-page tbody tr {
+    display: block;
+    margin-bottom: 12px;
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .accounts-page tbody td {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+  }
+
+  .accounts-page tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+  }
+}
+/* === Melhor responsividade para a tabela de contas === */
+.accounts-page table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.accounts-page th,
+.accounts-page td {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.accounts-page tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* 📱 Layout compacto para telas pequenas */
+@media (max-width: 900px) {
+  .accounts-page table,
+  .accounts-page thead,
+  .accounts-page tbody,
+  .accounts-page th,
+  .accounts-page td,
+  .accounts-page tr {
+    display: block;
+    width: 100%;
+  }
+
+  .accounts-page thead {
+    display: none; /* Esconde cabeçalhos em telas pequenas */
+  }
+
+  .accounts-page tbody tr {
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+  }
+
+  .accounts-page tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+
+  .accounts-page tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--muted);
+    margin-right: 10px;
+    flex: 1;
+  }
+
+  /* 🔠 Legibilidade melhor em telas menores */
+  .accounts-page tbody td {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+}

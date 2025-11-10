@@ -302,6 +302,7 @@ const removePartial = (idx: number) => {
   }));
 };
 
+// Atualiza campos das execuções parciais, permitindo editar o R manualmente
 const updatePartial = (
   idx: number,
   field: string,
@@ -310,21 +311,44 @@ const updatePartial = (
   setForm((f) => {
     const updated = f.PartialExecutions.map((p, i) => {
       if (i !== idx) return p;
-      
       const newExe = { ...p, [field]: value };
-      
-      // Recalcula R automaticamente
-      const { entryPrice, exitPrice, stop_loss } = newExe;
-      if (entryPrice && stop_loss && exitPrice) {
-        const isLong = stop_loss < entryPrice;
-        const risk = Math.abs(entryPrice - stop_loss);
-        const diff = isLong ? exitPrice - entryPrice : entryPrice - exitPrice;
-        newExe.result_R = risk > 0 ? diff / risk : 0;
+
+      // Guarda flags de R manual apenas em memória (não salva)
+      const wasManualR = (updatePartial as any)._manualR || {};
+
+      // Se usuário digitou manualmente o R, marcar como manual
+      if (field === "result_R") {
+        wasManualR[idx] = true;
+        (updatePartial as any)._manualR = wasManualR;
+        return newExe;
       }
-      
+
+      // Se usuário limpou o R manual (campo vazio), volta pro modo automático
+      if (field === "result_R" && (value === "" || value === null)) {
+        wasManualR[idx] = false;
+        (updatePartial as any)._manualR = wasManualR;
+      }
+
+      // Se alterou entrada, saída ou stop, volta a recalcular automaticamente
+      if (["entryPrice", "exitPrice", "stop_loss"].includes(field)) {
+        wasManualR[idx] = false;
+        (updatePartial as any)._manualR = wasManualR;
+      }
+
+      // Recalcula R apenas se não estiver manual
+      if (!wasManualR[idx]) {
+        const { entryPrice, exitPrice, stop_loss } = newExe;
+        if (entryPrice && stop_loss && exitPrice) {
+          const isLong = stop_loss < entryPrice;
+          const risk = Math.abs(entryPrice - stop_loss);
+          const diff = isLong ? exitPrice - entryPrice : entryPrice - exitPrice;
+          newExe.result_R = risk > 0 ? diff / risk : 0;
+        }
+      }
+
       return newExe;
     });
-    
+
     return { ...f, PartialExecutions: updated };
   });
 };
@@ -999,17 +1023,23 @@ min={
                 />
               </div>
 
-              <div>
-                <label>📈 R</label>
-                <input
-                  type="number"
-                  className="input"
-                  value={exe.result_R || ""}
-                  onChange={(e) =>
-                    updatePartial(idx, "result_R", parseFloat(e.target.value) || 0)
-                  }
-                />
-              </div>
+<div>
+  <label>📈 R</label>
+  <input
+    type="number"
+    className="input"
+    value={exe.result_R ?? ""}
+    onChange={(e) => {
+      const val = e.target.value;
+      updatePartial(
+        idx,
+        "result_R",
+        val === "" ? null : parseFloat(val)
+      );
+    }}
+  />
+</div>
+
 
               <div>
                 <label>💲 Gross ($)</label>
