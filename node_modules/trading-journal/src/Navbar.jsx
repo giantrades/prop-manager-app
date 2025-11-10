@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
-import { useDrive } from "@apps/state/DriveContext"; // ✅ usa o contexto global
+import { useDrive } from "@apps/state/DriveContext";
 
 function CurrencyBox() {
   const { currency, setCurrency, rate } = useCurrency();
@@ -27,6 +27,7 @@ function CurrencyBox() {
 
 export default function Navbar() {
   const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
   const mainAppUrl =
@@ -54,93 +55,84 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      {/* Logo */}
+      {/* Logo + botão mobile */}
       <div className="nav-logo">
         📈 <span>Trading Journal</span>
       </div>
 
-      {/* Links internos */}
-      <div className="nav-links">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")}>
-          Trades
-        </NavLink>
-        <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}>
-          Strategies
-        </NavLink>
-        <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
-          Settings
-        </NavLink>
-      </div>
-
-      <div className="spacer" />
-
-      {/* Voltar para o Main-App */}
-      <a
-        href={mainAppUrl}
-        style={{
-          color: "#fff",
-          padding: "8px 14px",
-          border: "2px solid var(--color-border-soft, #ffffffff)",
-          borderRadius: "16px",
-          fontWeight: "600",
-          fontSize: "1.1rem",
-          textDecoration: "none",
-          display: "inline-flex",
-          alignItems: "center",
-          transition: "background-color 0.2s",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.borderColor = "var(--color-accent-2, #161725ff)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.borderColor = "var(--color-accent-1, 15, 18, 24, 0.85)")
-        }
+      <button
+        className={`hamburger ${menuOpen ? "active" : ""}`}
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label="Menu"
       >
-        <span style={{ fontSize: "1rem" }}></span>Prop Manager
-      </a>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
 
-      {/* Currency */}
-      <CurrencyBox />
+      {/* Conteúdo geral */}
+      <div className={`nav-content ${menuOpen ? "open" : ""}`}>
+        <div className="nav-links">
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")}>
+            Trades
+          </NavLink>
+          <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}>
+            Strategies
+          </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+            Settings
+          </NavLink>
+        </div>
 
-      {/* Drive Status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 16 }}>
-        <span
-          title={
-            !driveReady
-              ? "Drive não inicializado"
-              : logged
-              ? "Conectado ao Google"
-              : "Desconectado do Google"
-          }
-          style={{
-            width: 12,
-            height: 12,
-            borderRadius: "50%",
-            backgroundColor: dotColor,
-            display: "inline-block",
-            boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
-          }}
-        />
-        {logged ? (
-          <>
-            <button className="btn ghost small" onClick={logout}>
-              Logout
-            </button>
-            <button className="btn ghost small" onClick={onBackup}>
-              Backup
-            </button>
-            <button className="btn ghost small" onClick={onList}>
-              Listar
-            </button>
-          </>
-        ) : (
-          <button className="btn ghost small" onClick={login}>
-            Login Google
-          </button>
-        )}
+        <div className="nav-actions">
+          {/* Botão para o app principal */}
+          <a href={mainAppUrl} className="journal-link">
+            Prop Manager
+          </a>
+
+          <CurrencyBox />
+
+          {/* Drive Status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              title={
+                !driveReady
+                  ? "Drive não inicializado"
+                  : logged
+                  ? "Conectado ao Google"
+                  : "Desconectado do Google"
+              }
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                backgroundColor: dotColor,
+                display: "inline-block",
+                boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
+              }}
+            />
+            {logged ? (
+              <>
+                <button className="btn ghost small" onClick={logout}>
+                  Logout
+                </button>
+                <button className="btn ghost small" onClick={onBackup}>
+                  Backup
+                </button>
+                <button className="btn ghost small" onClick={onList}>
+                  Listar
+                </button>
+              </>
+            ) : (
+              <button className="btn ghost small" onClick={login}>
+                Login Google
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </nav>
   );
