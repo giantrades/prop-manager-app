@@ -421,11 +421,25 @@ const filteredTrades = useMemo(() => {
       {/* TABELA */}
       <div className="card">
         <h3>📋 Lista de Trades</h3>
-        <TradeTable trades={filteredTrades} onEdit={setEditing} onDelete={() => {}} />
-      </div>
+<TradeTable
+  trades={filteredTrades}
+  onEdit={(trade) => {
+    setEditing(trade);
+    setOpen(true);
+  }}
+  onDelete={(id) => deleteTrade(id)}
+/>      </div>
 
       {/* MODAL */}
-      {open && <TradeForm onClose={() => setOpen(false)} editing={editing} />}
+{open && (
+  <TradeForm
+    onClose={() => {
+      setOpen(false);
+      setEditing(null); // 🧹 limpa o trade em edição
+    }}
+    editing={editing}
+  />
+)}
     </div>
   );
 }
