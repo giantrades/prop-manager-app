@@ -70,12 +70,42 @@ export default function TradesPage() {
     });
   }, [trades, accounts, strategies]);
 
-  const filteredTrades = useMemo(() => {
-    let filtered = enrichedTrades;
-    if (filters.category) filtered = filtered.filter((t) => t.accountType === filters.category);
-    if (filters.strategyId) filtered = filtered.filter((t) => t.strategyId === filters.strategyId);
-    return filtered.sort((a, b) => new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime());
-  }, [enrichedTrades, filters]);
+// === FILTRAGEM DE TRADES ===
+const accountStatuses = useMemo<string[]>(() => {
+  const all = (accounts || [])
+    .map((a) => a.status?.toLowerCase() || "")
+    .filter((s): s is string => !!s);
+  return Array.from(new Set(all));
+}, [accounts]);
+
+const filteredTrades = useMemo(() => {
+  let filtered = enrichedTrades;
+
+  // 🔹 Filtro por tipo de conta
+  if (filters.category) {
+    filtered = filtered.filter((t) => t.accountType === filters.category);
+  }
+
+  // 🔹 Filtro por estratégia
+  if (filters.strategyId) {
+    filtered = filtered.filter((t) => t.strategyId === filters.strategyId);
+  }
+
+  // 🔹 Filtro por status de conta
+  if (accountStatusFilter.length > 0) {
+    filtered = filtered.filter((t) => {
+      const acc = accounts.find((a) => a.id === t.accountId);
+      const st = acc?.status?.toLowerCase();
+      return st && accountStatusFilter.includes(st);
+    });
+  }
+
+  return filtered.sort(
+    (a, b) =>
+      new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime()
+  );
+}, [enrichedTrades, filters, accountStatusFilter, accounts]);
+
 
   const filteredStats = useMemo(() => {
     const total = filteredTrades.length;
@@ -144,6 +174,95 @@ export default function TradesPage() {
           </option>
         ))}
       </select>
+{/* Filtro de Status de Conta */}
+<div className="status-dropdown" ref={statusDropdownRef}>
+  <button
+    type="button"
+    onClick={(e) => {
+      e.stopPropagation();
+      setStatusDropdownOpen((v) => !v);
+    }}
+    className="input"
+    style={{ display: "flex", justifyContent: "space-between", minWidth: 160 }}
+  >
+    {accountStatusFilter?.length > 0
+      ? `Status: ${accountStatusFilter.join(", ")}`
+      : "Filtrar Status"}
+    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+  </button>
+
+  {statusDropdownOpen && (
+    <div
+      className="card"
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: 0,
+        zIndex: 9999,
+        background: "var(--card-bg, #1e1f2b)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: 8,
+        padding: "8px 10px",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        minWidth: 200,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ maxHeight: 220, overflowY: "auto" }}>
+        {accountStatuses.map((status) => {
+          const st = String(status || "");
+          const checked = accountStatusFilter.includes(st);
+          return (
+            <label
+              key={st}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "6px 4px",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#e6e6e9",
+                textTransform: "capitalize",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? Array.from(new Set([...accountStatusFilter, st]))
+                    : accountStatusFilter.filter((s) => s !== st);
+                  setAccountStatusFilter(next);
+                }}
+                style={{ width: 16, height: 16 }}
+              />
+              <span>{st}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(["live", "funded"])}
+        >
+          Resetar padrão
+        </button>
+
+        <button
+          className="btn ghost small"
+          style={{ flex: 1 }}
+          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+        >
+          Marcar todos
+        </button>
+      </div>
+    </div>
+  )}
+</div>
 
       <button
         className="btn ghost"

@@ -4281,6 +4281,26 @@ select.payouts-input {
 .filters-section {
   margin-bottom: 1rem;
 }
+/* === Filtro de Status e Busca === */
+.trades-page .status-filter {
+  flex: 0 0 200px;
+}
+
+.trades-page .status-filter,
+.trades-page .account-search-container {
+  width: 100%;
+  position: relative;
+  z-index: 200;
+}
+
+.trades-page .status-dropdown {
+  position: relative;
+}
+
+.trades-page .status-dropdown .card {
+  left: 0 !important;
+  right: auto !important;
+}
 
 /* Botão só aparece no mobile */
 .filters-toggle {
