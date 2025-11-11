@@ -395,6 +395,17 @@ const handleSave = async () => {
       updatedForm.result_gross = totalGross;
       updatedForm.volume = totalVol;
     }
+    // ✅ Calcula o R total a partir das PartialExecutions
+if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {
+  const totalR = updatedForm.PartialExecutions.reduce(
+    (sum, e) => sum + (Number(e.result_R) || 0),
+    0
+  );
+  updatedForm.result_R = totalR;
+} else {
+  updatedForm.result_R = Number(updatedForm.result_R) || 0;
+}
+
 // ✅ Garante que entry_datetime e exit_datetime do trade
 // sempre reflitam o período total das PartialExecutions
 if (Array.isArray(updatedForm.PartialExecutions) && updatedForm.PartialExecutions.length > 0) {

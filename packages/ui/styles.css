@@ -2960,7 +2960,7 @@ select.payouts-input {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
-  Overflow: visible !important;
+  overflow: visible !important;
 }
 
 .journal-dashboard-page .status-dropdown {
@@ -3376,11 +3376,54 @@ select.payouts-input {
     font-size: 1rem;
   }
 }
+/* ========================================
+   FIX: Filtros em linha única no desktop
+   ======================================== */
+
+/* Desktop: força .filters-content horizontal */
+@media (min-width: 901px) {
+  .journal-dashboard-page .filters-content {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    max-height: none; /* Remove limitação mobile */
+    opacity: 1;
+    overflow: visible;
+  }
+
+  .journal-dashboard-page .filters-left,
+  .journal-dashboard-page .filters-right {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+  }
+}
 
 /* ============================================================
    🧠 ADVANCED METRICS — fluido e consistente no mobile
    ============================================================ */
+/* ========================================
+   FIX: Advanced Metrics ocupando linha inteira
+   ======================================== */
 
+@media (min-width: 1024px) {
+  /* Advanced Metrics ocupa toda a largura */
+  .journal-dashboard-page .advanced-metrics {
+    grid-column: 1 / -1; /* ✅ Estica até o final do grid */
+  }
+
+  /* Grid interno sempre 4 colunas */
+  .journal-dashboard-page .advanced-metrics .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px;
+  }
+}
 .journal-dashboard-page .advanced-metrics {
   margin-top: 24px;
 }
@@ -3427,7 +3470,7 @@ select.payouts-input {
 }
 
 /* Responsividade */
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .journal-dashboard-page .advanced-metrics .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -3513,6 +3556,32 @@ select.payouts-input {
   .journal-dashboard-page .range {
     width: 100%;
     justify-content: space-between;
+  }
+}
+
+/* ========================================
+   ANIMAÇÕES - Conta Selecionada
+   ======================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
   }
 }
 

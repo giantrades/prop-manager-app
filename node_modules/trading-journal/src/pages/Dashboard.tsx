@@ -1952,6 +1952,78 @@ if (dateFilter.start || dateFilter.end) {
   </div>
 </div>
 </div>
+{/* Indicador de Conta Selecionada */}
+{selectedAccount && (
+  <div
+    style={{
+      background: "linear-gradient(90deg, #1a1f2e 0%, #151a27 100%)",
+      border: "1px solid rgba(99, 102, 241, 0.3)",
+      borderRadius: 10,
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 16,
+      animation: "fadeIn 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: "#6366f1",
+          boxShadow: "0 0 10px rgba(99, 102, 241, 0.6)",
+          animation: "pulse 2s ease-in-out infinite",
+        }}
+      />
+      <div>
+        <div style={{ fontSize: 13, color: "#9ca3af", marginBottom: 2 }}>
+          Filtrando por conta:
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#f9fafb" }}>
+          {selectedAccount.name}
+        </div>
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: "#94a3b8",
+          background: "rgba(99, 102, 241, 0.1)",
+          padding: "4px 8px",
+          borderRadius: 6,
+          border: "1px solid rgba(99, 102, 241, 0.2)",
+        }}
+      >
+        {selectedAccount.type}
+      </div>
+    </div>
+
+    <button
+      onClick={() => setSelectedAccount(null)}
+      style={{
+        background: "rgba(239, 68, 68, 0.1)",
+        border: "1px solid rgba(239, 68, 68, 0.3)",
+        color: "#ef4444",
+        borderRadius: 6,
+        padding: "6px 12px",
+        fontSize: 13,
+        fontWeight: 600,
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
+      }}
+    >
+      ✕ Remover Filtro
+    </button>
+  </div>
+)}
         {/* SUMMARY CARDS */}
 <div className="summary-section">
         <div className="grid cards">            
