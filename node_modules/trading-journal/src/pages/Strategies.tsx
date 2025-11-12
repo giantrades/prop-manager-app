@@ -189,10 +189,7 @@ export const StrategyCard = ({
             Mercado:
             <span className={`pill ${pillClass[strategy.category]}`}>
               {strategy.category}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-2">
+            </span> <div className="flex gap-2">
           <button className="btn ghost small" onClick={() => onEdit(strategy)}>
             Editar
           </button>
@@ -203,6 +200,9 @@ export const StrategyCard = ({
             Deletar
           </button>
         </div>
+          </div>
+        </div>
+       
       </div>
 
       {/* ======= MOBILE ======= */}
@@ -288,7 +288,7 @@ export const StrategyCard = ({
                             key={idx}
                             className="flex justify-between text-sm text-muted mb-1"
                           >
-                            <span>{it.title || "(sem título)"}</span>
+                            <span>{it.title || "(sem título)"} -</span>
                             <span>
                               {it.percent === null
                                 ? "—"
@@ -449,7 +449,7 @@ export const StrategyCard = ({
             {strategy.checklist?.length > 0 ? (
               Object.values(consistency.byItem || {}).map((it, idx) => (
                 <div key={idx} className="flex justify-between text-sm text-gray-300">
-                  <span>{it.title || "(sem título)"}</span>
+                  <span>{it.title || "(sem título)"} -</span>
                   <span className="text-gray-500">
                     {it.percent === null ? "—" : `${Math.round(it.percent)}%`}
                   </span>
