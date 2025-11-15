@@ -2,8 +2,7 @@ import React, { useMemo, useState, useEffect,useRef } from 'react'
 import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
-import { getOrCreateFolderByPath, uploadFileToFolder, initGoogleDrive } from '@apps/utils/googleDrive'; 
-
+import { getOrCreateFolderByPath, uploadFileToFolder, initGoogleDrive, signIn, isSignedIn } from '@apps/utils/googleDrive';
 // ---------------------------
 // Página de listagem + CRUD
 // ---------------------------
@@ -618,32 +617,69 @@ const [uploadingMap, setUploadingMap] = useState({}) // { accountId: boolean }
 // helper: upload file and attach metadata to payout (creates folder path then upload)
 async function handleUploadForAccount(accountId, file) {
   try {
-    if (!file) return null;
+    if (!file) {
+      console.warn('⚠️ Nenhum arquivo selecionado');
+      return null;
+    }
 
-    // inicializa gdrive (se necessário) - não força prompt
-    await initGoogleDrive();
+    console.log('📤 Iniciando upload para conta:', accountId);
+    console.log('📄 Arquivo:', file.name, file.type, file.size);
 
-    // monta a árvore de pastas: payouts > tipo > empresa > nomeConta > valor_data
+    // Inicializa Google Drive
+    const initialized = await initGoogleDrive();
+    if (!initialized) {
+      throw new Error('Falha ao inicializar Google Drive');
+    }
+    console.log('✅ Google Drive inicializado');
+
+    // Verifica se está autenticado
+    if (!isSignedIn()) {
+      console.log('🔐 Usuário não autenticado, solicitando login...');
+      alert('Você precisa fazer login no Google Drive para anexar comprovantes.');
+      await signIn();
+      
+      // Verifica novamente após login
+      if (!isSignedIn()) {
+        throw new Error('Autenticação cancelada pelo usuário');
+      }
+      console.log('✅ Autenticação concluída');
+    }
+
+    // Busca dados da conta
     const account = accounts.find(a => a.id === accountId);
-    const company = (account && account.firmId && (getAll().firms || []).find(f => f.id === account.firmId)?.name) || (account && account.company) || (state.company || 'UnknownCompany');
-    const tipo = state.type || (account && account.type) || 'Other';
-    const nomeConta = account ? account.name.replace(/\s+/g,'_') : 'Conta';
-    const dataPart = (state.amountSolicited || 0).toString().replace(/\./g,'').trim() + '_' + (state.dateCreated || new Date().toISOString().slice(0,10));
-    const folderSegments = ['payouts', tipo, company || 'Unknown', nomeConta, dataPart];
+    if (!account) {
+      throw new Error('Conta não encontrada: ' + accountId);
+    }
+    console.log('🏦 Conta encontrada:', account.name);
 
+    // Monta caminho de pastas
+    const allFirms = getAll().firms || [];
+    const firm = account.firmId ? allFirms.find(f => f.id === account.firmId) : null;
+    const company = firm?.name || 'UnknownCompany';
+    
+    const tipo = state.type || account.type || 'Other';
+    const nomeConta = account.name.replace(/\s+/g, '_');
+    const dataPart = `${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0, 10)}`;
+    const folderSegments = ['payouts', tipo, company, nomeConta, dataPart];
+
+    console.log('📁 Criando caminho:', folderSegments.join('/'));
+
+    // Mostra loading
     setUploadingMap(m => ({ ...m, [accountId]: true }));
 
-    // garante pasta final
+    // Cria/encontra pasta
     const folderId = await getOrCreateFolderByPath(folderSegments);
+    console.log('✅ Pasta criada/encontrada, ID:', folderId);
 
-    // nome do arquivo exibido: 'payout_{valor_data}.{ext}' (exibido na UI)
-    const ext = (file.name.split('.').pop() || 'png');
-    const displayName = `payout_${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0,10)}.${ext}`;
-
-    // faz upload físico para a pasta
+    // Upload do arquivo
+    const ext = file.name.split('.').pop() || 'png';
+    const displayName = `payout_${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0, 10)}.${ext}`;
+    
+    console.log('📤 Enviando arquivo:', displayName);
     const uploaded = await uploadFileToFolder(folderId, file, displayName);
+    console.log('✅ Upload concluído:', uploaded);
 
-    // monta metadados
+    // Monta metadados do anexo
     const attachment = {
       folderPath: folderSegments.join('/'),
       folderId,
@@ -653,22 +689,35 @@ async function handleUploadForAccount(accountId, file) {
       uploadedAt: new Date().toISOString()
     };
 
-    // salva referência no dataStore
-    // se payout ainda não existe (criando novo), guardamos em state e depois quando salvar o payout chamamos update/create
+    // Salva no estado
     if (!state.id) {
-      // mantemos num map temporário
-      setState(s => ({ ...s, attachments: { ...(s.attachments || {}), [accountId]: attachment } }));
+      // Novo payout (ainda não salvo)
+      setState(s => ({ 
+        ...s, 
+        attachments: { 
+          ...(s.attachments || {}), 
+          [accountId]: attachment 
+        } 
+      }));
+      console.log('💾 Anexo salvo no estado (novo payout)');
     } else {
-      // já tem payout id salvo (edit mode) -> atualiza no datastore
+      // Payout existente (já salvo)
       store.setPayoutAttachment(state.id, accountId, attachment);
+      console.log('💾 Anexo salvo no dataStore (payout existente)');
     }
 
     setUploadingMap(m => ({ ...m, [accountId]: false }));
+    alert('✅ Comprovante enviado com sucesso!');
+    
     return attachment;
   } catch (err) {
-    console.error('Upload failed:', err);
+    console.error('❌ Erro no upload:', err);
     setUploadingMap(m => ({ ...m, [accountId]: false }));
-    alert('Erro ao enviar comprovante: ' + (err.message || err));
+    
+    let errorMsg = 'Erro ao enviar comprovante';
+    if (err.message) errorMsg += ': ' + err.message;
+    
+    alert(errorMsg);
     return null;
   }
 }
@@ -933,7 +982,7 @@ async function handleUploadForAccount(accountId, file) {
     </table>
   </div>
 </div>
-          {/* Upload de comprovantes por conta selecionada */}
+        {/* Upload de comprovantes por conta selecionada */}
 {selectedAccounts.length > 0 && (
   <div className="payouts-section" style={{ marginTop: 20 }}>
     <div className="payouts-section-title">📎 Comprovantes por Conta</div>
@@ -966,21 +1015,39 @@ async function handleUploadForAccount(accountId, file) {
 
           {/* Botões de Upload / Ver / Trocar */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            {/* Botão de upload */}
-            <label className="btn secondary small" style={{ cursor: 'pointer' }}>
-              {existingAttachment ? '📤 Trocar Comprovante' : '📎 Anexar Comprovante'}
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                style={{ display: 'none' }}
-onChange={async (e) => {
-  const file = e?.target?.files?.[0] || e?.dataTransfer?.files?.[0];
-  if (!file) return;
-  await handleUploadForAccount(acc.id, file);
-}}
+            {/* Input escondido */}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              style={{ display: 'none' }}
+              id={`file-upload-${acc.id}`}
+              onChange={async (e) => {
+                const file = e?.target?.files?.[0];
+                if (!file) return;
+                await handleUploadForAccount(acc.id, file);
+                e.target.value = ''; // Reseta para permitir re-upload
+              }}
+            />
 
-              />
-            </label>
+            {/* Botão de upload com loading */}
+            <button 
+              className="btn secondary small"
+              onClick={() => document.getElementById(`file-upload-${acc.id}`).click()}
+              disabled={uploadingMap[acc.id]}
+              style={{ 
+                opacity: uploadingMap[acc.id] ? 0.6 : 1,
+                cursor: uploadingMap[acc.id] ? 'wait' : 'pointer',
+                position: 'relative'
+              }}
+            >
+              {uploadingMap[acc.id] ? (
+                <>⏳ Enviando...</>
+              ) : existingAttachment ? (
+                <>📤 Trocar Comprovante</>
+              ) : (
+                <>📎 Anexar Comprovante</>
+              )}
+            </button>
 
             {/* Se já existir comprovante */}
             {existingAttachment && (
