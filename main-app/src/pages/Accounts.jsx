@@ -316,7 +316,7 @@ export default function Accounts() {
           {field === "profitSplit"
             ? `${Math.round((value || 0) * 100)}%`
             : field === "dateCreated" && value
-            ? new Date(value).toLocaleDateString('pt-BR')
+            ? value.split('-').reverse().join('/')
             : value || "—"}
         </div>
       );
