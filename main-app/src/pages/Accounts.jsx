@@ -397,13 +397,13 @@ export default function Accounts() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)', borderRadius: 10, boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)', padding: '16px 24px', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }} className="hover-card">
           <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>Total de Contas</h4>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-strong, #fff)' }}>{accounts.length}</div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-strong, #fff)' }}>{filteredAccounts.length}</div>
         </div>
 
         <div style={{ flex: 1, background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)', borderRadius: 10, boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)', padding: '16px 24px', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
           <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>Por Categoria</h4>
           {types.map((type) => {
-            const count = accounts.filter((a) => a.type === type).length
+            const count = filteredAccounts.filter((a) => a.type === type).lengthgi
             const color = type === 'Forex' ? 'lavander' : type === 'Cripto' ? 'orange' : type === 'Futures' ? 'pink' : type === 'Personal' ? 'purple' : 'gray'
             return (
               <div key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
