@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect,useRef } from 'react'
 import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
@@ -359,8 +359,8 @@ useEffect(() => {
       </td>
       <td data-label="Método" className="center">{p.method}</td>
       <td data-label="Gross" className="center">{fmt(p.amountSolicited)}</td>
-      <td data-label="Fee" className="neg">- {fmt(p.fee)}</td>
-      <td data-label="Net" className="pos">+ {fmt(p.amountReceived)}</td>
+      <td data-label="Fee" className="center" style={{ color: '#ef4444', fontWeight: 600 }}>- {fmt(p.fee)}</td>
+      <td data-label="Net" className="center" style={{ color: '#22c55e', fontWeight: 600 }}>+ {fmt(p.amountReceived)}</td>
       <td className="right" data-label="Ações">
         <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
           Edit
@@ -532,6 +532,9 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
   const [methods, setMethods] = useState(store.getSettings().methods)
   const [newMethod, setNewMethod] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+const [accountStatusFilter, setAccountStatusFilter] = useState(['live', 'funded'])
+const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+const statusDropdownRef = useRef(null)
 
   const { currency, rate } = useCurrency()
   const fmt = (v) =>
@@ -543,10 +546,28 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
     ? accounts
     : accounts.filter(a => a.type === state.type)
   
-  const filteredPool = pool.filter(a =>
-    a.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
+ const filteredPool = pool.filter(a => {
+  const matchesSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const matchesStatus = accountStatusFilter.length === 0 || 
+                       accountStatusFilter.includes(a.status?.toLowerCase())
+  return matchesSearch && matchesStatus
+})
+const accountStatuses = useMemo(() => {
+  const all = pool
+    .map((a) => a.status?.toLowerCase() || '')
+    .filter((s) => !!s)
+  return Array.from(new Set(all))
+}, [pool])
+useEffect(() => {
+  function onDocClick(e) {
+    if (!statusDropdownRef.current) return
+    if (!statusDropdownRef.current.contains(e.target)) {
+      setStatusDropdownOpen(false)
+    }
+  }
+  if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick)
+  return () => document.removeEventListener('mousedown', onDocClick)
+}, [statusDropdownOpen])
   const selectedSet = new Set(state.accountIds)
   const selectedAccounts = pool.filter(a => selectedSet.has(a.id))
 
@@ -664,163 +685,254 @@ async function handleUploadForAccount(accountId, file) {
 
         <div className="payouts-modal-body">
           
-          {/* Informações Básicas */}
-          <div className="payouts-section">
-            <div className="payouts-section-title">Informações Básicas</div>
-            
-            <div className="payouts-field-row payouts-field-row-3">
-              <div className="payouts-field">
-                <label>📅 Data</label>
-                <input
-                  type="date"
-                  className="payouts-input"
-                  value={state.dateCreated}
-                  onChange={(e) => setState({ ...state, dateCreated: e.target.value })}
-                />
-              </div>
-              <div className="payouts-field">
-                <label>🏷️ Tipo</label>
-                <select
-                  className="payouts-input"
-                  value={state.type}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setState((s) => ({ ...s, type: v, accountIds: [] }))
+         {/* Informações Básicas - Data, Data Aprovação e Status do PAYOUT */}
+<div className="payouts-section">
+  <div className="payouts-section-title">Informações Básicas</div>
+  
+  <div className="payouts-field-row payouts-field-row-3">
+    <div className="payouts-field">
+      <label>📅 Data</label>
+      <input
+        type="date"
+        className="payouts-input"
+        value={state.dateCreated}
+        onChange={(e) => setState({ ...state, dateCreated: e.target.value })}
+      />
+    </div>
+    <div className="payouts-field">
+      <label>✅ Data Aprovação</label>
+      <input
+        type="date"
+        className="payouts-input"
+        value={state.approvedDate || ''}
+        onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
+      />
+    </div>
+    <div className="payouts-field">
+      <label>📊 Status do Payout</label>
+      <select
+        className="payouts-input"
+        value={state.status}
+        onChange={(e) => setState({ ...state, status: e.target.value })}
+      >
+        <option value="Cancelled">Cancelled</option>
+        <option value="Pending">Pending</option>
+        <option value="Completed">Completed</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+
+
+{/* Seleção de Contas */}
+<div className="payouts-section">
+  <div className="payouts-section-title">Contas Vinculadas</div>
+  
+  {/* Linha com busca + TIPO + filtro de STATUS DE CONTA */}
+  <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+    {/* 1. BUSCA */}
+    <div style={{ flex: 1 }}>
+      <input
+        type="text"
+        className="payouts-input"
+        placeholder="🔍 Buscar conta..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
+
+    {/* 2. TIPO */}
+    <div style={{ minWidth: 150 }}>
+      <select
+        className="payouts-input"
+        value={state.type}
+        onChange={(e) => {
+          const v = e.target.value
+          setState((s) => ({ ...s, type: v, accountIds: [] }))
+        }}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <option value="Todas">🏷️ Todas</option>
+        <option value="Futures">Futures</option>
+        <option value="Forex">Forex</option>
+        <option value="Cripto">Cripto</option>
+        <option value="Personal">Personal</option>
+      </select>
+    </div>
+
+    {/* 3. DROPDOWN DE STATUS DE CONTA */}
+    <div style={{ position: 'relative', minWidth: 200 }} ref={statusDropdownRef}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+        className="payouts-input"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          cursor: "pointer",
+          width: '100%',
+          height: '100%',
+          padding: '10px 12px',
+          textAlign: 'left'
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {accountStatusFilter && accountStatusFilter.length > 0
+            ? `Status: ${accountStatusFilter.join(", ")}`
+            : "Filtrar Status"}
+        </span>
+        <span style={{ opacity: 0.7, marginLeft: 8, flexShrink: 0 }}>▾</span>
+      </button>
+
+      {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            top: "110%",
+            right: 0,
+            zIndex: 9999,
+            background: "var(--card-bg, #1e1e2b)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 8,
+            padding: "8px 10px",
+            boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+            minWidth: 220,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {accountStatuses.map((status) => {
+              const st = String(status || '');
+              const checked = accountStatusFilter.includes(st);
+              return (
+                <label
+                  key={st}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "6px 4px",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    color: "#e6e6e9",
+                    textTransform: "capitalize",
                   }}
                 >
-                  <option value="Todas">Todas</option>
-                  <option value="Futures">Futures</option>
-                  <option value="Forex">Forex</option>
-                  <option value="Cripto">Cripto</option>
-                  <option value="Personal">Personal</option>
-                </select>
-              </div>
-              <div className="payouts-field">
-                <label>📊 Status</label>
-                <select
-                  className="payouts-input"
-                  value={state.status}
-                  onChange={(e) => setState({ ...state, status: e.target.value })}
-                >
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="payouts-field-row payouts-field-row-2">
-              <div className="payouts-field">
-                <label>💵 Valor Bruto (GROSS)</label>
-                <input
-                  type="number"
-                  className="payouts-input"
-                  value={state.amountSolicited}
-                  onChange={(e) =>
-                    setState({ ...state, amountSolicited: parseFloat(e.target.value) || 0 })
-                  }
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="payouts-field">
-                <label>✅ Data Aprovação</label>
-                <input
-                  type="date"
-                  className="payouts-input"
-                  value={state.approvedDate || ''}
-                  onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
-                />
-              </div>
-            </div>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? Array.from(new Set([...accountStatusFilter, st]))
+                        : accountStatusFilter.filter(s => s !== st);
+                      setAccountStatusFilter(next);
+                    }}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span>{st}</span>
+                </label>
+              );
+            })}
           </div>
 
+          <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+            <button
+              className="btn ghost small"
+              style={{ flex: 1, fontSize: 11, padding: '6px 8px' }}
+              onClick={() => setAccountStatusFilter(["live", "funded"])}
+            >
+              Resetar padrão
+            </button>
 
-
-          {/* Seleção de Contas */}
-          <div className="payouts-section">
-            <div className="payouts-section-title">Contas Vinculadas</div>
-            
-            <div className="payouts-search">
-              <input
-                type="text"
-                className="payouts-input"
-                placeholder="Buscar conta..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <p className="payouts-hint">
-              💡 {filteredPool.length} conta(s) disponível(eis) • {selectedAccounts.length} selecionada(s)
-            </p>
-
-            <div className="payouts-table-wrapper">
-              <table className="payouts-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}></th>
-                    <th>Nome da Conta</th>
-                    <th className="center">Tipo</th>
-                    <th className="center">Funding</th>
-                    <th className="center">Split</th>
-                    <th className="center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPool.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
-                        Nenhuma conta encontrada.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredPool.map((a) => {
-                      const checked = selectedSet.has(a.id)
-                      return (
-                        <tr key={a.id}>
-                          <td className="center">
-                            <input
-                              type="checkbox"
-                              className="payouts-checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const next = new Set(state.accountIds)
-                                e.target.checked ? next.add(a.id) : next.delete(a.id)
-                                setState({ ...state, accountIds: Array.from(next) })
-                              }}
-                            />
-                          </td>
-                          <td>{a.name}</td>
-                          <td className="center">
-                            <span className="payouts-pill payouts-pill-type">{a.type.toUpperCase()}</span>
-                          </td>
-                          <td className="center">{fmt(a.currentFunding || 0)}</td>
-                          <td className="center">{Math.round((a.profitSplit || 0) * 100)}%</td>
-                          <td className="center">
-                            <span
-                              className={
-                                'payouts-pill ' +
-                                (a.status === 'Live'
-                                  ? 'payouts-pill-green'
-                                  : a.status === 'Funded'
-                                  ? 'payouts-pill-blue'
-                                  : a.status === 'Challenge'
-                                  ? 'payouts-pill-yellow'
-                                  :a.status ==='Challenge Concluido'
-                                  ? 'payouts-pill-yellow'
-                                  : 'payouts-pill-gray')
-                              }
-                            >
-                              {a.status.toUpperCase()}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <button
+              className="btn ghost small"
+              style={{ flex: 1, fontSize: 11, padding: '6px 8px' }}
+              onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+            >
+              Marcar todos
+            </button>
           </div>
+        </div>
+      )}
+    </div>
+  </div>
+
+  <p className="payouts-hint">
+    💡 {filteredPool.length} conta(s) disponível(eis) • {selectedAccounts.length} selecionada(s)
+  </p>
+
+  <div className="payouts-table-wrapper">
+    <table className="payouts-table">
+      <thead>
+        <tr>
+          <th style={{ width: 40 }}></th>
+          <th>Nome da Conta</th>
+          <th className="center">Tipo</th>
+          <th className="center">Funding</th>
+          <th className="center">Split</th>
+          <th className="center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filteredPool.length === 0 ? (
+          <tr>
+            <td colSpan="6" style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+              Nenhuma conta encontrada.
+            </td>
+          </tr>
+        ) : (
+          filteredPool.map((a) => {
+            const checked = selectedSet.has(a.id)
+            return (
+              <tr key={a.id}>
+                <td className="center">
+                  <input
+                    type="checkbox"
+                    className="payouts-checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = new Set(state.accountIds)
+                      e.target.checked ? next.add(a.id) : next.delete(a.id)
+                      setState({ ...state, accountIds: Array.from(next) })
+                    }}
+                  />
+                </td>
+                <td>{a.name}</td>
+                <td className="center">
+                  <span className="payouts-pill payouts-pill-type">{a.type.toUpperCase()}</span>
+                </td>
+                <td className="center">{fmt(a.currentFunding || 0)}</td>
+                <td className="center">{Math.round((a.profitSplit || 0) * 100)}%</td>
+                <td className="center">
+                  <span
+                    className={
+                      'payouts-pill ' +
+                      (a.status === 'Live'
+                        ? 'payouts-pill-green'
+                        : a.status === 'Funded'
+                        ? 'payouts-pill-blue'
+                        : a.status === 'Challenge'
+                        ? 'payouts-pill-yellow'
+                        : a.status === 'Challenge Concluido'
+                        ? 'payouts-pill-yellow'
+                        : 'payouts-pill-gray')
+                    }
+                  >
+                    {a.status.toUpperCase()}
+                  </span>
+                </td>
+              </tr>
+            )
+          })
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
           {/* Upload de comprovantes por conta selecionada */}
 {selectedAccounts.length > 0 && (
   <div className="payouts-section" style={{ marginTop: 20 }}>
@@ -934,54 +1046,73 @@ onChange={async (e) => {
               </div>
             </div>
           </div>
-          {/* Preview */}
-          {preview.length > 0 && (
-            <div className="payouts-preview">
-              <div className="payouts-preview-header">
-                <div className="payouts-preview-title">💡 Prévia de Distribuição</div>
-                <div className="payouts-stats-mini">
-                  <div className="payouts-stat-mini">
-                    <div className="payouts-stat-mini-label">Total</div>
-                    <div className="payouts-stat-mini-value">{fmt(state.amountSolicited)}</div>
-                  </div>
-                  <div className="payouts-stat-mini">
-                    <div className="payouts-stat-mini-label">Taxa</div>
-                    <div className="payouts-stat-mini-value">{fmt(totals.fee)}</div>
-                  </div>
-                  <div className="payouts-stat-mini">
-                    <div className="payouts-stat-mini-label">Contas</div>
-                    <div className="payouts-stat-mini-value">{selectedAccounts.length}</div>
-                  </div>
-                  
-                </div>
-              </div>
+{/* Preview com GROSS no header */}
+{preview.length > 0 && (
+  <div className="payouts-preview">
+    <div className="payouts-preview-header">
+      <div className="payouts-preview-title">💡 Prévia de Distribuição</div>
+      
+      {/* Campo GROSS movido para cá */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 200 }}>
+          <label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase' }}>
+            💵 GROSS ($)
+          </label>
+          <input
+            type="number"
+            className="payouts-input"
+            value={state.amountSolicited}
+            onChange={(e) =>
+              setState({ ...state, amountSolicited: parseFloat(e.target.value) || 0 })
+            }
+            placeholder="0.00"
+            style={{ padding: '8px 12px', fontSize: 14 }}
+          />
+        </div>
 
-              <div className="payouts-table-wrapper" style={{ maxHeight: 240 }}>
-                <table className="payouts-table">
-                  <thead>
-                    <tr>
-                      <th>Conta</th>
-                      <th className="center">Split</th>
-                      <th className="center">Base</th>
-                      <th className="center">Taxa</th>
-                      <th className="center">Líquido</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.name}</td>
-                        <td className="center">{Math.round(r.split * 100)}%</td>
-                        <td className="center">{fmt(r.share)}</td>
-                        <td className="center" style={{ color: 'var(--yellow)' }}>{fmt(r.fee)}</td>
-                        <td className="center" style={{ color: 'var(--green)', fontWeight: 700 }}>{fmt(r.net)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+        <div className="payouts-stats-mini">
+          <div className="payouts-stat-mini">
+            <div className="payouts-stat-mini-label">Total</div>
+            <div className="payouts-stat-mini-value">{fmt(state.amountSolicited)}</div>
+          </div>
+          <div className="payouts-stat-mini">
+            <div className="payouts-stat-mini-label">Taxa</div>
+            <div className="payouts-stat-mini-value">{fmt(totals.fee)}</div>
+          </div>
+          <div className="payouts-stat-mini">
+            <div className="payouts-stat-mini-label">Contas</div>
+            <div className="payouts-stat-mini-value">{selectedAccounts.length}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="payouts-table-wrapper" style={{ maxHeight: 240 }}>
+      <table className="payouts-table">
+        <thead>
+          <tr>
+            <th>Conta</th>
+            <th className="center">Split</th>
+            <th className="center">Base</th>
+            <th className="center">Taxa</th>
+            <th className="center">Líquido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {preview.map((r) => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="center">{Math.round(r.split * 100)}%</td>
+              <td className="center">{fmt(r.share)}</td>
+              <td className="center" style={{ color: 'var(--yellow)' }}>{fmt(r.fee)}</td>
+              <td className="center" style={{ color: 'var(--green)', fontWeight: 700 }}>{fmt(r.net)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
         </div>
 
