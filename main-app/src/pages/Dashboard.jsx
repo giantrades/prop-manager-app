@@ -674,216 +674,159 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
 }
 
 
-function FundingPerAccount({ accountStatusFilter = ["live", "funded"],dateFilter = {} }){
-  const { accounts } = useFiltered(accountStatusFilter, dateFilter)
-  const { currency, rate } = useCurrency()
-  
-  const data = accounts.map((a, index) => ({ 
-    name: a.name, 
-    value: (currency === 'USD' ? a.currentFunding : a.currentFunding * rate),
-    index: index,
-    type: a.type
-  }))
+function FundingPerAccount({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
+  const { accounts } = useFiltered(accountStatusFilter, dateFilter);
+  const { currency, rate } = useCurrency();
 
-  // Get background-color from your actual CSS classes (.pill.lavander, etc.)
-  const getTypeColor = (type) => {
-    // Map account types to your exact CSS class names
-    const cssClass = type === 'Forex' ? 'lavander'     // .pill.lavander
-                   : type === 'Cripto' ? 'orange'      // .pill.orange
-                   : type === 'Futures' ? 'pink'       // .pill.pink
-                   : type === 'Personal' ? 'purple'    // .pill.purple
-                   : 'gray';                           // .pill.gray
-    
-    // Create temporary element with your actual CSS classes
-    const tempDiv = document.createElement('div');
-    tempDiv.className = `pill ${cssClass}`;
-    document.body.appendChild(tempDiv);
-    const computedBgColor = window.getComputedStyle(tempDiv).color;
-    document.body.removeChild(tempDiv);
-    
-    if (computedBgColor && computedBgColor !== 'rgba(0, 0, 0, 0)' && computedBgColor !== 'transparent') {
-      return computedBgColor;
-    }
-    
-    // Fallback colors (shouldn't be needed if CSS is loaded)
-    return type === 'Forex' ? '#5684a3'      // Your lavander color
-         : type === 'Cripto' ? '#ffa500'     // Orange
-         : type === 'Futures' ? '#ffc0cb'    // Pink  
-         : type === 'Personal' ? '#800080'   // Purple
-         : '#808080';                        // Gray
-  };
+  const [firms, setFirms] = React.useState([]);
 
-  // Get darker version by reducing opacity or darkening the base color
-  const getDarkerTypeColor = (type) => {
-    const baseColor = getTypeColor(type);
-    
-    // If we got an RGB color, convert it to a darker version
-    if (baseColor.startsWith('rgb')) {
-      const matches = baseColor.match(/\d+/g);
-      if (matches && matches.length >= 3) {
-        const r = Math.floor(parseInt(matches[0]) * 0.8);
-        const g = Math.floor(parseInt(matches[1]) * 0.8);
-        const b = Math.floor(parseInt(matches[2]) * 0.8);
-        return `rgb(${r}, ${g}, ${b})`;
-      }
-    }
-    
-    // Fallback darker colors
-    return type === 'Forex' ? '#456a85'
-         : type === 'Cripto' ? '#cc8400'
-         : type === 'Futures' ? '#cc9aa2'
-         : type === 'Personal' ? '#660066'
-         : '#666666';
-  };
+  React.useEffect(() => {
+    const data = getAll();
+    setFirms(data.firms || []);
+  }, []);
 
-  // Format value for display
+  // pega cor da empresa da conta
+  const getFirmColor = React.useCallback((firmId) => {
+    const f = firms.find((x) => x.id === firmId);
+    return f?.color || "#6b7280"; // fallback cinza
+  }, [firms]);
+
+  // monta dados
+  const data = accounts.map((a, index) => ({
+    name: a.name,
+    value: currency === "USD" ? a.currentFunding : a.currentFunding * rate,
+    firmId: a.firmId || null,
+  }));
+
   const formatValue = (value) => {
     if (Math.abs(value) >= 1000) {
-      return `${currency === 'USD' ? '$' : ''}${(value / 1000).toFixed(0)}k`;
+      return `${currency === "USD" ? "$" : ""}${(value / 1000).toFixed(0)}k`;
     }
-    return `${currency === 'USD' ? '$' : ''}${value.toFixed(0)}`;
+    return `${currency === "USD" ? "$" : ""}${value.toFixed(0)}`;
   };
 
-  // Custom tooltip with account type color border
+  // Tooltip com cor da empresa
   const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      const accountData = payload[0].payload;
-      const borderColor = getTypeColor(accountData.type);
-      
-      return (
-        <div style={{
-          background: '#0f1218',
-          border: `2px solid ${borderColor}`,
-          borderRadius: '8px',
-          padding: '12px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-        }}>
-          <p style={{ color: '#e7eaf0', fontSize: '14px', fontWeight: '600', margin: '0 0 4px 0' }}>
-            {label}
-          </p>
-          <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 6px 0' }}>
-            ({accountData.type})
-          </p>
-          <p style={{ color: borderColor, fontSize: '16px', fontWeight: '700', margin: 0 }}>
-            {formatValue(payload[0].value)}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
+    if (!active || !payload || !payload.length) return null;
 
-  // Custom bar shape with individual coloring
-  const CustomBar = (props) => {
-    const { payload, index, dataKey, tooltipPayload, tooltipPosition, ...rest } = props;
-    if (!payload) return null;
-    
-    const accountType = payload.type;
-    const color = getTypeColor(accountType);
-    
+    const d = payload[0].payload;
+    const borderColor = getFirmColor(d.firmId);
+
     return (
-      <rect 
-        {...rest} 
-        fill={color}
-        rx={4} 
-        ry={4}
-      />
+      <div
+        style={{
+          background: "#0f1218",
+          border: `2px solid ${borderColor}`,
+          borderRadius: "8px",
+          padding: "12px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          color: "#fff",
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+        <div style={{ color: borderColor, fontWeight: 700, fontSize: 16 }}>
+          {formatValue(payload[0].value)}
+        </div>
+      </div>
     );
   };
 
-  // Calculate bar width based on number of accounts
+  // barra usando a cor da empresa
+  const CustomBar = (props) => {
+    const { payload, ...rest } = props;
+    if (!payload) return null;
+
+    const color = getFirmColor(payload.firmId);
+
+    return <rect {...rest} fill={color} rx={4} ry={4} />;
+  };
+
   const getBarSize = () => {
-    const count = data.length;
-    if (count <= 3) return 80;
-    if (count <= 5) return 60;
-    if (count <= 10) return 40;
-    if (count <= 20) return 25;
+    const c = data.length;
+    if (c <= 3) return 80;
+    if (c <= 5) return 60;
+    if (c <= 10) return 40;
+    if (c <= 20) return 25;
     return 15;
   };
 
   return (
     <div className="card">
-      <h3 style={{ marginBottom: '16px' }}>📦 Funding por conta</h3>
-      <div style={{height:240}}>
+      <h3 style={{ marginBottom: "16px" }}>📦 Funding por conta</h3>
+
+      <div style={{ height: 240 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            data={data} 
+          <BarChart
+            data={data}
             margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
             maxBarSize={getBarSize()}
           >
-            <CartesianGrid 
-              strokeDasharray="2 4" 
-              stroke="#374151" 
+            <CartesianGrid
+              strokeDasharray="2 4"
+              stroke="#374151"
               opacity={0.3}
-              horizontal={true}
+              horizontal
               vertical={false}
             />
-            
-            <XAxis 
-              dataKey="name" 
-              hide 
-              type="category"
-            />
-            
-            <YAxis 
+
+            <XAxis dataKey="name" hide type="category" />
+
+            <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{fill:'#94a3b8', fontSize: 11}}
+              tick={{ fill: "#94a3b8", fontSize: 11 }}
               tickFormatter={formatValue}
             />
-            
+
             <Tooltip content={<CustomTooltip />} />
-            
-            <Bar 
-              dataKey="value" 
-              shape={<CustomBar />}
-            />
+
+            <Bar dataKey="value" shape={<CustomBar />} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      
-      {/* Account indicators below the chart */}
-      <div style={{ 
-        marginTop: '12px', 
-        display: 'flex', 
-        flexWrap: 'wrap', 
-        gap: '8px',
-        justifyContent: 'center'
-      }}>
-        {data.map((account, index) => (
-          <div 
+
+      {/* legenda */}
+      <div
+        style={{
+          marginTop: "12px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px",
+          justifyContent: "center",
+        }}
+      >
+        {data.map((acc, index) => (
+          <div
             key={index}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '12px',
-              color: '#94a3b8'
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              color: "#94a3b8",
             }}
           >
-            <div 
+            <div
               style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '2px',
-                background: getTypeColor(account.type)
+                width: "12px",
+                height: "12px",
+                borderRadius: "2px",
+                background: getFirmColor(acc.firmId),
               }}
             />
-            <span style={{ fontWeight: '500' }}>
-              {account.name}
-            </span>
-            <span style={{ color: '#6b7280', fontSize: '10px' }}>
-              ({account.type})
-            </span>
-            <span style={{ color: '#6b7280' }}>
-              {formatValue(account.value)}
+
+            <span style={{ fontWeight: "500" }}>{acc.name}</span>
+
+            <span style={{ color: "#6b7280" }}>
+              {formatValue(acc.value)}
             </span>
           </div>
         ))}
       </div>
     </div>
-  )
+  );
 }
+
 
 function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
   // ✅ Usar useFiltered em vez de getAll() manual
@@ -1131,116 +1074,220 @@ const stats = {
   )
 }
 
-function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
-  const { payouts } = useFiltered(accountStatusFilter, dateFilter)
-  const { currency, rate } = useCurrency()
-  const fmt = (v)=> currency==='USD'
-    ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v||0)
-    : new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((v||0)*rate)
-  const rows = payouts.sort((a,b)=> new Date(b.dateCreated) - new Date(a.dateCreated)).slice(0,6);
+function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
+  const { payouts } = useFiltered(accountStatusFilter, dateFilter);
+  const { currency, rate } = useCurrency();
+
+  const fmt = (v) =>
+    currency === 'USD'
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
+      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
+
+  const rows = payouts
+    .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
+    .slice(0, 6);
+
+  // formatar DD/MM/YYYY
+  const fmtDate = (d) => {
+    if (!d) return "--";
+    const dt = new Date(d);
+    return dt.toLocaleDateString("pt-BR");
+  };
+
+  const navigateToPayout = (id) => {
+    window.location.href = `/payouts?id=${id}`;
+  };
+
   return (
     <div className="card">
       <h3>🧾 Payouts recentes</h3>
+
       <table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>Status</th><th>Net</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Status</th>
+            <th>Net</th>
+          </tr>
+        </thead>
+
         <tbody>
-          {rows.map(r=>(
-            <tr key={r.id}>
-              <td>{r.dateCreated}</td>
-              <td>{r.type}</td>
-              <td><span className={'pill '+(r.status==='Completed'?'greenpayout':r.status==='Pending'?'yellowpayout':'gray')}>{r.status}</span></td>
-              <td>{fmt(r.amountReceived)}</td>
+          {rows.map((r) => (
+            <tr
+              key={r.id}
+              onClick={() => navigateToPayout(r.id)}
+              style={{
+                cursor: "pointer",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <td>{fmtDate(r.dateCreated)}</td>
+
+              {/* TYPE como pill */}
+              <td>
+                <span
+                  className={
+                    "pill " +
+                    (r.type === "Forex"
+                      ? "lavander"
+                      : r.type === "Cripto"
+                      ? "orange"
+                      : r.type === "Futures"
+                      ? "pink"
+                      : r.type === "Personal"
+                      ? "purple"
+                      : "gray")
+                  }
+                >
+                  {r.type || "--"}
+                </span>
+              </td>
+
+              {/* STATUS existente */}
+              <td>
+                <span
+                  className={
+                    "pill " +
+                    (r.status === "Completed"
+                      ? "greenpayout"
+                      : r.status === "Pending"
+                      ? "yellowpayout"
+                      : "gray")
+                  }
+                >
+                  {r.status}
+                </span>
+              </td>
+
+              {/* NET verde com + */}
+              <td style={{ color: "#22c55e", fontWeight: 600 }}>
+                +{fmt(r.amountReceived || 0)}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
+
+
 
 function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
   const { accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {};
-  const { currency = 'USD', rate = 1 } = useCurrency() || {};
-  const [firms, setFirms] = useState ([])
- 
-   useEffect(() => {
-   const data = getAll()
-   setFirms(data.firms || [])
-   }, [])
+  const { currency = "USD", rate = 1 } = useCurrency() || {};
 
-  // === cores DENTRO do componente (pega from CSS .pill.<class>) ===
-  const getTypeColor = React.useCallback((type) => {
-    const cls =
-      type === 'Forex'   ? 'lavander' :
-      type === 'Cripto'  ? 'orange'   :
-      type === 'Futures' ? 'pink'     :
-      type === 'Personal'? 'purple'   :
-                          'gray';
-    const span = document.createElement('span');
-    span.className = `pill ${cls}`;
-    document.body.appendChild(span);
-    const c = getComputedStyle(span).color || '#888';
-    document.body.removeChild(span);
-    return c;
+  const [firms, setFirms] = React.useState([]);
+
+  React.useEffect(() => {
+    const data = getAll();
+    setFirms(data.firms || []);
   }, []);
-  // =============================================================
 
-  // formatador de valores (recebe valor já convertido conforme currency)
+  // pega cor da empresa
+  const getFirmColor = React.useCallback(
+    (firmId) => {
+      const f = firms.find((x) => x.id === firmId);
+      return f?.color || "#6b7280";
+    },
+    [firms]
+  );
+
   const fmt = (v) => {
-    if (currency === 'USD')
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+    if (currency === "USD")
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(v || 0);
+
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(v || 0);
   };
 
-  // monta os dados: soma currentFunding das contas que pertencem à firm
+  // monta os dados por empresa
   const data = React.useMemo(() => {
-    return firms.map(f => {
+    return firms.map((f) => {
       const totalRaw = accounts
-        .filter(a => a.firmId === f.id)
+        .filter((a) => a.firmId === f.id)
         .reduce((s, a) => s + (a.currentFunding || 0), 0);
-      const total = currency === 'USD' ? totalRaw : totalRaw * rate;
+
+      const total = currency === "USD" ? totalRaw : totalRaw * rate;
+
       return {
         id: f.id,
         name: f.name,
+        type: f.type || "",
         logo: f.logo,
-        type: f.type || '',
-        value: total
+        color: f.color,    // <- ESSENCIAL
+        value: total,
       };
     });
   }, [firms, accounts, currency, rate]);
 
-  // Tooltip customizado (borda colorida pela categoria)
+  // Tooltip usando firm.color
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload || !payload.length) return null;
+
     const d = payload[0].payload;
-    const borderColor = getTypeColor(d.type);
+    const borderColor = getFirmColor(d.id);
+
     return (
-      <div style={{
-        background: '#0f1218',
-        border: `2px solid ${borderColor}`,
-        borderRadius: 8,
-        padding: 12,
-        boxShadow: '0 6px 18px rgba(0,0,0,0.4)',
-        color: '#fff',
-        minWidth: 160
-      }}>
-        {d.logo && <img src={d.logo} alt={d.name} style={{width:80,height:24,objectFit:'contain',display:'block',marginBottom:8}} />}
-        <div style={{fontWeight:700, marginBottom:4}}>{d.name}</div>
-        <div style={{color:'#94a3b8', fontSize:12, marginBottom:8}}>({d.type})</div>
-        <div style={{color:borderColor, fontWeight:700}}>{fmt(d.value)}</div>
+      <div
+        style={{
+          background: "#0f1218",
+          border: `2px solid ${borderColor}`,
+          borderRadius: 8,
+          padding: 12,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+          color: "#fff",
+          minWidth: 160,
+        }}
+      >
+        {d.logo && (
+          <img
+            src={d.logo}
+            alt={d.name}
+            style={{
+              width: 80,
+              height: 24,
+              objectFit: "contain",
+              display: "block",
+              marginBottom: 8,
+            }}
+          />
+        )}
+
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
+        <div style={{ color: borderColor, fontWeight: 700 }}>{fmt(d.value)}</div>
       </div>
     );
   };
 
-  // Shape customizado: use apenas os props seguros para evitar warnings
+  // barra usando cor da empresa
   const CustomBar = (props) => {
-    const { x, y, width, height, payload, tooltipPayload, dataKey, ...rest } = props;
-    const color = getTypeColor(payload?.type);
-    if (width <= 0 || height <= 0) return null;
-    return <rect x={x} y={y} width={width} height={height} rx={6} ry={6} fill={color} />;
+    const { payload, x, y, width, height } = props;
+    if (!payload || width <= 0 || height <= 0) return null;
+
+    const color = getFirmColor(payload.id);
+
+    return (
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        rx={6}
+        ry={6}
+        fill={color}
+      />
+    );
   };
 
-  // adaptar tamanho das barras
   const getBarSize = () => {
     const c = data.length;
     if (c <= 3) return 80;
@@ -1253,40 +1300,87 @@ function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
   return (
     <div className="card">
       <h3>💰 Fundings por Empresa</h3>
+
       <div style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 20 }} maxBarSize={getBarSize()}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v)=> {
-              // formatter que apresenta $50k / R$50k de forma compacta
-              if (Math.abs(v) >= 1000) return (currency === 'USD' ? '$' : 'R$') + Math.round(v/1000) + 'k';
-              return (currency === 'USD' ? '$' : 'R$') + Math.round(v);
-            }} />
+          <BarChart
+            data={data}
+            margin={{ top: 12, right: 16, left: 0, bottom: 20 }}
+            maxBarSize={getBarSize()}
+          >
+            <CartesianGrid
+              strokeDasharray="2 4"
+              stroke="#374151"
+              opacity={0.25}
+              horizontal
+              vertical={false}
+            />
+
+            <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#94a3b8", fontSize: 11 }}
+              tickFormatter={(v) => {
+                if (Math.abs(v) >= 1000)
+                  return (currency === "USD" ? "$" : "R$") + Math.round(v / 1000) + "k";
+                return (currency === "USD" ? "$" : "R$") + Math.round(v);
+              }}
+            />
+
             <Tooltip content={<CustomTooltip />} />
+
             <Bar dataKey="value" shape={<CustomBar />} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* legenda customizada (logo + nome + tipo + valor) */}
-      <div style={{
-        marginTop: 12,
-        display: 'flex',
-        gap: 12,
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        {data.map(d => (
-          <div key={d.id || d.name} style={{ display:'flex', alignItems:'center', gap:8, color:'#94a3b8', minWidth:140 }}>
-            <div style={{ width:12, height:12, borderRadius:2, background: getTypeColor(d.type) }} />
-            {d.logo
-              ? <img src={d.logo} alt={d.name} style={{ width:48, height:18, objectFit:'contain' }} />
-              : <div style={{ width:48, height:18 }} />
-            }
-            <div style={{ display:'flex', flexDirection:'column' }}>
-              <span style={{ color:'#fff', fontWeight:600 }}>{d.name}</span>
-              <span style={{ fontSize:12, color:'#9aa4b2' }}>({d.type}) • {fmt(d.value)}</span>
+      {/* legenda */}
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        {data.map((d) => (
+          <div
+            key={d.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: "#94a3b8",
+              minWidth: 140,
+            }}
+          >
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 2,
+                background: getFirmColor(d.id),
+              }}
+            />
+
+            {d.logo ? (
+              <img
+                src={d.logo}
+                alt={d.name}
+                style={{ width: 48, height: 18, objectFit: "contain" }}
+              />
+            ) : (
+              <div style={{ width: 48, height: 18 }} />
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ color: "#fff", fontWeight: 600 }}>{d.name}</span>
+              <span style={{ fontSize: 12, color: "#9aa4b2" }}>
+                {fmt(d.value)}
+              </span>
             </div>
           </div>
         ))}
@@ -1295,120 +1389,145 @@ function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
   );
 }
 
+
 function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
   const { payouts = [], accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {};
-  const { currency = 'USD', rate = 1 } = useCurrency() || {};
-  const [firms, setFirms] = useState ([])
-   useEffect(() => {
-   const data = getAll()
-   setFirms(data.firms || [])
-   }, [])
+  const { currency = "USD", rate = 1 } = useCurrency() || {};
+  const [firms, setFirms] = React.useState([]);
 
-  // === cores DENTRO do componente ===
-  const getTypeColor = React.useCallback((type) => {
-    const cls =
-      type === 'Forex'   ? 'lavander' :
-      type === 'Cripto'  ? 'orange'   :
-      type === 'Futures' ? 'pink'     :
-      type === 'Personal'? 'purple'   :
-                          'gray';
-    const span = document.createElement('span');
-    span.className = `pill ${cls}`;
-    document.body.appendChild(span);
-    const c = getComputedStyle(span).color || '#888';
-    document.body.removeChild(span);
-    return c;
+  React.useEffect(() => {
+    const data = getAll();
+    setFirms(data.firms || []);
   }, []);
-  // =================================================
 
+  // PEGAR cor da empresa pelo firmId
+  const getFirmColor = React.useCallback(
+    (firmId) => {
+      const f = firms.find((x) => x.id === firmId);
+      return f?.color || "#6b7280"; // fallback cinza
+    },
+    [firms]
+  );
+
+  // formatador
   const fmt = (v) => {
-    if (currency === 'USD')
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0);
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
+    if (currency === "USD")
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0);
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
   };
 
-  // soma payouts por firm através das contas associadas (robusto)
+  // soma payouts para cada firm
   const data = React.useMemo(() => {
-    const totals = {}; // firmId => total (em currency já convertida)
-    payouts.forEach(p => {
-      const amountRaw = (p.amountReceived ?? p.amount ?? 0); // prefer amountReceived como usado na lista
-      const amount = currency === 'USD' ? amountRaw : amountRaw * rate;
+    const totals = {};
 
-      // se payout tem firmId direto, some nele
+    payouts.forEach((p) => {
+      const amountRaw = p.amountReceived ?? p.amount ?? 0;
+      const amount = currency === "USD" ? amountRaw : amountRaw * rate;
+
+      // 1 — payout já vem com firmId direto
       if (p.firmId) {
         totals[p.firmId] = (totals[p.firmId] || 0) + amount;
         return;
       }
 
-      // se tem accountIds (array) some para cada conta -> firm
-      if (Array.isArray(p.accountIds) && p.accountIds.length) {
-        p.accountIds.forEach(accId => {
-          const acc = accounts.find(a => a.id === accId);
-          if (!acc) return;
-          if (!acc.firmId) return;
-          totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+      // 2 — lista de accountIds
+      if (Array.isArray(p.accountIds)) {
+        p.accountIds.forEach((accId) => {
+          const acc = accounts.find((a) => a.id === accId);
+          if (acc?.firmId) {
+            totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+          }
         });
         return;
       }
 
-      // se tem accountId individual
+      // 3 — accountId único
       if (p.accountId) {
-        const acc = accounts.find(a => a.id === p.accountId);
-        if (acc && acc.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+        const acc = accounts.find((a) => a.id === p.accountId);
+        if (acc?.firmId) {
+          totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+        }
         return;
       }
 
-      // se tem accounts por nome (string array) ou accountName
-      if (Array.isArray(p.accounts) && p.accounts.length) {
-        p.accounts.forEach(name => {
-          const acc = accounts.find(a => a.name === name);
-          if (!acc || !acc.firmId) return;
-          totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+      // 4 — payouts antigos por nome
+      if (Array.isArray(p.accounts)) {
+        p.accounts.forEach((name) => {
+          const acc = accounts.find((a) => a.name === name);
+          if (acc?.firmId) {
+            totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+          }
         });
         return;
       }
+
       if (p.accountName) {
-        const acc = accounts.find(a => a.name === p.accountName);
-        if (acc && acc.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+        const acc = accounts.find((a) => a.name === p.accountName);
+        if (acc?.firmId) {
+          totals[acc.firmId] = (totals[acc.firmId] || 0) + amount;
+        }
       }
     });
 
-    // construir array de firms (mantendo ordem das firms)
-    return firms.map(f => ({
+    return firms.map((f) => ({
       id: f.id,
       name: f.name,
       logo: f.logo,
-      type: f.type || '',
-      value: totals[f.id] || 0
+      type: f.type,
+      color: f.color, // adicionar para facilitar
+      value: totals[f.id] || 0,
     }));
   }, [payouts, accounts, firms, currency, rate]);
 
+  // Tooltip com cor da firm
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload || !payload.length) return null;
     const d = payload[0].payload;
-    const borderColor = getTypeColor(d.type);
+
+    const borderColor = getFirmColor(d.id);
+
     return (
-      <div style={{
-        background: '#0f1218',
-        border: `2px solid ${borderColor}`,
-        borderRadius: 8,
-        padding: 12,
-        boxShadow: '0 6px 18px rgba(0,0,0,0.4)',
-        color: '#fff',
-        minWidth: 160
-      }}>
-        {d.logo && <img src={d.logo} alt={d.name} style={{width:80,height:24,objectFit:'contain',display:'block',marginBottom:8}} />}
-        <div style={{fontWeight:700, marginBottom:4}}>{d.name}</div>
-        <div style={{color:'#94a3b8', fontSize:12, marginBottom:8}}>({d.type})</div>
-        <div style={{color:borderColor, fontWeight:700}}>{fmt(d.value)}</div>
+      <div
+        style={{
+          background: "#0f1218",
+          border: `2px solid ${borderColor}`,
+          borderRadius: 8,
+          padding: 12,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+          color: "#fff",
+          minWidth: 160,
+        }}
+      >
+        {d.logo && (
+          <img
+            src={d.logo}
+            alt={d.name}
+            style={{
+              width: 80,
+              height: 24,
+              objectFit: "contain",
+              display: "block",
+              marginBottom: 8,
+            }}
+          />
+        )}
+
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
+        <div style={{ color: "#94a3b8", fontSize: 12, marginBottom: 8 }}>
+          ({d.type})
+        </div>
+        <div style={{ color: borderColor, fontWeight: 700 }}>{fmt(d.value)}</div>
       </div>
     );
   };
 
+  // Barra usa firm.color
   const CustomBar = (props) => {
     const { x, y, width, height, payload } = props;
-    const color = getTypeColor(payload?.type);
     if (width <= 0 || height <= 0) return null;
+
+    const color = getFirmColor(payload?.id);
+
     return <rect x={x} y={y} width={width} height={height} rx={6} ry={6} fill={color} />;
   };
 
@@ -1424,38 +1543,87 @@ function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
   return (
     <div className="card">
       <h3>🧾 Payouts por Empresa</h3>
+
       <div style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 20 }} maxBarSize={getBarSize()}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v)=>{
-              if (Math.abs(v) >= 1000) return (currency === 'USD' ? '$' : 'R$') + Math.round(v/1000) + 'k';
-              return (currency === 'USD' ? '$' : 'R$') + Math.round(v);
-            }} />
+          <BarChart
+            data={data}
+            margin={{ top: 12, right: 16, left: 0, bottom: 20 }}
+            maxBarSize={getBarSize()}
+          >
+            <CartesianGrid
+              strokeDasharray="2 4"
+              stroke="#374151"
+              opacity={0.25}
+              horizontal
+              vertical={false}
+            />
+
+            <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} />
+
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: "#94a3b8", fontSize: 11 }}
+              tickFormatter={(v) => {
+                if (Math.abs(v) >= 1000)
+                  return (currency === "USD" ? "$" : "R$") + Math.round(v / 1000) + "k";
+                return (currency === "USD" ? "$" : "R$") + Math.round(v);
+              }}
+            />
+
             <Tooltip content={<CustomTooltip />} />
+
             <Bar dataKey="value" shape={<CustomBar />} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div style={{
-        marginTop: 12,
-        display: 'flex',
-        gap: 12,
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        {data.map(d => (
-          <div key={d.id || d.name} style={{ display:'flex', alignItems:'center', gap:8, color:'#94a3b8', minWidth:140 }}>
-            <div style={{ width:12, height:12, borderRadius:2, background: getTypeColor(d.type) }} />
-            {d.logo
-              ? <img src={d.logo} alt={d.name} style={{ width:48, height:18, objectFit:'contain' }} />
-              : <div style={{ width:48, height:18 }} />
-            }
-            <div style={{ display:'flex', flexDirection:'column' }}>
-              <span style={{ color:'#fff', fontWeight:600 }}>{d.name}</span>
-              <span style={{ fontSize:12, color:'#9aa4b2' }}>({d.type}) • {fmt(d.value)}</span>
+      {/* legenda */}
+      <div
+        style={{
+          marginTop: 12,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        {data.map((d) => (
+          <div
+            key={d.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: "#94a3b8",
+              minWidth: 140,
+            }}
+          >
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: 2,
+                background: getFirmColor(d.id),
+              }}
+            />
+
+            {d.logo ? (
+              <img
+                src={d.logo}
+                alt={d.name}
+                style={{ width: 48, height: 18, objectFit: "contain" }}
+              />
+            ) : (
+              <div style={{ width: 48, height: 18 }} />
+            )}
+
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ color: "#fff", fontWeight: 600 }}>{d.name}</span>
+              <span style={{ fontSize: 12, color: "#9aa4b2" }}>
+                ({d.type}) • {fmt(d.value)}
+              </span>
             </div>
           </div>
         ))}
@@ -1465,32 +1633,123 @@ function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
 }
 
 
-function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
-  const { accounts } = useFiltered(accountStatusFilter, dateFilter)
-  
+function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
+  const { accounts } = useFiltered(accountStatusFilter, dateFilter);
+
+  const [firms, setFirms] = React.useState([]);
+
+  React.useEffect(() => {
+    const data = getAll();
+    setFirms(data.firms || []);
+  }, []);
+
   const recentAccounts = accounts
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
-    .slice(0, 5)
-  
+    .slice(0, 5);
+
+  const getFirm = (firmId) => firms.find((f) => f.id === firmId) || null;
+
   return (
     <div className="card">
       <h3>🗂️ Visão geral das contas</h3>
+
       <table>
-        <thead><tr><th>Conta</th><th>Categoria</th><th>Status</th><th>Funding</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Conta</th>
+            <th>Categoria</th>
+            <th>Firm</th> {/* ← NOVA COLUNA */}
+            <th>Status</th>
+            <th>Funding</th>
+          </tr>
+        </thead>
+
         <tbody>
-          {recentAccounts.map(a=>(
-            <tr key={a.id}>
-              <td>{a.name}</td>
-              <td><span className={'pill ' +(a.type=== 'Forex' ? 'lavander':a.type === 'Cripto' ? 'orange': a.type === 'Futures' ? 'pink': a.type === 'Personal' ? 'purple' : 'gray')}>{a.type}</span></td>
-              <td><span className={'pill '+(a.status==='Live'?'green':a.status==='Funded'?'blue':a.status==='Challenge'?'yellow':a.status==='Challenge Concluido'?'yellow':'gray')}>{a.status}</span></td>
-              <td>${a.currentFunding.toLocaleString()}</td>
-            </tr>
-          ))}
+          {recentAccounts.map((a) => {
+            const firm = getFirm(a.firmId);
+
+            return (
+              <tr key={a.id}>
+                <td>{a.name}</td>
+
+                {/* Categoria */}
+                <td>
+                  <span
+                    className={
+                      "pill " +
+                      (a.type === "Forex"
+                        ? "lavander"
+                        : a.type === "Cripto"
+                        ? "orange"
+                        : a.type === "Futures"
+                        ? "pink"
+                        : a.type === "Personal"
+                        ? "purple"
+                        : "gray")
+                    }
+                  >
+                    {a.type}
+                  </span>
+                </td>
+
+                {/* NOVA COLUNA: FIRM */}
+                <td>
+                  {firm ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {/* Logo pequena */}
+                      {firm.logo ? (
+                        <img
+                          src={firm.logo}
+                          alt={firm.name}
+                          style={{
+                            width: 22,
+                            height: 14,
+                            objectFit: "contain",
+                            opacity: 0.9,
+                          }}
+                        />
+                      ) : null}
+
+                      {/* Nome pequeno */}
+                      <span style={{ fontSize: 12, color: "#cbd5e1" }}>
+                        {firm.name}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+
+                {/* Status */}
+                <td>
+                  <span
+                    className={
+                      "pill " +
+                      (a.status === "Live"
+                        ? "green"
+                        : a.status === "Funded"
+                        ? "blue"
+                        : a.status === "Challenge"
+                        ? "yellow"
+                        : a.status === "Challenge Concluido"
+                        ? "yellow"
+                        : "gray")
+                    }
+                  >
+                    {a.status}
+                  </span>
+                </td>
+
+                <td>${a.currentFunding.toLocaleString()}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
-  )
+  );
 }
+
 
 /* =========================================================
    5) Página principal

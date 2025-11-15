@@ -151,3 +151,191 @@ tr:hover td { background: rgba(39,48,68,0.24); }
 .navbar .drive-status .btn {
   padding: 6px 10px;
 }
+
+/* ===========================================================
+   INLINE EDITING FOR ACCOUNTS TABLE
+   =========================================================== */
+/* ===========================================================
+   INLINE EDITING FOR ACCOUNTS TABLE
+   =========================================================== */
+
+.acc-inline-display {
+  padding: 4px 8px;
+  cursor: pointer;
+  min-width: 60px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.acc-inline-display:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.acc-inline-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(21, 23, 32, 0.95);
+  color: #f1f1f1;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border 0.15s ease, background 0.15s ease;
+}
+
+.acc-inline-input:focus {
+  border-color: #4a90e2;
+  background: rgba(30, 33, 45, 0.95);
+}
+
+/* ===========================================================
+   PILLS (badges coloridos)
+   =========================================================== */
+
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.pink    { background: #ff4fa3; color: white; }
+.lavander{ background: #8b5cf6; color: white; }
+.orange  { background: #f97316; color: white; }
+.purple  { background: #a855f7; color: white; }
+.green   { background: #22c55e; color: white; }
+.blue    { background: #3b82f6; color: white; }
+.yellow  { background: #facc15; color: #1f2937; }
+.gray    { background: #6b7280; color: white; }
+
+/* ===========================================================
+   CUSTOM DROPDOWN (estilo igual ao filtro de status)
+   =========================================================== */
+
+.custom-dropdown-menu {
+  position: fixed;
+  z-index: 99999;
+  background: var(--card-bg, #1e1e2b);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 6px 0;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* Scroll estilizado e suave */
+.custom-dropdown-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-dropdown-menu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  margin: 4px 0;
+}
+
+.custom-dropdown-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.custom-dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Firefox */
+.custom-dropdown-menu {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.02);
+}
+
+.custom-dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s ease;
+}
+
+.custom-dropdown-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* Indicador visual quando tem scroll */
+.custom-dropdown-menu::before,
+.custom-dropdown-menu::after {
+  content: '';
+  position: sticky;
+  display: block;
+  height: 8px;
+  margin: 0 -6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.custom-dropdown-menu::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--card-bg, #1e1e2b) 0%, transparent 100%);
+}
+
+.custom-dropdown-menu::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--card-bg, #1e1e2b) 0%, transparent 100%);
+}
+
+/* ===========================================================
+   BOTÃO SALVAR
+   =========================================================== */
+
+.btn.accent {
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+}
+
+.btn.accent:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* ===========================================================
+   VALORES ROI
+   =========================================================== */
+
+.value-green {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.value-red {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* ===========================================================
+   MOBILE RESPONSIVE
+   =========================================================== */
+
+@media (max-width: 768px) {
+  .acc-inline-input {
+    font-size: 13px;
+    padding: 6px;
+  }
+
+  .pill {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  
+  .custom-dropdown-menu {
+    min-width: 150px;
+  }
+}

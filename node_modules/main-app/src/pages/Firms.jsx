@@ -14,7 +14,7 @@ const TYPES = ["Futures", "Forex", "Cripto", "Personal"];
 export default function FirmsPage() {
   const [firms, setFirms] = useState(() => getAll().firms || []);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", type: "Futures", logo: null });
+  const [form, setForm] = useState({ name: "", type: "Futures", logo: null, color: "#6366f1"  });
   const { currency, rate } = useCurrency();
   const fmt = (v) =>
   currency === 'USD'
@@ -44,13 +44,13 @@ export default function FirmsPage() {
     } else {
       await createFirm(form);
     }
-    setForm({ name: "", type: "Futures", logo: null });
+    setForm({ name: "", type: "Futures", logo: null, color: "#6366f1"  });
     setFirms(getAll().firms || []);
   };
 
   const onEdit = (f) => {
     setEditing(f);
-    setForm({ name: f.name, type: f.type, logo: f.logo || null });
+    setForm({ name: f.name, type: f.type, logo: f.logo || null, color: f.color || "#6366f1" });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -204,6 +204,23 @@ export default function FirmsPage() {
               ))}
             </select>
           </div>
+<div style={{ width: "120px" }}>
+  <label style={labelStyle}>Cor</label>
+  <input
+    type="color"
+    value={form.color || "#6366f1"}
+    onChange={(e) => setForm({ ...form, color: e.target.value })}
+    style={{
+      width: "100%",
+      height: "42px",
+      padding: 0,
+      border: "1px solid #3a3a4a",
+      borderRadius: "6px",
+      background: "#1a1a2a",
+      cursor: "pointer",
+    }}
+  />
+</div>
 
           <div style={{ width: "180px" }}>
             <label style={labelStyle}>Logo (PNG/JPG)</label>
@@ -247,7 +264,7 @@ export default function FirmsPage() {
               style={ghostButtonStyle}
               onClick={() => {
                 setEditing(null);
-                setForm({ name: "", type: "Futures", logo: null });
+                setForm({ name: "", type: "Futures", logo: null, color: "#6366f1" });
               }}
               onMouseEnter={(e) => e.target.style.backgroundColor = "#2a2a3a"}
               onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
@@ -264,6 +281,7 @@ export default function FirmsPage() {
           <thead>
             <tr>
               <th>Logo</th>
+              <th>Cor</th>
               <th>Nome</th>
               <th>Tipo</th>
               <th>Funding total</th>
@@ -295,6 +313,7 @@ return (
                     <span className="muted">—</span>
                   )}
                 </td>
+                <td data-label="Cor"> <div style={{width: 20,height: 20,borderRadius: 4,background: f.color || "#6366f1", border: "1px solid #555"}} /></td>
                 <td data-label="Nome">{f.name}</td>
                 <td data-label="Tipo">{f.type}</td>
                 <td data-label="Funding total">{fmt(s.totalFunding)}</td>

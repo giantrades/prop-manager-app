@@ -254,18 +254,33 @@ export function getAccountStats(accountId){
 /* --------------------
    FIRMS
    -------------------- */
+
 export function getFirms(){ return load().firms || [] }
 export function createFirm(partial){
   const data = load()
-  const f = { id: uuid(), name: partial.name || '', type: partial.type || 'Futures', logo: partial.logo || null, dateCreated: new Date().toISOString().slice(0,10), ...partial }
+  const f = { 
+    id: uuid(),
+    name: partial.name || '',
+    type: partial.type || 'Futures',
+    logo: partial.logo || null,
+    color: partial.color || '#6366f1',   // 👈 NOVO
+    dateCreated: new Date().toISOString().slice(0,10),
+    ...partial 
+  }
   data.firms.push(f); save(data); return f
 }
+
 export function updateFirm(id, patch){
   const data = load()
-  const idx = data.firms.findIndex(x=>x.id===id); if (idx===-1) return null
+  const idx = data.firms.findIndex(x=>x.id===id);
+  if (idx===-1) return null
+
   data.firms[idx] = { ...data.firms[idx], ...patch }
-  save(data); return data.firms[idx]
+
+  save(data)
+  return data.firms[idx]
 }
+
 export function deleteFirm(id){
   const data = load()
   data.firms = data.firms.filter(x=>x.id!==id)
