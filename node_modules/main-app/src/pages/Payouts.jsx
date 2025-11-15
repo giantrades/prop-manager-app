@@ -645,6 +645,23 @@ async function handleUploadForAccount(accountId, file) {
       console.log('✅ Autenticação concluída');
     }
 
+    // ✅ ADICIONE ESTA VERIFICAÇÃO:
+    const token = gapi?.client?.getToken();
+    if (!token) {
+      throw new Error('Token não encontrado. Faça login novamente.');
+    }
+    
+    // Verifica se token está muito próximo de expirar (menos de 2 minutos)
+    const expiresIn = (token.expires_at || 0) - Date.now();
+    if (expiresIn < 2 * 60 * 1000) {
+      alert('⚠️ Sua sessão do Google Drive expirou. Por favor, faça login novamente.');
+      await signIn();
+      
+      if (!isSignedIn()) {
+        throw new Error('Autenticação cancelada');
+      }
+    }
+
     // Busca dados da conta
     const account = accounts.find(a => a.id === accountId);
     if (!account) {
@@ -667,7 +684,7 @@ async function handleUploadForAccount(accountId, file) {
     // Mostra loading
     setUploadingMap(m => ({ ...m, [accountId]: true }));
 
-    // Cria/encontra pasta
+    // Cria/encontra pasta (SEM verificar token novamente)
     const folderId = await getOrCreateFolderByPath(folderSegments);
     console.log('✅ Pasta criada/encontrada, ID:', folderId);
 
@@ -691,7 +708,6 @@ async function handleUploadForAccount(accountId, file) {
 
     // Salva no estado
     if (!state.id) {
-      // Novo payout (ainda não salvo)
       setState(s => ({ 
         ...s, 
         attachments: { 
@@ -701,7 +717,6 @@ async function handleUploadForAccount(accountId, file) {
       }));
       console.log('💾 Anexo salvo no estado (novo payout)');
     } else {
-      // Payout existente (já salvo)
       store.setPayoutAttachment(state.id, accountId, attachment);
       console.log('💾 Anexo salvo no dataStore (payout existente)');
     }
