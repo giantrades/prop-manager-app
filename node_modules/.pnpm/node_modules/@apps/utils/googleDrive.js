@@ -263,7 +263,7 @@ export async function downloadFile(fileId) {
  * Retorna o folderId.
  */
 export async function getOrCreateFolderByName(name, parentId = null) {
-  await ensureValidToken();
+  //await ensureValidToken();
   const parentQ = parentId ? `'${parentId}' in parents and ` : '';
   const q = `${parentQ}name='${name.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res = await gapi.client.drive.files.list({ q, fields: 'files(id, name)' });
@@ -289,7 +289,7 @@ export async function getOrCreateFolderByName(name, parentId = null) {
  * Retorna o folderId da última pasta criada/encontrada.
  */
 export async function getOrCreateFolderByPath(segments = []) {
-  await ensureValidToken();
+ // await ensureValidToken();
   if (!Array.isArray(segments) || segments.length === 0) throw new Error('segments required');
   let parent = null;
   for (const seg of segments) {
@@ -303,7 +303,7 @@ export async function getOrCreateFolderByPath(segments = []) {
  * Retorna o objeto result (contendo id e webViewLink quando possível).
  */
 export async function uploadFileToFolder(folderId, file, fileName = null) {
-  await ensureValidToken();
+  //await ensureValidToken();
   if (!folderId) throw new Error('folderId required');
   const name = fileName || file.name || `file_${Date.now()}`;
 

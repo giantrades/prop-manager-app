@@ -632,34 +632,9 @@ async function handleUploadForAccount(accountId, file) {
     }
     console.log('✅ Google Drive inicializado');
 
-    // Verifica se está autenticado
+    // ✅ APENAS verifica se está logado, SEM verificar expiração
     if (!isSignedIn()) {
-      console.log('🔐 Usuário não autenticado, solicitando login...');
-      alert('Você precisa fazer login no Google Drive para anexar comprovantes.');
-      await signIn();
-      
-      // Verifica novamente após login
-      if (!isSignedIn()) {
-        throw new Error('Autenticação cancelada pelo usuário');
-      }
-      console.log('✅ Autenticação concluída');
-    }
-
-    // ✅ ADICIONE ESTA VERIFICAÇÃO:
-    const token = gapi?.client?.getToken();
-    if (!token) {
-      throw new Error('Token não encontrado. Faça login novamente.');
-    }
-    
-    // Verifica se token está muito próximo de expirar (menos de 2 minutos)
-    const expiresIn = (token.expires_at || 0) - Date.now();
-    if (expiresIn < 2 * 60 * 1000) {
-      alert('⚠️ Sua sessão do Google Drive expirou. Por favor, faça login novamente.');
-      await signIn();
-      
-      if (!isSignedIn()) {
-        throw new Error('Autenticação cancelada');
-      }
+      throw new Error('Você precisa estar logado no Google Drive. Por favor, faça login na página de configurações.');
     }
 
     // Busca dados da conta
@@ -684,7 +659,7 @@ async function handleUploadForAccount(accountId, file) {
     // Mostra loading
     setUploadingMap(m => ({ ...m, [accountId]: true }));
 
-    // Cria/encontra pasta (SEM verificar token novamente)
+    // Cria/encontra pasta
     const folderId = await getOrCreateFolderByPath(folderSegments);
     console.log('✅ Pasta criada/encontrada, ID:', folderId);
 
