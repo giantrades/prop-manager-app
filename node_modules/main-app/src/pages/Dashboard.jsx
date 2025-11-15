@@ -583,13 +583,26 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
       ? new Date(v).toLocaleDateString('pt-BR',{month:'short', year:'2-digit'})
       : new Date(v).toLocaleDateString('pt-BR',{day:'2-digit', month:'short'})
 
-  const fmtVal = (v)=>{
-    if (v==null) return ''
-    const abs = Math.abs(v)
-    const sign = v<0 ? '-' : ''
-    const sym = currency==='USD' ? '$' : ''
-    return abs>=1000 ? `${sign}${sym}${(abs/1000).toFixed(0)}k` : `${sign}${sym}${abs.toFixed(0)}`
+  const fmtVal = (v) => {
+  if (v == null) return '';
+  
+  // Formata com separadores de milhar
+  if (currency === 'USD') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(v);
+  } else {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(v);
   }
+};
 
   const Tip = ({active,payload,label})=>{
     if (!active || !payload?.length) return null
