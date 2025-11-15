@@ -329,9 +329,6 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) 
   const effectiveCats = (!selCats?.length || isMarkAllActive) ? allCats : selCats
   const catSet = new Set(effectiveCats)
 
-  const accById   = Object.fromEntries(accounts.map(a => [a.id, a]))
-  const accByName = Object.fromEntries(accounts.map(a => [a.name, a]))
-
   // ✅ APLICAR todos os filtros de uma vez (categoria, timeRange, status E data)
   const filteredAccounts = accounts.filter(a => {
     const matchesCategory = catSet.has(a.type);
@@ -351,7 +348,9 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) 
     
     return matchesCategory && matchesTimeRange && matchesStatus && matchesDateFilter;
   });
-
+// ✅ DEPOIS (correto)
+const accById   = Object.fromEntries(filteredAccounts.map(a => [a.id, a]))
+const accByName = Object.fromEntries(filteredAccounts.map(a => [a.name, a]))
   const payoutBelongs = (p) => {
     const d = new Date(p.dateCreated || p.date)
     if (isNaN(+d) || d < start) return false
@@ -365,17 +364,12 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) 
       if (d < startDate || d > endDate) return false;
     }
     
-    const direct = p.type || p.category
-    if (direct && catSet.has(direct)) {
-      return true;
-    }
     
     const checkAccountStatus = (acc) => {
-      if (!acc) return false;
-      const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
-                           accountStatusFilter.includes(acc.status?.toLowerCase());
-      return catSet.has(acc.type) && matchesStatus;
-    };
+  if (!acc) return false;
+  // ✅ Apenas verifica categoria - status já foi filtrado nos maps
+  return catSet.has(acc.type);
+};
     
     if (Array.isArray(p.accountIds) && p.accountIds.some(id => checkAccountStatus(accById[id]))) return true;
     if (p.accountId && checkAccountStatus(accById[p.accountId])) return true;
