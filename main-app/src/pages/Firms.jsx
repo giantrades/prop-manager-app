@@ -318,7 +318,59 @@ return (
                 <td data-label="Tipo">{f.type}</td>
                 <td data-label="Funding total">{fmt(s.totalFunding)}</td>
                 <td data-label="Payouts total">{fmt(s.totalPayouts)}</td>
-                <td data-label="Contas">{s.accountCount}</td>
+                <td data-label="Contas">
+  {(() => {
+    if (s.accountCount === 0) return <span className="muted">0</span>;
+    
+    const allAccounts = getAll().accounts || [];
+    const firmAccounts = allAccounts.filter(a => a.firmId === f.id);
+    
+    const statusCounts = {
+      Live: firmAccounts.filter(a => a.status?.toLowerCase() === 'live').length,
+      Funded: firmAccounts.filter(a => a.status?.toLowerCase() === 'funded').length,
+      Challenge: firmAccounts.filter(a => a.status?.toLowerCase() === 'challenge').length,
+      'Ch. Concluido': firmAccounts.filter(a => a.status?.toLowerCase() === 'challenge concluido').length,
+    };
+    
+    // Mapa de cores (mesmas das pills)
+    const statusColors = {
+      Live: '#22c55e',        // verde
+      Funded: '#3b82f6',      // azul
+      Challenge: '#eab308',   // amarelo
+      'Ch. Concluido': '#eab308', // amarelo
+    };
+    
+    const activeStatuses = Object.entries(statusCounts)
+      .filter(([_, count]) => count > 0);
+    
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        {/* Número total */}
+        <strong style={{ fontSize: 15, color: 'var(--text)' }}>
+          {s.accountCount}
+        </strong>
+        
+        {/* Status coloridos */}
+        {activeStatuses.length > 0 && (
+          <span style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+            <span style={{ color: '#666' }}>(</span>
+            {activeStatuses.map(([status, count], index) => (
+              <React.Fragment key={status}>
+                <span style={{ color: statusColors[status], fontWeight: 500 }}>
+                  {status}: {count}
+                </span>
+                {index < activeStatuses.length - 1 && (
+                  <span style={{ color: '#666' }}>•</span>
+                )}
+              </React.Fragment>
+            ))}
+            <span style={{ color: '#666' }}>)</span>
+          </span>
+        )}
+      </div>
+    );
+  })()}
+</td>
                 <td data-label="Ações" style={{ textAlign: "right" }}>
                   <button className="btn ghost small" onClick={() => onEdit(f)}>
                     Editar
