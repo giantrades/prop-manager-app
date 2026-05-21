@@ -47,7 +47,10 @@ export type Trade = {
   updatedAt?: string;
   PartialExecutions?:PartialExecution[];
   isBreakeven?: boolean;
-    attachments?: {
+  source?: string; // e.g., 'quantower', 'ctrader', 'csv', 'manual'
+  platformTradeId?: string;
+  isLive?: boolean;
+  attachments?: {
     id: string;
     name: string;
     mimeType: string;

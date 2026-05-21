@@ -3,27 +3,37 @@ import { useCurrency } from '@apps/state'
 import { useFilters } from '@apps/state'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid
+  BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid,
+  AreaChart, Area
 } from 'recharts'
-import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
 import { getAllGoals } from '@apps/lib/dataStore';
+import LivePositions from '@apps/ui/LivePositions';
+import AccountPicker from '@apps/ui/AccountPicker';
+import { usePlatform } from '@apps/state/usePlatform';
+
 
 /* =========================================================
    1) Barra de filtros (categorias + range)
    ========================================================= */
-function FiltersBar({ 
-  categories, 
-  accountStatusFilter, 
+function FiltersBar({
+  categories,
+  accountStatusFilter,
   setAccountStatusFilter,
   statusDropdownOpen,
   setStatusDropdownOpen,
   statusDropdownRef,
   accountStatuses,
-  dateFilter = {start:null,end:null},
+  dateFilter = { start: null, end: null },
   setDateFilter,
   showCalendar,
   setShowCalendar,
-  calendarRef, 
+  calendarRef,
+  // AccountPicker props
+  selectedAccountIds,
+  setSelectedAccountIds,
+  allAccounts,
+  firms,
 }) {
   const {
     categories: sel,
@@ -35,269 +45,265 @@ function FiltersBar({
     isMarkAllActive
   } = useFilters()
 
-  const [catColors, setCatColors] = useState({})
+  const catColors = {
+    'Forex': '#8b5cf6',
+    'Cripto': '#f97316',
+    'Futures': '#ff4fa3',
+    'Personal': '#a855f7'
+  };
 
-  useEffect(() => {
-    const map = {}
-    const order = ['Forex','Cripto','Futures','Personal',
-      ...categories.filter(c => !['Forex','Cripto','Futures','Personal'].includes(c))]
-    order.forEach(cat => {
-      const cls =
-        cat==='Forex'   ? 'lavander' :
-        cat==='Cripto'  ? 'orange'   :
-        cat==='Futures' ? 'pink'     :
-        cat==='Personal'? 'purple'   : 'gray'
-      const span = document.createElement('span')
-      span.className = `pill ${cls}`
-      document.body.appendChild(span)
-      map[cat] = getComputedStyle(span).color
-      document.body.removeChild(span)
-    })
-    setCatColors(map)
-  }, [categories])
+  const chipStyle = (item, active) => {
+    const color = catColors[item] || 'var(--primary, #7c5cff)';
+    return {
+      borderColor: active ? color : 'rgba(255,255,255,0.06)',
+      backgroundColor: active ? `${color}22` : 'transparent',
+      color: active ? color : 'var(--text-secondary)'
+    };
+  };
 
-  const chipStyle = (item, active) => ({
-    borderColor: active ? (catColors[item] || 'var(--primary)') : 'var(--border)',
-    backgroundColor: active ? (catColors[item] || 'var(--primary)')+'33' : 'transparent',
-    color: active ? (catColors[item] || 'var(--primary)') : 'var(--text-secondary)'
-  })
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   return (
-    <div className="filters sticky-filters" style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: 24,
-      flexWrap: 'wrap'
-    }}>
-      {/* ESQUERDA: Filtros de Categoria */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 auto' }}>
-        <span>🔎 Filtros:</span>
-        <div style={{ display:'inline-flex', gap:8, flexWrap:'wrap' }}>
-          {categories.map(item=>{
-            const active = sel.includes(item)
-            return (
-              <button key={item}
-                className={`chip ${active?'active':''}`}
-                style={chipStyle(item, active)}
-                onClick={()=>toggleCategory(item)}
-              >
-                {active &&
-                  <span style={{
-                    display:'inline-block', width:8, height:8, borderRadius:'50%',
-                    backgroundColor: catColors[item] || 'var(--primary)', marginRight:6
-                  }}/>}
-                {item}
-              </button>
-            )
-          })}
-        </div>
-
-        <button
-          className={`chip ${isMarkAllActive ? 'active' : ''}`}
-          style={{
-            borderColor:'var(--primary)',
-            backgroundColor: isMarkAllActive ? 'var(--primary)20' : 'transparent',
-            color:'var(--primary)'
-          }}
-          onClick={()=>markAll(categories)}
-        >
-          ✅ Marcar todas
+    <div className="filters">
+      <div className="filters-toggle">
+        <button onClick={() => setFiltersOpen(v => !v)}>
+          {filtersOpen ? "Ocultar Filtros ▲" : "Mostrar Filtros ▼"}
         </button>
-
-        <button className="chip" onClick={clearCategories}>🧹 Limpar</button>
       </div>
 
-{/* ========== CENTRO: Filtro de Status de Conta ========== */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: 8,
-        flex: '0 0 auto',
-        justifyContent: 'center'
-      }}>
-        <div style={{ position: 'relative' }} ref={statusDropdownRef}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
-            className="input"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              minWidth: 180,
-              cursor: "pointer"
-            }}
-          >
-            {accountStatusFilter && accountStatusFilter.length > 0
-              ? `Status: ${accountStatusFilter.join(", ")}`
-              : "Filtrar Status"}
-            <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
-          </button>
+      <div className={`filters-content ${filtersOpen ? "open" : ""}`}>
+        {/* LEFT: Category Filters */}
+        <div className="filters-left">
+          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>🔎 Filters:</span>
+          <div className="category-chips">
+            {categories.map(item => {
+              const active = sel.includes(item)
+              return (
+                <button key={item}
+                  className={`chip ${active ? 'active' : ''}`}
+                  style={chipStyle(item, active)}
+                  onClick={() => toggleCategory(item)}
+                >
+                  {active &&
+                    <span style={{
+                      display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                      backgroundColor: catColors[item] || 'var(--primary, #7c5cff)', marginRight: 6
+                    }} />}
+                  {item}
+                </button>
+              )
+            })}
+          </div>
 
-          {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
-            <div
-              className="card"
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={`chip ${isMarkAllActive ? 'active' : ''}`}
               style={{
-                position: "absolute",
-                top: "110%",
-                left: 0,
-                zIndex: 9999,
-                background: "var(--card-bg, #1e1e2b)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                borderRadius: 8,
-                padding: "8px 10px",
-                boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-                minWidth: 200,
+                borderColor: 'var(--primary)',
+                backgroundColor: isMarkAllActive ? 'var(--primary)20' : 'transparent',
+                color: 'var(--primary)'
               }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={() => markAll(categories)}
             >
-              <div style={{ maxHeight: 220, overflowY: 'auto' }}>
-                {accountStatuses.map((status) => {
-                  const st = String(status || '');
-                  const checked = accountStatusFilter.includes(st);
-                  return (
-                    <label
-                      key={st}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "6px 4px",
-                        cursor: "pointer",
-                        fontSize: 14,
-                        color: "#e6e6e9",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? Array.from(new Set([...accountStatusFilter, st]))
-                            : accountStatusFilter.filter(s => s !== st);
-                          setAccountStatusFilter(next);
+              ✅ All
+            </button>
+            <button className="chip" onClick={clearCategories}>🧹 Clear</button>
+          </div>
+        </div>
+
+        {/* RIGHT: Status, Range, Calendar */}
+        <div className="filters-right">
+
+          {/* ========== Account Status Filter ========== */}
+          <div style={{ position: 'relative' }} ref={statusDropdownRef}>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(v => !v); }}
+              className={`chip account-status-chip ${accountStatusFilter?.length > 0 ? 'status-active' : ''}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                cursor: "pointer",
+                padding: '8px 16px'
+              }}
+            >
+              <span style={{ fontSize: 13 }}>
+                Account Status
+              </span>
+              <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
+            </button>
+
+            {statusDropdownOpen && accountStatuses && accountStatuses.length > 0 && (
+              <div
+                className="card"
+                style={{
+                  position: "absolute",
+                  top: "110%",
+                  left: 0,
+                  zIndex: 9999,
+                  background: "var(--bg, #0f1218)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+                  minWidth: 200,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {accountStatuses.map((status) => {
+                    const st = String(status || '');
+                    const checked = accountStatusFilter.includes(st);
+                    return (
+                      <label
+                        key={st}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "6px 4px",
+                          cursor: "pointer",
+                          fontSize: 14,
+                          color: "#e6e6e9",
+                          textTransform: "capitalize",
                         }}
-                        style={{ width: 16, height: 16 }}
-                      />
-                      <span>{st}</span>
-                    </label>
-                  );
-                })}
-              </div>
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? Array.from(new Set([...accountStatusFilter, st]))
+                              : accountStatusFilter.filter(s => s !== st);
+                            setAccountStatusFilter(next);
+                          }}
+                          style={{ width: 16, height: 16 }}
+                        />
+                        <span>{st}</span>
+                      </label>
+                    );
+                  })}
+                </div>
 
-              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                <button
-                  className="btn ghost small"
-                  style={{ flex: 1 }}
-                  onClick={() => setAccountStatusFilter(["live", "funded"])}
-                >
-                  Resetar padrão
-                </button>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn ghost small"
+                    style={{ flex: 1 }}
+                    onClick={() => setAccountStatusFilter(["live", "funded"])}
+                  >
+                    Reset Default
+                  </button>
 
-                <button
-                  className="btn ghost small"
-                  style={{ flex: 1 }}
-                  onClick={() => setAccountStatusFilter(accountStatuses.slice())}
-                >
-                  Marcar todos
-                </button>
+                  <button
+                    className="btn ghost small"
+                    style={{ flex: 1 }}
+                    onClick={() => setAccountStatusFilter(accountStatuses.slice())}
+                  >
+                    Select All
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* ========== Account Picker ========== */}
+          <AccountPicker
+            selectedIds={selectedAccountIds}
+            onChange={setSelectedAccountIds}
+            accounts={allAccounts}
+            firms={firms}
+            placeholder="Todas as contas"
+          />
+
+
+
+          {/* Time Range Filters */}
+          <div className="range">
+            {['7', '30', '180', '365', 'all'].map(r => (
+              <button key={r}
+                className={'chip ' + (timeRange === r ? 'active' : '')}
+                onClick={() => setRange(r)}
+              >
+                {r === '7' ? '7d' : r === '30' ? '30d' : r === '180' ? '180d' : r === '365' ? '1y' : 'All'}
+              </button>
+            ))}
+          </div>
+          {/* Calendário */}
+          <div style={{ position: 'relative', flex: '0 0 auto' }} ref={calendarRef}>
+            <button
+              className={`calendar-btn ${(dateFilter.start || dateFilter.end) ? 'active' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowCalendar(v => !v); }}
+              title="Filtrar por data"
+            >
+              <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </button>
+
+            {showCalendar && (
+              <div className="calendar-dropdown">
+                <div className="calendar-header">
+                  <h4 style={{ margin: 0, fontSize: 14, color: 'var(--text)' }}>Filter by Date</h4>
+                  {(dateFilter.start || dateFilter.end) && (
+                    <button
+                      className="btn ghost small"
+                      onClick={() => setDateFilter({ start: null, end: null })}
+                      style={{ fontSize: 11 }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <div className="calendar-label">Start Date</div>
+                  <input
+                    type="date"
+                    className="calendar-input"
+                    value={dateFilter.start || ''}
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <div className="calendar-label">End Date</div>
+                  <input
+                    type="date"
+                    className="calendar-input"
+                    value={dateFilter.end || ''}
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+                  />
+                </div>
+
+                <div className="calendar-actions">
+                  <button
+                    className="btn ghost small"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      const today = new Date().toISOString().split('T')[0];
+                      const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                      setDateFilter({ start: lastMonth, end: today });
+                    }}
+                  >
+                    Last Month
+                  </button>
+                  <button
+                    className="btn primary small"
+                    style={{ flex: 1 }}
+                    onClick={() => setShowCalendar(false)}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {/* DIREITA: Filtros de Range Temporal */}
-      <div className="range" style={{ 
-        display: 'flex', 
-        gap: 8,
-        flex: '0 0 auto',
-        justifyContent: 'flex-end'
-      }}>
-        {['7','30','180','365','all'].map(r=>(
-          <button key={r}
-            className={'chip '+(timeRange===r?'active':'')}
-            onClick={()=>setRange(r)}
-          >
-            {r==='7'?'7d':r==='30'?'30d':r==='180'?'180d':r==='365'?'1y':'All'}
-          </button>
-        ))}
-      </div>
-      {/* Calendário */}
-<div style={{ position: 'relative', flex: '0 0 auto' }} ref={calendarRef}>
-  <button
-    className={`calendar-btn ${(dateFilter.start || dateFilter.end) ? 'active' : ''}`}
-    onClick={(e) => { e.stopPropagation(); setShowCalendar(v => !v); }}
-    title="Filtrar por data"
-  >
-    <svg className="calendar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-      <line x1="16" y1="2" x2="16" y2="6"/>
-      <line x1="8" y1="2" x2="8" y2="6"/>
-      <line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-  </button>
-
-  {showCalendar && (
-    <div className="calendar-dropdown">
-      <div className="calendar-header">
-        <h4 style={{ margin: 0, fontSize: 14, color: 'var(--text)' }}>Filtrar por Data</h4>
-        {(dateFilter.start || dateFilter.end) && (
-          <button
-            className="btn ghost small"
-            onClick={() => setDateFilter({ start: null, end: null })}
-            style={{ fontSize: 11 }}
-          >
-            Limpar
-          </button>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div className="calendar-label">Data Início</div>
-        <input
-          type="date"
-          className="calendar-input"
-          value={dateFilter.start || ''}
-          onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <div className="calendar-label">Data Fim</div>
-        <input
-          type="date"
-          className="calendar-input"
-          value={dateFilter.end || ''}
-          onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
-        />
-      </div>
-
-      <div className="calendar-actions">
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => {
-            const today = new Date().toISOString().split('T')[0];
-            const lastMonth = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
-            setDateFilter({ start: lastMonth, end: today });
-          }}
-        >
-          Último mês
-        </button>
-        <button
-          className="btn primary small"
-          style={{ flex: 1 }}
-          onClick={() => setShowCalendar(false)}
-        >
-          Aplicar
-        </button>
-      </div>
-    </div>
-  )}
-</div>
     </div>
   )
 }
@@ -305,11 +311,12 @@ function FiltersBar({
 /* =========================================================
    2) Hook para filtrar contas/payouts e trazer firms
    ========================================================= */
-function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) {
+function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}, selectedAccountIds = []) {
+
   const [accounts, setAccounts] = useState([])
   const [payouts, setPayouts] = useState([])
   const [firms, setFirms] = useState([])
- 
+
   useEffect(() => {
     const data = getAll()
     setAccounts(data.accounts || [])
@@ -322,8 +329,8 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) 
   const now = new Date()
   const start = timeRange === 'all'
     ? new Date('1970-01-01')
-    : new Date(now.getTime() - parseInt(timeRange,10)*86400000)
-  start.setHours(0,0,0,0)
+    : new Date(now.getTime() - parseInt(timeRange, 10) * 86400000)
+  start.setHours(0, 0, 0, 0)
 
   const allCats = Array.from(new Set(accounts.map(a => a.type).filter(Boolean)))
   const effectiveCats = (!selCats?.length || isMarkAllActive) ? allCats : selCats
@@ -333,53 +340,57 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}) 
   const filteredAccounts = accounts.filter(a => {
     const matchesCategory = catSet.has(a.type);
     const matchesTimeRange = new Date(a.dateCreated) >= start;
-    const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 || 
-                         accountStatusFilter.includes(a.status?.toLowerCase());
-    
+    const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 ||
+      accountStatusFilter.includes(a.status?.toLowerCase());
+
     let matchesDateFilter = true;
     if (dateFilter?.start || dateFilter?.end) {
       const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01');
       const endDate = dateFilter.end ? new Date(dateFilter.end) : new Date();
       endDate.setHours(23, 59, 59, 999);
-      
+
       const createdDate = new Date(a.dateCreated);
       matchesDateFilter = createdDate >= startDate && createdDate <= endDate;
     }
-    
-    return matchesCategory && matchesTimeRange && matchesStatus && matchesDateFilter;
+
+    // AccountPicker filter (Nível adicional)
+    const matchesAccountPicker = selectedAccountIds.length === 0 || selectedAccountIds.includes(a.id);
+
+    return matchesCategory && matchesTimeRange && matchesStatus && matchesDateFilter && matchesAccountPicker;
   });
-// ✅ DEPOIS (correto)
-const accById   = Object.fromEntries(filteredAccounts.map(a => [a.id, a]))
-const accByName = Object.fromEntries(filteredAccounts.map(a => [a.name, a]))
+
+  // ✅ DEPOIS (correto)
+  const accById = Object.fromEntries(filteredAccounts.map(a => [a.id, a]))
+  const accByName = Object.fromEntries(filteredAccounts.map(a => [a.name, a]))
   const payoutBelongs = (p) => {
     const d = new Date(p.dateCreated || p.date)
     if (isNaN(+d) || d < start) return false
-    
+
     // Filtro de data do calendário
     if (dateFilter?.start || dateFilter?.end) {
       const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01');
       const endDate = dateFilter.end ? new Date(dateFilter.end) : new Date();
       endDate.setHours(23, 59, 59, 999);
-      
+
       if (d < startDate || d > endDate) return false;
     }
-    
-    
+
+
     const checkAccountStatus = (acc) => {
-  if (!acc) return false;
-  // ✅ Apenas verifica categoria - status já foi filtrado nos maps
-  return catSet.has(acc.type);
-};
-    
+      if (!acc) return false;
+      // ✅ Apenas verifica categoria - status já foi filtrado nos maps
+      return catSet.has(acc.type);
+    };
+
     if (Array.isArray(p.accountIds) && p.accountIds.some(id => checkAccountStatus(accById[id]))) return true;
     if (p.accountId && checkAccountStatus(accById[p.accountId])) return true;
-    
+
     if (Array.isArray(p.accounts)) {
       return p.accounts.some(n => checkAccountStatus(accByName[n]));
     }
-    
+
     if (p.accountName && checkAccountStatus(accByName[p.accountName])) return true;
-    
+
     return false;
   }
 
@@ -393,9 +404,10 @@ const accByName = Object.fromEntries(filteredAccounts.map(a => [a.name, a]))
   }
 }
 
-/*========================================================= 3) Cards resumo ========================================================= */ 
-function SummaryCards({ accountStatusFilter = [], dateFilter = {} }) {
-  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter)
+/*========================================================= 3) Cards resumo ========================================================= */
+function SummaryCards({ accountStatusFilter = [], dateFilter = {}, selectedAccountIds = [] }) {
+  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter, selectedAccountIds)
+
   const { currency, rate } = useCurrency()
 
   const totalFunding = accounts.reduce((s, a) => s + (a.currentFunding || 0), 0)
@@ -426,15 +438,15 @@ function SummaryCards({ accountStatusFilter = [], dateFilter = {} }) {
       <div className="card accent3"><h3>📈 %</h3><div className="stat">{(roi * 100).toFixed(2)}%</div></div>
 
       <div className="card accent4">
-        <h3>🧮 Contas Ativas</h3>
+        <h3>🧮 Active Accounts</h3>
         <div className="stat center">{noStatusSelected ? 0 : accounts.length}</div>
 
         <div className="muted" style={{ fontSize: 12, marginTop: 4, textAlign: 'center' }}>
           {noStatusSelected
-            ? 'Nenhum status selecionado'
+            ? 'No status selected'
             : allSelected
-              ? 'Todas as contas'
-              : `Filtradas: ${accountStatusFilter.join(', ')}`}
+              ? 'All accounts'
+              : `Filtered: ${accountStatusFilter.join(', ')}`}
         </div>
       </div>
     </div>
@@ -442,49 +454,50 @@ function SummaryCards({ accountStatusFilter = [], dateFilter = {} }) {
 }
 
 
-function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
+function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
   const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
   const { categories: selected, timeRange } = useFilters()
+  const [activeTab, setActiveTab] = React.useState('payouts') // 'payouts' ou 'funding'
 
   // util
-  const cur  = (v)=> currency==='USD' ? v : v*rate
-  const dStr = (d)=> new Date(d).toISOString().slice(0,10)
+  const cur = (v) => currency === 'USD' ? v : v * rate
+  const dStr = (d) => new Date(d).toISOString().slice(0, 10)
 
   // range do período (X-axis obedece ao filtro)
-  const range = React.useMemo(()=>{
+  const range = React.useMemo(() => {
     const end = new Date()
     let start
-    if (timeRange==='7')       start = new Date(end.getTime() - 6*86400000)
-    else if (timeRange==='30') start = new Date(end.getTime() - 29*86400000)
-    else if (timeRange==='180')start = new Date(end.getTime() - 179*86400000)
-    else if (timeRange==='365')start = new Date(end.getTime() - 364*86400000)
+    if (timeRange === '7') start = new Date(end.getTime() - 6 * 86400000)
+    else if (timeRange === '30') start = new Date(end.getTime() - 29 * 86400000)
+    else if (timeRange === '180') start = new Date(end.getTime() - 179 * 86400000)
+    else if (timeRange === '365') start = new Date(end.getTime() - 364 * 86400000)
     else {
       const min = allAccounts.length
-        ? Math.min(...allAccounts.map(a=>+new Date(a.dateCreated)))
+        ? Math.min(...allAccounts.map(a => +new Date(a.dateCreated)))
         : +end
       start = new Date(min)
     }
-    start.setHours(0,0,0,0); end.setHours(23,59,59,999)
+    start.setHours(0, 0, 0, 0); end.setHours(23, 59, 59, 999)
     return { start, end, startKey: dStr(start), endKey: dStr(end) }
   }, [allAccounts, timeRange])
 
   // categorias existentes
   const ALL_CATS = React.useMemo(
-    ()=> Array.from(new Set(allAccounts.map(a=>a.type))),
+    () => Array.from(new Set(allAccounts.map(a => a.type))),
     [allAccounts]
   )
 
   // "Total" quando nenhuma ou todas selecionadas
-  const showTotalOnly = selected.length===0 || selected.length===ALL_CATS.length
-  const activeCats    = showTotalOnly ? ALL_CATS : selected
+  const showTotalOnly = selected.length === 0 || selected.length === ALL_CATS.length
+  const activeCats = showTotalOnly ? ALL_CATS : selected
 
   // pega cores direto do CSS .pill
   const [catColors, setCatColors] = React.useState({})
-  React.useEffect(()=>{
-    const cls = (c)=> c==='Forex'?'lavander':c==='Cripto'?'orange':c==='Futures'?'pink':c==='Personal'?'purple':'gray'
+  React.useEffect(() => {
+    const cls = (c) => c === 'Forex' ? 'lavander' : c === 'Cripto' ? 'orange' : c === 'Futures' ? 'pink' : c === 'Personal' ? 'purple' : 'gray'
     const map = {}
-    for (const c of ALL_CATS){
+    for (const c of ALL_CATS) {
       const el = document.createElement('span')
       el.className = `pill ${cls(c)}`
       document.body.appendChild(el)
@@ -494,18 +507,18 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
     setCatColors(map)
   }, [ALL_CATS])
 
-  const colorFor = (k)=> k==='Total' ? '#34d399' : (catColors[k] || '#94a3b8')
+  const colorFor = (k) => k === 'Total' ? '#34d399' : (catColors[k] || '#94a3b8')
 
   // ---------- EVENTOS (APENAS DIAS COM MUDANÇA) ----------
   // funding: evento no dia de criação da conta (soma currentFunding da conta)
-  const fundingEvents = React.useMemo(()=>{
+  const fundingEvents = React.useMemo(() => {
     const ev = new Map() // dateKey -> {cat -> delta}
-    for (const a of accounts){
+    for (const a of accounts) {
       if (!activeCats.includes(a.type)) continue
       const key = dStr(a.dateCreated)
       if (new Date(key) < range.start || new Date(key) > range.end) continue
       const m = ev.get(key) || {}
-      m[a.type] = (m[a.type]||0) + (+a.currentFunding||0)
+      m[a.type] = (m[a.type] || 0) + (+a.currentFunding || 0)
       ev.set(key, m)
     }
     return ev
@@ -513,19 +526,19 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
 
   // payouts: para cada payout, soma amountReceived em TODAS as contas linkadas,
   // e credita na categoria de cada conta (duplicando quando várias contas compartilham o payout)
-  const payoutEvents = React.useMemo(()=>{
+  const payoutEvents = React.useMemo(() => {
     const ev = new Map() // dateKey -> {cat -> delta}
-    for (const p of payouts){
+    for (const p of payouts) {
       const key = dStr(p.dateCreated)
       if (new Date(key) < range.start || new Date(key) > range.end) continue
       const ids = p.accountIds || []
       if (!ids.length) continue
       let bucket = ev.get(key) || {}
-      for (const id of ids){
-        const acc = accounts.find(a=>a.id===id) || allAccounts.find(a=>a.id===id)
+      for (const id of ids) {
+        const acc = accounts.find(a => a.id === id) || allAccounts.find(a => a.id === id)
         if (!acc) continue
         if (!activeCats.includes(acc.type)) continue
-        bucket[acc.type] = (bucket[acc.type]||0) + (+p.amountReceived||0)
+        bucket[acc.type] = (bucket[acc.type] || 0) + (+p.amountReceived || 0)
       }
       ev.set(key, bucket)
     }
@@ -533,13 +546,13 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
   }, [payouts, accounts, allAccounts, activeCats, range])
 
   // ---------- BUILDER STEP (flat entre eventos) ----------
-  function buildStepSeries(eventsMap){
+  function buildStepSeries(eventsMap) {
     const dates = Array.from(eventsMap.keys()).sort()
     const cumByCat = Object.create(null)
     const rows = []
 
     // ponto inicial (início do range)
-    if (showTotalOnly){
+    if (showTotalOnly) {
       rows.push({ date: range.startKey, Total: cur(0) })
     } else {
       const row = { date: range.startKey }
@@ -547,15 +560,15 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
       rows.push(row)
     }
 
-    for (const key of dates){
+    for (const key of dates) {
       const deltas = eventsMap.get(key) || {}
       // aplica deltas do dia
-      for (const [cat,inc] of Object.entries(deltas)){
-        cumByCat[cat] = (cumByCat[cat]||0) + inc
+      for (const [cat, inc] of Object.entries(deltas)) {
+        cumByCat[cat] = (cumByCat[cat] || 0) + inc
       }
       // adiciona ponto APÓS mudança (stepAfter)
-      if (showTotalOnly){
-        const total = Object.values(cumByCat).reduce((s,v)=>s+v,0)
+      if (showTotalOnly) {
+        const total = Object.values(cumByCat).reduce((s, v) => s + v, 0)
         rows.push({ date: key, Total: cur(total) })
       } else {
         const row = { date: key }
@@ -565,54 +578,54 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
     }
 
     // força último ponto no fim do range (mantém flat até o fim)
-    if (rows.length===0 || rows[rows.length-1].date !== range.endKey){
-      const last = rows[rows.length-1] || (showTotalOnly ? {Total:cur(0)} : Object.fromEntries(activeCats.map(c=>[c,cur(0)])))
+    if (rows.length === 0 || rows[rows.length - 1].date !== range.endKey) {
+      const last = rows[rows.length - 1] || (showTotalOnly ? { Total: cur(0) } : Object.fromEntries(activeCats.map(c => [c, cur(0)])))
       rows.push({ ...last, date: range.endKey })
     }
     return rows
   }
 
-  const fundingData = React.useMemo(()=> buildStepSeries(fundingEvents), [fundingEvents, showTotalOnly, activeCats, currency, rate])
-  const payoutData  = React.useMemo(()=> buildStepSeries(payoutEvents),  [payoutEvents,  showTotalOnly, activeCats, currency, rate])
+  const fundingData = React.useMemo(() => buildStepSeries(fundingEvents), [fundingEvents, showTotalOnly, activeCats, currency, rate])
+  const payoutData = React.useMemo(() => buildStepSeries(payoutEvents), [payoutEvents, showTotalOnly, activeCats, currency, rate])
 
   const keys = showTotalOnly ? ['Total'] : activeCats.slice()
 
   // ------- formatadores iguais ao resto do app -------
-  const fmtTick = (v)=>
-    timeRange==='all'
-      ? new Date(v).toLocaleDateString('pt-BR',{month:'short', year:'2-digit'})
-      : new Date(v).toLocaleDateString('pt-BR',{day:'2-digit', month:'short'})
+  const fmtTick = (v) =>
+    timeRange === 'all'
+      ? new Date(v).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+      : new Date(v).toLocaleDateString('en-US', { day: '2-digit', month: 'short' })
 
   const fmtVal = (v) => {
-  if (v == null) return '';
-  
-  // Formata com separadores de milhar
-  if (currency === 'USD') {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(v);
-  } else {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(v);
-  }
-};
+    if (v == null) return '';
 
-  const Tip = ({active,payload,label})=>{
+    // Formata com separadores de milhar
+    if (currency === 'USD') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(v);
+    } else {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(v);
+    }
+  };
+
+  const Tip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
     return (
-      <div style={{background:'#0f1218',border:'1px solid #2a3246',borderRadius:8,padding:'8px 12px'}}>
-        <div style={{color:'#94a3b8',fontSize:12,marginBottom:4}}>
-          {new Date(label).toLocaleDateString('pt-BR')}
+      <div style={{ background: '#0f1218', border: '1px solid #2a3246', borderRadius: 8, padding: '8px 12px' }}>
+        <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4 }}>
+          {new Date(label).toLocaleDateString('en-US')}
         </div>
-        {payload.map((p,i)=>(
-          <div key={i} style={{color:p.color,fontWeight:600}}>
+        {payload.map((p, i) => (
+          <div key={i} style={{ color: p.color, fontWeight: 600 }}>
             {p.dataKey}: {fmtVal(p.value)}
           </div>
         ))}
@@ -620,63 +633,121 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
     )
   }
 
-  const AxisXProps = { dataKey:'date', axisLine:false, tickLine:false, tick:{fill:'#94a3b8',fontSize:11}, tickFormatter:fmtTick }
-  const AxisYProps = { axisLine:false, tickLine:false, tick:{fill:'#94a3b8',fontSize:11}, tickFormatter:fmtVal }
+  const AxisXProps = { dataKey: 'date', axisLine: false, tickLine: false, tick: { fill: '#94a3b8', fontSize: 11 }, tickFormatter: fmtTick }
+  const AxisYProps = { axisLine: false, tickLine: false, tick: { fill: '#94a3b8', fontSize: 11 }, tickFormatter: fmtVal }
 
-  const renderChart = (title, data) => (
+  const chartData = activeTab === 'payouts' ? payoutData : fundingData
+
+  return (
     <div className="card" style={{ paddingBottom: 16, marginBottom: 20 }}>
-      <h3 style={{ marginBottom: 12 }}>{title}</h3>
-      <div style={{height:300}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 18, color: '#f3f4f6' }}>
+          📈 Patrimônio & Financiamento
+        </h3>
+        
+        {/* Abas Premium */}
+        <div style={{
+          display: 'inline-flex',
+          background: '#0f172a',
+          border: '1px solid #1e293b',
+          borderRadius: 8,
+          padding: 3,
+        }}>
+          <button
+            onClick={() => setActiveTab('payouts')}
+            style={{
+              background: activeTab === 'payouts' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+              color: activeTab === 'payouts' ? '#ffffff' : '#94a3b8',
+              border: 'none',
+              borderRadius: 6,
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <span>💸</span> Payouts Retirados
+          </button>
+          <button
+            onClick={() => setActiveTab('funding')}
+            style={{
+              background: activeTab === 'funding' ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : 'transparent',
+              color: activeTab === 'funding' ? '#ffffff' : '#94a3b8',
+              border: 'none',
+              borderRadius: 6,
+              padding: '6px 12px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <span>💰</span> Funding de Contas
+          </button>
+        </div>
+      </div>
+
+      <div style={{ height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 15, right: 15, left: 40, bottom: 25 }}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.3} horizontal vertical={false}/>
+          <AreaChart data={chartData} margin={{ top: 15, right: 15, left: 40, bottom: 25 }}>
+            <defs>
+              {keys.map(k => {
+                const col = colorFor(k)
+                return (
+                  <linearGradient key={k} id={`grad-${k}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={col} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={col} stopOpacity={0.02} />
+                  </linearGradient>
+                )
+              })}
+            </defs>
+            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.3} horizontal vertical={false} />
             <XAxis {...AxisXProps} />
             <YAxis {...AxisYProps} />
-            <Tooltip content={<Tip/>} />
-            <Legend wrapperStyle={{ color:'#94a3b8', fontSize:12 }} />
-            {keys.map(k=>(
-            <Line
-  key={k+title}
-  type="monotone"              // agora linha fluida
-  dataKey={k}
-  stroke={colorFor(k)}
-  strokeWidth={2.5}
-  dot={(props) => {
-    // só desenhar bolinha se for evento real
-    const { cx, cy, payload } = props
-    const isEvent =
-      (title.includes("Funding")  && fundingEvents.has(payload.date)) ||
-      (title.includes("Payouts") && payoutEvents.has(payload.date))
-    if (!isEvent) return null
-    return (
-      <circle
-        key={`${payload.date}-${payload.dataKey}`} 
-        cx={cx}
-        cy={cy}
-        r={5}
-        stroke="#0f1218"
-        strokeWidth={2}
-        fill={colorFor(k)}
-      />
-    )
-  }}
-  activeDot={{ r: 6, stroke: '#0f1218', strokeWidth: 2 }}
-  name={k}
-  isAnimationActive={false}
-/>
-
+            <Tooltip content={<Tip />} />
+            <Legend wrapperStyle={{ color: '#94a3b8', fontSize: 12 }} />
+            {keys.map(k => (
+              <Area
+                key={k + activeTab}
+                type="monotone"
+                dataKey={k}
+                stroke={colorFor(k)}
+                strokeWidth={2.5}
+                fill={`url(#grad-${k})`}
+                dot={(props) => {
+                  const { cx, cy, payload } = props
+                  const isEvent =
+                    (activeTab === 'funding' && fundingEvents.has(payload.date)) ||
+                    (activeTab === 'payouts' && payoutEvents.has(payload.date))
+                  if (!isEvent) return null
+                  return (
+                    <circle
+                      key={`${payload.date}-${payload.dataKey}`}
+                      cx={cx}
+                      cy={cy}
+                      r={5}
+                      stroke="#0f1218"
+                      strokeWidth={2}
+                      fill={colorFor(k)}
+                    />
+                  )
+                }}
+                activeDot={{ r: 6, stroke: '#0f1218', strokeWidth: 2 }}
+                name={k}
+                isAnimationActive={false}
+              />
             ))}
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>
-  )
-
-  return (
-    <>
-      {renderChart('💸 Payouts acumulados ao longo do tempo', payoutData)}
-      {renderChart('💰 Funding acumulado ao longo do tempo', fundingData)}
-    </>
   )
 }
 
@@ -759,7 +830,7 @@ function FundingPerAccount({ accountStatusFilter = ["live", "funded"], dateFilte
 
   return (
     <div className="card">
-      <h3 style={{ marginBottom: "16px" }}>📦 Funding por conta</h3>
+      <h3 style={{ marginBottom: "16px" }}>📦 Funding by Account</h3>
 
       <div style={{ height: 240 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -835,7 +906,7 @@ function FundingPerAccount({ accountStatusFilter = ["live", "funded"], dateFilte
 }
 
 
-function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilter = {} }){
+function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilter = {} }) {
   // ✅ Usar useFiltered em vez de getAll() manual
   const { accounts } = useFiltered(accountStatusFilter, dateFilter);
   const { currency, rate } = useCurrency();
@@ -847,10 +918,10 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
     const colors = {};
     categories.forEach(cat => {
       const className = cat === 'Forex' ? 'lavander'
-                      : cat === 'Cripto' ? 'orange'
-                      : cat === 'Futures' ? 'pink'
-                      : cat === 'Personal' ? 'purple'
-                      : 'gray';
+        : cat === 'Cripto' ? 'orange'
+          : cat === 'Futures' ? 'pink'
+            : cat === 'Personal' ? 'purple'
+              : 'gray';
       const temp = document.createElement('span');
       temp.className = `pill ${className}`;
       document.body.appendChild(temp);
@@ -863,7 +934,7 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
 
   const byCat = useMemo(() => {
     const calculated = {};
-    for (const a of accounts){
+    for (const a of accounts) {
       calculated[a.type] = (calculated[a.type] || 0) + (currency === 'USD' ? a.currentFunding : a.currentFunding * rate);
     }
     return calculated;
@@ -884,7 +955,7 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
         : `R$${dataPoint.value.toLocaleString()}`;
       const percentage = ((dataPoint.value / total) * 100).toFixed(1);
       const color = categoryColors[dataPoint.name] || 'gray';
-      
+
       return (
         <div style={{
           background: '#0f1218',
@@ -903,8 +974,8 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
 
   return (
     <div className="card">
-      <h3>🧭 Funding por categoria</h3>
-      <div style={{height:280}}>
+      <h3>🧭 Funding by Category</h3>
+      <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" outerRadius={100}>
@@ -920,9 +991,9 @@ function FundingPerCategory({ accountStatusFilter = ["live", "funded"], dateFilt
 
       {/* Tabela redesenhada com divs e flexbox */}
       <div style={{
-        width:'100%',
-        marginTop:'1rem',
-        fontSize:'1rem'
+        width: '100%',
+        marginTop: '1rem',
+        fontSize: '1rem'
       }}>
         {data.map((row) => {
           const valueFormatted = currency === 'USD'
@@ -978,25 +1049,25 @@ function GoalsDistributionChart() {
       ...g,
       status:
         g.status === "in-progress" ? "inProgress" :
-        g.status === "not-started" ? "notStarted" :
-        g.status === "completed" ? "completed" :
-        g.status === "archived" ? "archived" : g.status
+          g.status === "not-started" ? "notStarted" :
+            g.status === "completed" ? "completed" :
+              g.status === "archived" ? "archived" : g.status
     }))
     setGoals(normalized)
   }, [])
 
-const stats = {
-  total: goals.filter(g => !g.archived).length, // só metas ativas
-  concluido: goals.filter(g => g.completed && !g.archived).length,
-  emProgresso: goals.filter(g => !g.completed && !g.archived).length,
-  arquivado: goals.filter(g => g.archived).length,
-}
+  const stats = {
+    total: goals.filter(g => !g.archived).length, // só metas ativas
+    concluido: goals.filter(g => g.completed && !g.archived).length,
+    emProgresso: goals.filter(g => !g.completed && !g.archived).length,
+    arquivado: goals.filter(g => g.archived).length,
+  }
 
 
   const chartData = [
-    { name: "Concluídos", value: stats.concluido },
-    { name: "Em Progresso", value: stats.emProgresso },
-    { name: "Arquivados", value: stats.arquivado },
+    { name: "Completed", value: stats.concluido },
+    { name: "In Progress", value: stats.emProgresso },
+    { name: "Archived", value: stats.arquivado },
   ]
 
   const colors = ["#10B981", "#8B5CF6", "#475569"]
@@ -1026,7 +1097,7 @@ const stats = {
 
   return (
     <div className="card">
-      <h3>🎯 Goals por Status</h3>
+      <h3>🎯 Goals by Status</h3>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -1098,7 +1169,7 @@ function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = 
   const fmtDate = (d) => {
     if (!d) return "--";
     const dt = new Date(d);
-    return dt.toLocaleDateString("pt-BR");
+    return dt.toLocaleDateString("en-US");
   };
 
   const navigateToPayout = (id) => {
@@ -1107,13 +1178,13 @@ function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = 
 
   return (
     <div className="card">
-      <h3>🧾 Payouts recentes</h3>
+      <h3>🧾 Recent Payouts</h3>
 
       <table>
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Tipo</th>
+            <th>Date</th>
+            <th>Type</th>
             <th>Status</th>
             <th>Net</th>
           </tr>
@@ -1141,12 +1212,12 @@ function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = 
                     (r.type === "Forex"
                       ? "lavander"
                       : r.type === "Cripto"
-                      ? "orange"
-                      : r.type === "Futures"
-                      ? "pink"
-                      : r.type === "Personal"
-                      ? "purple"
-                      : "gray")
+                        ? "orange"
+                        : r.type === "Futures"
+                          ? "pink"
+                          : r.type === "Personal"
+                            ? "purple"
+                            : "gray")
                   }
                 >
                   {r.type || "--"}
@@ -1161,8 +1232,8 @@ function RecentPayouts({ accountStatusFilter = ["live", "funded"], dateFilter = 
                     (r.status === "Completed"
                       ? "greenpayout"
                       : r.status === "Pending"
-                      ? "yellowpayout"
-                      : "gray")
+                        ? "yellowpayout"
+                        : "gray")
                   }
                 >
                   {r.status}
@@ -1306,7 +1377,7 @@ function FundingPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
 
   return (
     <div className="card">
-      <h3>💰 Fundings por Empresa</h3>
+      <h3>💰 Funding by Firm</h3>
 
       <div style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -1549,7 +1620,7 @@ function PayoutsPerFirmChart({ accountStatusFilter = ["live", "funded"], dateFil
 
   return (
     <div className="card">
-      <h3>🧾 Payouts por Empresa</h3>
+      <h3>🧾 Payouts by Firm</h3>
 
       <div style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -1658,14 +1729,14 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
 
   return (
     <div className="card">
-      <h3>🗂️ Visão geral das contas</h3>
+      <h3>🗂️ Accounts Overview</h3>
 
       <table>
         <thead>
           <tr>
-            <th>Conta</th>
-            <th>Categoria</th>
-            <th>Firm</th> {/* ← NOVA COLUNA */}
+            <th>Account</th>
+            <th>Category</th>
+            <th>Firm</th>
             <th>Status</th>
             <th>Funding</th>
           </tr>
@@ -1687,12 +1758,12 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
                       (a.type === "Forex"
                         ? "lavander"
                         : a.type === "Cripto"
-                        ? "orange"
-                        : a.type === "Futures"
-                        ? "pink"
-                        : a.type === "Personal"
-                        ? "purple"
-                        : "gray")
+                          ? "orange"
+                          : a.type === "Futures"
+                            ? "pink"
+                            : a.type === "Personal"
+                              ? "purple"
+                              : "gray")
                     }
                   >
                     {a.type}
@@ -1735,12 +1806,12 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
                       (a.status === "Live"
                         ? "green"
                         : a.status === "Funded"
-                        ? "blue"
-                        : a.status === "Challenge"
-                        ? "yellow"
-                        : a.status === "Challenge Concluido"
-                        ? "yellow"
-                        : "gray")
+                          ? "blue"
+                          : a.status === "Challenge"
+                            ? "yellow"
+                            : a.status === "Challenge Done"
+                              ? "yellow"
+                              : "gray")
                     }
                   >
                     {a.status}
@@ -1761,21 +1832,26 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
 /* =========================================================
    5) Página principal
    ========================================================= */
-export default function Dashboard(){
-  // ✅ PASSO 1: Estados para filtro de status de conta
+export default function Dashboard() {
+  // Platform live positions
+  const { livePositions } = usePlatform();
+  // Account status filter
   const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded"]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef(null);
-// Logo após accountStatusFilter
-const [dateFilter, setDateFilter] = useState({ start: null, end: null });
-const [showCalendar, setShowCalendar] = useState(false);
-const calendarRef = useRef(null);
-  // Pega todas as contas para montar os filtros
+  const [dateFilter, setDateFilter] = useState({ start: null, end: null });
+  const [showCalendar, setShowCalendar] = useState(false);
+  const calendarRef = useRef(null);
+  // AccountPicker state
+  const [selectedAccountIds, setSelectedAccountIds] = useState([]);
+  const [firms, setFirms] = useState([]);
+  // All accounts for filters
   const [allAccountsData, setAllAccountsData] = useState([]);
-  
+
   useEffect(() => {
     const data = getAll();
     setAllAccountsData(data.accounts || []);
+    setFirms(getFirms());
   }, []);
 
   const cats = useMemo(
@@ -1802,21 +1878,21 @@ const calendarRef = useRef(null);
     if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [statusDropdownOpen]);
-// Logo após o useEffect do statusDropdown
-useEffect(() => {
-  function onDocClick(e) {
-    if (!calendarRef.current) return;
-    if (!calendarRef.current.contains(e.target)) {
-      setShowCalendar(false);
+  // Logo após o useEffect do statusDropdown
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!calendarRef.current) return;
+      if (!calendarRef.current.contains(e.target)) {
+        setShowCalendar(false);
+      }
     }
-  }
-  if (showCalendar) document.addEventListener('mousedown', onDocClick);
-  return () => document.removeEventListener('mousedown', onDocClick);
-}, [showCalendar]);
+    if (showCalendar) document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showCalendar]);
   return (
-    <div className="dashboard-page"  style={{ gap: 20 }}>
-      <FiltersBar 
-        categories={cats} 
+    <div className="dashboard-page" style={{ gap: 20 }}>
+      <FiltersBar
+        categories={cats}
         accountStatusFilter={accountStatusFilter}
         setAccountStatusFilter={setAccountStatusFilter}
         statusDropdownOpen={statusDropdownOpen}
@@ -1828,22 +1904,32 @@ useEffect(() => {
         showCalendar={showCalendar}
         setShowCalendar={setShowCalendar}
         calendarRef={calendarRef}
+        selectedAccountIds={selectedAccountIds}
+        setSelectedAccountIds={setSelectedAccountIds}
+        allAccounts={allAccountsData}
+        firms={firms}
       />
-      <SummaryCards accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
-      <div className="grid" style={{gridTemplateColumns:'2fr 1fr', gap:16}}>
-        <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
-        <FundingPerCategory accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
+      <SummaryCards accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+      {/* Live Positions Widget — only shown when positions exist */}
+      {livePositions.length > 0 && (
+        <div className="card" style={{ marginBottom: 4 }}>
+          <LivePositions positions={livePositions} />
+        </div>
+      )}
+      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 16, overflow: 'hidden' }}>
+        <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+        <FundingPerCategory accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
         <GoalsDistributionChart dateFilter={dateFilter} />
       </div>
-      <div className="grid" style={{gridTemplateColumns:'1fr 1fr', gap:16}}>
-        <FundingPerAccount accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
-        <RecentPayouts accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <FundingPerAccount accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+        <RecentPayouts accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <FundingPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
-        <PayoutsPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter}/>
+        <FundingPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+        <PayoutsPerFirmChart accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
       </div>
-      <AccountsOverview accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} />
+      <AccountsOverview accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
     </div>
   )
 }

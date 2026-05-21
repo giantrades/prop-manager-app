@@ -3,9 +3,11 @@ import TradeTable from '../Components/TradeTable';
 import TradeForm from '../Components/TradeForm';
 import { useJournal } from '@apps/journal-state';
 import { useCurrency } from '@apps/state';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { getAll } from '@apps/lib/dataStore';
+import { AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { getAll, getFirms } from '@apps/lib/dataStore';
 import type { EnrichedTrade, Trade } from '../types/trade';
+import AccountPicker from '@apps/ui/AccountPicker';
+
 
 export default function TradesPage() {
   const [open, setOpen] = useState(false);
@@ -18,11 +20,6 @@ export default function TradesPage() {
     timeframe: ''
   });
 
-  const [searchAccount, setSearchAccount] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
-  const [accountStatusFilter, setAccountStatusFilter] = useState<string[]>(['live', 'funded']);
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  const statusDropdownRef = useRef<HTMLDivElement | null>(null);
   const [accounts, setAccounts] = useState(() => {
     try {
       return getAll().accounts || [];
@@ -30,15 +27,20 @@ export default function TradesPage() {
       return [];
     }
   });
+  const [firms, setFirms] = useState<any[]>([]);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+
 
   useEffect(() => {
     try {
       const data = getAll();
       setAccounts(data.accounts || []);
+      setFirms(getFirms() || []);
     } catch (err) {
       console.error('Erro ao atualizar contas:', err);
     }
   }, []);
+
 
   const { currency, rate } = useCurrency();
   const fmt = (v: number) =>
@@ -70,41 +72,39 @@ export default function TradesPage() {
     });
   }, [trades, accounts, strategies]);
 
-// === FILTRAGEM DE TRADES ===
-const accountStatuses = useMemo<string[]>(() => {
-  const all = (accounts || [])
-    .map((a) => a.status?.toLowerCase() || "")
-    .filter((s): s is string => !!s);
-  return Array.from(new Set(all));
-}, [accounts]);
+  // === FILTRAGEM DE TRADES ===
+  const filteredTrades = useMemo(() => {
+    let filtered = enrichedTrades;
 
-const filteredTrades = useMemo(() => {
-  let filtered = enrichedTrades;
+    // 🔹 Filtro por tipo de conta (dropdown All Markets)
+    if (filters.category) {
+      filtered = filtered.filter((t) => t.accountType === filters.category);
+    }
 
-  // 🔹 Filtro por tipo de conta
-  if (filters.category) {
-    filtered = filtered.filter((t) => t.accountType === filters.category);
-  }
+    // 🔹 Filtro por estratégia
+    if (filters.strategyId) {
+      filtered = filtered.filter((t) => t.strategyId === filters.strategyId);
+    }
 
-  // 🔹 Filtro por estratégia
-  if (filters.strategyId) {
-    filtered = filtered.filter((t) => t.strategyId === filters.strategyId);
-  }
+    // 🔹 Filtro pelo AccountPicker
+    if (selectedAccountIds.length > 0) {
+      filtered = filtered.filter((t) => {
+        // Verifica se a conta primária ou alguma das contas do trade está nos selecionados
+        if (t.accountId && selectedAccountIds.includes(t.accountId)) return true;
+        if (t.accounts && t.accounts.some((acc: any) => selectedAccountIds.includes(acc.accountId))) return true;
+        // Fallback p/ legacy name matching
+        const accNames = accounts.filter(a => selectedAccountIds.includes(a.id)).map(a => a.name);
+        if (t.accountName && accNames.includes(t.accountName)) return true;
+        return false;
+      });
+    }
 
-  // 🔹 Filtro por status de conta
-  if (accountStatusFilter.length > 0) {
-    filtered = filtered.filter((t) => {
-      const acc = accounts.find((a) => a.id === t.accountId);
-      const st = acc?.status?.toLowerCase();
-      return st && accountStatusFilter.includes(st);
-    });
-  }
+    return filtered.sort(
+      (a, b) =>
+        new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime()
+    );
+  }, [enrichedTrades, filters, selectedAccountIds, accounts]);
 
-  return filtered.sort(
-    (a, b) =>
-      new Date(b.entry_datetime).getTime() - new Date(a.entry_datetime).getTime()
-  );
-}, [enrichedTrades, filters, accountStatusFilter, accounts]);
 
 
   const filteredStats = useMemo(() => {
@@ -116,16 +116,104 @@ const filteredTrades = useMemo(() => {
     return { total, winrate, avgR, totalPnL };
   }, [filteredTrades]);
 
-  const equitySeries = useMemo(() => {
-    let acc = 0;
-    return filteredTrades
-      .slice()
-      .sort((a, b) => new Date(a.entry_datetime).getTime() - new Date(b.entry_datetime).getTime())
-      .map((t) => {
-        acc += t.result_net || 0;
-        return { x: t.entry_datetime, y: acc };
+  // 🔹 Payouts correspondentes às contas ativas
+  const activePayouts = useMemo(() => {
+    try {
+      const allPayouts = getAll().payouts || [];
+      return allPayouts.filter((p: any) => {
+        if (!selectedAccountIds || selectedAccountIds.length === 0) {
+          const allowedIds = accounts.map((a: any) => a.id);
+          return p.accountIds?.some((id: string) => allowedIds.includes(id)) || allowedIds.includes(p.accountId);
+        }
+        return p.accountIds?.some((id: string) => selectedAccountIds.includes(id)) || selectedAccountIds.includes(p.accountId);
       });
-  }, [filteredTrades]);
+    } catch {
+      return [];
+    }
+  }, [selectedAccountIds, accounts]);
+
+  const equitySeries = useMemo(() => {
+    const events: any[] = [];
+    const safeNumber = (n: any) => typeof n === "number" && !isNaN(n) ? n : Number(n) || 0;
+
+    // 1. Trades
+    (filteredTrades || [])
+      .forEach((t: any) => {
+        if (t.entry_datetime) {
+          events.push({
+            time: new Date(t.entry_datetime).getTime(),
+            dateStr: new Date(t.entry_datetime).toLocaleDateString("pt-BR"),
+            type: 'trade',
+            net: safeNumber(t.result_net),
+            trade: t
+          });
+        }
+      });
+
+    // 2. Payouts (ativos, ignorando Rejected)
+    activePayouts
+      .filter((p: any) => p && p.dateCreated && p.status?.toLowerCase() !== 'rejected')
+      .forEach((p: any) => {
+        let amount = 0;
+        if (selectedAccountIds && selectedAccountIds.length > 0) {
+          selectedAccountIds.forEach((id: string) => {
+            amount += p.splitByAccount?.[id]?.gross || (p.amountSolicited / (p.accountIds?.length || 1));
+          });
+        } else {
+          const allowedIds = accounts.map((a: any) => a.id);
+          allowedIds.forEach((id: string) => {
+            amount += p.splitByAccount?.[id]?.gross || (p.amountSolicited / (p.accountIds?.length || 1));
+          });
+        }
+
+        if (amount > 0) {
+          events.push({
+            time: new Date(p.dateCreated).getTime(),
+            dateStr: new Date(p.dateCreated).toLocaleDateString("pt-BR"),
+            type: 'payout',
+            net: -amount,
+            payout: p
+          });
+        }
+      });
+
+    // 3. Ordena cronologicamente
+    events.sort((a, b) => a.time - b.time);
+
+    // 4. Acumula
+    let cumPnL = 0;
+    let cumPayouts = 0;
+    const result: any[] = [];
+
+    events.forEach((ev: any) => {
+      if (ev.type === 'trade') {
+        cumPnL += ev.net;
+      } else if (ev.type === 'payout') {
+        cumPayouts += Math.abs(ev.net);
+      }
+
+      const bal = cumPnL - cumPayouts;
+
+      result.push({
+        time: ev.time,
+        x: ev.time,
+        entry_datetime: ev.dateStr,
+        y: +cumPnL.toFixed(2),
+        pnl: +cumPnL.toFixed(2),
+        balance: +bal.toFixed(2),
+        hasPayout: ev.type === 'payout',
+        payoutAmount: ev.type === 'payout' ? Math.abs(ev.net) : 0,
+        trade: ev.trade || null,
+        payoutDetail: ev.payout || null
+      });
+    });
+
+    if (result.length === 0) {
+      result.push({ entry_datetime: "", pnl: 0, balance: 0, y: 0 });
+    }
+
+    return result;
+  }, [filteredTrades, activePayouts, selectedAccountIds, accounts]);
 
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -139,140 +227,59 @@ const filteredTrades = useMemo(() => {
         </button>
       </div>
 
-{/* === FILTROS === */}
-<div className="filters-section">
-  {/* BOTÃO MOBILE */}
-  <button className="filters-toggle md:hidden" onClick={() => setFiltersOpen((o) => !o)}>
-    {filtersOpen ? '🔽 Ocultar Filtros' : '🔍 Mostrar Filtros'}
-  </button>
+      {/* === FILTROS === */}
+      <div className="filters-section" style={{ width: '100%', marginBottom: 16 }}>
+        {/* BOTÃO MOBILE */}
+        <button className="filters-toggle md:hidden" onClick={() => setFiltersOpen((o) => !o)}>
+          {filtersOpen ? '🔽 Ocultar Filtros' : '🔍 Mostrar Filtros'}
+        </button>
 
-  {/* CONTEÚDO DOS FILTROS */}
-  <div className={`filters-content ${filtersOpen ? 'open' : ''}`}>
-    <div className="card p-3 flex gap-4 flex-wrap items-center">
-      <span className="text-sm font-medium text-muted">🔎 Filtros:</span>
+        {/* CONTEÚDO DOS FILTROS */}
+        <div className={`filters-content ${filtersOpen ? 'open' : ''}`} style={{ width: '100%' }}>
+          <div className="card w-full p-3 flex gap-4 flex-wrap items-center" style={{ width: '100%' }}>
+            <span className="text-sm font-medium text-muted">🔎 Filtros:</span>
 
-      <select
-        className="input w-1/5 min-w-[150px]"
-        value={filters.category}
-        onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-      >
-        <option value="">All Markets</option>
-        {['Forex', 'Futures', 'Cripto'].map((c) => (
-          <option key={c}>{c}</option>
-        ))}
-      </select>
-
-      <select
-        className="input w-1/5 min-w-[150px]"
-        value={filters.strategyId}
-        onChange={(e) => setFilters({ ...filters, strategyId: e.target.value })}
-      >
-        <option value="">All Strategies</option>
-        {strategies.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
-{/* Filtro de Status de Conta */}
-<div className="status-dropdown" ref={statusDropdownRef}>
-  <button
-    type="button"
-    onClick={(e) => {
-      e.stopPropagation();
-      setStatusDropdownOpen((v) => !v);
-    }}
-    className="input"
-    style={{ display: "flex", justifyContent: "space-between", minWidth: 160 }}
-  >
-    {accountStatusFilter?.length > 0
-      ? `Status: ${accountStatusFilter.join(", ")}`
-      : "Filtrar Status"}
-    <span style={{ opacity: 0.7, marginLeft: 8 }}>▾</span>
-  </button>
-
-  {statusDropdownOpen && (
-    <div
-      className="card"
-      style={{
-        position: "absolute",
-        top: "110%",
-        left: 0,
-        zIndex: 9999,
-        background: "var(--card-bg, #1e1f2b)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        borderRadius: 8,
-        padding: "8px 10px",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-        minWidth: 200,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ maxHeight: 220, overflowY: "auto" }}>
-        {accountStatuses.map((status) => {
-          const st = String(status || "");
-          const checked = accountStatusFilter.includes(st);
-          return (
-            <label
-              key={st}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "6px 4px",
-                cursor: "pointer",
-                fontSize: 14,
-                color: "#e6e6e9",
-                textTransform: "capitalize",
-              }}
+            <select
+              className="input w-1/5 min-w-[150px]"
+              value={filters.category}
+              onChange={(e) => setFilters({ ...filters, category: e.target.value })}
             >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) => {
-                  const next = e.target.checked
-                    ? Array.from(new Set([...accountStatusFilter, st]))
-                    : accountStatusFilter.filter((s) => s !== st);
-                  setAccountStatusFilter(next);
-                }}
-                style={{ width: 16, height: 16 }}
-              />
-              <span>{st}</span>
-            </label>
-          );
-        })}
+              <option value="">All Markets</option>
+              {['Forex', 'Futures', 'Cripto'].map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+
+            <select
+              className="input w-1/5 min-w-[150px]"
+              value={filters.strategyId}
+              onChange={(e) => setFilters({ ...filters, strategyId: e.target.value })}
+            >
+              <option value="">All Strategies</option>
+              {strategies.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <AccountPicker
+              selectedIds={selectedAccountIds}
+              onChange={setSelectedAccountIds}
+              accounts={accounts}
+              firms={firms}
+              placeholder="Todas as contas"
+            />
+
+
+            <button
+              className="btn ghost"
+              onClick={() => setFilters({ account: '', category: '', strategyId: '', timeframe: '' })}
+            >
+              🧹 Limpar
+            </button>
+          </div>
+        </div>
       </div>
-
-      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => setAccountStatusFilter(["live", "funded"])}
-        >
-          Resetar padrão
-        </button>
-
-        <button
-          className="btn ghost small"
-          style={{ flex: 1 }}
-          onClick={() => setAccountStatusFilter(accountStatuses.slice())}
-        >
-          Marcar todos
-        </button>
-      </div>
-    </div>
-  )}
-</div>
-
-      <button
-        className="btn ghost"
-        onClick={() => setFilters({ account: '', category: '', strategyId: '', timeframe: '' })}
-      >
-        🧹 Limpar
-      </button>
-    </div>
-  </div>
-</div>
 
 
       {/* MÉTRICAS + GRÁFICO */}
@@ -302,144 +309,209 @@ const filteredTrades = useMemo(() => {
           </div>
         </div>
 
-{/* GRÁFICO */}
-{equitySeries.length > 0 && (
-  <div className="card chart-card">
-    <div className="flex items-center justify-between mb-3">
-      <h3>📈 Curva de Equity</h3>
-      <div className="muted">{filteredTrades.length} trades</div>
-    </div>
+        {/* GRÁFICO */}
+        {equitySeries.length > 0 && (
+          <div className="card chart-card">
+            <div className="flex items-center justify-between mb-3">
+              <h3>📈 Curva de Equity</h3>
+              <div className="muted">{filteredTrades.length} trades</div>
+            </div>
 
-    <div style={{ height: 300 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={equitySeries}
-          margin={{ top: 15, right: 15, left: 40, bottom: 25 }}
-        >
-          <CartesianGrid
-            strokeDasharray="2 4"
-            stroke="#374151"
-            opacity={0.3}
-            horizontal
-            vertical={false}
-          />
-          <XAxis
-            dataKey="x"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: "#94a3b8", fontSize: 11 }}
-            tickFormatter={(value) =>
-              new Date(value).toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "short",
-              })
-            }
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: "#94a3af", fontSize: 11 }}
-            tickFormatter={(v) => fmt(Number(v))}
-            width={80}
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (active && payload && payload.length) {
-                const data = payload[0].payload;
-                return (
-                  <div
-                    style={{
-                      background: "rgba(15,17,25,0.95)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      borderRadius: 8,
-                      padding: "10px 14px",
-                      color: "#f3f4f6",
-                      boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+            <div style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={equitySeries}
+                  margin={{ top: 15, right: 15, left: 40, bottom: 25 }}
+                >
+                  <defs>
+                    <linearGradient id="gradPnLTrades" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid
+                    strokeDasharray="2 4"
+                    stroke="#374151"
+                    opacity={0.3}
+                    horizontal
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="x"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3b8", fontSize: 11 }}
+                    tickFormatter={(value) => {
+                      if (!value) return "";
+                      return new Date(value).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "short",
+                      });
                     }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#9ca3af",
-                        marginBottom: 4,
-                      }}
-                    >
-                      {new Date(label).toLocaleDateString("pt-BR")}
-                    </div>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        color: Number(data.y) >= 0 ? "#4ade80" : "#f87171",
-                      }}
-                    >
-                      {fmt(Number(data.y))}
-                    </div>
-                    {data.trade && (
-                      <div
-                        style={{
-                          marginTop: 6,
-                          fontSize: 12,
-                          color: "#9ca3af",
-                        }}
-                      >
-                        {data.trade.asset} ({data.trade.direction}) •{" "}
-                        <span
-                          style={{
-                            color:
-                              (data.trade.result_R || 0) > 0
-                                ? "#4ade80"
-                                : "#f87171",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {(Number(data.trade.result_R) || 0).toFixed(2)} R
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              return null;
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey="y"
-            stroke="#22c55e"
-            strokeWidth={2.4}
-            dot={false}
-            activeDot={{ r: 5, stroke: "#0f1218", strokeWidth: 2 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-)}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "#94a3af", fontSize: 11 }}
+                    tickFormatter={(v) => fmt(Number(v))}
+                    width={80}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        const pnlVal = payload.find((p: any) => p.dataKey === 'pnl' || p.dataKey === 'y')?.value ?? 0;
+                        const balVal = payload.find((p: any) => p.dataKey === 'balance')?.value ?? 0;
+                        
+                        return (
+                          <div
+                            style={{
+                              background: "rgba(15,17,25,0.95)",
+                              border: "1px solid rgba(255,255,255,0.06)",
+                              borderRadius: 8,
+                              padding: "10px 14px",
+                              color: "#f3f4f6",
+                              boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#9ca3af",
+                                marginBottom: 4,
+                              }}
+                            >
+                              {new Date(data.time || label).toLocaleDateString("pt-BR")}
+                            </div>
+                            
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Cumulative P&L:</span>
+                                <span style={{ fontWeight: 600, color: Number(pnlVal) >= 0 ? "#4ade80" : "#f87171", fontSize: 12 }}>
+                                  {fmt(Number(pnlVal))}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+                                <span style={{ fontSize: 11, color: '#9ca3af' }}>Operational Bal:</span>
+                                <span style={{ fontWeight: 600, color: Number(balVal) >= 0 ? "#a855f7" : "#f87171", fontSize: 12 }}>
+                                  {fmt(Number(balVal))}
+                                </span>
+                              </div>
+                            </div>
+
+                            {data.trade && (
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  paddingTop: 6,
+                                  borderTop: "1px solid rgba(255,255,255,0.06)",
+                                  fontSize: 12,
+                                  color: "#9ca3af",
+                                }}
+                              >
+                                {data.trade.asset} ({data.trade.direction}) •{" "}
+                                <span
+                                  style={{
+                                    color:
+                                      (data.trade.result_R || 0) > 0
+                                        ? "#4ade80"
+                                        : "#f87171",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {(Number(data.trade.result_R) || 0).toFixed(2)} R
+                                </span>
+                              </div>
+                            )}
+
+                            {data.hasPayout && (
+                              <div
+                                style={{
+                                  marginTop: 8,
+                                  paddingTop: 6,
+                                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                                  color: '#fbbf24',
+                                  fontWeight: 600,
+                                  fontSize: 11,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                              >
+                                <span>💸 Payout Retirado:</span>
+                                <span>{fmt(-data.payoutAmount)}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af', marginTop: 10 }} />
+                  
+                  <Area
+                    type="monotone"
+                    dataKey="pnl"
+                    stroke="#22c55e"
+                    strokeWidth={2.5}
+                    fill="url(#gradPnLTrades)"
+                    dot={false}
+                    activeDot={{ r: 6 }}
+                    name="Cumulative P&L"
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#a855f7"
+                    strokeWidth={2.2}
+                    strokeDasharray="4 4"
+                    name="Operational Balance"
+                    activeDot={{ r: 5 }}
+                    isAnimationActive={false}
+                    dot={(props: any) => {
+                      const { cx, cy, payload } = props;
+                      if (!payload.hasPayout) return null as any;
+                      return (
+                        <g key={`payout-dot-trades-${payload.time}`}>
+                          <circle cx={cx} cy={cy} r={8} fill="#a855f7" stroke="#0c1119" strokeWidth={2} />
+                          <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fill="#ffffff" fontWeight="bold">💸</text>
+                        </g>
+                      ) as any;
+                    }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
       </div>
 
       {/* TABELA */}
       <div className="card">
         <h3>📋 Lista de Trades</h3>
-<TradeTable
-  trades={filteredTrades}
-  onEdit={(trade) => {
-    setEditing(trade);
-    setOpen(true);
-  }}
-  onDelete={(id) => deleteTrade(id)}
-/>      </div>
+        <TradeTable
+          trades={filteredTrades}
+          onEdit={(trade) => {
+            setEditing(trade);
+            setOpen(true);
+          }}
+          onDelete={(id) => deleteTrade(id)}
+        />      </div>
 
       {/* MODAL */}
-{open && (
-  <TradeForm
-    onClose={() => {
-      setOpen(false);
-      setEditing(null); // 🧹 limpa o trade em edição
-    }}
-    editing={editing}
-  />
-)}
+      {open && (
+        <TradeForm
+          onClose={() => {
+            setOpen(false);
+            setEditing(null); // 🧹 limpa o trade em edição
+          }}
+          editing={editing}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,61 @@
 import React, { useMemo, useEffect, useState } from 'react';
-import { Trade, AccountWeight, EnrichedTrade } from '../types/trade'; // Certifique-se do path correto
+import { Trade, AccountWeight, EnrichedTrade } from '../types/trade';
 import { useJournal } from "@apps/journal-state";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { useCurrency } from '@apps/state';
 
+// Platform source mini-logo badge
+const PLATFORM_LOGOS: Record<string, string> = {
+  quantower: 'assets/logos/quantower.png',
+  ctrader:   'assets/logos/ctrader.png',
+  ibkr:      'assets/logos/ibkr.png',
+  csv:       '', 
+};
+
+function PlatformBadge({ source, isLive }: { source?: string; isLive?: boolean }) {
+  if (!source || source === 'manual') return null;
+  const logo = PLATFORM_LOGOS[source];
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      {logo ? (
+        <img 
+          src={(import.meta as any).env.BASE_URL + logo} 
+          title={source}
+          style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} 
+        />
+      ) : (
+        <span
+          title={source}
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 16, height: 16, borderRadius: 3,
+            background: '#6b7280', color: '#fff',
+            fontSize: 9, fontWeight: 700, lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          {source.charAt(0).toUpperCase()}
+        </span>
+      )}
+      {isLive && (
+        <span
+          title="Live Position"
+          style={{
+            fontSize: 8, fontWeight: 700,
+            color: '#22c55e',
+            padding: '1px 4px', borderRadius: 4,
+            background: 'rgba(34,197,94,0.15)',
+            border: '1px solid rgba(34,197,94,0.3)',
+            animation: 'pulse-badge 1.5s infinite',
+          }}
+        >
+          LIVE
+        </span>
+      )}
+    </span>
+  );
+}
 
 type Props = {
   trades: EnrichedTrade[];
@@ -233,6 +285,7 @@ useEffect(() => {
         <div className="trade-header">
           <div className="trade-header-top">
             <div className="trade-asset">
+              <PlatformBadge source={(t as any).source} isLive={(t as any).isLive} />
               {t.asset} <span className="muted">• {t.tf_signal || ""}</span>
             </div>
             <div className={`pill direction-${t.direction?.toLowerCase()}`}>
@@ -461,7 +514,10 @@ useEffect(() => {
 
 
         <td data-label="Asset/TF">
-          {t.asset} <span className="muted">• {t.tf_signal || ''}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <PlatformBadge source={t.source} isLive={t.isLive} />
+            {t.asset} <span className="muted">• {t.tf_signal || ''}</span>
+          </div>
         </td>
 
         <td data-label="Market/Accounts">

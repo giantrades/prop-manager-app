@@ -3,6 +3,8 @@ import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { getOrCreateFolderByPath, uploadFileToFolder, initGoogleDrive, signIn, isSignedIn } from '@apps/utils/googleDrive';
+import AccountPicker from '@apps/ui/AccountPicker';
+
 // ---------------------------
 // Página de listagem + CRUD
 // ---------------------------
@@ -10,12 +12,16 @@ import { getOrCreateFolderByPath, uploadFileToFolder, initGoogleDrive, signIn, i
 export default function Payouts() {
   const [accounts, setAccounts] = useState([])
   const [payouts, setPayouts] = useState([])
+  const [firms, setFirms] = useState([])
+  const [selectedAccountIds, setSelectedAccountIds] = useState([])
 
 useEffect(() => {
   const data = getAll()
   setAccounts(data.accounts || [])
   setPayouts(data.payouts || [])
+  setFirms(getFirms() || [])
 }, [])
+
 useEffect(() => {
   const idToOpen = localStorage.getItem('openPayoutId');
   if (idToOpen && payouts.length > 0) {
@@ -32,7 +38,9 @@ useEffect(() => {
       const data = getAll()
       setAccounts(data.accounts || [])
       setPayouts(data.payouts || [])
+      setFirms(getFirms() || [])
     }
+
     window.addEventListener('storage', sync)
     return () => window.removeEventListener('storage', sync)
   }, [])
@@ -58,9 +66,37 @@ useEffect(() => {
   // Processamento: filtro -> dedup -> sort -> pagina
   // ---------------------------
   const processedData = useMemo(() => {
-    let filtered = payouts.filter((p) =>
-      p.type.toLowerCase().includes(filter.toLowerCase())
-    )
+    let filtered = payouts.filter((p) => {
+      // Filtrar por busca (texto ou valor)
+      const q = filter.toLowerCase();
+      if (q) {
+        const matchType = p.type?.toLowerCase().includes(q);
+        const matchAmount = String(p.amountSolicited || '').includes(q) || String(p.amountReceived || '').includes(q) || String(p.fee || '').includes(q);
+        const matchMethod = p.method?.toLowerCase().includes(q);
+        const matchStatus = p.status?.toLowerCase().includes(q);
+        if (!matchType && !matchAmount && !matchMethod && !matchStatus) return false;
+      }
+
+      // Filtrar pelo AccountPicker
+      if (selectedAccountIds.length > 0) {
+        // Se a seleção não estiver vazia, payout tem que pertencer a uma das contas selecionadas
+        // (Verificar se algum id em p.accountIds, ou p.accountId, está na lista selecionada)
+        if (p.accountIds && p.accountIds.some(id => selectedAccountIds.includes(id))) return true;
+        if (p.accountId && selectedAccountIds.includes(p.accountId)) return true;
+        
+        // Verifica pelos nomes de conta (legado)
+        if (p.accounts || p.accountName) {
+           const linkedAccountIds = accounts
+             .filter(a => (p.accounts && p.accounts.includes(a.name)) || a.name === p.accountName)
+             .map(a => a.id);
+           if (linkedAccountIds.some(id => selectedAccountIds.includes(id))) return true;
+        }
+
+        return false;
+      }
+
+      return true;
+    })
 
     // Deduplicação por id
     const uniqueMap = new Map()
@@ -68,6 +104,7 @@ useEffect(() => {
       if (!uniqueMap.has(item.id)) uniqueMap.set(item.id, item)
     })
     let dedup = Array.from(uniqueMap.values())
+
 
     if (sortField) {
       dedup.sort((a, b) => {
@@ -98,7 +135,8 @@ useEffect(() => {
     }
 
     return dedup
-  }, [payouts, filter, sortField, sortDirection])
+  }, [payouts, filter, sortField, sortDirection, selectedAccountIds, accounts])
+
 
   // Paginação final
   const totalItems = processedData.length
@@ -197,7 +235,7 @@ useEffect(() => {
     </h4>
     <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
       {fmt(
-        payouts.reduce(
+        processedData.reduce(
           (sum, p) => sum + (Number(p.amountReceived) || 0),
           0
         )
@@ -205,6 +243,7 @@ useEffect(() => {
     </div>
   </div>
 </div>
+
 
 {/* ==== PAYOUTS POR CATEGORIA + QUANTIDADE ==== */}
 <div
@@ -228,10 +267,11 @@ useEffect(() => {
       Total Payouts por Categoria
     </h4>
     {['Futures', 'Forex', 'Cripto', 'Personal'].map((cat) => {
-      const totalCat = payouts
+      const totalCat = processedData
         .filter((p) => p.type === cat)
         .reduce((sum, p) => sum + (Number(p.amountReceived) || 0), 0)
       return (
+
         <div
           key={cat}
           style={{
@@ -262,23 +302,35 @@ useEffect(() => {
       Total de Payouts Solicitados
     </h4>
     <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text)' }}>
-      {payouts.reduce(
-        (sum, p) => sum + (p.accountIds?.length || 0),
+      {processedData.reduce(
+        (sum, p) => sum + (p.accountIds?.length || p.accounts?.length || 1),
         0
       )}
     </div>
   </div>
+
 </div>
 {/* ==== FIM DOS CARDS ==== */}
 
       {/* Toolbar superior */}
-      <div className="toolbar">
+      <div className="toolbar" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <input
           className="input"
-          placeholder="Filter by type..."
+          placeholder="Search by amount, method, type..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
+          style={{ width: 250, margin: 0 }}
         />
+        
+        <AccountPicker
+          selectedIds={selectedAccountIds}
+          onChange={setSelectedAccountIds}
+          accounts={accounts}
+          firms={firms}
+          placeholder="Todas as contas"
+        />
+
+        <div className="spacer" />
         <select
           className="select"
           value={itemsPerPage}

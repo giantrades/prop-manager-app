@@ -207,11 +207,10 @@ const totals = useMemo(() => {
   const exitVwap = computeVWAP(exits, 'exit') || form.exit_price || 0;
 
   // 1. P&L Bruto = SOMA dos result_gross das execuções parciais
-  const result_gross = (form.PartialExecutions || []).reduce(
-    (sum, exec) => sum + (Number(exec.result_gross) || 0), 
-    0
-  );
-    
+  const result_gross = (form.PartialExecutions?.length ?? 0) > 0
+    ? form.PartialExecutions!.reduce((sum, exec) => sum + (Number(exec.result_gross) || 0), 0)
+    : Number(form.result_gross || 0);
+
     // 2. Custos e P&L Líquido
     const costs = (form.commission || 0) + (form.fees || 0) + (form.swap || 0) + (form.slippage || 0);
     const result_net = result_gross - costs; // P&L Líquido = P&L Bruto (Input) - Custos
@@ -516,9 +515,21 @@ useEffect(() => {
         {/* header com save/cancel */}
         <div className="sticky top-0 bg-panel p-6 border-b border-soft">
           <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold mb-4">
-            {editing ? 'Editar Trade' : 'Novo Trade'}
-            </h2>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-xl font-semibold mb-0">
+                {editing ? 'Editar Trade' : 'Novo Trade'}
+              </h2>
+              {editing?.source && editing.source !== 'manual' && (
+                <span className="pill" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)', fontSize: 11, padding: '2px 8px', letterSpacing: '0.5px' }}>
+                  Auto-Synced ({editing.source})
+                </span>
+              )}
+              {(!editing || !editing.source || editing.source === 'manual') && (
+                <span className="pill" style={{ background: 'rgba(255,255,255,0.05)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.1)', fontSize: 11, padding: '2px 8px', letterSpacing: '0.5px' }}>
+                  Manual
+                </span>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               <button className="btn ghost" onClick={onClose}>Cancelar</button>

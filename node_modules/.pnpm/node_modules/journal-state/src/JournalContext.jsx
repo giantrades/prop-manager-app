@@ -103,6 +103,50 @@ setReady(true);
     })();
     return () => { mounted = false; };
   }, []);
+
+  // 🔗 Listen for platform sync events → persist new trades into IndexedDB
+  useEffect(() => {
+    const handlePlatformSync = async (e) => {
+      const detail = e.detail || {};
+      if (detail.source !== 'platform-sync' && detail.source !== 'position-closed') return;
+
+      try {
+        const ds = await import("@apps/lib/dataStore.js");
+        const { getAll: dsGetAll } = ds.default || ds;
+        const all = await dsGetAll();
+        const dsTrades = all.trades || [];
+
+        // Find trades that came from platforms (have source !== 'manual')
+        const platformTrades = dsTrades.filter(t =>
+          t.source && t.source !== 'manual' && t.platformTradeId
+        );
+
+        if (platformTrades.length === 0) return;
+
+        const db = await getDB();
+        const existingIds = new Set((await db.getAll('trades')).map(t => t.id));
+
+        let added = 0;
+        for (const trade of platformTrades) {
+          if (!existingIds.has(trade.id)) {
+            await db.put('trades', trade);
+            added++;
+          }
+        }
+
+        if (added > 0) {
+          console.log(`🔗 Platform sync: ${added} new trades imported to journal`);
+          const allTrades = await db.getAll('trades');
+          setTrades(allTrades || []);
+        }
+      } catch (err) {
+        console.warn('⚠️ Platform sync → journal import failed:', err);
+      }
+    };
+
+    window.addEventListener('datastore:change', handlePlatformSync);
+    return () => window.removeEventListener('datastore:change', handlePlatformSync);
+  }, []);
   // ✅ ADICIONAR ESTE USEEFFECT COMPLETO:
 // 🔹 Backup automático a cada 5 minutos (apenas se logado)
 useEffect(() => {

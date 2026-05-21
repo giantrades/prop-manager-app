@@ -1,10 +1,11 @@
-// d.ts: só tipagem, não código real
-export function uploadFile(
-  name: string,
-  content: unknown
-): Promise<{ id: string }>;
-
-export function uploadOrUpdateJSON(
-  name: string,
-  content: unknown
-): Promise<{ id: string }>;
+export function initGoogleDrive(clientId?: string, apiKey?: string): Promise<boolean>;
+export function isSignedIn(): boolean;
+export function signIn(): Promise<any>;
+export function signOut(): void;
+export function uploadFile(name: string, content: any): Promise<any>;
+export function listFiles(): Promise<any[]>;
+export function downloadFile(fileId: string): Promise<any>;
+export function downloadLatestJSON(filename?: string): Promise<any>;
+export function uploadOrUpdateJSON(name: string, content: any): Promise<any>;
+export function backupToDrive(): Promise<{ success: boolean; message: string }>;
+export function restoreFromDrive(options?: { filename?: string }): Promise<{ success: boolean; message: string; data?: any }>;

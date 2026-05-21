@@ -2,6 +2,8 @@ import React, { useState,useEffect, useRef  } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
+import PlatformStatusIndicator from "@apps/ui/PlatformStatusIndicator";
+import { usePlatform } from "@apps/state/usePlatform";
 
 function CurrencyBox() {
   const { currency, setCurrency, rate } = useCurrency();
@@ -27,8 +29,9 @@ function CurrencyBox() {
 
 export default function Navbar() {
   const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
   const [menuOpen, setMenuOpen] = useState(false);
-  const navRef = useRef(null); // ✅ sem tipagem
+  const navRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -102,6 +105,15 @@ export default function Navbar() {
         </div>
 
         <div className="nav-actions">
+          {/* Platform Status */}
+          <PlatformStatusIndicator
+            statuses={statuses}
+            liveCount={liveCount}
+            lastSync={lastSync}
+            isRunning={isRunning}
+            onToggleSync={isRunning ? stopSync : startSync}
+          />
+
           {/* Botão para o app principal */}
           <a href={mainAppUrl} className="journal-link">
             Prop Manager

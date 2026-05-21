@@ -10,10 +10,34 @@ const LS_KEY = 'propmanager-data-v1'
 const seed = {
   accounts: [],
   payouts: [],
-  settings: { methods: ['Rise','Wise','Pix','Paypal','Cripto'] },
+  settings: {
+    methods: ['Rise','Wise','Pix','Paypal','Cripto'],
+    platforms: {
+      quantower: {
+        enabled: false,
+        bridgeUrl: 'http://localhost:8787',
+        autoSync: true,
+        syncIntervalMs: 2000,
+        lastSync: null,
+        accountMapping: {}   // { platformAccountId: internalAccountId }
+      },
+      ctrader: {
+        enabled: false,
+        accessToken: null,
+        refreshToken: null,
+        autoSync: true,
+        syncIntervalMs: 5000,
+        lastSync: null,
+        accountMapping: {}
+      }
+    }
+  },
+  connectionFirmMap: {},     // { [connectionId]: firmId }  — Nível 1: toda a conexão → Firm
+  accountFirmOverride: {},   // { [accountId]: firmId }      — Nível 2: override por conta
   firms: [],
-  trades: [],   // ADICIONADO: armazena trades
-  goals: []     // ADICIONADO: armazena goals
+  trades: [],   // armazena trades
+  goals: [],    // armazena goals
+  livePositions: []  // posições abertas em tempo real
 }
 
 function load() {
@@ -26,11 +50,24 @@ function load() {
     const data = JSON.parse(raw)
     // MIGRATION: garante chaves obrigatórias
     data.settings = data.settings || { methods: ['Rise','Wise','Pix','Paypal','Cripto'] }
+    // Platform settings migration (backward-compatible)
+    if (!data.settings.platforms) {
+      data.settings.platforms = seed.settings.platforms;
+    } else {
+      // Ensure each platform config has all keys
+      for (const [pid, defaults] of Object.entries(seed.settings.platforms)) {
+        data.settings.platforms[pid] = { ...defaults, ...(data.settings.platforms[pid] || {}) };
+      }
+    }
     data.accounts = data.accounts || []
     data.payouts = data.payouts || []
     data.firms = data.firms || []
     data.trades = data.trades || []
     data.goals = data.goals || []
+    data.livePositions = data.livePositions || []
+    // Migration: connection/firm mapping (backward-compatible)
+    data.connectionFirmMap = data.connectionFirmMap || {}
+    data.accountFirmOverride = data.accountFirmOverride || {}
     return data
   } catch (e) {
     localStorage.setItem(LS_KEY, JSON.stringify(seed))
@@ -110,7 +147,9 @@ export async function ensureJournalSynced() {
 export function createAccount(partial){
   const data = load()
   const acc = { id: uuid(), name:'', type:'Forex', dateCreated: new Date().toISOString().slice(0,10), status:'Standby',
-    initialFunding:0, currentFunding:0, profitSplit:0.8, payoutFrequency:'monthly', defaultWeight:1, ...partial }
+    initialFunding:0, currentFunding:0, profitSplit:0.8, payoutFrequency:'monthly', defaultWeight:1,
+    platformAccountId: null, platformName: null, lastPlatformSync: null,
+    ...partial }
   data.accounts.push(acc); save(data); return acc
 }
 export function updateAccount(id, patch){
@@ -318,6 +357,12 @@ export function createTrade(partial) {
     notes: partial.notes || '',
     PartialExecutions: partial.PartialExecutions || [],
     accounts: partial.accounts || [],
+    // Platform integration fields
+    source: partial.source || 'manual',                // 'manual' | 'quantower' | 'ctrader' | 'csv'
+    platformTradeId: partial.platformTradeId || null,   // Original ID from platform (for dedup)
+    platformName: partial.platformName || null,         // 'Quantower', 'cTrader', etc.
+    connectionName: partial.connectionName || null,     // Sub-connection: 'Rithmic', 'DXFeed', etc.
+    isLive: partial.isLive || false,                    // true if position still open
     ...partial
   };
 
@@ -802,14 +847,264 @@ export function getAllTags() {
 
 
 /* --------------------
+   PLATFORM INTEGRATION
+   -------------------- */
+
+/**
+ * Get platform-specific settings.
+ * @param {string} platformId - e.g. 'quantower', 'ctrader'
+ */
+export function getPlatformSettings(platformId) {
+  const data = load();
+  return data.settings?.platforms?.[platformId] || null;
+}
+
+/**
+ * Update platform-specific settings (merges with existing).
+ * @param {string} platformId
+ * @param {Object} patch
+ */
+export function setPlatformSettings(platformId, patch) {
+  const data = load();
+  if (!data.settings.platforms) data.settings.platforms = {};
+  data.settings.platforms[platformId] = {
+    ...(data.settings.platforms[platformId] || {}),
+    ...patch,
+  };
+  save(data);
+  return data.settings.platforms[platformId];
+}
+
+/**
+ * Find a trade by its platform-specific ID (for deduplication).
+ * @param {string} platformTradeId - e.g. 'qt_12345'
+ * @returns {Object|null}
+ */
+export function getTradeByPlatformId(platformTradeId) {
+  if (!platformTradeId) return null;
+  const data = load();
+  return (data.trades || []).find(t => t.platformTradeId === platformTradeId) || null;
+}
+
+/**
+ * Insert or update a trade from a platform (upsert by platformTradeId).
+ * If the trade already exists (same platformTradeId), updates it.
+ * If not, creates a new one.
+ * @param {Object} normalizedTrade - Trade with platformTradeId set
+ * @returns {{ trade: Object, isNew: boolean }}
+ */
+export function upsertTradeFromPlatform(normalizedTrade) {
+  const data = load();
+  const existing = (data.trades || []).findIndex(
+    t => t.platformTradeId && t.platformTradeId === normalizedTrade.platformTradeId
+  );
+
+  let trade, isNew;
+
+  if (existing !== -1) {
+    // Update existing trade (preserve internal fields like notes, strategyId)
+    data.trades[existing] = {
+      ...data.trades[existing],
+      ...normalizedTrade,
+      id: data.trades[existing].id, // keep internal ID
+    };
+    trade = data.trades[existing];
+    isNew = false;
+  } else {
+    // Create new trade
+    trade = {
+      id: uuid(),
+      ...normalizedTrade,
+    };
+    data.trades.push(trade);
+    isNew = true;
+  }
+
+  save(data);
+  return { trade, isNew };
+}
+
+/**
+ * Get all live (open) positions from cache.
+ * @returns {Array}
+ */
+export function getLivePositions() {
+  const data = load();
+  return data.livePositions || [];
+}
+
+/**
+ * Update the cached live positions (replaces entire array).
+ * @param {Array} positions
+ */
+export function updateLivePositions(positions) {
+  const data = load();
+  data.livePositions = positions || [];
+  save(data);
+}
+
+/**
+ * Mark a live position as closed — converts it into a completed trade.
+ * @param {string} platformPositionId
+ * @param {Object} exitData - { exitPrice, exitTime, netPnl, grossPnl, fee }
+ * @returns {Object|null} The created/updated trade, or null
+ */
+export function closeLivePosition(platformPositionId, exitData = {}) {
+  const data = load();
+  const posIdx = (data.livePositions || []).findIndex(
+    p => p.platformPositionId === platformPositionId
+  );
+
+  if (posIdx === -1) return null;
+
+  const pos = data.livePositions[posIdx];
+
+  // Remove from live positions
+  data.livePositions.splice(posIdx, 1);
+
+  // Create or update trade from the closed position
+  const tradeData = {
+    entry_datetime: pos.openTime,
+    exit_datetime: exitData.exitTime || new Date().toISOString(),
+    asset: pos.symbol,
+    accountId: pos.internalAccountId || null,
+    direction: pos.side === 'Short' ? 'Short' : 'Long',
+    volume: pos.quantity,
+    entry_price: pos.openPrice,
+    exit_price: exitData.exitPrice || pos.currentPrice,
+    result_net: exitData.netPnl ?? pos.netPnl ?? 0,
+    source: pos.platformId || 'quantower',
+    platformTradeId: pos.platformPositionId,
+    platformName: pos.platformName || 'Quantower',
+    connectionName: pos.connectionName || '',
+    isLive: false,
+  };
+
+  const result = upsertTradeFromPlatform(tradeData);
+  save(data);
+  return result.trade;
+}
+
+/**
+ * Get account mapping for a platform.
+ * @param {string} platformId
+ * @returns {Object} { platformAccountId: internalAccountId }
+ */
+export function getAccountMapping(platformId) {
+  const settings = getPlatformSettings(platformId);
+  return settings?.accountMapping || {};
+}
+
+/**
+ * Set account mapping for a platform.
+ * @param {string} platformId
+ * @param {string} platformAccountId
+ * @param {string} internalAccountId
+ */
+export function setAccountMapping(platformId, platformAccountId, internalAccountId) {
+  const data = load();
+  if (!data.settings.platforms[platformId]) return null;
+  if (!data.settings.platforms[platformId].accountMapping) {
+    data.settings.platforms[platformId].accountMapping = {};
+  }
+  data.settings.platforms[platformId].accountMapping[platformAccountId] = internalAccountId;
+  save(data);
+  return data.settings.platforms[platformId].accountMapping;
+}
+
+/* --------------------
+   CONNECTION → FIRM MAPPING (Nível 1)
+   Vincula toda uma conexão do Quantower a uma Firm.
+   -------------------- */
+export function getConnectionFirmMap() {
+  const data = load();
+  return data.connectionFirmMap || {};
+}
+
+export function setConnectionFirmMap(map) {
+  const data = load();
+  data.connectionFirmMap = { ...map };
+  save(data);
+  return data.connectionFirmMap;
+}
+
+export function setConnectionFirmEntry(connectionId, firmId) {
+  const data = load();
+  if (!data.connectionFirmMap) data.connectionFirmMap = {};
+  if (firmId === null || firmId === undefined) {
+    delete data.connectionFirmMap[connectionId];
+  } else {
+    data.connectionFirmMap[connectionId] = firmId;
+  }
+  save(data);
+  return data.connectionFirmMap;
+}
+
+/* --------------------
+   ACCOUNT → FIRM OVERRIDE (Nível 2)
+   Permite que uma conta específica use uma Firm diferente da conexão.
+   -------------------- */
+export function getAccountFirmOverride() {
+  const data = load();
+  return data.accountFirmOverride || {};
+}
+
+export function setAccountFirmOverride(map) {
+  const data = load();
+  data.accountFirmOverride = { ...map };
+  save(data);
+  return data.accountFirmOverride;
+}
+
+export function setAccountFirmEntry(accountId, firmId) {
+  const data = load();
+  if (!data.accountFirmOverride) data.accountFirmOverride = {};
+  if (firmId === null || firmId === undefined) {
+    delete data.accountFirmOverride[accountId];
+  } else {
+    data.accountFirmOverride[accountId] = firmId;
+  }
+  save(data);
+  return data.accountFirmOverride;
+}
+
+/* --------------------
+   RESOLVER: Firma efetiva para uma conta
+   Prioridade: Override (Nível 2) > Conexão (Nível 1) > firmId da conta
+   -------------------- */
+export function resolveFirmForAccount(account, firms) {
+  if (!account) return null;
+  const override = getAccountFirmOverride();
+  const connMap  = getConnectionFirmMap();
+
+  const firmId =
+    override[account.id] ||
+    (account.connectionId ? connMap[account.connectionId] : null) ||
+    account.firmId ||
+    null;
+
+  if (!firmId) return null;
+  return (firms || []).find(f => f.id === firmId) || null;
+}
+
+/* --------------------
    Export default summary (optional)
    -------------------- */
 export default {
   getAll, getSettings, setSettings,
-  createAccount, updateAccount, deleteAccount,recalcAccountFunding,
+  createAccount, updateAccount, deleteAccount, recalcAccountFunding,
   createPayout, updatePayout, deletePayout,
   getAccountStats,
   getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
   getTrades, createTrade, updateTrade, deleteTrade,
   getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal, calculateMetric, getAllTradesSafe,
+  // Platform integration
+  getPlatformSettings, setPlatformSettings,
+  getTradeByPlatformId, upsertTradeFromPlatform,
+  getLivePositions, updateLivePositions, closeLivePosition,
+  getAccountMapping, setAccountMapping,
+  // Connection → Firm mapping
+  getConnectionFirmMap, setConnectionFirmMap, setConnectionFirmEntry,
+  getAccountFirmOverride, setAccountFirmOverride, setAccountFirmEntry,
+  resolveFirmForAccount,
 }

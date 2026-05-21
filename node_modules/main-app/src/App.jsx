@@ -6,6 +6,7 @@ import Payouts from "./pages/Payouts.jsx";
 import Settings from "./pages/Settings.jsx";
 import Firms from "./pages/Firms.jsx";
 import Navbar from "./Navbar";
+import './styles.css';
 import { useJournal } from "@apps/journal-state";
 import Goals from "./pages/Goals.jsx/"
 import {

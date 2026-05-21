@@ -3,6 +3,7 @@ import React, {useState, useEffect} from "react";
 import { useCurrency } from '@apps/state'
 import {useDrive, DriveProvider} from "@apps/state/DriveContext";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
@@ -25,6 +26,12 @@ useEffect(() => {
 
   return (
     <div className="grid" style={{ gap: 16 }}>
+      {/* -------- PLATFORM CONNECTIONS -------- */}
+      <div>
+        <h3 style={{ marginBottom: 12 }}>🔗 Platform Connections</h3>
+        <PlatformConnectionSettings />
+      </div>
+
       <div className="card">
         <h3>⚙️ Settings</h3>
 

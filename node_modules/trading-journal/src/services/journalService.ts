@@ -73,9 +73,8 @@ export function addTrade(payload: Partial<Trade>) {
   const now = new Date().toISOString();
   const trade: Trade = {
     id: uuidv4(),
-    date: payload.date || now.split('T')[0],
-    entry_time: payload.entry_time,
-    exit_time: payload.entry_time,
+    entry_datetime: payload.entry_datetime || now,
+    exit_datetime: payload.exit_datetime || undefined,
     asset: payload.asset || 'UNKNOWN',
     strategyId: payload.strategyId || null,
     marketCategory: payload.marketCategory || 'Futures',

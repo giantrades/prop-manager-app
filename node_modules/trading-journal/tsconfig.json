@@ -1,9 +1,14 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": ["DOM", "DOM.Iterable", "ESNext", "WebWorker"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext",
+      "WebWorker"
+    ],
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "allowJs": true,
     "checkJs": false,
@@ -12,22 +17,38 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": false,
+    "resolveJsonModule": true,
     "baseUrl": ".",
+    "typeRoots": [
+      "./node_modules/@types",
+      "../node_modules/@types"
+    ],
+    "types": [
+      "node",
+      "react",
+      "react-dom",
+      "gapi.auth2",
+      "gapi.client",
+      "uuid"
+    ],
     "paths": {
-      "@apps/*": ["../apps/*"],
       "@apps/lib/*": ["../packages/lib/*"],
-      "@apps/lib": ["../packages/lib/index.js"],
+      "@apps/lib": ["../packages/lib/dataStore.js"],
       "@apps/state": ["../packages/state"],
+      "@apps/state/*": ["../packages/state/*"],
       "@apps/journal-state": ["../packages/journal-state/src"],
       "@apps/journal-state/*": ["../packages/journal-state/src/*"],
-      "@apps/utils/*": ["../packages/utils/*"]
+      "@apps/utils/*": ["../packages/utils/*"],
+      "@apps/ui/*": ["../packages/ui/*"]
     }
   },
   "include": [
     "src",
     "../packages/state",
     "../packages/lib",
-    "../packages/journal-state"
+    "../packages/journal-state",
+    "../packages/ui",
+    "../packages/utils"
   ],
   "exclude": [
     "node_modules",

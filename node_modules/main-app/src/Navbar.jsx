@@ -2,6 +2,8 @@ import React, { useState,useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
+import PlatformStatusIndicator from "@apps/ui/PlatformStatusIndicator";
+import { usePlatform } from "@apps/state/usePlatform";
 
 function CurrencyBox() {
   const { currency, setCurrency, rate } = useCurrency();
@@ -27,10 +29,11 @@ function CurrencyBox() {
 
 export default function Navbar() {
   const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
   const [menuOpen, setMenuOpen] = useState(false);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
   const journalUrl = import.meta.env.VITE_JOURNAL_URL || "/journal/";
- const navRef = useRef(null); // ✅ sem tipagem
+ const navRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -47,17 +50,17 @@ export default function Navbar() {
       const { getAll } = await import("@apps/lib/dataStore.js");
       const all = getAll();
       await backup(JSON.stringify(all));
-      alert("✅ Backup salvo no Drive!");
+      alert("✅ Backup saved to Drive!");
     } catch (err) {
-      console.error("Erro ao fazer backup:", err);
-      alert("⚠️ Falha ao salvar backup no Drive");
+      console.error("Backup error:", err);
+      alert("⚠️ Failed to save backup to Drive");
     }
   };
 
   const onList = async () => {
     const list = await files();
-    console.log("📁 Arquivos no Drive:", list);
-    alert(`${list.length} arquivos encontrados no Drive`);
+    console.log("📁 Drive files:", list);
+    alert(`${list.length} files found on Drive`);
   };
 
   return (
@@ -88,6 +91,14 @@ export default function Navbar() {
         </div>
 
         <div className="nav-actions">
+          <PlatformStatusIndicator
+            statuses={statuses}
+            liveCount={liveCount}
+            lastSync={lastSync}
+            isRunning={isRunning}
+            onToggleSync={isRunning ? stopSync : startSync}
+          />
+
           <a href={journalUrl} className="journal-link">
             Trading Journal
           </a>
@@ -98,10 +109,10 @@ export default function Navbar() {
             <span
               title={
                 !driveReady
-                  ? "Drive não inicializado"
+                  ? "Drive not initialized"
                   : logged
-                  ? "Conectado ao Google"
-                  : "Desconectado do Google"
+                  ? "Connected to Google"
+                  : "Disconnected from Google"
               }
               style={{
                 width: 12,
@@ -121,7 +132,7 @@ export default function Navbar() {
                   Backup
                 </button>
                 <button className="btn ghost small" onClick={onList}>
-                  Listar
+                  Files
                 </button>
               </>
             ) : (

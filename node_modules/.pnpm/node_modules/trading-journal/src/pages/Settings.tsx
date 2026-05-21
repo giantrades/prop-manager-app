@@ -4,6 +4,7 @@ import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
 import {getAll,updateAccount,} from "@apps/lib/dataStore";
 import { openDB } from 'idb';
+import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
 async function getDB() {
   return openDB('journal-db', 2, {
@@ -85,6 +86,12 @@ const handleRecalcFunding = useCallback(async () => {
 
   return (
     <div className="grid" style={{ gap: 16 }}>
+      {/* -------- PLATFORM CONNECTIONS -------- */}
+      <div>
+        <h3 style={{ marginBottom: 12 }}>🔗 Platform Connections</h3>
+        <PlatformConnectionSettings />
+      </div>
+
       {/* -------- SETTINGS GERAIS -------- */}
       <div className="card">
         <h3>⚙️ Settings</h3>
