@@ -8,9 +8,9 @@ import {
 } from 'recharts'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
 import { getAllGoals } from '@apps/lib/dataStore';
-import LivePositions from '@apps/ui/LivePositions';
+
 import AccountPicker from '@apps/ui/AccountPicker';
-import { usePlatform } from '@apps/state/usePlatform';
+
 
 
 /* =========================================================
@@ -1833,8 +1833,7 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
    5) Página principal
    ========================================================= */
 export default function Dashboard() {
-  // Platform live positions
-  const { livePositions } = usePlatform();
+
   // Account status filter
   const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded"]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -1910,12 +1909,7 @@ export default function Dashboard() {
         firms={firms}
       />
       <SummaryCards accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
-      {/* Live Positions Widget — only shown when positions exist */}
-      {livePositions.length > 0 && (
-        <div className="card" style={{ marginBottom: 4 }}>
-          <LivePositions positions={livePositions} />
-        </div>
-      )}
+
       <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, overflow: 'hidden' }}>
         <FundingPerCategory accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />

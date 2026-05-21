@@ -55,18 +55,41 @@ a {
   border-bottom: 1px solid #1c2230;
 }
 
+.hamburger {
+  display: none;
+}
+
+.nav-content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
 .nav-logo {
   font-weight: 800;
   letter-spacing: 0.4px;
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .nav-links {
   display: flex;
+  align-items: center;
   gap: 12px;
   margin-left: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .nav-links a {
@@ -790,5 +813,26 @@ select.chip option {
 /* ===========================================================
    MOBILE RESPONSIVE
    =========================================================== */
+
+@media (max-width: 1200px) {
+  .nav-links a {
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+  .nav-links {
+    gap: 6px;
+    margin-left: 0;
+  }
+  .navbar {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .nav-actions {
+    gap: 8px;
+  }
+  .nav-logo {
+    font-size: 15px;
+  }
+}
 
 /* Cleanup redundant media query */
