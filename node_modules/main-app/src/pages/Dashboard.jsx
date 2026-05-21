@@ -644,7 +644,7 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
         <h3 style={{ margin: 0, fontSize: 18, color: '#f3f4f6' }}>
           📈 Patrimônio & Financiamento
         </h3>
-        
+
         {/* Abas Premium */}
         <div style={{
           display: 'inline-flex',
@@ -1916,8 +1916,8 @@ export default function Dashboard() {
           <LivePositions positions={livePositions} />
         </div>
       )}
-      <div className="grid" style={{ gridTemplateColumns: '2fr 1fr', gap: 16, overflow: 'hidden' }}>
-        <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+      <PatrimonioLine accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
+      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, overflow: 'hidden' }}>
         <FundingPerCategory accountStatusFilter={accountStatusFilter} dateFilter={dateFilter} selectedAccountIds={selectedAccountIds} />
         <GoalsDistributionChart dateFilter={dateFilter} />
       </div>
