@@ -46,13 +46,16 @@ a {
   position: sticky;
   top: 0;
   z-index: 50;
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
-  background: rgba(15, 18, 24, 0.85);
+  height: 56px;              /* altura fixa para nunca crescer */
+  gap: clamp(6px, 1vw, 16px);
+  padding: 0 clamp(12px, 2vw, 24px);
+  background: rgba(15, 18, 24, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid #1c2230;
+  overflow: hidden;          /* impede que filhos estourem */
 }
 
 .hamburger {
@@ -62,41 +65,34 @@ a {
 .nav-content {
   display: flex;
   flex: 1;
+  min-width: 0;              /* permite shrink dentro do flex */
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: clamp(4px, 1vw, 12px);
+  overflow: hidden;
 }
 
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: nowrap;
-}
-
-.nav-logo {
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
+/* Links de navegação — encolhem se necessário */
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-left: 8px;
+  flex-shrink: 1;
+  min-width: 0;
+  gap: clamp(2px, 0.5vw, 10px);
+  margin-left: 4px;
   flex-wrap: nowrap;
   white-space: nowrap;
 }
 
 .nav-links a {
-  padding: 8px 12px;
+  padding: clamp(4px, 0.5vw, 8px) clamp(6px, 0.8vw, 12px);
   border-radius: 10px;
   background: transparent;
   color: var(--muted);
+  font-size: clamp(12px, 1.1vw, 14px); /* fluido: nunca vai para 2ª linha */
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.2s, background 0.2s;
 }
 
 .nav-links a.active {
@@ -104,17 +100,52 @@ a {
   color: var(--text);
 }
 
+/* Ações da direita — não encolhem (indicadores, botões Drive) */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;            /* nunca comprime */
+  gap: clamp(4px, 0.6vw, 10px);
+  flex-wrap: nowrap;
+}
+
+.nav-logo {
+  font-weight: 800;
+  font-size: clamp(13px, 1.2vw, 16px);
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .spacer {
   flex: 1;
 }
 
+/* Currency box compacto */
 .currency-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--soft);
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 10px;
+  font-size: clamp(11px, 1vw, 13px);
+  white-space: nowrap;
+}
+
+.currency-toggle .muted {
+  font-size: clamp(10px, 0.9vw, 12px);
+}
+
+/* drive-status inline */
+.drive-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .btn {
@@ -814,25 +845,5 @@ select.chip option {
    MOBILE RESPONSIVE
    =========================================================== */
 
-@media (max-width: 1200px) {
-  .nav-links a {
-    padding: 6px 8px;
-    font-size: 14px;
-  }
-  .nav-links {
-    gap: 6px;
-    margin-left: 0;
-  }
-  .navbar {
-    gap: 8px;
-    padding: 10px 12px;
-  }
-  .nav-actions {
-    gap: 8px;
-  }
-  .nav-logo {
-    font-size: 15px;
-  }
-}
-
-/* Cleanup redundant media query */
+/* As fontes e espaçamentos da navbar usam clamp() e se adaptam automaticamente.
+   Regras mobile extra (hamburger menu) ficam abaixo conforme necessário. */
