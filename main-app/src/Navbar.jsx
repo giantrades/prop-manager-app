@@ -1,4 +1,4 @@
-import React, { useState,useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
@@ -33,7 +33,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
   const journalUrl = import.meta.env.VITE_JOURNAL_URL || "/journal/";
- const navRef = useRef(null);
+  const navRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -57,14 +57,8 @@ export default function Navbar() {
     }
   };
 
-  const onList = async () => {
-    const list = await files();
-    console.log("📁 Drive files:", list);
-    alert(`${list.length} files found on Drive`);
-  };
-
   return (
-<nav className="navbar" ref={navRef}>
+    <nav className="navbar" ref={navRef}>
       <div className="nav-left">
         <div className="nav-logo">📊 <span>PropManager</span></div>
       </div>
@@ -111,8 +105,8 @@ export default function Navbar() {
                 !driveReady
                   ? "Drive not initialized"
                   : logged
-                  ? "Connected to Google"
-                  : "Disconnected from Google"
+                    ? "Connected to Google"
+                    : "Disconnected from Google"
               }
               style={{
                 width: 12,
@@ -125,20 +119,22 @@ export default function Navbar() {
             />
             {logged ? (
               <>
-                <button className="btn ghost small" onClick={logout}>
-                  Logout
+                <button className="btn ghost small icon-only" title="Logout do Google" onClick={logout}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
                 </button>
-                <button className="btn ghost small" onClick={onBackup}>
-                  Backup
-                </button>
-                <button className="btn ghost small" onClick={onList}>
-                  Files
+                <button className="btn ghost small icon-only" title="Salvar backup no Drive" onClick={onBackup}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" />
+                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                  </svg>
                 </button>
               </>
             ) : (
-              <button className="btn ghost small" onClick={login}>
-                Login Google
-              </button>
+              <button className="btn ghost small" onClick={login}>Google</button>
             )}
           </div>
         </div>
