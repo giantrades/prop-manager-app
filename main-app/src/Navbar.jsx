@@ -28,7 +28,7 @@ function CurrencyBox() {
 }
 
 export default function Navbar() {
-  const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const { ready: driveReady, logged, login, logout, backup } = useDrive();
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
   const [menuOpen, setMenuOpen] = useState(false);
   const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";

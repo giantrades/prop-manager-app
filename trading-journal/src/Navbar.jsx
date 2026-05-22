@@ -1,4 +1,4 @@
-import React, { useState,useEffect, useRef  } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
@@ -28,7 +28,7 @@ function CurrencyBox() {
 }
 
 export default function Navbar() {
-  const { ready: driveReady, logged, login, logout, backup, files } = useDrive();
+  const { ready: driveReady, logged, login, logout, backup } = useDrive();
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef(null);
@@ -61,14 +61,9 @@ export default function Navbar() {
     }
   };
 
-  const onList = async () => {
-    const list = await files();
-    console.log("📁 Arquivos no Drive:", list);
-    alert(`${list.length} arquivos encontrados no Drive`);
-  };
 
   return (
-<nav className="navbar" ref={navRef}>
+    <nav className="navbar" ref={navRef}>
       {/* Logo + botão mobile */}
       <div className="nav-logo">
         📈 <span>Trading Journal</span>
@@ -87,19 +82,19 @@ export default function Navbar() {
       {/* Conteúdo geral */}
       <div className={`nav-content ${menuOpen ? "open" : ""}`}>
         <div className="nav-links">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")} onClick={() => setMenuOpen(false)}>
             Dashboard
-            
+
           </NavLink>
-          <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
+          <NavLink to="/trades" className={({ isActive }) => (isActive ? "active" : "")} onClick={() => setMenuOpen(false)}>
             Trades
-           
+
           </NavLink>
-          <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
+          <NavLink to="/strategies" className={({ isActive }) => (isActive ? "active" : "")} onClick={() => setMenuOpen(false)}>
             Strategies
-            
+
           </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}onClick={() => setMenuOpen(false)}>
+          <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")} onClick={() => setMenuOpen(false)}>
             Settings
           </NavLink>
         </div>
@@ -128,8 +123,8 @@ export default function Navbar() {
                 !driveReady
                   ? "Drive não inicializado"
                   : logged
-                  ? "Conectado ao Google"
-                  : "Desconectado do Google"
+                    ? "Conectado ao Google"
+                    : "Desconectado do Google"
               }
               style={{
                 width: 12,
@@ -142,20 +137,22 @@ export default function Navbar() {
             />
             {logged ? (
               <>
-                <button className="btn ghost small" onClick={logout}>
-                  Logout
+                <button className="btn ghost small icon-only" title="Logout do Google" onClick={logout}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
                 </button>
-                <button className="btn ghost small" onClick={onBackup}>
-                  Backup
-                </button>
-                <button className="btn ghost small" onClick={onList}>
-                  Listar
+                <button className="btn ghost small icon-only" title="Salvar backup no Drive" onClick={onBackup}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" />
+                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                  </svg>
                 </button>
               </>
             ) : (
-              <button className="btn ghost small" onClick={login}>
-                Login Google
-              </button>
+              <button className="btn ghost small" onClick={login}>Google</button>
             )}
           </div>
         </div>
