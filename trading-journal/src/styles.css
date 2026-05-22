@@ -143,6 +143,10 @@ a {
   border-radius: 10px;
 }
 
+.currency-toggle .muted {
+  display: none;
+}
+
 .btn {
   background: var(--brand);
   color: white;
