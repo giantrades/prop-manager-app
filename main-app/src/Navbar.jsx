@@ -2,49 +2,145 @@ import React, { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
-import PlatformStatusIndicator from "@apps/ui/PlatformStatusIndicator";
 import { usePlatform } from "@apps/state/usePlatform";
+import {
+  LayoutDashboard,
+  Wallet,
+  ArrowDownToLine,
+  Target,
+  Building2,
+  Settings,
+  BookOpen,
+  Activity,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+  Menu,
+  CloudUpload,
+  LogOut,
+  LogIn,
+  ExternalLink,
+  Cloud
+} from "lucide-react";
 
-function CurrencyBox() {
-  const { currency, setCurrency, rate } = useCurrency();
-  return (
-    <div className="currency-toggle" title="Toggle currency">
-      <span>💱</span>
-      <button
-        className={currency === "USD" ? "btn" : "btn ghost"}
-        onClick={() => setCurrency("USD")}
-      >
-        USD
-      </button>
-      <button
-        className={currency === "BRL" ? "btn" : "btn ghost"}
-        onClick={() => setCurrency("BRL")}
-      >
-        BRL
-      </button>
-      <span className="muted">1 USD = {rate} BRL</span>
-    </div>
-  );
+/* ── Platform logos ── */
+const PLATFORM_LOGOS = {
+  quantower: (
+    <img
+      src={`${import.meta.env.BASE_URL || "/"}assets/logos/quantower.png`}
+      style={{ width: 16, height: 16, objectFit: "contain" }}
+      alt="quantower"
+    />
+  ),
+  ctrader: (
+    <img
+      src={`${import.meta.env.BASE_URL || "/"}assets/logos/ctrader.png`}
+      style={{ width: 16, height: 16, objectFit: "contain" }}
+      alt="ctrader"
+    />
+  ),
+  ibkr: (
+    <img
+      src={`${import.meta.env.BASE_URL || "/"}assets/logos/ibkr.png`}
+      style={{ width: 16, height: 16, objectFit: "contain" }}
+      alt="ibkr"
+    />
+  ),
+};
+
+function timeAgo(isoString) {
+  if (!isoString) return "Never";
+  const diff = Date.now() - new Date(isoString).getTime();
+  if (diff < 5000) return "Just now";
+  if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-export default function Navbar() {
-  const { ready: driveReady, logged, login, logout, backup } = useDrive();
-  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const dotColor = !driveReady ? "#9CA3AF" : logged ? "#22c55e" : "#ef4444";
-  const journalUrl = import.meta.env.VITE_JOURNAL_URL || "/journal/";
-  const navRef = useRef(null);
+const NAV_LINKS = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/accounts", label: "Accounts", icon: Wallet },
+  { to: "/payouts", label: "Payouts", icon: ArrowDownToLine },
+  { to: "/goals", label: "Goals", icon: Target },
+  { to: "/firms", label: "Firms", icon: Building2 },
+  { to: "/settings", label: "Settings", icon: Settings },
+];
 
+export default function Navbar({ isPinned, onTogglePin }) {
+  const { ready: driveReady, logged, login, logout, backup } = useDrive();
+  const { currency, setCurrency, rate } = useCurrency();
+  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
+    usePlatform();
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [platformOpen, setPlatformOpen] = useState(false);
+  const [platformDropdownTop, setPlatformDropdownTop] = useState(240);
+
+  const platformItemRef = useRef(null);
+  const platformDropdownRef = useRef(null);
+
+  const journalUrl =
+    import.meta.env.DEV
+      ? import.meta.env.VITE_JOURNAL_URL || "http://localhost:5175/"
+      : "/journal/";
+
+  const dotColor = !driveReady
+    ? "#9CA3AF"
+    : logged
+    ? "#22c55e"
+    : "#ef4444";
+  const driveTitle = !driveReady
+    ? "Drive not initialized"
+    : logged
+    ? "Connected to Google"
+    : "Disconnected from Google";
+
+  const hasOnline = statuses.some((s) => s.online);
+  const allOffline =
+    statuses.length > 0 && statuses.every((s) => !s.online);
+  const platformDotColor = hasOnline
+    ? "#22c55e"
+    : allOffline
+    ? "#ef4444"
+    : "#9CA3AF";
+
+  const isExpanded = isPinned || isHovered || mobileOpen;
+
+  /* Close platform dropdown on outside click */
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuOpen && navRef.current && !navRef.current.contains(e.target)) {
-        setMenuOpen(false);
+    const handler = (e) => {
+      if (
+        platformOpen &&
+        platformDropdownRef.current &&
+        !platformDropdownRef.current.contains(e.target) &&
+        platformItemRef.current &&
+        !platformItemRef.current.contains(e.target)
+      ) {
+        setPlatformOpen(false);
       }
     };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [platformOpen]);
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [menuOpen]);
+  /* Close mobile on resize */
+  useEffect(() => {
+    const handler = () => {
+      if (window.innerWidth > 768) setMobileOpen(false);
+    };
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  const togglePlatform = () => {
+    if (!platformOpen && platformItemRef.current) {
+      const rect = platformItemRef.current.getBoundingClientRect();
+      setPlatformDropdownTop(rect.top);
+    }
+    setPlatformOpen((p) => !p);
+  };
+
   const onBackup = async () => {
     try {
       const { getAll } = await import("@apps/lib/dataStore.js");
@@ -58,87 +154,279 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="navbar" ref={navRef}>
-      <div className="nav-left">
-        <div className="nav-logo">📊 <span>PropManager</span></div>
-      </div>
-
-      {/* BOTÃO HAMBÚRGUER */}
+    <>
+      {/* Mobile hamburger */}
       <button
-        className={`hamburger ${menuOpen ? "active" : ""}`}
-        onClick={() => setMenuOpen(!menuOpen)}
+        className="sb-mobile-trigger"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open menu"
       >
-        <span />
-        <span />
-        <span />
+        <Menu size={20} />
       </button>
 
-      {/* LINKS E AÇÕES */}
-      <div className={`nav-content ${menuOpen ? "open" : ""}`}>
-        <div className="nav-links">
-          <NavLink to="/" onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
-          <NavLink to="/accounts" onClick={() => setMenuOpen(false)}>Accounts</NavLink>
-          <NavLink to="/payouts" onClick={() => setMenuOpen(false)}>Payouts</NavLink>
-          <NavLink to="/goals" onClick={() => setMenuOpen(false)}>Goals</NavLink>
-          <NavLink to="/firms" onClick={() => setMenuOpen(false)}>Firms</NavLink>
-          <NavLink to="/settings" onClick={() => setMenuOpen(false)}>Settings</NavLink>
-        </div>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="sb-overlay"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
-        <div className="nav-actions">
-          <PlatformStatusIndicator
-            statuses={statuses}
-            liveCount={liveCount}
-            lastSync={lastSync}
-            isRunning={isRunning}
-            onToggleSync={isRunning ? stopSync : startSync}
-          />
-
-          <a href={journalUrl} className="journal-link">
-            Trading Journal
-          </a>
-
-          <CurrencyBox />
-
-          <div className="drive-status">
-            <span
-              title={
-                !driveReady
-                  ? "Drive not initialized"
-                  : logged
-                    ? "Connected to Google"
-                    : "Disconnected from Google"
-              }
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                backgroundColor: dotColor,
-                display: "inline-block",
-                boxShadow: "0 0 0 2px rgba(255,255,255,0.1)",
-              }}
-            />
-            {logged ? (
-              <>
-                <button className="btn ghost small icon-only" title="Logout do Google" onClick={logout}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
-                  </svg>
-                </button>
-                <button className="btn ghost small icon-only" title="Salvar backup no Drive" onClick={onBackup}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="16 16 12 12 8 16" /><line x1="12" y1="12" x2="12" y2="21" />
-                    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-                  </svg>
-                </button>
-              </>
-            ) : (
-              <button className="btn ghost small" onClick={login}>Google</button>
-            )}
+      {/* ── Sidebar ── */}
+      <nav
+        className={`sidebar${isPinned ? " pinned" : ""}${
+          mobileOpen ? " mobile-open" : ""
+        }`}
+        onMouseEnter={() => !isPinned && setIsHovered(true)}
+        onMouseLeave={() => {
+          setIsHovered(false);
+          setPlatformOpen(false);
+        }}
+      >
+        {/* Header */}
+        <div className="sb-header">
+          <div className="sb-logo">
+            <span className="sb-logo-icon">📊</span>
+            <span className="sb-logo-text">PropManager</span>
+          </div>
+          <div className="sb-header-actions">
+            <button
+              className="sb-pin-btn"
+              onClick={onTogglePin}
+              title={isPinned ? "Collapse sidebar" : "Pin sidebar open"}
+            >
+              {isPinned ? (
+                <ChevronsLeft size={15} />
+              ) : (
+                <ChevronsRight size={15} />
+              )}
+            </button>
+            <button
+              className="sb-close-btn"
+              onClick={() => setMobileOpen(false)}
+            >
+              <X size={17} />
+            </button>
           </div>
         </div>
-      </div>
-    </nav>
+
+        {/* Navigation */}
+        <div className="sb-nav">
+          {NAV_LINKS.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `sb-link${isActive ? " active" : ""}`
+              }
+              onClick={() => setMobileOpen(false)}
+              title={!isExpanded ? label : undefined}
+            >
+              <span className="sb-link-icon">
+                <Icon size={18} strokeWidth={1.75} />
+              </span>
+              <span className="sb-link-label">{label}</span>
+            </NavLink>
+          ))}
+
+          <div className="sb-divider" />
+
+          {/* Cross-app link */}
+          <a
+            href={journalUrl}
+            className="sb-link sb-external"
+            title={!isExpanded ? "Trading Journal" : undefined}
+          >
+            <span className="sb-link-icon">
+              <BookOpen size={20} strokeWidth={2} />
+            </span>
+            <span className="sb-link-label">
+              Trading Journal
+              <ExternalLink
+                size={12}
+                style={{ opacity: 0.6, marginLeft: 4 }}
+              />
+            </span>
+          </a>
+        </div>
+
+        {/* ── Footer ── */}
+        <div className="sb-footer">
+          {/* Platform Status */}
+          <div
+            ref={platformItemRef}
+            className={`sb-footer-item${platformOpen ? " active" : ""}`}
+            onClick={togglePlatform}
+            title={!isExpanded ? "Platforms" : undefined}
+            role="button"
+          >
+            <div className="sb-footer-icon">
+              <Activity size={18} strokeWidth={1.75} />
+              <span
+                className="sb-footer-dot"
+                style={{ background: platformDotColor }}
+              />
+            </div>
+            <div className="sb-footer-content" style={{ justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>Platforms</span>
+              {liveCount > 0 && (
+                <span className="sb-live-badge">{liveCount} LIVE</span>
+              )}
+            </div>
+          </div>
+
+          {/* Currency */}
+          <div
+            className="sb-footer-item"
+            title={!isExpanded ? `Currency: ${currency}` : undefined}
+          >
+            <div className="sb-footer-icon" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+              {currency}
+            </div>
+            <div className="sb-footer-content">
+              <div className="sb-currency-actions">
+                <button
+                  className={`sb-currency-btn${currency === "USD" ? " active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setCurrency("USD"); }}
+                >
+                  USD
+                </button>
+                <span className="sb-currency-sep">|</span>
+                <button
+                  className={`sb-currency-btn${currency === "BRL" ? " active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); setCurrency("BRL"); }}
+                >
+                  BRL
+                </button>
+                <span className="sb-currency-rate">= {rate}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Drive */}
+          <div className="sb-footer-item" title={driveTitle}>
+            <div className="sb-footer-icon">
+              <Cloud size={18} strokeWidth={1.75} />
+              <span
+                className="sb-footer-dot"
+                style={{ background: dotColor }}
+              />
+            </div>
+            <div className="sb-footer-content">
+              <div className="sb-drive-actions">
+                {logged ? (
+                  <>
+                    <button
+                      className="sb-icon-btn"
+                      title="Backup to Drive"
+                      onClick={(e) => { e.stopPropagation(); onBackup(); }}
+                    >
+                      <CloudUpload size={13} />
+                      <span className="sb-drive-label">Backup</span>
+                    </button>
+                    <button
+                      className="sb-icon-btn"
+                      title="Logout"
+                      onClick={(e) => { e.stopPropagation(); logout(); }}
+                    >
+                      <LogOut size={13} />
+                      <span className="sb-drive-label">Logout</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="sb-icon-btn sb-drive-login"
+                    title="Login with Google"
+                    onClick={(e) => { e.stopPropagation(); login(); }}
+                  >
+                    <LogIn size={13} />
+                    <span className="sb-drive-label">Google Login</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* ── Platform dropdown (outside sidebar, to the right) ── */}
+      {platformOpen && (
+        <div
+          ref={platformDropdownRef}
+          className="sb-platform-dropdown"
+          style={{ top: platformDropdownTop }}
+        >
+          <div className="sb-platform-dropdown-header">
+            <h4>Platforms</h4>
+            <button
+              className={`sb-sync-btn${isRunning ? " running" : " stopped"}`}
+              onClick={isRunning ? stopSync : startSync}
+            >
+              {isRunning ? "⏸ Stop" : "▶ Start"}
+            </button>
+          </div>
+
+          {statuses.length === 0 ? (
+            <p
+              style={{
+                color: "#6b7280",
+                fontSize: 12,
+                textAlign: "center",
+                padding: 16,
+                margin: 0,
+              }}
+            >
+              No platforms configured
+            </p>
+          ) : (
+            statuses.map((s) => (
+              <div key={s.platformId} className="sb-platform-row">
+                <span style={{ flexShrink: 0 }}>
+                  {PLATFORM_LOGOS[s.platformId] || "🔗"}
+                </span>
+                <div className="sb-platform-info">
+                  <div className="sb-platform-name">
+                    {s.platformId}
+                    <span
+                      className="sb-platform-dot"
+                      style={{
+                        background: s.online ? "#22c55e" : "#ef4444",
+                      }}
+                    />
+                  </div>
+                  {s.online ? (
+                    <div className="sb-platform-detail">
+                      {s.connections?.length || 0} conn ·{" "}
+                      {s.positionsCount || 0} positions
+                    </div>
+                  ) : (
+                    <div
+                      className="sb-platform-detail"
+                      style={{ color: "#ef4444" }}
+                    >
+                      Offline — check connection
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+
+          {lastSync && (
+            <div
+              style={{
+                marginTop: 10,
+                fontSize: 11,
+                color: "#4a5568",
+                textAlign: "center",
+              }}
+            >
+              Last sync: {timeAgo(lastSync)}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }

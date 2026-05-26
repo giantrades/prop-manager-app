@@ -22,6 +22,9 @@ import {
 export default function App() {
   const [driveReady, setDriveReady] = useState(false);
   const [logged, setLogged] = useState(false);
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    return localStorage.getItem("sidebarPinned") !== "false";
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -49,42 +52,28 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = async () => {
-    await signIn();
-    setLogged(isSignedIn());
-  };
-  const handleLogout = async () => {
-    await signOut();
-    setLogged(isSignedIn());
-  };
-  const handleBackup = async () => {
-    await driveBackup(); // backup direto
-  };
-  const handleList = async () => {
-    const files = await listFiles();
-    console.log("📄 Arquivos no Drive:", files);
-    alert("Arquivos listados no console.");
+  const handleTogglePin = () => {
+    setSidebarPinned((p) => {
+      const next = !p;
+      localStorage.setItem("sidebarPinned", String(next));
+      return next;
+    });
   };
 
   return (
-    <div>
-      <Navbar
-        driveReady={driveReady}
-        logged={logged}
-        onLogin={handleLogin}
-        onLogout={handleLogout}
-        onBackup={handleBackup}
-        onList={handleList}
-      />
-      <main className="container">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/accounts" element={<Accounts />} />
-          <Route path="/payouts" element={<Payouts />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/firms" element={<Firms />} />
-          <Route path="/goals" element={<Goals />} />
-        </Routes>
+    <div className={`app-shell${sidebarPinned ? " sidebar-pinned" : ""}`}>
+      <Navbar isPinned={sidebarPinned} onTogglePin={handleTogglePin} />
+      <main className="main-content">
+        <div className="container">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/accounts" element={<Accounts />} />
+            <Route path="/payouts" element={<Payouts />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/firms" element={<Firms />} />
+            <Route path="/goals" element={<Goals />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );
