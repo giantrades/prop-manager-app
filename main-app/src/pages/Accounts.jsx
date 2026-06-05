@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom'
 import { useCurrency } from '@apps/state'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats } from '@apps/lib/dataStore';
 
-const statuses = ['Live', 'Funded', 'Challenge', 'Challenge Done', 'Standby']
+const statuses = ['Live', 'Funded', 'Challenge', 'Standby']
 const types = ['Futures', 'Forex', 'Personal', 'Cripto']
 
 // Componente de Dropdown customizado (igual ao filtro de status)
@@ -449,43 +449,56 @@ export default function Accounts() {
 
   return (
     <div className="accounts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* CARDS DE RESUMO */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)', borderRadius: 10, boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)', padding: '16px 24px', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }} className="hover-card">
-          <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>Total Accounts</h4>
-          <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-strong, #fff)' }}>{filteredAccounts.length}</div>
+      {/* CARDS DE RESUMO PREMIUM */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+        {/* Card 1: Total Accounts */}
+        <div style={{ flex: 1, minWidth: 260, background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }} className="hover-card">
+          <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, background: 'radial-gradient(circle, rgba(124,92,255,0.15) 0%, transparent 70%)', borderRadius: '50%' }} />
+          <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, color: 'var(--muted)' }}>Total Accounts</h4>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: '2.5rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>{filteredAccounts.length}</span>
+            <span style={{ fontSize: 13, color: '#a78bfa' }}>active items</span>
+          </div>
+          <div style={{ display: 'flex', gap: 4, height: 6, borderRadius: 3, overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+            {statuses.map(s => {
+              const count = filteredAccounts.filter(a => a.status === s).length;
+              if (count === 0) return null;
+              const pct = (count / filteredAccounts.length) * 100;
+              const col = s === 'Live' ? '#10b981' : s === 'Funded' ? '#3b82f6' : s === 'Challenge' ? '#f59e0b' : '#6b7280';
+              return <div key={s} style={{ width: `${pct}%`, background: col, transition: 'width 0.3s' }} title={`${s}: ${count}`} />;
+            })}
+          </div>
         </div>
 
-        <div style={{ flex: 1, background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)', borderRadius: 10, boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)', padding: '16px 24px', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
-          <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>By Category</h4>
-          {types.map((type) => {
-            const count = filteredAccounts.filter((a) => a.type === type).lengthgi
-            const color = type === 'Forex' ? 'lavander' : type === 'Cripto' ? 'orange' : type === 'Futures' ? 'pink' : type === 'Personal' ? 'purple' : 'gray'
-            return (
-              <div key={type} style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                {count > 0 && (
-                  <span className={`pill ${color}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, borderRadius: '9999px', fontSize: 13, fontWeight: 600, marginRight: 8, padding: '0 6px', transition: 'all 0.3s ease' }}>{count}</span>
-                )}
-                <span>{type}</span>
-              </div>
-            )
-          })}
+        {/* Card 2: Categories */}
+        <div style={{ flex: 1, minWidth: 260, background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }} className="hover-card">
+          <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, background: 'radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 70%)', borderRadius: '50%' }} />
+          <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, color: 'var(--muted)', marginBottom: 16 }}>By Category</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {types.map(type => {
+              const count = filteredAccounts.filter(a => a.type === type).length;
+              if (count === 0) return null;
+              const color = type === 'Forex' ? 'lavander' : type === 'Cripto' ? 'orange' : type === 'Futures' ? 'pink' : type === 'Personal' ? 'purple' : 'gray';
+              return (
+                <div key={type} className={`pill ${color}`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: 13, background: 'rgba(255,255,255,0.03)' }}>
+                  <span style={{ fontWeight: 700 }}>{count}</span>
+                  <span style={{ opacity: 0.8 }}>{type}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div style={{ flex: 1, background: 'linear-gradient(180deg, var(--card-bg, #0b1018) 0%, var(--background, #0f172a) 100%)', borderRadius: 10, boxShadow: '0 4px 18px rgba(0, 0, 0, 0.35)', padding: '16px 24px', transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}>
-          <h4 style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-muted, #b4b8c0)' }}>By Status</h4>
-          {statuses.map((status) => {
-            const count = accounts.filter((a) => a.status === status).length
-            const color = status === 'Live' ? 'green' : status === 'Funded' ? 'blue' : status === 'Challenge' ? 'yellow' : status === 'Challenge Done' ? 'yellow' : status === 'Standby' ? 'gray' : 'gray'
-            return (
-              <div key={status} style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                {count > 0 && (
-                  <span className={`pill ${color}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, borderRadius: '9999px', fontSize: 13, fontWeight: 600, marginRight: 8, padding: '0 6px', transition: 'all 0.3s ease' }}>{count}</span>
-                )}
-                <span>{status}</span>
-              </div>
-            )
-          })}
+        {/* Card 3: Capital */}
+        <div style={{ flex: 1, minWidth: 260, background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(5,150,105,0.05) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }} className="hover-card">
+          <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 80, opacity: 0.05, transform: 'rotate(15deg)' }}>💰</div>
+          <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, color: '#34d399' }}>Capital em Gestão</h4>
+          <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', marginTop: 12, textShadow: '0 2px 10px rgba(16,185,129,0.2)' }}>
+            {fmt(filteredAccounts.reduce((sum, a) => sum + (Number(a.currentFunding) || 0), 0))}
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>
+            Soma de fundos ativos
+          </div>
         </div>
       </div>
 
@@ -524,7 +537,7 @@ export default function Accounts() {
             options={accountStatuses.map(s => ({ value: s, label: s }))}
             selectedValues={accountStatusFilter}
             onChange={setAccountStatusFilter}
-            pillColors={{ Live: "green", Funded: "blue", Challenge: "yellow", "Challenge Done": "yellow", Standby: "gray", live: "green", funded: "blue", challenge: "yellow" }}
+            pillColors={{ Live: "green", Funded: "blue", Challenge: "yellow", Standby: "gray", live: "green", funded: "blue", challenge: "yellow" }}
           />
 
           <ModernMultiSelect
@@ -626,7 +639,6 @@ export default function Accounts() {
                           Live: "green",
                           Funded: "blue",
                           Challenge: "yellow",
-                          "Challenge Done": "yellow",
                           Standby: "gray"
                         }}
                       />

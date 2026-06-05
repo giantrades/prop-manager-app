@@ -160,10 +160,48 @@ export function updateAccount(id, patch){
 }
 export function deleteAccount(id){
   const data = load()
-  data.accounts = data.accounts.filter(a=>a.id!==id)
-  data.payouts = data.payouts.map(p=> ({...p, accountIds: p.accountIds?.filter(aid=>aid!==id) || []}))
-  // remove trades that referenced this account (or keep but mark?) -> we'll remove references
-  data.trades = data.trades.map(t => t.accountId === id ? ({...t, accountId: null}) : t)
+  // Capture account snapshot BEFORE removing it
+  const accountToDelete = data.accounts.find(a => a.id === id)
+
+  data.accounts = data.accounts.filter(a => a.id !== id)
+
+  // Instead of silently dropping the accountId from payouts, preserve a snapshot
+  // of the deleted account inside each affected payout so historical data is kept.
+  data.payouts = data.payouts.map(p => {
+    const isInAccountIds = Array.isArray(p.accountIds) && p.accountIds.includes(id)
+    const isInSplit      = p.splitByAccount && p.splitByAccount[id]
+    if (!isInAccountIds && !isInSplit) return p
+
+    // Build the archived snapshot entry
+    const archivedEntry = {
+      id,
+      name:   accountToDelete?.name   || 'Conta Deletada',
+      type:   accountToDelete?.type   || 'Futures',
+      firmId: accountToDelete?.firmId || null,
+    }
+
+    // Move the live splitByAccount[id] entry to a keyed archive slot
+    const updatedSplit = { ...(p.splitByAccount || {}) }
+    if (updatedSplit[id]) {
+      updatedSplit[`__archived_${id}`] = {
+        ...updatedSplit[id],
+        _archived:     true,
+        _accountName:  archivedEntry.name,
+        _accountType:  archivedEntry.type,
+      }
+      delete updatedSplit[id]
+    }
+
+    return {
+      ...p,
+      accountIds:        (p.accountIds || []).filter(aid => aid !== id),
+      splitByAccount:    updatedSplit,
+      // _archivedAccounts is a list of snapshot objects for all deleted accounts
+      _archivedAccounts: [...(p._archivedAccounts || []), archivedEntry],
+    }
+  })
+
+  data.trades = data.trades.map(t => t.accountId === id ? ({ ...t, accountId: null }) : t)
   save(data)
 }
 
@@ -278,12 +316,12 @@ export function getAccountStats(accountId){
   const data = load()
   const acc = data.accounts.find(a=>a.id===accountId)
   if (!acc) return null
-  const payouts = data.payouts.filter(p=> (p.splitByAccount && p.splitByAccount[accountId]))
-  const totalNet = payouts.reduce((s,p)=> s + (p.splitByAccount[accountId]?.net||0), 0)
+  const payouts = data.payouts.filter(p=> (p.splitByAccount && p.splitByAccount[accountId]) || (p.splitByAccount && p.splitByAccount[`__archived_${accountId}`]))
+  const totalNet = payouts.reduce((s,p)=> s + ((p.splitByAccount[accountId]?.net || p.splitByAccount[`__archived_${accountId}`]?.net) || 0), 0)
   const last = payouts.slice().sort((a,b)=> (a.dateCreated>b.dateCreated?-1:1))[0]
   const roi = acc.initialFunding>0 ? (totalNet + (acc.currentFunding - acc.initialFunding)) / acc.initialFunding : 0
   const totalPayouts = totalNet
-  const lastPayoutAmount = last ? (last.splitByAccount[accountId]?.net||0) : 0
+  const lastPayoutAmount = last ? ((last.splitByAccount[accountId]?.net || last.splitByAccount[`__archived_${accountId}`]?.net) || 0) : 0
   const freqDays = acc.payoutFrequency==='daily' ? 1 : acc.payoutFrequency==='weekly' ? 7 : acc.payoutFrequency==='biweekly' ? 14 : 30
   const lastDate = last?.approvedDate || last?.dateCreated || acc.dateCreated
   const nextPayout = lastDate ? new Date(new Date(lastDate).getTime()+freqDays*86400000).toISOString().slice(0,10) : null

@@ -190,7 +190,7 @@ function FiltersBar({
                   <button
                     className="btn ghost small"
                     style={{ flex: 1 }}
-                    onClick={() => setAccountStatusFilter(["live", "funded"])}
+                    onClick={() => setAccountStatusFilter(["live", "funded", "archived"])}
                   >
                     Reset Default
                   </button>
@@ -391,6 +391,12 @@ function useFiltered(accountStatusFilter = ["live", "funded"], dateFilter = {}, 
 
     if (p.accountName && checkAccountStatus(accByName[p.accountName])) return true;
 
+    // Payouts de contas arquivadas (deletadas)
+    if (p._archivedAccounts?.length) {
+      const hasMatchingArchivedAcc = p._archivedAccounts.some(arc => catSet.has(arc.type));
+      if (hasMatchingArchivedAcc) return true;
+    }
+
     return false;
   }
 
@@ -535,10 +541,14 @@ function PatrimonioLine({ accountStatusFilter = ["live", "funded"], dateFilter =
       if (!ids.length) continue
       let bucket = ev.get(key) || {}
       for (const id of ids) {
-        const acc = accounts.find(a => a.id === id) || allAccounts.find(a => a.id === id)
-        if (!acc) continue
-        if (!activeCats.includes(acc.type)) continue
-        bucket[acc.type] = (bucket[acc.type] || 0) + (+p.amountReceived || 0)
+        let acc = accounts.find(a => a.id === id) || allAccounts.find(a => a.id === id);
+        if (!acc) {
+          // Tenta usar snapshot arquivado
+          acc = p._archivedAccounts?.find(arc => arc.id === id);
+        }
+        if (!acc) continue;
+        if (!activeCats.includes(acc.type)) continue;
+        bucket[acc.type] = (bucket[acc.type] || 0) + (+p.amountReceived || 0);
       }
       ev.set(key, bucket)
     }
@@ -1809,9 +1819,7 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
                           ? "blue"
                           : a.status === "Challenge"
                             ? "yellow"
-                            : a.status === "Challenge Done"
-                              ? "yellow"
-                              : "gray")
+                            : "gray")
                     }
                   >
                     {a.status}
@@ -1835,7 +1843,7 @@ function AccountsOverview({ accountStatusFilter = ["live", "funded"], dateFilter
 export default function Dashboard() {
 
   // Account status filter
-  const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded"]);
+  const [accountStatusFilter, setAccountStatusFilter] = useState(["live", "funded", "archived"]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef(null);
   const [dateFilter, setDateFilter] = useState({ start: null, end: null });
@@ -1862,8 +1870,10 @@ export default function Dashboard() {
   const accountStatuses = useMemo(() => {
     const all = (allAccountsData || [])
       .map((a) => a.status?.toLowerCase() || "")
-      .filter((s) => !!s); // remove o ": s is string"
-    return Array.from(new Set(all));
+      .filter((s) => !!s);
+    const set = new Set(all);
+    set.add("archived");
+    return Array.from(set);
   }, [allAccountsData]);
 
   // ✅ Fechar dropdown ao clicar fora
