@@ -491,13 +491,13 @@ export default function Accounts() {
 
         {/* Card 3: Capital */}
         <div style={{ flex: 1, minWidth: 260, background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(5,150,105,0.05) 100%)', backdropFilter: 'blur(10px)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }} className="hover-card">
-          <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 80, opacity: 0.05, transform: 'rotate(15deg)' }}>💰</div>
-          <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, color: '#34d399' }}>Capital em Gestão</h4>
+          <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 80, opacity: 0.05, transform: 'rotate(15deg)' }}></div>
+          <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, color: '#34d399' }}>Assets Under Management (AUM)</h4>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', marginTop: 12, textShadow: '0 2px 10px rgba(16,185,129,0.2)' }}>
             {fmt(filteredAccounts.reduce((sum, a) => sum + (Number(a.currentFunding) || 0), 0))}
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>
-            Soma de fundos ativos
+            Total AUM
           </div>
         </div>
       </div>
