@@ -613,7 +613,7 @@ const EquityArea = ({ trades = [], selectedAccountIds = [], accounts = [], fmt }
             />
             <ReTooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af', marginTop: 10 }} />
-            
+
             {/* Curva 1: Trading PnL (Preenchimento Verde) */}
             <Area
               type="monotone"
@@ -1936,7 +1936,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      
+
 
 
       {/* Grid with main charts */}
@@ -1964,7 +1964,7 @@ export default function Dashboard() {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 80, opacity: 0.08, pointerEvents: 'none' }}>💰</div>
+            <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 80, opacity: 0.08, pointerEvents: 'none' }}></div>
             <div style={{ fontSize: 13, color: '#a3a3a3', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>
               Total Net P&L
             </div>
@@ -1986,7 +1986,7 @@ export default function Dashboard() {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 80, opacity: 0.08, pointerEvents: 'none' }}>🎯</div>
+            <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 80, opacity: 0.08, pointerEvents: 'none' }}></div>
             <div style={{ fontSize: 13, color: '#a3a3a3', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 600 }}>
               Win Rate
             </div>
