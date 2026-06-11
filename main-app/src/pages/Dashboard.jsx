@@ -332,9 +332,8 @@ function SummaryCards({ accountStatusFilter = [], dateFilter = {}, selectedAccou
       color: '#10b981', glow: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.2)',
       sub: payouts.length === 0
         ? '0 payouts'
-        : `${payouts.length} payout${payouts.length !== 1 ? 's' : ''}${
-            deletedAccPayouts > 0 ? ` · 👻 ${deletedAccPayouts} de conta excluída` : ''
-          }`,
+        : `${payouts.length} payout${payouts.length !== 1 ? 's' : ''}${deletedAccPayouts > 0 ? ` · 👻 ${deletedAccPayouts} from deleted accounts` : ''
+        }`,
     },
     {
       label: 'Capital Deployed', value: fmt(totalFunding),
@@ -535,7 +534,7 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 12, position: 'relative' }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>
-          📈 Patrimônio & Financiamento
+          📈 Equity and Funding
         </h3>
         {/* Tab switcher — unchanged */}
         <div style={{ display: 'inline-flex', background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: 3 }}>
@@ -545,7 +544,7 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
             border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600,
             cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: 6
           }}>
-            <span>💸</span> Payouts Retirados
+            <span>💸</span> Payouts & Withdrawals
           </button>
           <button onClick={() => setActiveTab('funding')} style={{
             background: activeTab === 'funding' ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' : 'transparent',
@@ -553,7 +552,7 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
             border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600,
             cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: 6
           }}>
-            <span>💰</span> Funding de Contas
+            <span>💰</span> Funding
           </button>
         </div>
       </div>

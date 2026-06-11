@@ -105,7 +105,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
     ? "#ef4444"
     : "#9CA3AF";
 
-  const isExpanded = isPinned || isHovered || mobileOpen;
+  const isExpanded = isPinned || isHovered || mobileOpen || platformOpen;
 
   /* Close platform dropdown on outside click */
   useEffect(() => {
@@ -176,12 +176,9 @@ export default function Navbar({ isPinned, onTogglePin }) {
       <nav
         className={`sidebar${isPinned ? " pinned" : ""}${
           mobileOpen ? " mobile-open" : ""
-        }`}
+        }${platformOpen ? " platform-open" : ""}`}
         onMouseEnter={() => !isPinned && setIsHovered(true)}
-        onMouseLeave={() => {
-          setIsHovered(false);
-          setPlatformOpen(false);
-        }}
+        onMouseLeave={() => setIsHovered(false)}
       >
         {/* Header */}
         <div className="sb-header">
