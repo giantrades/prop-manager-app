@@ -630,28 +630,17 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
   )
 }
 
-/* =========================================================
-   6) Funding per Category  —  GLASS UPGRADE
-   ========================================================= */
 function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { accounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
-  const [categoryColors, setCategoryColors] = useState({})
 
-  useEffect(() => {
-    const categories = ['Forex', 'Cripto', 'Futures', 'Personal']
-    const colors = {}
-    categories.forEach(cat => {
-      const className = cat === 'Forex' ? 'lavander' : cat === 'Cripto' ? 'orange' : cat === 'Futures' ? 'pink' : cat === 'Personal' ? 'purple' : 'gray'
-      const temp = document.createElement('span'); temp.className = `pill ${className}`
-      document.body.appendChild(temp); colors[cat] = getComputedStyle(temp).color; document.body.removeChild(temp)
-    })
-    setCategoryColors(colors)
-  }, [])
+  // ← remove useState(categoryColors) e o useEffect inteiro
+  const getCatColor = (name) => CAT_HEX[name] || '#6b7280'
 
   const byCat = useMemo(() => {
     const calc = {}
-    for (const a of accounts) calc[a.type] = (calc[a.type] || 0) + (currency === 'USD' ? a.currentFunding : a.currentFunding * rate)
+    for (const a of accounts)
+      calc[a.type] = (calc[a.type] || 0) + (currency === 'USD' ? a.currentFunding : a.currentFunding * rate)
     return calc
   }, [accounts, currency, rate])
 
@@ -661,12 +650,17 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null
     const dp = payload[0].payload
-    const valueFormatted = currency === 'USD' ? `$${dp.value.toLocaleString()}` : `R$${dp.value.toLocaleString()}`
+    const color = getCatColor(dp.name)                         // ← usa getCatColor
+    const valueFormatted = currency === 'USD'
+      ? `$${dp.value.toLocaleString()}` : `R$${dp.value.toLocaleString()}`
     const pct = ((dp.value / total) * 100).toFixed(1)
     return (
-      <div style={{ background: '#0f1218', border: `1px solid ${categoryColors[dp.name] || 'gray'}`, color: '#e7eaf0', padding: 10, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+      <div style={{
+        background: '#0f1218', border: `1px solid ${color}`,
+        color: '#e7eaf0', padding: 10, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+      }}>
         <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{dp.name}</p>
-        <p style={{ color: categoryColors[dp.name] || 'gray', margin: 0, fontWeight: 600 }}>{`${valueFormatted} (${pct}%)`}</p>
+        <p style={{ color, margin: 0, fontWeight: 600 }}>{`${valueFormatted} (${pct}%)`}</p>
       </div>
     )
   }
@@ -680,7 +674,9 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" outerRadius={95} innerRadius={45}>
-              {data.map((entry, i) => <Cell key={`cell-${i}`} fill={categoryColors[entry.name] || 'gray'} />)}
+              {data.map((entry, i) => (
+                <Cell key={`cell-${i}`} fill={getCatColor(entry.name)} />   // ← cores corretas
+              ))}
             </Pie>
             <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
             <Tooltip content={<CustomTooltip />} />
@@ -688,25 +684,33 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
         </ResponsiveContainer>
       </div>
 
-      {/* Breakdown rows */}
       <div style={{ ...SEP, marginTop: 4 }}>
         {data.map((row) => {
-          const valueFormatted = currency === 'USD' ? `$${row.value.toLocaleString()}` : `R$${row.value.toLocaleString()}`
+          const color = getCatColor(row.name)                  // ← usa getCatColor
+          const valueFormatted = currency === 'USD'
+            ? `$${row.value.toLocaleString()}` : `R$${row.value.toLocaleString()}`
           const pct = ((row.value / total) * 100).toFixed(1)
-          const hex = CAT_HEX[row.name] || '#6b7280'
           return (
-            <div key={row.name} style={{ display: 'flex', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div key={row.name} style={{
+              display: 'flex', alignItems: 'center',
+              padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.04)'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: categoryColors[row.name] || 'gray', flexShrink: 0 }} />
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
                 <span className={`pill ${catPillClass(row.name)}`} style={{ fontSize: 11 }}>{row.name}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{valueFormatted}</div>
                 <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{pct}%</div>
               </div>
-              {/* mini bar */}
-              <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, marginLeft: 12, overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', background: hex, borderRadius: 2, transition: 'width 0.4s ease' }} />
+              <div style={{
+                width: 60, height: 4, background: 'rgba(255,255,255,0.05)',
+                borderRadius: 2, marginLeft: 12, overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%', background: color,
+                  borderRadius: 2, transition: 'width 0.4s ease'
+                }} />
               </div>
             </div>
           )
@@ -715,7 +719,6 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
     </div>
   )
 }
-
 /* =========================================================
    7) Goals Distribution  —  GLASS UPGRADE
    ========================================================= */
