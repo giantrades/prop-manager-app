@@ -238,9 +238,20 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
     : new Date(now.getTime() - parseInt(timeRange, 10) * 86400000)
   start.setHours(0, 0, 0, 0)
 
-  const allCats = Array.from(new Set(accounts.map(a => a.type).filter(Boolean)))
+  // Collect types from active accounts
+  const activeCatTypes = Array.from(new Set(accounts.map(a => a.type).filter(Boolean)))
+  // Also collect types from archived/deleted accounts stored in payouts
+  // so that deleted account categories are still considered when filtering
+  const archivedCatTypes = Array.from(new Set(
+    payouts.flatMap(p => (p._archivedAccounts || []).map(arc => arc.type).filter(Boolean))
+  ))
+  const allCats = Array.from(new Set([...activeCatTypes, ...archivedCatTypes]))
   const effectiveCats = (!selCats?.length || isMarkAllActive) ? allCats : selCats
   const catSet = new Set(effectiveCats)
+
+  // Whether "archived" (deleted) accounts should be shown based on status filter
+  const showArchived = !accountStatusFilter || accountStatusFilter.length === 0 ||
+    accountStatusFilter.includes('archived')
 
   const filteredAccounts = accounts.filter(a => {
     const matchesCategory = catSet.has(a.type)
@@ -274,9 +285,11 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
     const checkAccountStatus = (acc) => { if (!acc) return false; return catSet.has(acc.type) }
     if (Array.isArray(p.accountIds) && p.accountIds.some(id => checkAccountStatus(accById[id]))) return true
     if (p.accountId && checkAccountStatus(accById[p.accountId])) return true
-    if (Array.isArray(p.accounts)) return p.accounts.some(n => checkAccountStatus(accByName[n]))
+    if (Array.isArray(p.accounts) && p.accounts.some(n => checkAccountStatus(accByName[n]))) return true
     if (p.accountName && checkAccountStatus(accByName[p.accountName])) return true
-    if (p._archivedAccounts?.length) {
+    // Payouts from deleted/archived accounts: include if user has "archived" status filter active
+    // and the archived account type matches the active category filter
+    if (showArchived && p._archivedAccounts?.length) {
       const hasMatchingArchivedAcc = p._archivedAccounts.some(arc => catSet.has(arc.type))
       if (hasMatchingArchivedAcc) return true
     }
@@ -310,11 +323,18 @@ function SummaryCards({ accountStatusFilter = [], dateFilter = {}, selectedAccou
     accountStatusFilter.length === allPossibleStatuses.length &&
     allPossibleStatuses.every(s => accountStatusFilter.includes(s))
 
+  // Count payouts that come (wholly or partially) from deleted accounts
+  const deletedAccPayouts = payouts.filter(p => p._archivedAccounts?.length > 0).length
+
   const CARDS = [
     {
       label: 'Total Payouts', value: fmt(totalNetPayouts),
       color: '#10b981', glow: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.2)',
-      sub: `${payouts.length} payout${payouts.length !== 1 ? 's' : ''}`,
+      sub: payouts.length === 0
+        ? '0 payouts'
+        : `${payouts.length} payout${payouts.length !== 1 ? 's' : ''}${
+            deletedAccPayouts > 0 ? ` · 👻 ${deletedAccPayouts} de conta excluída` : ''
+          }`,
     },
     {
       label: 'Capital Deployed', value: fmt(totalFunding),
@@ -387,14 +407,22 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
     else if (timeRange === '180') start = new Date(end.getTime() - 179 * 86400000)
     else if (timeRange === '365') start = new Date(end.getTime() - 364 * 86400000)
     else {
-      const min = allAccounts.length ? Math.min(...allAccounts.map(a => +new Date(a.dateCreated))) : +end
+      // Include payout dates in the range calculation in case all accounts are deleted
+      const accDates = allAccounts.map(a => +new Date(a.dateCreated))
+      const payoutDates = payouts.map(p => +new Date(p.dateCreated))
+      const allDates = [...accDates, ...payoutDates].filter(n => !isNaN(n))
+      const min = allDates.length ? Math.min(...allDates) : +end
       start = new Date(min)
     }
     start.setHours(0, 0, 0, 0); end.setHours(23, 59, 59, 999)
     return { start, end, startKey: dStr(start), endKey: dStr(end) }
-  }, [allAccounts, timeRange])
+  }, [allAccounts, payouts, timeRange])
 
-  const ALL_CATS = React.useMemo(() => Array.from(new Set(allAccounts.map(a => a.type))), [allAccounts])
+  const ALL_CATS = React.useMemo(() => {
+    const fromAccounts = allAccounts.map(a => a.type).filter(Boolean)
+    const fromArchived = payouts.flatMap(p => (p._archivedAccounts || []).map(arc => arc.type).filter(Boolean))
+    return Array.from(new Set([...fromAccounts, ...fromArchived]))
+  }, [allAccounts, payouts])
   const showTotalOnly = selected.length === 0 || selected.length === ALL_CATS.length
   const activeCats = showTotalOnly ? ALL_CATS : selected
 
@@ -427,14 +455,25 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
     for (const p of payouts) {
       const key = dStr(p.dateCreated)
       if (new Date(key) < range.start || new Date(key) > range.end) continue
-      const ids = p.accountIds || []; if (!ids.length) continue
       let bucket = ev.get(key) || {}
+      let contributed = false
+      // Try to resolve via live accountIds
+      const ids = p.accountIds || []
       for (const id of ids) {
         const acc = accounts.find(a => a.id === id) || allAccounts.find(a => a.id === id)
-        if (!acc) continue; if (!activeCats.includes(acc.type)) continue
+        if (!acc || !activeCats.includes(acc.type)) continue
         bucket[acc.type] = (bucket[acc.type] || 0) + (+p.amountReceived || 0)
+        contributed = true
       }
-      ev.set(key, bucket)
+      // Fall back to archived account snapshots for deleted accounts
+      if (!contributed && p._archivedAccounts?.length) {
+        for (const arc of p._archivedAccounts) {
+          if (!activeCats.includes(arc.type)) continue
+          bucket[arc.type] = (bucket[arc.type] || 0) + (+p.amountReceived || 0)
+          contributed = true
+        }
+      }
+      if (contributed) ev.set(key, bucket)
     }
     return ev
   }, [payouts, accounts, allAccounts, activeCats, range])
@@ -806,6 +845,9 @@ function RecentPayouts({ accountStatusFilter = ['live', 'funded'], dateFilter = 
   const fmtDate = (d) => { if (!d) return '--'; return new Date(d).toLocaleDateString('en-US') }
   const navigateToPayout = (id) => { window.location.href = `/payouts?id=${id}` }
 
+  // Helper: detect if a payout belongs (even partially) to a deleted account
+  const isDeletedAccountPayout = (p) => p._archivedAccounts?.length > 0
+
   return (
     <div style={glass()}>
       <GlowOrb color="rgba(16,185,129,0.08)" />
@@ -823,21 +865,44 @@ function RecentPayouts({ accountStatusFilter = ['live', 'funded'], dateFilter = 
           <tbody>
             {rows.length === 0 ? (
               <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No payouts in this period</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.id} onClick={() => navigateToPayout(r.id)}
-                style={{ cursor: 'pointer', transition: 'background 0.15s' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13, color: '#94a3b8' }}>{fmtDate(r.dateCreated)}</td>
-                <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <span className={`pill ${catPillClass(r.type)}`}>{r.type || '--'}</span>
-                </td>
-                <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <span className={`pill ${r.status === 'Completed' ? 'greenpayout' : r.status === 'Pending' ? 'yellowpayout' : 'gray'}`}>{r.status}</span>
-                </td>
-                <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#22c55e', fontWeight: 700, fontSize: 14 }}>+{fmt(r.amountReceived || 0)}</td>
-              </tr>
-            ))}
+            ) : rows.map((r) => {
+              const fromDeleted = isDeletedAccountPayout(r)
+              const archivedNames = (r._archivedAccounts || []).map(a => a.name).join(', ')
+              return (
+                <tr key={r.id} onClick={() => navigateToPayout(r.id)}
+                  style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13, color: '#94a3b8' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{fmtDate(r.dateCreated)}</span>
+                      {fromDeleted && (
+                        <span
+                          title={`Conta(s) excluída(s): ${archivedNames || 'desconhecido'}`}
+                          style={{
+                            fontSize: 10, fontWeight: 600, color: '#94a3b8',
+                            background: 'rgba(148,163,184,0.12)',
+                            border: '1px solid rgba(148,163,184,0.2)',
+                            borderRadius: 4, padding: '1px 5px',
+                            cursor: 'help', letterSpacing: '0.3px',
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                          }}
+                        >
+                          👻 deleted
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <span className={`pill ${catPillClass(r.type)}`}>{r.type || '--'}</span>
+                  </td>
+                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <span className={`pill ${r.status === 'Completed' ? 'greenpayout' : r.status === 'Pending' ? 'yellowpayout' : 'gray'}`}>{r.status}</span>
+                  </td>
+                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#22c55e', fontWeight: 700, fontSize: 14 }}>+{fmt(r.amountReceived || 0)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -938,16 +1003,31 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
   const data = React.useMemo(() => {
     const totals = {}
+    const archivedFlags = {} // track which firms have archived-account payouts
     payouts.forEach((p) => {
       const amountRaw = p.amountReceived ?? p.amount ?? 0
       const amount = currency === 'USD' ? amountRaw : amountRaw * rate
-      if (p.firmId) { totals[p.firmId] = (totals[p.firmId] || 0) + amount; return }
-      if (Array.isArray(p.accountIds)) { p.accountIds.forEach((accId) => { const acc = accounts.find((a) => a.id === accId); if (acc?.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount }); return }
-      if (p.accountId) { const acc = accounts.find((a) => a.id === p.accountId); if (acc?.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; return }
-      if (Array.isArray(p.accounts)) { p.accounts.forEach((name) => { const acc = accounts.find((a) => a.name === name); if (acc?.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount }); return }
-      if (p.accountName) { const acc = accounts.find((a) => a.name === p.accountName); if (acc?.firmId) totals[acc.firmId] = (totals[acc.firmId] || 0) + amount }
+      let resolved = false
+      if (p.firmId) { totals[p.firmId] = (totals[p.firmId] || 0) + amount; resolved = true }
+      else if (Array.isArray(p.accountIds) && p.accountIds.length) {
+        p.accountIds.forEach((accId) => { const acc = accounts.find((a) => a.id === accId); if (acc?.firmId) { totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; resolved = true } })
+      } else if (p.accountId) {
+        const acc = accounts.find((a) => a.id === p.accountId); if (acc?.firmId) { totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; resolved = true }
+      } else if (Array.isArray(p.accounts)) {
+        p.accounts.forEach((name) => { const acc = accounts.find((a) => a.name === name); if (acc?.firmId) { totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; resolved = true } })
+      } else if (p.accountName) {
+        const acc = accounts.find((a) => a.name === p.accountName); if (acc?.firmId) { totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; resolved = true }
+      }
+      // Fall back to archived account snapshots for deleted accounts
+      if (!resolved && p._archivedAccounts?.length) {
+        p._archivedAccounts.forEach((arc) => { if (arc.firmId) { totals[arc.firmId] = (totals[arc.firmId] || 0) + amount; archivedFlags[arc.firmId] = true } })
+      }
+      // Also flag firms that had some live + some archived account in same payout
+      if (p._archivedAccounts?.length) {
+        p._archivedAccounts.forEach((arc) => { if (arc.firmId) archivedFlags[arc.firmId] = true })
+      }
     })
-    return firms.map((f) => ({ id: f.id, name: f.name, logo: f.logo, type: f.type, color: f.color, value: totals[f.id] || 0 }))
+    return firms.map((f) => ({ id: f.id, name: f.name, logo: f.logo, type: f.type, color: f.color, value: totals[f.id] || 0, hasArchived: !!archivedFlags[f.id] }))
   }, [payouts, accounts, firms, currency, rate])
 
   const CustomTooltip = ({ active, payload }) => {
@@ -959,6 +1039,11 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
         <div style={{ fontWeight: 700, marginBottom: 2 }}>{d.name}</div>
         <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6 }}>({d.type})</div>
         <div style={{ color: getFirmColor(d.id), fontWeight: 700 }}>{fmt(d.value)}</div>
+        {d.hasArchived && (
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+            👻 inclui contas excluídas
+          </div>
+        )}
       </div>
     )
   }
