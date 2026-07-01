@@ -1,5 +1,6 @@
 // main-app/src/pages/Accounts.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ReactDOM from 'react-dom'
 import { useCurrency } from '@apps/state'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats } from '@apps/lib/dataStore';
@@ -781,6 +782,7 @@ function NewAccountForm({ onCreate, onCancel, firms = [] }) {
 
 function AccountDetail({ id, update, getStats, firms = [], onClose }) {
   const { currency, rate } = useCurrency();
+  const navigate = useNavigate();
   const [local, setLocal] = useState(null);
 
   useEffect(() => {
@@ -963,7 +965,7 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
                 const attachment = p.attachments?.[id] || null;
                 const openPayoutPage = () => {
                   localStorage.setItem('openPayoutId', p.id);
-                  window.location.href = '/payouts';
+                  navigate('/payouts');
                 };
 
                 return (

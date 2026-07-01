@@ -61,6 +61,20 @@ function load() {
     }
     data.accounts = data.accounts || []
     data.payouts = data.payouts || []
+    
+    // MIGRATION: Fix archived accounts missing profitSplit
+    let needsSave = false;
+    data.payouts.forEach(p => {
+      if (p._archivedAccounts && p._archivedAccounts.length > 0) {
+        p._archivedAccounts.forEach(acc => {
+          if (acc.profitSplit === undefined || acc.profitSplit === 1) {
+            acc.profitSplit = 0.8; // Default fee 80% if missing
+            needsSave = true;
+          }
+        });
+      }
+    });
+
     data.firms = data.firms || []
     data.trades = data.trades || []
     data.goals = data.goals || []
@@ -68,6 +82,10 @@ function load() {
     // Migration: connection/firm mapping (backward-compatible)
     data.connectionFirmMap = data.connectionFirmMap || {}
     data.accountFirmOverride = data.accountFirmOverride || {}
+
+    if (needsSave) {
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    }
     return data
   } catch (e) {
     localStorage.setItem(LS_KEY, JSON.stringify(seed))
@@ -175,9 +193,10 @@ export function deleteAccount(id){
     // Build the archived snapshot entry
     const archivedEntry = {
       id,
-      name:   accountToDelete?.name   || 'Conta Deletada',
-      type:   accountToDelete?.type   || 'Futures',
-      firmId: accountToDelete?.firmId || null,
+      name:        accountToDelete?.name        || 'Conta Deletada',
+      type:        accountToDelete?.type        || 'Futures',
+      firmId:      accountToDelete?.firmId      || null,
+      profitSplit: accountToDelete?.profitSplit ?? 1,
     }
 
     // Move the live splitByAccount[id] entry to a keyed archive slot

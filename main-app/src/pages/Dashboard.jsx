@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useCurrency } from '@apps/state'
 import { useFilters } from '@apps/state'
 import {
@@ -835,14 +836,17 @@ function GoalsDistributionChart() {
 function RecentPayouts({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { payouts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
-
+  const navigate = useNavigate()
   const fmt = (v) => currency === 'USD'
     ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
     : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate)
 
   const rows = payouts.sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated)).slice(0, 6)
   const fmtDate = (d) => { if (!d) return '--'; return new Date(d).toLocaleDateString('en-US') }
-  const navigateToPayout = (id) => { window.location.href = `/payouts?id=${id}` }
+  const navigateToPayout = (id) => {
+    localStorage.setItem('openPayoutId', id)
+    navigate('/payouts')
+  }
 
   // Helper: detect if a payout belongs (even partially) to a deleted account
   const isDeletedAccountPayout = (p) => p._archivedAccounts?.length > 0
@@ -1172,14 +1176,22 @@ export default function Dashboard() {
   }, [allAccountsData])
 
   useEffect(() => {
-    function onDocClick(e) { if (!statusDropdownRef.current) return; if (!statusDropdownRef.current.contains(e.target)) setStatusDropdownOpen(false) }
-    if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick)
+    function onDocClick(e) {
+      if (!statusDropdownOpen) return
+      if (!statusDropdownRef.current) return
+      if (!statusDropdownRef.current.contains(e.target)) setStatusDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [statusDropdownOpen])
 
   useEffect(() => {
-    function onDocClick(e) { if (!calendarRef.current) return; if (!calendarRef.current.contains(e.target)) setShowCalendar(false) }
-    if (showCalendar) document.addEventListener('mousedown', onDocClick)
+    function onDocClick(e) {
+      if (!showCalendar) return
+      if (!calendarRef.current) return
+      if (!calendarRef.current.contains(e.target)) setShowCalendar(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [showCalendar])
 
