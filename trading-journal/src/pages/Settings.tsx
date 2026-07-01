@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
-import {getAll,updateAccount,} from "@apps/lib/dataStore";
+import { getAll, updateAccount } from "@apps/lib/dataStore";
 import { openDB } from 'idb';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
@@ -22,66 +22,153 @@ async function getDB() {
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
-  const { backup, loadBackup } = useDrive();
+  const {
+    backup, loadBackup, logged, login, logout,
+    protonSupported, protonLogged, protonLogin, protonLogout,
+    backupToProton, loadProtonBackup,
+  } = useDrive();
   const [autoSync, setAutoSync] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
-  // ☁️ Auto backup a cada 30s
+  // ☁️ Auto backup a cada 30s — Google + Proton, sempre com o snapshot completo
   useEffect(() => {
     if (!autoSync) return;
     const interval = setInterval(async () => {
       try {
         const allData = getAll();
-        await backup(JSON.stringify(allData));
-        console.log("☁️ Auto-sync executado com sucesso.");
+        if (logged) {
+          await backup(JSON.stringify(allData));
+          console.log("☁️ Auto-sync (Google) executado com sucesso.");
+        }
+        if (protonLogged || !protonSupported) {
+          await backupToProton(JSON.stringify(allData));
+          console.log("☁️ Auto-sync (Proton) executado com sucesso.");
+        }
       } catch (e) {
         console.warn("Auto-sync falhou:", e);
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [autoSync, backup]);
+  }, [autoSync, backup, backupToProton, logged, protonLogged, protonSupported]);
+
+  // ===========================================================
+  // 🔄 Aplica dados restaurados (Google OU Proton) tanto no
+  // localStorage compartilhado (dataStore) quanto no IndexedDB
+  // journal-db (onde este app lê/grava trades — ver handleRecalcFunding).
+  //
+  // OBS: este app não expõe um DataContext com setState em memória
+  // (diferente do main-app), então após restaurar recomendamos
+  // recarregar a página para todas as telas pegarem os dados novos.
+  // ===========================================================
+  const applyRemoteData = useCallback(async (remote) => {
+    if (!remote || typeof remote !== 'object') return false;
+    try {
+      const ds = await import('@apps/lib/dataStore.js');
+      const current = ds.getAll();
+
+      const merged = {
+        ...current,
+        accounts: remote.accounts ?? current.accounts,
+        payouts: remote.payouts ?? current.payouts,
+        settings: remote.settings ?? current.settings,
+        firms: remote.firms ?? current.firms,
+        trades: remote.trades ?? current.trades,
+        goals: remote.goals ?? current.goals,
+        livePositions: remote.livePositions ?? current.livePositions,
+        tags: remote.tags ?? current.tags,
+        connectionFirmMap: remote.connectionFirmMap ?? current.connectionFirmMap,
+        accountFirmOverride: remote.accountFirmOverride ?? current.accountFirmOverride,
+      };
+
+      localStorage.setItem('propmanager-data-v1', JSON.stringify(merged));
+
+      // Restaura também os trades no IndexedDB do Journal
+      if (Array.isArray(remote.trades) && remote.trades.length > 0) {
+        const db = await getDB();
+        const tx = db.transaction('trades', 'readwrite');
+        await tx.store.clear();
+        for (const trade of remote.trades) {
+          await tx.store.put(trade);
+        }
+        await tx.done;
+      }
+
+      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'restore' } }));
+      return true;
+    } catch (err) {
+      console.error('Erro ao aplicar dados restaurados:', err);
+      return false;
+    }
+  }, []);
+
+  const onRestoreGoogle = async () => {
+    setRestoreLoading(true);
+    try {
+      const data = await loadBackup();
+      if (data) {
+        const ok = await applyRemoteData(data);
+        if (ok) alert('✅ Dados restaurados do Google Drive! Recarregue a página para ver tudo atualizado.');
+      }
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const onRestoreProton = async () => {
+    setRestoreLoading(true);
+    try {
+      const data = await loadProtonBackup();
+      if (data) {
+        const ok = await applyRemoteData(data);
+        if (ok) alert('✅ Dados restaurados do Proton Drive! Recarregue a página para ver tudo atualizado.');
+      }
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
 
   // ⚙️ Função para recalcular fundings das contas
-const handleRecalcFunding = useCallback(async () => {
-  try {
-    setRecalcLoading(true);
-    const db = await getDB();
-    const allTrades = await db.getAll("trades");
+  const handleRecalcFunding = useCallback(async () => {
+    try {
+      setRecalcLoading(true);
+      const db = await getDB();
+      const allTrades = await db.getAll("trades");
 
-    const ds = await import('@apps/lib/dataStore.js');
-    const { getAll, updateAccount } = ds;
-    const all = await getAll();
-    const accounts = all.accounts || [];
+      const ds = await import('@apps/lib/dataStore.js');
+      const { getAll, updateAccount } = ds;
+      const all = await getAll();
+      const accounts = all.accounts || [];
 
-    // 🔹 Zera fundings primeiro
-    for (const acc of accounts) {
-      await updateAccount(acc.id, { ...acc, currentFunding: 0 });
-    }
-
-    // 🔹 Aplica todos os trades uma única vez
-    for (const trade of allTrades) {
-      for (const accEntry of trade.accounts || []) {
-        const acc = accounts.find(a => a.id === accEntry.accountId);
-        if (!acc) continue;
-
-        const pnlImpact = (trade.result_net || 0) * (accEntry.weight ?? 1);
-        acc.currentFunding = (acc.currentFunding || 0) + pnlImpact;
+      // 🔹 Zera fundings primeiro
+      for (const acc of accounts) {
+        await updateAccount(acc.id, { ...acc, currentFunding: 0 });
       }
-    }
 
-    // 🔹 Salva fundings finais
-    for (const acc of accounts) {
-      await updateAccount(acc.id, acc);
-    }
+      // 🔹 Aplica todos os trades uma única vez
+      for (const trade of allTrades) {
+        for (const accEntry of trade.accounts || []) {
+          const acc = accounts.find(a => a.id === accEntry.accountId);
+          if (!acc) continue;
 
-    alert("✅ Fundings recalculados com sucesso!");
-  } catch (err) {
-    console.error("Erro ao recalcular fundings:", err);
-    alert("❌ Erro ao recalcular fundings: " + err.message);
-  } finally {
-    setRecalcLoading(false);
-  }
-}, []);
+          const pnlImpact = (trade.result_net || 0) * (accEntry.weight ?? 1);
+          acc.currentFunding = (acc.currentFunding || 0) + pnlImpact;
+        }
+      }
+
+      // 🔹 Salva fundings finais
+      for (const acc of accounts) {
+        await updateAccount(acc.id, acc);
+      }
+
+      alert("✅ Fundings recalculados com sucesso!");
+    } catch (err) {
+      console.error("Erro ao recalcular fundings:", err);
+      alert("❌ Erro ao recalcular fundings: " + err.message);
+    } finally {
+      setRecalcLoading(false);
+    }
+  }, []);
 
 
   return (
@@ -112,9 +199,9 @@ const handleRecalcFunding = useCallback(async () => {
         </p>
       </div>
 
-      {/* -------- GOOGLE DRIVE -------- */}
+      {/* -------- BACKUP NA NUVEM -------- */}
       <div className="card">
-        <h3>☁️ Google Drive</h3>
+        <h3>☁️ Backup na Nuvem</h3>
 
         <div className="field">
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -123,24 +210,69 @@ const handleRecalcFunding = useCallback(async () => {
               checked={!!autoSync}
               onChange={(e) => setAutoSync(!!e.target.checked)}
             />
-            Auto-Sync a cada 30s
+            Auto-Sync a cada 30s (Google + Proton)
           </label>
           <p className="muted">
-            Quando ligado, enviará um backup do estado (accounts/payouts) para seu Google Drive/PropManager/propmanager-backup.json.
+            Quando ligado, envia um backup completo (contas, payouts, trades, goals, firms, etc.) para todos os drives conectados.
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button
-            className="btn"
-            onClick={() => backup(JSON.stringify(getAll()))}
-          >
-            Backup agora
-          </button>
+        {/* Google Drive */}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border, #333)' }}>
+          <p style={{ fontWeight: 600, marginBottom: 6 }}>
+            Google Drive {logged ? '🟢 Conectado' : '🔴 Desconectado'}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
+            {logged ? (
+              <>
+                <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
+                  Backup agora
+                </button>
+                <button className="btn ghost" onClick={onRestoreGoogle} disabled={restoreLoading}>
+                  {restoreLoading ? "Restaurando..." : "Restaurar do Drive"}
+                </button>
+                <button className="btn ghost" onClick={logout}>
+                  Desconectar
+                </button>
+              </>
+            ) : (
+              <button className="btn" onClick={login}>Conectar Google Drive</button>
+            )}
+          </div>
+        </div>
 
-          <button className="btn ghost" onClick={loadBackup}>
-            Restaurar do Drive
-          </button>
+        {/* Proton Drive */}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border, #333)' }}>
+          <p style={{ fontWeight: 600, marginBottom: 6 }}>
+            Proton Drive {protonSupported ? (protonLogged ? '🟢 Conectado' : '🔴 Desconectado') : '⬇️ Modo Download'}
+          </p>
+
+          {!protonSupported && (
+            <p className="muted" style={{ marginBottom: 8 }}>
+              Seu navegador não permite conectar diretamente a uma pasta local (funciona em Chrome, Edge ou Opera).
+              "Backup agora" vai <strong>baixar</strong> o arquivo <code>propmanager-backup.json</code> —
+              mova-o manualmente para a pasta Trading Management &gt; PropManager do Proton Drive.
+            </p>
+          )}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
+            {protonSupported && !protonLogged && (
+              <button className="btn" onClick={protonLogin}>Conectar pasta do Proton Drive</button>
+            )}
+            {protonSupported && protonLogged && (
+              <button className="btn ghost" onClick={protonLogout}>Desconectar</button>
+            )}
+
+            <button className="btn" onClick={() => backupToProton(JSON.stringify(getAll()))}>
+              Backup agora
+            </button>
+
+            {protonSupported && protonLogged && (
+              <button className="btn ghost" onClick={onRestoreProton} disabled={restoreLoading}>
+                {restoreLoading ? "Restaurando..." : "Restaurar do Proton"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

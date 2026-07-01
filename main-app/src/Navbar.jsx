@@ -67,7 +67,11 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar({ isPinned, onTogglePin }) {
-  const { ready: driveReady, logged, login, logout, backup } = useDrive();
+  const {
+    ready: driveReady, logged, login, logout, backup,
+    protonReady, protonLogged, protonLogin, protonLogout, backupToProton,
+    protonSupported,
+  } = useDrive();
   const { currency, setCurrency, rate } = useCurrency();
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
     usePlatform();
@@ -85,16 +89,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
       ? import.meta.env.VITE_JOURNAL_URL || "http://localhost:5175/"
       : "/journal/";
 
-  const dotColor = !driveReady
-    ? "#9CA3AF"
-    : logged
-    ? "#22c55e"
-    : "#ef4444";
-  const driveTitle = !driveReady
-    ? "Drive not initialized"
-    : logged
-    ? "Connected to Google"
-    : "Disconnected from Google";
+  const dotColor = (logged || protonLogged) ? "#22c55e" : "#ef4444";
+  const driveTitle = "Cloud Sync";
 
   const hasOnline = statuses.some((s) => s.online);
   const allOffline =
@@ -102,8 +98,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const platformDotColor = hasOnline
     ? "#22c55e"
     : allOffline
-    ? "#ef4444"
-    : "#9CA3AF";
+      ? "#ef4444"
+      : "#9CA3AF";
 
   const isExpanded = isPinned || isHovered || mobileOpen || platformOpen;
 
@@ -146,10 +142,26 @@ export default function Navbar({ isPinned, onTogglePin }) {
       const { getAll } = await import("@apps/lib/dataStore.js");
       const all = getAll();
       await backup(JSON.stringify(all));
-      alert("✅ Backup saved to Drive!");
+      alert("✅ Backup saved to Google Drive!");
     } catch (err) {
       console.error("Backup error:", err);
-      alert("⚠️ Failed to save backup to Drive");
+      alert("⚠️ Failed to save backup to Google Drive");
+    }
+  };
+
+  const onProtonBackup = async () => {
+    try {
+      const { getAll } = await import("@apps/lib/dataStore.js");
+      const all = getAll();
+      await backupToProton(JSON.stringify(all));
+      if (protonSupported) {
+        alert("✅ Backup saved to Proton Drive local folder!");
+      } else {
+        alert("⬇️ Backup file downloaded — move it to your Proton Drive folder.");
+      }
+    } catch (err) {
+      console.error("Proton Backup error:", err);
+      alert("⚠️ Failed to save backup to Proton Drive");
     }
   };
 
@@ -174,9 +186,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
       {/* ── Sidebar ── */}
       <nav
-        className={`sidebar${isPinned ? " pinned" : ""}${
-          mobileOpen ? " mobile-open" : ""
-        }${platformOpen ? " platform-open" : ""}`}
+        className={`sidebar${isPinned ? " pinned" : ""}${mobileOpen ? " mobile-open" : ""
+          }${platformOpen ? " platform-open" : ""}`}
         onMouseEnter={() => !isPinned && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -301,47 +312,93 @@ export default function Navbar({ isPinned, onTogglePin }) {
             </div>
           </div>
 
-          {/* Drive */}
-          <div className="sb-footer-item" title={driveTitle}>
-            <div className="sb-footer-icon">
+          {/* Cloud Sync */}
+          <div className="sb-footer-item" title={driveTitle} style={{ height: 'auto', padding: '8px 12px', alignItems: 'flex-start' }}>
+            <div className="sb-footer-icon" style={{ marginTop: 2 }}>
               <Cloud size={18} strokeWidth={1.75} />
               <span
                 className="sb-footer-dot"
                 style={{ background: dotColor }}
               />
             </div>
-            <div className="sb-footer-content">
-              <div className="sb-drive-actions">
+            <div className="sb-footer-content" style={{ flexDirection: 'column', gap: 8, width: '100%' }}>
+
+              {/* Google Drive */}
+              <div className="sb-drive-actions" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF' }}>Google</span>
                 {logged ? (
-                  <>
+                  <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       className="sb-icon-btn"
-                      title="Backup to Drive"
+                      title="Backup to Google Drive"
                       onClick={(e) => { e.stopPropagation(); onBackup(); }}
                     >
-                      <CloudUpload size={13} />
-                      <span className="sb-drive-label">Backup</span>
+                      <CloudUpload size={13} color="#22c55e" />
                     </button>
                     <button
                       className="sb-icon-btn"
-                      title="Logout"
+                      title="Logout Google"
                       onClick={(e) => { e.stopPropagation(); logout(); }}
                     >
                       <LogOut size={13} />
-                      <span className="sb-drive-label">Logout</span>
                     </button>
-                  </>
+                  </div>
                 ) : (
                   <button
                     className="sb-icon-btn sb-drive-login"
                     title="Login with Google"
                     onClick={(e) => { e.stopPropagation(); login(); }}
+                    style={{ padding: '2px 6px' }}
                   >
                     <LogIn size={13} />
-                    <span className="sb-drive-label">Google Login</span>
+                    <span style={{ fontSize: 10, marginLeft: 4 }}>Login</span>
                   </button>
                 )}
               </div>
+
+              {/* Proton Drive */}
+              <div className="sb-drive-actions" style={{ width: '100%', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF' }}>Proton</span>
+                {protonSupported && protonLogged ? (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      className="sb-icon-btn"
+                      title="Backup to Proton Drive"
+                      onClick={(e) => { e.stopPropagation(); onProtonBackup(); }}
+                    >
+                      <CloudUpload size={13} color="#a855f7" />
+                    </button>
+                    <button
+                      className="sb-icon-btn"
+                      title="Logout Proton"
+                      onClick={(e) => { e.stopPropagation(); protonLogout(); }}
+                    >
+                      <LogOut size={13} />
+                    </button>
+                  </div>
+                ) : protonSupported ? (
+                  <button
+                    className="sb-icon-btn sb-drive-login"
+                    title="Connect Proton Folder"
+                    onClick={(e) => { e.stopPropagation(); protonLogin(); }}
+                    style={{ padding: '2px 6px' }}
+                  >
+                    <LogIn size={13} />
+                    <span style={{ fontSize: 10, marginLeft: 4 }}>Connect</span>
+                  </button>
+                ) : (
+                  <button
+                    className="sb-icon-btn"
+                    title="Baixar backup (navegador sem suporte a pasta local)"
+                    onClick={(e) => { e.stopPropagation(); onProtonBackup(); }}
+                    style={{ padding: '2px 6px' }}
+                  >
+                    <CloudUpload size={13} color="#a855f7" />
+                    <span style={{ fontSize: 10, marginLeft: 4 }}>Baixar</span>
+                  </button>
+                )}
+              </div>
+
             </div>
           </div>
         </div>

@@ -1,28 +1,60 @@
 // src/pages/Settings.jsx
-import React, {useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import { useCurrency } from '@apps/state'
-import {useDrive, DriveProvider} from "@apps/state/DriveContext";
-import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
+import { useDrive } from "@apps/state/DriveContext";
+import { useData } from "@apps/state/DashboardDataContext";
+import { getAll } from '@apps/lib/dataStore';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
   const [autoSync, setAutoSync] = useState(false);
-const { backup, loadBackup } = useDrive();
 
-useEffect(() => {
-  if (!autoSync) return;
-  const interval = setInterval(async () => {
-    try {
-      const allData = getAll();
-      await backup(JSON.stringify(allData));
-      console.log('☁️ Auto-sync executado com sucesso.');
-    } catch (e) {
-      console.warn('Auto-sync falhou:', e);
+  const {
+    backup, loadBackup, logged, login, logout,
+    protonSupported, protonLogged, protonLogin, protonLogout,
+    backupToProton, loadProtonBackup,
+  } = useDrive();
+
+  const { applyRemoteData } = useData();
+
+  // Auto-sync unificado: a cada 30s, manda o snapshot completo
+  // (getAll()) para os dois drives, se estiverem disponíveis.
+  useEffect(() => {
+    if (!autoSync) return;
+    const interval = setInterval(async () => {
+      try {
+        const allData = getAll();
+        if (logged) {
+          await backup(JSON.stringify(allData));
+          console.log('☁️ Auto-sync (Google) executado com sucesso.');
+        }
+        if (protonLogged || !protonSupported) {
+          await backupToProton(JSON.stringify(allData));
+          console.log('☁️ Auto-sync (Proton) executado com sucesso.');
+        }
+      } catch (e) {
+        console.warn('Auto-sync falhou:', e);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoSync, backup, backupToProton, logged, protonLogged, protonSupported]);
+
+  const onRestoreGoogle = async () => {
+    const data = await loadBackup();
+    if (data) {
+      applyRemoteData(data);
+      alert('✅ Dados restaurados do Google Drive!');
     }
-  }, 30000);
-  return () => clearInterval(interval);
-}, [autoSync, backup]);
+  };
+
+  const onRestoreProton = async () => {
+    const data = await loadProtonBackup();
+    if (data) {
+      applyRemoteData(data);
+      alert('✅ Dados restaurados do Proton Drive!');
+    }
+  };
 
   return (
     <div className="grid" style={{ gap: 16 }}>
@@ -51,7 +83,7 @@ useEffect(() => {
       </div>
 
       <div className="card">
-        <h3>☁️ Google Drive</h3>
+        <h3>☁️ Backup na Nuvem</h3>
 
         <div className="field">
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -60,19 +92,69 @@ useEffect(() => {
               checked={!!autoSync}
               onChange={(e) => setAutoSync(!!e.target.checked)}
             />
-            Auto-Sync a cada 30s
+            Auto-Sync a cada 30s (Google + Proton)
           </label>
-          <p className="muted">Quando ligado, enviará um backup do estado (accounts/payouts) para seu Google Drive/PropManager/propmanager-backup.json.</p>
+          <p className="muted">
+            Quando ligado, envia um backup completo (contas, payouts, trades, goals, firms, etc.) para todos os drives conectados.
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
-  Backup agora
-</button>
+        {/* Google Drive */}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border, #333)' }}>
+          <p style={{ fontWeight: 600, marginBottom: 6 }}>
+            Google Drive {logged ? '🟢 Conectado' : '🔴 Desconectado'}
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
+            {logged ? (
+              <>
+                <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
+                  Backup agora
+                </button>
+                <button className="btn ghost" onClick={onRestoreGoogle}>
+                  Restaurar do Drive
+                </button>
+                <button className="btn ghost" onClick={logout}>
+                  Desconectar
+                </button>
+              </>
+            ) : (
+              <button className="btn" onClick={login}>Conectar Google Drive</button>
+            )}
+          </div>
+        </div>
 
-<button className="btn ghost" onClick={loadBackup}>
-  Restaurar do Drive
-</button>
+        {/* Proton Drive */}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border, #333)' }}>
+          <p style={{ fontWeight: 600, marginBottom: 6 }}>
+            Proton Drive {protonSupported ? (protonLogged ? '🟢 Conectado' : '🔴 Desconectado') : '⬇️ Modo Download'}
+          </p>
+
+          {!protonSupported && (
+            <p className="muted" style={{ marginBottom: 8 }}>
+              Seu navegador não permite conectar diretamente a uma pasta local (isso só funciona em Chrome, Edge ou Opera).
+              Clicar em "Backup agora" vai <strong>baixar</strong> o arquivo <code>propmanager-backup.json</code> —
+              basta movê-lo manualmente para a pasta Trading Management &gt; PropManager do Proton Drive.
+            </p>
+          )}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
+            {protonSupported && !protonLogged && (
+              <button className="btn" onClick={protonLogin}>Conectar pasta do Proton Drive</button>
+            )}
+            {protonSupported && protonLogged && (
+              <button className="btn ghost" onClick={protonLogout}>Desconectar</button>
+            )}
+
+            <button className="btn" onClick={() => backupToProton(JSON.stringify(getAll()))}>
+              Backup agora
+            </button>
+
+            {protonSupported && protonLogged && (
+              <button className="btn ghost" onClick={onRestoreProton}>
+                Restaurar do Proton
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -2,8 +2,7 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import * as store from "@apps/lib/dataStore";
 import { isSignedIn, uploadOrUpdateJSON, downloadLatestJSON } from "../utils/googleDrive.js";
-import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
-
+import { isProtonDriveLogged, backupToProtonDrive, ensureProtonPermission } from "../utils/protonDrive.js";
 
 const DataCtx = createContext(null);
 
@@ -12,73 +11,115 @@ export function DataProvider({ children }) {
   const all = store.getAll() || {}
   const [accounts, setAccounts] = useState(all.accounts || []);
   const [payouts, setPayouts] = useState(all.payouts || []);
-  const [settings, setSettings] = useState(all.settings || { methods: ['Rise','Wise','Pix','Paypal','Cripto'] });
+  const [settings, setSettings] = useState(all.settings || { methods: ['Rise', 'Wise', 'Pix', 'Paypal', 'Cripto'] });
   const [firms, setFirms] = useState(all.firms || []);
   const [autoSync, setAutoSync] = useState(false);
-useEffect(() => {
-  const syncFromStorage = () => {
+  useEffect(() => {
+    const syncFromStorage = () => {
+      try {
+        const data = JSON.parse(localStorage.getItem('propmanager-data-v1') || '{}');
+        if (data.accounts) setAccounts(data.accounts);
+        if (data.payouts) setPayouts(data.payouts);
+        if (data.settings) setSettings(data.settings);
+        if (data.firms) setFirms(data.firms);
+      } catch (err) {
+        console.warn('Erro ao sincronizar localStorage:', err);
+      }
+    };
+
+    // roda na primeira montagem
+    syncFromStorage();
+
+    // sincroniza entre abas / apps
+    window.addEventListener('storage', syncFromStorage);
+    return () => window.removeEventListener('storage', syncFromStorage);
+  }, []);
+
+  // Backup para o Drive — sempre usa o snapshot MAIS COMPLETO do store
+  // (inclui trades, goals, livePositions, tags, etc. — não só o que este
+  // contexto guarda em state)
+  const backupToDrive = async () => {
+    if (!autoSync) return; // SOMENTE FAZ AUTO-SYNC SE ESTIVER ATIVADO
+
+    const toSend = store.getAll();
+
+    // Backup para Google Drive
+    if (isSignedIn()) {
+      try {
+        await uploadOrUpdateJSON("propmanager-backup.json", toSend);
+        console.log("✅ Backup enviado para o Google Drive (Auto-sync)");
+      } catch (err) {
+        console.error("Erro ao fazer backup no Drive", err);
+      }
+    }
+
+    // Backup para Proton Drive
     try {
-      const data = JSON.parse(localStorage.getItem('propmanager-data-v1') || '{}');
-      if (data.accounts) setAccounts(data.accounts);
-      if (data.payouts) setPayouts(data.payouts);
-      if (data.settings) setSettings(data.settings);
-      if (data.firms) setFirms(data.firms);
+      const protonLogged = await isProtonDriveLogged();
+      if (protonLogged) {
+        const permOk = await ensureProtonPermission();
+        if (permOk) {
+          await backupToProtonDrive(toSend);
+          console.log("✅ Backup enviado para o Proton Drive (Auto-sync)");
+        }
+      }
     } catch (err) {
-      console.warn('Erro ao sincronizar localStorage:', err);
+      console.error("Erro ao fazer backup no Proton Drive", err);
     }
   };
 
-  // roda na primeira montagem
-  syncFromStorage();
+  // ===========================================================
+  // 🔄 Aplica um objeto de dados remoto (vindo de qualquer drive)
+  // ao estado do app inteiro + localStorage. É isso que faz o
+  // "Restaurar" realmente restaurar, e não só baixar e descartar.
+  // ===========================================================
+  const applyRemoteData = (remote) => {
+    if (!remote || typeof remote !== 'object') return false;
 
-  // sincroniza entre abas / apps
-  window.addEventListener('storage', syncFromStorage);
-  return () => window.removeEventListener('storage', syncFromStorage);
-}, []);
+    const current = store.getAll();
 
-  // Backup para o Drive — envia o JSON com todas as chaves
-  const backupToDrive = async (payload) => {
-    if (!isSignedIn()) return;
-    const toSend = payload || { accounts, payouts, settings, firms };
+    const merged = {
+      ...current,
+      accounts: remote.accounts ?? current.accounts,
+      payouts: remote.payouts ?? current.payouts,
+      settings: remote.settings ?? current.settings,
+      firms: remote.firms ?? current.firms,
+      trades: remote.trades ?? current.trades,
+      goals: remote.goals ?? current.goals,
+      livePositions: remote.livePositions ?? current.livePositions,
+      tags: remote.tags ?? current.tags,
+      connectionFirmMap: remote.connectionFirmMap ?? current.connectionFirmMap,
+      accountFirmOverride: remote.accountFirmOverride ?? current.accountFirmOverride,
+    };
+
+    // Atualiza os states que este contexto expõe
+    setAccounts(merged.accounts || []);
+    setPayouts(merged.payouts || []);
+    setSettings(merged.settings || settings);
+    setFirms(merged.firms || []);
+
+    // Persiste TUDO no localStorage (inclusive o que este contexto não
+    // guarda em state, como trades/goals/livePositions), para que
+    // TradingJournal, página de Goals, etc. também enxerguem os dados
+    // restaurados na próxima leitura do store.
     try {
-      await uploadOrUpdateJSON("propmanager-backup.json", toSend);
-      console.log("✅ Backup enviado para o Google Drive");
-    } catch (err) {
-      console.error("Erro ao fazer backup no Drive", err);
-      throw err;
+      localStorage.setItem('propmanager-data-v1', JSON.stringify(merged));
+      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'restore' } }));
+    } catch (e) {
+      console.error('Erro ao persistir dados restaurados:', e);
+      return false;
     }
+
+    return true;
   };
 
-  // Restaura a partir do Drive (arquivo mais recente)
+  // Restaura a partir do Google Drive (arquivo mais recente)
   const restoreFromDrive = async () => {
     try {
       const remote = await downloadLatestJSON();
       if (!remote) return null;
-      // assegura compatibilidade/migração
-      const remoteAccounts = remote.accounts || []
-      const remotePayouts = remote.payouts || []
-      const remoteSettings = remote.settings || settings
-      const remoteFirms = remote.firms || []
-
-      // atualiza states locais
-      setAccounts(remoteAccounts)
-      setPayouts(remotePayouts)
-      setSettings(remoteSettings)
-      setFirms(remoteFirms)
-
-      // também atualiza localStorage (store) para ficar consistente offline
-      const data = store.getAll()
-      data.accounts = remoteAccounts
-      data.payouts = remotePayouts
-      data.settings = remoteSettings
-      data.firms = remoteFirms
-      try { // escrevendo no localStore
-        // usando funções existentes do store
-        remoteSettings && store.setSettings(remoteSettings)
-        // sobrescreve diretamente (save) se seu store expor função, caso contrário mantém localStorage
-        localStorage.setItem('propmanager-data-v1', JSON.stringify({ accounts: remoteAccounts, payouts: remotePayouts, settings: remoteSettings, firms: remoteFirms }))
-      } catch(e){}
-      return true
+      applyRemoteData(remote);
+      return true;
     } catch (err) {
       console.error("Erro no restoreFromDrive", err)
       return null
@@ -91,15 +132,14 @@ useEffect(() => {
     const a = store.createAccount(partial)
     const all = store.getAll()
     setAccounts(all.accounts)
-    // backup
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
     return a
   }
   const updateAccount = (id, patch) => {
     const a = store.updateAccount(id, patch)
     const all = store.getAll()
     setAccounts(all.accounts)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
     return a
   }
   const deleteAccount = (id) => {
@@ -107,7 +147,7 @@ useEffect(() => {
     const all = store.getAll()
     setAccounts(all.accounts)
     setPayouts(all.payouts)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
   }
 
   // PAYOUTS
@@ -116,7 +156,7 @@ useEffect(() => {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts) // caso currentFunding tenha sido atualizado no store
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
     return p
   }
   const updatePayout = (id, patch) => {
@@ -124,7 +164,7 @@ useEffect(() => {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
     return p
   }
   const deletePayout = (id) => {
@@ -132,14 +172,14 @@ useEffect(() => {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms })
+    backupToDrive()
   }
 
   // SETTINGS
   const patchSettings = (patch) => {
     const s = store.setSettings(patch)
     setSettings(s)
-    backupToDrive({ accounts, payouts, settings: s, firms })
+    backupToDrive()
     return s
   }
 
@@ -149,14 +189,14 @@ useEffect(() => {
     const f = store.createFirm(partial)
     const all = store.getAll()
     setFirms(all.firms)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms: all.firms })
+    backupToDrive()
     return f
   }
   const updateFirm = (id, patch) => {
     const f = store.updateFirm(id, patch)
     const all = store.getAll()
     setFirms(all.firms)
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms: all.firms })
+    backupToDrive()
     return f
   }
   const deleteFirm = (id) => {
@@ -164,7 +204,7 @@ useEffect(() => {
     const all = store.getAll()
     setFirms(all.firms)
     setAccounts(all.accounts) // contas possivelmente desvinculadas
-    backupToDrive({ accounts: all.accounts, payouts: all.payouts, settings, firms: all.firms })
+    backupToDrive()
   }
   const getFirmStats = (id) => store.getFirmStats(id)
 
@@ -191,6 +231,9 @@ useEffect(() => {
     // Google Drive
     backupToDrive,
     restoreFromDrive,
+
+    // Restauração genérica (usada também para Proton Drive)
+    applyRemoteData,
 
     // misc
     autoSync, setAutoSync,
