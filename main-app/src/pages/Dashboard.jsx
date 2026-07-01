@@ -1175,30 +1175,18 @@ export default function Dashboard() {
     const set = new Set(all); set.add('archived'); return Array.from(set)
   }, [allAccountsData])
 
-  useEffect(() => {
-    function onDocClick(e) {
-      if (!statusDropdownOpen) return
-      if (!statusDropdownRef.current) return
-      if (!statusDropdownRef.current.contains(e.target)) setStatusDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [statusDropdownOpen])
-
-  useEffect(() => {
-    function onDocClick(e) {
-      if (!showCalendar) return
-      if (!calendarRef.current) return
-      if (!calendarRef.current.contains(e.target)) setShowCalendar(false)
-    }
-    document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
-  }, [showCalendar])
-
   const props = { accountStatusFilter, dateFilter }
 
   return (
     <div className="dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Overlays invisíveis para capturar cliques fora e fechar dropdowns */}
+      {statusDropdownOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(false) }} />
+      )}
+      {showCalendar && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onClick={(e) => { e.stopPropagation(); setShowCalendar(false) }} />
+      )}
+      
       <FiltersBar
         categories={cats}
         accountStatusFilter={accountStatusFilter} setAccountStatusFilter={setAccountStatusFilter}

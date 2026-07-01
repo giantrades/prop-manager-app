@@ -62,16 +62,34 @@ function load() {
     data.accounts = data.accounts || []
     data.payouts = data.payouts || []
     
-    // MIGRATION: Fix archived accounts missing profitSplit
+    // MIGRATION: Fix archived accounts missing profitSplit AND recalculate fee/net
     let needsSave = false;
     data.payouts.forEach(p => {
       if (p._archivedAccounts && p._archivedAccounts.length > 0) {
+        let hasFix = false;
         p._archivedAccounts.forEach(acc => {
           if (acc.profitSplit === undefined || acc.profitSplit === 1) {
             acc.profitSplit = 0.8; // Default fee 80% if missing
-            needsSave = true;
+            hasFix = true;
           }
         });
+        
+        // Se corrigimos o profitSplit OU se o fee está zerado num payout que devia ter fee
+        if (hasFix || p.fee === 0) {
+          const split = p._archivedAccounts[0].profitSplit || 0.8;
+          const gross = p.amountSolicited || 0;
+          p.amountReceived = gross * split;
+          p.fee = gross - p.amountReceived;
+          
+          if (p.splitByAccount) {
+             Object.keys(p.splitByAccount).forEach(id => {
+               const partGross = p.splitByAccount[id].gross || gross;
+               p.splitByAccount[id].net = partGross * split;
+               p.splitByAccount[id].fee = partGross - p.splitByAccount[id].net;
+             });
+          }
+          needsSave = true;
+        }
       }
     });
 
