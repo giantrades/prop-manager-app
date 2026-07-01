@@ -14,7 +14,7 @@ import { DriveProvider } from "@apps/state/DriveContext";
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      future={{ v7_relativeSplatPath: true }}>
       <DriveProvider>
     <JournalProvider>
       <CurrencyProvider>
