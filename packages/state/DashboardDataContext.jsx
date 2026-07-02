@@ -3,6 +3,7 @@ import React, { createContext, useContext, useMemo, useState, useEffect } from "
 import * as store from "@apps/lib/dataStore";
 import { isSignedIn, uploadOrUpdateJSON, downloadLatestJSON } from "../utils/googleDrive.js";
 import { isProtonDriveLogged, backupToProtonDrive, ensureProtonPermission } from "../utils/protonDrive.js";
+import { getFullBackupPayload, applyFullBackupPayload } from "../utils/backupPayload.js";
 
 const DataCtx = createContext(null);
 
@@ -41,7 +42,7 @@ export function DataProvider({ children }) {
   const backupToDrive = async () => {
     if (!autoSync) return; // SOMENTE FAZ AUTO-SYNC SE ESTIVER ATIVADO
 
-    const toSend = store.getAll();
+    const toSend = await getFullBackupPayload();
 
     // Backup para Google Drive
     if (isSignedIn()) {
@@ -73,42 +74,22 @@ export function DataProvider({ children }) {
   // ao estado do app inteiro + localStorage. É isso que faz o
   // "Restaurar" realmente restaurar, e não só baixar e descartar.
   // ===========================================================
-  const applyRemoteData = (remote) => {
+  const applyRemoteData = async (remote) => {
     if (!remote || typeof remote !== 'object') return false;
 
-    const current = store.getAll();
+    // Persiste tudo (localStorage + trades/strategies no journal-db) e
+    // dispara 'datastore:change' (source: 'restore') para outros
+    // providers (ex: JournalProvider) recarregarem sozinhos.
+    const ok = await applyFullBackupPayload(remote);
+    if (!ok) return false;
 
-    const merged = {
-      ...current,
-      accounts: remote.accounts ?? current.accounts,
-      payouts: remote.payouts ?? current.payouts,
-      settings: remote.settings ?? current.settings,
-      firms: remote.firms ?? current.firms,
-      trades: remote.trades ?? current.trades,
-      goals: remote.goals ?? current.goals,
-      livePositions: remote.livePositions ?? current.livePositions,
-      tags: remote.tags ?? current.tags,
-      connectionFirmMap: remote.connectionFirmMap ?? current.connectionFirmMap,
-      accountFirmOverride: remote.accountFirmOverride ?? current.accountFirmOverride,
-    };
-
-    // Atualiza os states que este contexto expõe
+    // Atualiza os states que este contexto expõe, lendo de volta do
+    // store já mesclado (garante consistência com o que foi persistido)
+    const merged = store.getAll();
     setAccounts(merged.accounts || []);
     setPayouts(merged.payouts || []);
     setSettings(merged.settings || settings);
     setFirms(merged.firms || []);
-
-    // Persiste TUDO no localStorage (inclusive o que este contexto não
-    // guarda em state, como trades/goals/livePositions), para que
-    // TradingJournal, página de Goals, etc. também enxerguem os dados
-    // restaurados na próxima leitura do store.
-    try {
-      localStorage.setItem('propmanager-data-v1', JSON.stringify(merged));
-      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'restore' } }));
-    } catch (e) {
-      console.error('Erro ao persistir dados restaurados:', e);
-      return false;
-    }
 
     return true;
   };
@@ -118,7 +99,7 @@ export function DataProvider({ children }) {
     try {
       const remote = await downloadLatestJSON();
       if (!remote) return null;
-      applyRemoteData(remote);
+      await applyRemoteData(remote);
       return true;
     } catch (err) {
       console.error("Erro no restoreFromDrive", err)

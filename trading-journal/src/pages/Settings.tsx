@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
-import { getAll, updateAccount } from "@apps/lib/dataStore";
+import { getFullBackupPayload, applyFullBackupPayload } from "@apps/utils/backupPayload.js";
 import { openDB } from 'idb';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
@@ -36,7 +36,7 @@ export default function Settings() {
     if (!autoSync) return;
     const interval = setInterval(async () => {
       try {
-        const allData = getAll();
+        const allData = await getFullBackupPayload();
         if (logged) {
           await backup(JSON.stringify(allData));
           console.log("☁️ Auto-sync (Google) executado com sucesso.");
@@ -53,62 +53,20 @@ export default function Settings() {
   }, [autoSync, backup, backupToProton, logged, protonLogged, protonSupported]);
 
   // ===========================================================
-  // 🔄 Aplica dados restaurados (Google OU Proton) tanto no
-  // localStorage compartilhado (dataStore) quanto no IndexedDB
-  // journal-db (onde este app lê/grava trades — ver handleRecalcFunding).
-  //
-  // OBS: este app não expõe um DataContext com setState em memória
-  // (diferente do main-app), então após restaurar recomendamos
-  // recarregar a página para todas as telas pegarem os dados novos.
+  // 🔄 Aplica dados restaurados (Google OU Proton). A função
+  // compartilhada (applyFullBackupPayload) já grava tudo no
+  // localStorage E no journal-db (trades + strategies), e dispara
+  // 'datastore:change' com source 'restore' — o JournalProvider
+  // escuta esse evento e recarrega trades/strategies sozinho,
+  // então a tela atualiza sem precisar de F5.
   // ===========================================================
-  const applyRemoteData = useCallback(async (remote) => {
-    if (!remote || typeof remote !== 'object') return false;
-    try {
-      const ds = await import('@apps/lib/dataStore.js');
-      const current = ds.getAll();
-
-      const merged = {
-        ...current,
-        accounts: remote.accounts ?? current.accounts,
-        payouts: remote.payouts ?? current.payouts,
-        settings: remote.settings ?? current.settings,
-        firms: remote.firms ?? current.firms,
-        trades: remote.trades ?? current.trades,
-        goals: remote.goals ?? current.goals,
-        livePositions: remote.livePositions ?? current.livePositions,
-        tags: remote.tags ?? current.tags,
-        connectionFirmMap: remote.connectionFirmMap ?? current.connectionFirmMap,
-        accountFirmOverride: remote.accountFirmOverride ?? current.accountFirmOverride,
-      };
-
-      localStorage.setItem('propmanager-data-v1', JSON.stringify(merged));
-
-      // Restaura também os trades no IndexedDB do Journal
-      if (Array.isArray(remote.trades) && remote.trades.length > 0) {
-        const db = await getDB();
-        const tx = db.transaction('trades', 'readwrite');
-        await tx.store.clear();
-        for (const trade of remote.trades) {
-          await tx.store.put(trade);
-        }
-        await tx.done;
-      }
-
-      window.dispatchEvent(new CustomEvent('datastore:change', { detail: { source: 'restore' } }));
-      return true;
-    } catch (err) {
-      console.error('Erro ao aplicar dados restaurados:', err);
-      return false;
-    }
-  }, []);
-
   const onRestoreGoogle = async () => {
     setRestoreLoading(true);
     try {
       const data = await loadBackup();
       if (data) {
-        const ok = await applyRemoteData(data);
-        if (ok) alert('✅ Dados restaurados do Google Drive! Recarregue a página para ver tudo atualizado.');
+        const ok = await applyFullBackupPayload(data);
+        if (ok) alert('✅ Dados restaurados do Google Drive!');
       }
     } finally {
       setRestoreLoading(false);
@@ -120,8 +78,8 @@ export default function Settings() {
     try {
       const data = await loadProtonBackup();
       if (data) {
-        const ok = await applyRemoteData(data);
-        if (ok) alert('✅ Dados restaurados do Proton Drive! Recarregue a página para ver tudo atualizado.');
+        const ok = await applyFullBackupPayload(data);
+        if (ok) alert('✅ Dados restaurados do Proton Drive!');
       }
     } finally {
       setRestoreLoading(false);
@@ -225,7 +183,7 @@ export default function Settings() {
           <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
             {logged ? (
               <>
-                <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
+                <button className="btn" onClick={async () => backup(JSON.stringify(await getFullBackupPayload()))}>
                   Backup agora
                 </button>
                 <button className="btn ghost" onClick={onRestoreGoogle} disabled={restoreLoading}>
@@ -263,7 +221,7 @@ export default function Settings() {
               <button className="btn ghost" onClick={protonLogout}>Desconectar</button>
             )}
 
-            <button className="btn" onClick={() => backupToProton(JSON.stringify(getAll()))}>
+            <button className="btn" onClick={async () => backupToProton(JSON.stringify(await getFullBackupPayload()))}>
               Backup agora
             </button>
 

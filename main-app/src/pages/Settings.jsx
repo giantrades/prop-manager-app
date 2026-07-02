@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { useCurrency } from '@apps/state'
 import { useDrive } from "@apps/state/DriveContext";
 import { useData } from "@apps/state/DashboardDataContext";
-import { getAll } from '@apps/lib/dataStore';
+import { getFullBackupPayload } from '@apps/utils/backupPayload.js';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
 
 export default function Settings() {
@@ -19,12 +19,12 @@ export default function Settings() {
   const { applyRemoteData } = useData();
 
   // Auto-sync unificado: a cada 30s, manda o snapshot completo
-  // (getAll()) para os dois drives, se estiverem disponíveis.
+  // (getFullBackupPayload) para os dois drives, se estiverem disponíveis.
   useEffect(() => {
     if (!autoSync) return;
     const interval = setInterval(async () => {
       try {
-        const allData = getAll();
+        const allData = await getFullBackupPayload();
         if (logged) {
           await backup(JSON.stringify(allData));
           console.log('☁️ Auto-sync (Google) executado com sucesso.');
@@ -107,7 +107,7 @@ export default function Settings() {
           <div style={{ display: "flex", gap: 8, flexWrap: 'wrap' }}>
             {logged ? (
               <>
-                <button className="btn" onClick={() => backup(JSON.stringify(getAll()))}>
+                <button className="btn" onClick={async () => backup(JSON.stringify(await getFullBackupPayload()))}>
                   Backup agora
                 </button>
                 <button className="btn ghost" onClick={onRestoreGoogle}>
@@ -145,7 +145,7 @@ export default function Settings() {
               <button className="btn ghost" onClick={protonLogout}>Desconectar</button>
             )}
 
-            <button className="btn" onClick={() => backupToProton(JSON.stringify(getAll()))}>
+            <button className="btn" onClick={async () => backupToProton(JSON.stringify(await getFullBackupPayload()))}>
               Backup agora
             </button>
 
