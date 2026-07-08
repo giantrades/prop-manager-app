@@ -138,8 +138,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
   const onBackup = async () => {
     try {
-      const { getAll } = await import("@apps/lib/dataStore.js");
-      const all = getAll();
+      const { getFullBackupPayload } = await import("@apps/utils/backupPayload.js");
+      const all = await getFullBackupPayload();
       await backup(JSON.stringify(all));
       alert("✅ Backup salvo no Google Drive!");
     } catch (err) {
@@ -150,8 +150,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
   const onProtonBackup = async () => {
     try {
-      const { getAll } = await import("@apps/lib/dataStore.js");
-      const all = getAll();
+      const { getFullBackupPayload } = await import("@apps/utils/backupPayload.js");
+      const all = await getFullBackupPayload();
       await backupToProton(JSON.stringify(all));
       if (protonSupported) {
         alert("✅ Backup salvo na pasta local do Proton Drive!");

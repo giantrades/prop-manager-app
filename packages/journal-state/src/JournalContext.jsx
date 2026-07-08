@@ -358,66 +358,6 @@ export default function JournalProvider({ children }) {
   }, []);
 
 
-  const exportToDrive = useCallback(async (filename = 'journal_backup.json') => {
-    try {
-      const db = await getDB();
-      const allTrades = await db.getAll('trades');
-      const allStrategies = await db.getAll('strategies');
-
-      const payload = {
-        trades: allTrades,
-        strategies: allStrategies,
-        meta: { exportedAt: new Date().toISOString() }
-      };
-
-      if (driveLogged) {
-        await driveBackup(payload);
-        return payload;
-      } else {
-        console.log('ℹ️ Não conectado ao Drive - backup ignorado');
-        return payload;
-      }
-    } catch (err) {
-      console.error('Export failed', err);
-      throw err;
-    }
-  }, [driveLogged, driveBackup]);
-
-  const importFromDrive = useCallback(async () => {
-    try {
-      if (!isSignedIn || !isSignedIn()) return null;
-      const data = await downloadLatestJSON();
-      if (!data || (!data.trades && !data.strategies)) return null;
-
-      const db = await getDB();
-
-      // Importar Trades
-      if (data.trades) {
-        const txTrades = db.transaction('trades', 'readwrite');
-        for (const t of data.trades) {
-          await txTrades.store.put(t);
-        }
-        await txTrades.done;
-      }
-
-      // Importar Estratégias
-      if (data.strategies) {
-        const txStrategies = db.transaction('strategies', 'readwrite');
-        for (const s of data.strategies) {
-          await txStrategies.store.put(s);
-        }
-        await txStrategies.done;
-      }
-
-      // Atualiza os estados locais
-      const result = await reloadFromDB();
-      return result;
-    } catch (err) {
-      console.error('Import failed', err);
-      throw err;
-    }
-  }, [reloadFromDB]);
-
   function normalizeTrade(t) {
     if (!t.entry_datetime && t.date && t.entry_time) {
       t.entry_datetime = new Date(`${t.date}T${t.entry_time}`).toISOString();
@@ -431,7 +371,7 @@ export default function JournalProvider({ children }) {
 
   return (
     <JournalCtx.Provider value={{
-      ready, trades, saveTrade, deleteTrade, exportToDrive, importFromDrive,
+      ready, trades, saveTrade, deleteTrade,
       strategies, saveStrategy, removeStrategy
     }}>
       {children}

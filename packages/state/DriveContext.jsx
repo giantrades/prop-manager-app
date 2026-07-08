@@ -19,7 +19,6 @@ export function DriveProvider({ children }) {
   const channel = new BroadcastChannel("drive-sync");
   const [initializing, setInitializing] = useState(true);
 
-  const [protonReady, setProtonReady] = useState(true);
   const [protonLogged, setProtonLogged] = useState(false);
   // Detecta uma única vez se o navegador suporta a File System Access API
   const [protonSupported] = useState(() => isFileSystemAccessSupported());
@@ -368,7 +367,6 @@ export function DriveProvider({ children }) {
         backup,
         files,
         loadBackup,
-        protonReady,
         protonLogged,
         protonSupported,
         protonLogin,

@@ -14,7 +14,6 @@ export function DataProvider({ children }) {
   const [payouts, setPayouts] = useState(all.payouts || []);
   const [settings, setSettings] = useState(all.settings || { methods: ['Rise', 'Wise', 'Pix', 'Paypal', 'Cripto'] });
   const [firms, setFirms] = useState(all.firms || []);
-  const [autoSync, setAutoSync] = useState(false);
   useEffect(() => {
     const syncFromStorage = () => {
       try {
@@ -36,38 +35,6 @@ export function DataProvider({ children }) {
     return () => window.removeEventListener('storage', syncFromStorage);
   }, []);
 
-  // Backup para o Drive — sempre usa o snapshot MAIS COMPLETO do store
-  // (inclui trades, goals, livePositions, tags, etc. — não só o que este
-  // contexto guarda em state)
-  const backupToDrive = async () => {
-    if (!autoSync) return; // SOMENTE FAZ AUTO-SYNC SE ESTIVER ATIVADO
-
-    const toSend = await getFullBackupPayload();
-
-    // Backup para Google Drive
-    if (isSignedIn()) {
-      try {
-        await uploadOrUpdateJSON("propmanager-backup.json", toSend);
-        console.log("✅ Backup enviado para o Google Drive (Auto-sync)");
-      } catch (err) {
-        console.error("Erro ao fazer backup no Drive", err);
-      }
-    }
-
-    // Backup para Proton Drive
-    try {
-      const protonLogged = await isProtonDriveLogged();
-      if (protonLogged) {
-        const permOk = await ensureProtonPermission();
-        if (permOk) {
-          await backupToProtonDrive(toSend);
-          console.log("✅ Backup enviado para o Proton Drive (Auto-sync)");
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao fazer backup no Proton Drive", err);
-    }
-  };
 
   // ===========================================================
   // 🔄 Aplica um objeto de dados remoto (vindo de qualquer drive)
@@ -113,14 +80,12 @@ export function DataProvider({ children }) {
     const a = store.createAccount(partial)
     const all = store.getAll()
     setAccounts(all.accounts)
-    backupToDrive()
     return a
   }
   const updateAccount = (id, patch) => {
     const a = store.updateAccount(id, patch)
     const all = store.getAll()
     setAccounts(all.accounts)
-    backupToDrive()
     return a
   }
   const deleteAccount = (id) => {
@@ -128,7 +93,6 @@ export function DataProvider({ children }) {
     const all = store.getAll()
     setAccounts(all.accounts)
     setPayouts(all.payouts)
-    backupToDrive()
   }
 
   // PAYOUTS
@@ -137,7 +101,6 @@ export function DataProvider({ children }) {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts) // caso currentFunding tenha sido atualizado no store
-    backupToDrive()
     return p
   }
   const updatePayout = (id, patch) => {
@@ -145,7 +108,6 @@ export function DataProvider({ children }) {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts)
-    backupToDrive()
     return p
   }
   const deletePayout = (id) => {
@@ -153,14 +115,12 @@ export function DataProvider({ children }) {
     const all = store.getAll()
     setPayouts(all.payouts)
     setAccounts(all.accounts)
-    backupToDrive()
   }
 
   // SETTINGS
   const patchSettings = (patch) => {
     const s = store.setSettings(patch)
     setSettings(s)
-    backupToDrive()
     return s
   }
 
@@ -170,14 +130,12 @@ export function DataProvider({ children }) {
     const f = store.createFirm(partial)
     const all = store.getAll()
     setFirms(all.firms)
-    backupToDrive()
     return f
   }
   const updateFirm = (id, patch) => {
     const f = store.updateFirm(id, patch)
     const all = store.getAll()
     setFirms(all.firms)
-    backupToDrive()
     return f
   }
   const deleteFirm = (id) => {
@@ -185,7 +143,6 @@ export function DataProvider({ children }) {
     const all = store.getAll()
     setFirms(all.firms)
     setAccounts(all.accounts) // contas possivelmente desvinculadas
-    backupToDrive()
   }
   const getFirmStats = (id) => store.getFirmStats(id)
 
@@ -210,15 +167,11 @@ export function DataProvider({ children }) {
     getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
 
     // Google Drive
-    backupToDrive,
     restoreFromDrive,
 
     // Restauração genérica (usada também para Proton Drive)
     applyRemoteData,
-
-    // misc
-    autoSync, setAutoSync,
-  }), [accounts, payouts, settings, firms, autoSync]);
+  }), [accounts, payouts, settings, firms]);
 
   return <DataCtx.Provider value={api}>{children}</DataCtx.Provider>;
 }
