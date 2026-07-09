@@ -16,44 +16,11 @@
 //   GET /trades     → trade history (optional ?from=&to=)
 //   GET /positions  → open positions with live P&L
 //   GET /orders     → pending orders
-//
-// ============================================================
-// ALTERAÇÕES EM RELAÇÃO À VERSÃO ANTERIOR:
-//
-// [1] REMOVIDO: OnGetMetrics() — método obsoleto no SDK atual do Quantower.
-//     O compilador avisava: "Strategy.OnGetMetrics() is obsolete:
-//     Use OnInitializeMetrics() method to initialize System.Diagnostics.Metrics"
-//
-// [2] ADICIONADO: OnInitializeMetrics(Meter meter) — novo padrão do .NET
-//     para métricas observáveis. Em vez de retornar uma lista estática,
-//     registramos gauges que o Quantower consulta dinamicamente.
-//
-// [3] ADICIONADO: using System.Diagnostics.Metrics — necessário para o
-//     tipo Meter usado em OnInitializeMetrics.
-//
-// [4] CORRIGIDO: Parsing de datas em BuildTradesJson — o operador ternário
-//     inline após TryParse não é válido em C#. Separado em blocos if/else
-//     corretos para fromDate e toDate.
-//
-// [5] CORRIGIDO: Core.Instance.Trades não existe na API do Quantower.
-//     Conforme documentação oficial (api.quantower.com/docs/...Core.html),
-//     trades são obtidos via Core.Instance.GetTrades(TradesHistoryRequestParameters).
-//     Corrigido em dois locais:
-//       - BuildStatusJson: contagem de trades no status
-//       - BuildTradesJson: iteração sobre os trades com filtro de datas
-//
-// [6] CORRIGIDO: TradesH
-
-
-
-istoryRequestParameters.FromTime e .ToTime não existem.
-//     Conforme docs (api.quantower.com/docs/...TradesHistoryRequestParameters.html),
-//     as propriedades corretas são From (DateTime) e To (DateTime).
 // ============================================================
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Metrics; // [3] ADICIONADO: necessário para o tipo Meter
+using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -63,8 +30,15 @@ using TradingPlatform.BusinessLayer;
 
 namespace QuantowerBridge
 {
-    public class BridgeStrategy : Strategy
+    // CORREÇÃO CS1520: O nome da classe deve ser exatamente igual ao do construtor
+    public class QuantowerBridge : Strategy
     {
+        public QuantowerBridge() : base()
+        {
+            this.Name = "QuantowerBridge";
+            this.Description = "Bridge de integração via HTTP API";
+        }
+
         // ── Configuration ──────────────────────────────────
         [InputParameter("HTTP Port", 10)]
         public int Port = 8787;
@@ -77,6 +51,11 @@ namespace QuantowerBridge
         private Thread _serverThread;
 
         // ── Lifecycle ──────────────────────────────────────
+        protected override void OnCreated()
+        {
+            base.OnCreated();
+        }
+
         protected override void OnRun()
         {
             try
@@ -118,24 +97,16 @@ namespace QuantowerBridge
             catch { }
         }
 
-        // [1] REMOVIDO: OnGetMetrics() — era o método obsoleto:
-        //     protected override List<StrategyMetric> OnGetMetrics() { ... }
-        //
-        // [2] ADICIONADO: OnInitializeMetrics — novo padrão do SDK.
-        //     Usa System.Diagnostics.Metrics.Meter para registrar gauges
-        //     observáveis que o Quantower lê dinamicamente.
         protected override void OnInitializeMetrics(Meter meter)
         {
             base.OnInitializeMetrics(meter);
 
-            // Gauge de status: retorna 1 se online, 0 se offline
             meter.CreateObservableGauge(
                 name: "Bridge Status",
                 observeValue: () => _listener?.IsListening == true ? 1 : 0,
                 description: "1 = 🟢 Online, 0 = 🔴 Offline"
             );
 
-            // Gauge da porta configurada
             meter.CreateObservableGauge(
                 name: "Port",
                 observeValue: () => Port,
@@ -168,13 +139,11 @@ namespace QuantowerBridge
 
             try
             {
-                // CORS headers for webapp access
                 response.Headers.Add("Access-Control-Allow-Origin", "*");
                 response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
                 response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
                 response.ContentType = "application/json; charset=utf-8";
 
-                // Handle CORS preflight
                 if (context.Request.HttpMethod == "OPTIONS")
                 {
                     response.StatusCode = 204;
@@ -188,7 +157,7 @@ namespace QuantowerBridge
                 switch (path)
                 {
                     case "/status":
-                        json = BuildStatusJson();
+                        json = BuildStatusJson(Port);
                         break;
                     case "/accounts":
                         json = BuildAccountsJson();
@@ -230,29 +199,31 @@ namespace QuantowerBridge
         }
 
         // ── JSON Builders ──────────────────────────────────
+        // AVISOS RESOLVIDOS: Métodos marcados como static e Count alterado para Length/propriedades diretas.
 
-        private string BuildStatusJson()
+        private static string BuildStatusJson(int port)
         {
             var connections = Core.Instance.Connections.Connected
                 .Select(c => $"{{\"id\":\"{EscapeJson(c.Id)}\",\"name\":\"{EscapeJson(c.Name)}\"}}")
-                .ToList();
+                .ToArray();
+
+            var tradesCount = Core.Instance.GetTrades(new TradesHistoryRequestParameters()).Count;
 
             return $"{{" +
                 $"\"online\":true," +
                 $"\"version\":\"1.0.0\"," +
                 $"\"platform\":\"quantower\"," +
-                $"\"port\":{Port}," +
+                $"\"port\":{port}," +
                 $"\"timestamp\":\"{DateTime.UtcNow:O}\"," +
-                $"\"connectionsCount\":{connections.Count}," +
+                $"\"connectionsCount\":{connections.Length}," +
                 $"\"connections\":[{string.Join(",", connections)}]," +
-                // [5] CORRIGIDO: Core não tem propriedade Trades — usar GetTrades()
-                $"\"accountsCount\":{Core.Instance.Accounts.Count()}," +
-                $"\"positionsCount\":{Core.Instance.Positions.Count()}," +
-                $"\"tradesCount\":{Core.Instance.GetTrades(new TradesHistoryRequestParameters()).Count}" +
+                $"\"accountsCount\":{Core.Instance.Accounts.Length}," +
+                $"\"positionsCount\":{Core.Instance.Positions.Length}," +
+                $"\"tradesCount\":{tradesCount}" +
                 $"}}";
         }
 
-        private string BuildAccountsJson()
+        private static string BuildAccountsJson()
         {
             var items = new List<string>();
 
@@ -280,10 +251,8 @@ namespace QuantowerBridge
             return $"{{\"accounts\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
         }
 
-        private string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
+        private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
         {
-            // [4] CORRIGIDO: o parsing de datas estava usando operador ternário inline
-            //     após TryParse, que não é sintaxe válida em C#. Separado em if/else.
             DateTime? fromDate = null;
             DateTime? toDate = null;
 
@@ -299,13 +268,10 @@ namespace QuantowerBridge
                     toDate = t;
             }
 
-            // [5] CORRIGIDO: Core não tem propriedade Trades — usar GetTrades()
-            //     com TradesHistoryRequestParameters passando o intervalo de datas.
-            // Propriedades corretas conforme docs: From e To (não FromTime/ToTime)
             var reqParams = new TradesHistoryRequestParameters
             {
                 From = fromDate ?? DateTime.UtcNow.AddYears(-10),
-                To   = toDate   ?? DateTime.UtcNow
+                To = toDate ?? DateTime.UtcNow
             };
 
             var tradeList = Core.Instance.GetTrades(reqParams);
@@ -313,7 +279,6 @@ namespace QuantowerBridge
 
             foreach (Trade trade in tradeList)
             {
-                // Filtro de datas já aplicado via TradesHistoryRequestParameters acima
                 string connName = "";
                 string accountId = "";
                 string accountName = "";
@@ -359,7 +324,7 @@ namespace QuantowerBridge
             return $"{{\"trades\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
         }
 
-        private string BuildPositionsJson()
+        private static string BuildPositionsJson()
         {
             var items = new List<string>();
 
@@ -409,7 +374,7 @@ namespace QuantowerBridge
             return $"{{\"positions\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
         }
 
-        private string BuildOrdersJson()
+        private static string BuildOrdersJson()
         {
             var items = new List<string>();
 
