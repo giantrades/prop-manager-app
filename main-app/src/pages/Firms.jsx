@@ -165,7 +165,7 @@ export default function FirmsPage() {
                className="select"
                value={form.type}
                onChange={(e) => setForm({ ...form, type: e.target.value })}
-               style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text, #e7eaf0)' }}
+               style={{ background: 'var(--chip-bg, #1b2130)', color: 'var(--text, #e7eaf0)', border: '1px solid rgba(255,255,255,0.08)' }}
              >
                {TYPES.map((t) => (
                  <option key={t} value={t}>

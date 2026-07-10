@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
-  base: '/',                // ou '/main/' se quiser /main/ em produção
+  base: '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -12,7 +12,9 @@ export default defineConfig({
       '@apps/ui':    path.resolve(__dirname, '../packages/ui'),
       '@apps/journal-state': path.resolve(__dirname, '../packages/journal-state/src'),
       '@apps/utils': path.resolve(__dirname, '../packages/utils'),
-      '@apps': path.resolve(__dirname, 'packages'),
+      '@apps/auth':  path.resolve(__dirname, '../packages/auth'),
+      '@apps/sync':  path.resolve(__dirname, '../packages/sync'),
+      '@apps/supabase': path.resolve(__dirname, '../packages/supabase'),
     }
   },
   server: {

@@ -8,23 +8,29 @@ import { CurrencyProvider, FiltersProvider, DataProvider, PlatformProvider } fro
 import '@apps/utils/googleDrive.js'
 import {useDrive} from "@apps/state/DriveContext";
 import { DriveProvider } from "@apps/state/DriveContext";
+import { AuthProvider } from "@apps/auth";
+import { SyncProvider } from "@apps/sync";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter basename="/journal"> 
-    <DriveProvider>
-    <JournalProvider>
-      <CurrencyProvider>
-        <FiltersProvider>
-          <DataProvider>
-            <PlatformProvider>
-              <App />
-            </PlatformProvider>
-          </DataProvider>
-        </FiltersProvider>
-      </CurrencyProvider> 
-      </JournalProvider>
-      </DriveProvider>
+      <AuthProvider>
+        <SyncProvider>
+          <DriveProvider>
+          <JournalProvider>
+            <CurrencyProvider>
+              <FiltersProvider>
+                <DataProvider>
+                  <PlatformProvider>
+                    <App />
+                  </PlatformProvider>
+                </DataProvider>
+              </FiltersProvider>
+            </CurrencyProvider> 
+            </JournalProvider>
+          </DriveProvider>
+        </SyncProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

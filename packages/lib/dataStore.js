@@ -413,6 +413,14 @@ export function getFirmStats(firmId){
       const part = p.splitByAccount[id]
       if (part && part.net) totalPayouts += Number(part.net) || 0
     })
+    // Include payouts from archived/deleted accounts
+    if (p._archivedAccounts) {
+      p._archivedAccounts.forEach(arc => {
+        if (arc.firmId === firmId && arc.net) {
+          totalPayouts += Number(arc.net) || 0
+        }
+      })
+    }
   })
   return { totalFunding: Number(totalFunding.toFixed(2)), totalPayouts: Number(totalPayouts.toFixed(2)), accountCount: accounts.length }
 }

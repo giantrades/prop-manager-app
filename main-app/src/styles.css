@@ -1029,6 +1029,13 @@ tr:hover td {
   width: 100%;
 }
 
+/* Select dropdown (native) - dark mode */
+.select,
+.select option {
+  background-color: #111623 !important;
+  color: var(--text) !important;
+}
+
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1264,7 +1271,8 @@ select.chip {
   padding-right: 32px !important;
 }
 
-select.chip option {
+select.chip option,
+select.select option {
   background-color: #0f1218;
   color: #e7eaf0;
 }
@@ -1404,3 +1412,49 @@ select.chip option {
 
 /* As fontes e espaçamentos da navbar usam clamp() e se adaptam automaticamente.
    Regras mobile extra (hamburger menu) ficam abaixo conforme necessário. */
+
+@media (max-width: 768px) {
+  /* Container principal */
+  .container { padding: 12px; }
+  
+  /* Tabelas com scroll horizontal */
+  .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 800px; }
+  
+  /* Cards empilhados */
+  .grid { grid-template-columns: 1fr !important; }
+  
+  /* Modais */
+  .modal { max-width: 95vw !important; padding: 16px; }
+  .modal-content { max-height: 80vh; overflow-y: auto; }
+  
+  /* Formulários */
+  .field { width: 100% !important; }
+  .row { grid-template-columns: 1fr !important; }
+  
+  /* Gráficos - reduzir padding esquerdo */
+  .recharts-wrapper { padding-left: 0 !important; }
+  
+  /* Sidebar */
+  .sidebar { width: 100% !important; max-width: 280px; }
+  
+  /* Botões */
+  .btn { padding: 10px 16px; font-size: 14px; }
+  .btn.small { padding: 6px 10px; font-size: 12px; }
+  
+  /* Dropdowns */
+  .custom-dropdown-menu { max-width: 95vw; }
+  .account-picker-dropdown { max-width: 95vw; }
+}
+
+/* Gráficos - reduzir margin left */
+.recharts-wrapper .recharts-surface {
+  margin-left: -12px !important;
+}
+
+/* Select nativo - dark mode */
+.select,
+.select option {
+  background-color: #0f1218;
+  color: #e7eaf0;
+}

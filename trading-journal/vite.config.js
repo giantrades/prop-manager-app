@@ -13,7 +13,9 @@ export default defineConfig({
       '@apps/journal-state': path.resolve(__dirname, '../packages/journal-state/src'),
       '@apps/ui':    path.resolve(__dirname, '../packages/ui'),
       '@apps/utils': path.resolve(__dirname, '../packages/utils'),
-      '@apps': path.resolve(__dirname, 'packages')
+      '@apps/auth':  path.resolve(__dirname, '../packages/auth'),
+      '@apps/sync':  path.resolve(__dirname, '../packages/sync'),
+      '@apps/supabase': path.resolve(__dirname, '../packages/supabase'),
     }
   },
   server: {
