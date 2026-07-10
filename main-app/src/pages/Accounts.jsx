@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom'
 import { useCurrency } from '@apps/state'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats } from '@apps/lib/dataStore';
 
-const statuses = ['Live', 'Funded', 'Challenge', 'Standby']
+const statuses = ['Live', 'Funded', 'Challenge', 'Standby', 'Demo']
 const types = ['Futures', 'Forex', 'Personal', 'Cripto']
 
 // Componente de Dropdown customizado (igual ao filtro de status)
@@ -21,18 +21,11 @@ function CustomDropdown({ value, onChange, options, pillColors = {}, showLogos =
       }
     }
 
-    function handleScroll() {
-      setOpen(false);
-    }
-
     if (open) {
       document.addEventListener('mousedown', handleClick);
-      window.addEventListener('scroll', handleScroll, true);
     }
-
     return () => {
       document.removeEventListener('mousedown', handleClick);
-      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [open]);
 
@@ -533,12 +526,12 @@ export default function Accounts() {
             />
           </div>
 
-          <ModernMultiSelect
+<ModernMultiSelect
             title="Status"
-            options={accountStatuses.map(s => ({ value: s, label: s }))}
+            options={statuses.map(s => ({ value: s, label: s }))}
             selectedValues={accountStatusFilter}
             onChange={setAccountStatusFilter}
-            pillColors={{ Live: "green", Funded: "blue", Challenge: "yellow", Standby: "gray", live: "green", funded: "blue", challenge: "yellow" }}
+            pillColors={{ Live: "green", Funded: "blue", Challenge: "yellow", Standby: "gray", Demo: "cyan", live: "green", funded: "blue", challenge: "yellow" }}
           />
 
           <ModernMultiSelect

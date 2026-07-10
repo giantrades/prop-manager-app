@@ -159,21 +159,21 @@ export default function FirmsPage() {
             />
           </div>
 
-          <div style={{ width: "150px" }}>
-            <label className="muted" style={{ display: "block", marginBottom: "6px", fontSize: "12px" }}>Tipo</label>
-            <select
-              className="select"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-              style={{ background: 'rgba(0,0,0,0.2)' }}
-            >
-              {TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
+<div style={{ width: "150px" }}>
+             <label className="muted" style={{ display: "block", marginBottom: "6px", fontSize: "12px" }}>Tipo</label>
+             <select
+               className="select"
+               value={form.type}
+               onChange={(e) => setForm({ ...form, type: e.target.value })}
+               style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text, #e7eaf0)' }}
+             >
+               {TYPES.map((t) => (
+                 <option key={t} value={t}>
+                   {t}
+                 </option>
+               ))}
+             </select>
+           </div>
 
           <div style={{ width: "140px" }}>
             <label className="muted" style={{ display: "block", marginBottom: "6px", fontSize: "12px" }}>Cor</label>
