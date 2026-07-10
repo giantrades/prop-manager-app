@@ -251,7 +251,7 @@ export default function DrawdownSection({
       {/* Gráfico Underwater */}
       <div style={{ height: 200, marginBottom: 16 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={underwater}>
+          <AreaChart data={underwater} margin={{ top: 10, right: 20, left: 20, bottom: 20 }}>
             <defs>
               <linearGradient id="gradDD" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#dc2626" stopOpacity={0.4} />

@@ -964,12 +964,23 @@ function FundingPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 20 }} maxBarSize={getBarSize()}>
+          <BarChart 
+            layout="vertical"
+            data={data} 
+            margin={{ top: 12, right: 16, left: 12, bottom: 20 }} 
+            maxBarSize={getBarSize()}
+          >
             <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => { if (Math.abs(v) >= 1000) return (currency === 'USD' ? '$' : 'R$') + Math.round(v / 1000) + 'k'; return (currency === 'USD' ? '$' : 'R$') + Math.round(v) }} />
+            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+            <YAxis 
+              dataKey="name" 
+              type="category" 
+              tick={{ fill: '#94a3b8', fontSize: 11 }} 
+              width={120}
+              tickMargin={8}
+            />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" shape={<CustomBar />} />
+            <Bar dataKey="value" shape={<CustomBar />} radius={[6, 0, 0, 6]} fill="#f59e0b" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1066,12 +1077,23 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 20 }} maxBarSize={getBarSize()}>
+          <BarChart 
+            layout="vertical"
+            data={data} 
+            margin={{ top: 12, right: 16, left: 12, bottom: 20 }} 
+            maxBarSize={getBarSize()}
+          >
             <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => { if (Math.abs(v) >= 1000) return (currency === 'USD' ? '$' : 'R$') + Math.round(v / 1000) + 'k'; return (currency === 'USD' ? '$' : 'R$') + Math.round(v) }} />
+            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+            <YAxis 
+              dataKey="name" 
+              type="category" 
+              tick={{ fill: '#94a3b8', fontSize: 11 }} 
+              width={120}
+              tickMargin={8}
+            />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" shape={<CustomBar />} />
+            <Bar dataKey="value" shape={<CustomBar />} radius={[6, 0, 0, 6]} fill="#10b981" />
           </BarChart>
         </ResponsiveContainer>
       </div>

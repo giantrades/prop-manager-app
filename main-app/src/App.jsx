@@ -5,6 +5,7 @@ import Accounts from "./pages/Accounts.jsx";
 import Payouts from "./pages/Payouts.jsx";
 import Settings from "./pages/Settings.jsx";
 import Firms from "./pages/Firms.jsx";
+import Login from "./pages/Login.jsx";
 import Navbar from "./Navbar";
 import './styles.css';
 import { useJournal } from "@apps/journal-state";
@@ -67,6 +68,7 @@ export default function App() {
         <div className="container">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/payouts" element={<Payouts />} />
             <Route path="/settings" element={<Settings />} />

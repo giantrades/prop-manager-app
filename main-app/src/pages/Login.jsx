@@ -7,7 +7,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
     
@@ -17,7 +17,7 @@ export default function Login() {
     try {
       await signIn(email);
       // Success - redirect handled by auth callback
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message || 'Erro ao enviar link de login');
     } finally {
       setLoading(false);
