@@ -1,3 +1,4 @@
+// main-app/src/pages/Payouts.jsx
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { useCurrency } from '@apps/state'
 import * as store from '@apps/lib/dataStore.js'
@@ -27,12 +28,12 @@ export default function Payouts() {
     if (idToOpen && payouts.length > 0) {
       const found = payouts.find(p => p.id === idToOpen);
       if (found) {
-        setShowForm({ edit: found }); // abre o modal com dados do payout
-        localStorage.removeItem('openPayoutId'); // não repetir
+        setShowForm({ edit: found });
+        localStorage.removeItem('openPayoutId');
       }
     }
   }, [payouts]);
-  // Mantém sincronizado com o localStorage quando outros componentes/páginas alteram
+
   useEffect(() => {
     const sync = () => {
       const data = getAll()
@@ -49,11 +50,9 @@ export default function Payouts() {
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState('')
 
-  // Paginação
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
 
-  // Ordenação
   const [sortField, setSortField] = useState('dateCreated')
   const [sortDirection, setSortDirection] = useState('desc')
 
@@ -62,12 +61,8 @@ export default function Payouts() {
       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
       : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate)
 
-  // ---------------------------
-  // Processamento: filtro -> dedup -> sort -> pagina
-  // ---------------------------
   const processedData = useMemo(() => {
     let filtered = payouts.filter((p) => {
-      // Filtrar por busca (texto ou valor)
       const q = filter.toLowerCase();
       if (q) {
         const matchType = p.type?.toLowerCase().includes(q);
@@ -75,15 +70,12 @@ export default function Payouts() {
         const matchMethod = p.method?.toLowerCase().includes(q);
         const matchStatus = p.status?.toLowerCase().includes(q);
 
-        // Match archived tags
         const isArchivedSearch = q === 'arquivado' || q === 'deletado' || q === 'archived' || q === 'deleted';
         const hasArchived = p._archivedAccounts && p._archivedAccounts.length > 0;
         const matchArchivedState = isArchivedSearch && hasArchived;
 
-        // Match archived account names
         const matchArchivedName = hasArchived && p._archivedAccounts.some(arc => arc.name?.toLowerCase().includes(q));
 
-        // Match live account names
         const matchLiveName = (p.accountIds || []).some(id => {
           const a = accounts.find(acc => acc.id === id);
           return a && a.name?.toLowerCase().includes(q);
@@ -92,7 +84,6 @@ export default function Payouts() {
         if (!matchType && !matchAmount && !matchMethod && !matchStatus && !matchArchivedState && !matchArchivedName && !matchLiveName) return false;
       }
 
-      // Filtrar pelo AccountPicker
       if (selectedAccountIds.length > 0) {
         if (p.accountIds && p.accountIds.some(id => selectedAccountIds.includes(id))) return true;
         if (p.accountId && selectedAccountIds.includes(p.accountId)) return true;
@@ -110,20 +101,17 @@ export default function Payouts() {
       return true;
     })
 
-    // Deduplicação por id
     const uniqueMap = new Map()
     filtered.forEach((item) => {
       if (!uniqueMap.has(item.id)) uniqueMap.set(item.id, item)
     })
     let dedup = Array.from(uniqueMap.values())
 
-
     if (sortField) {
       dedup.sort((a, b) => {
         let aVal = a[sortField]
         let bVal = b[sortField]
 
-        // Normaliza tipos de dados
         if (['dateCreated', 'approvedDate'].includes(sortField)) {
           aVal = new Date(aVal || 0).getTime()
           bVal = new Date(bVal || 0).getTime()
@@ -158,8 +146,6 @@ export default function Payouts() {
     return dedup
   }, [payouts, filter, sortField, sortDirection, selectedAccountIds, accounts])
 
-
-  // Paginação final
   const totalItems = processedData.length
   const totalPages = Math.ceil(totalItems / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
@@ -181,11 +167,10 @@ export default function Payouts() {
   const SortIndicator = ({ field }) =>
     sortField === field ? <span>{sortDirection === 'asc' ? ' ↑' : ' ↓'}</span> : null
 
-  // Reseta página quando o filtro muda
   useEffect(() => setCurrentPage(1), [filter])
 
   return (
-    <div className="payouts-page grid" style={{ gap: 16 }}>
+    <div className="payouts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       {/* ==== DASHBOARD DE RESUMO DE PAYOUTS ==== */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -218,15 +203,8 @@ export default function Payouts() {
           <div style={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, background: 'radial-gradient(circle, rgba(34, 197, 94, 0.2) 0%, transparent 70%)', borderRadius: '50%' }} />
           <h4 style={{ margin: 0, fontSize: 14, fontWeight: 500, color: '#86efac', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 8, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80' }}>
-              <svg
-                width="8"
-                height="8"
-                viewBox="0 0 100 100"
-              >
-                <polygon
-                  points="50,10 95,90 5,90"
-                  fill="#22c55e"
-                />
+              <svg width="8" height="8" viewBox="0 0 100 100">
+                <polygon points="50,10 95,90 5,90" fill="#22c55e" />
               </svg>
             </span>
             Lucro Líquido
@@ -237,9 +215,9 @@ export default function Payouts() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         {/* CARD 4 - Categorias */}
-        <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: 16, padding: '20px 24px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+        <div style={{ flex: '1 1 300px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 16, padding: '20px 24px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
           <h4 style={{ margin: '0 0 16px 0', fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>Líquido por Categoria</h4>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {['Futures', 'Forex', 'Cripto', 'Personal'].map((cat) => {
@@ -263,32 +241,33 @@ export default function Payouts() {
         </div>
 
         {/* CARD 5 - Solicitados */}
-        <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: 16, padding: '20px 24px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ flex: '1 1 200px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 16, padding: '20px 24px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ fontSize: 48, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{processedData.length}</div>
           <div style={{ fontSize: 14, color: '#94a3b8', marginTop: 8 }}>Payouts Exibidos</div>
         </div>
       </div>
       {/* ==== FIM DOS CARDS ==== */}
 
-      {/* Toolbar superior */}
-      <div className="toolbar" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+      {/* Toolbar superior responsiva */}
+      <div className="toolbar" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           className="input"
           placeholder="Search by amount, method, type..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ width: 250, margin: 0 }}
+          style={{ flex: '1 1 200px', minWidth: 200, margin: 0 }}
         />
 
-        <AccountPicker
-          selectedIds={selectedAccountIds}
-          onChange={setSelectedAccountIds}
-          accounts={accounts}
-          firms={firms}
-          placeholder="Todas as contas"
-        />
+        <div style={{ flex: '1 1 200px', minWidth: 200 }}>
+          <AccountPicker
+            selectedIds={selectedAccountIds}
+            onChange={setSelectedAccountIds}
+            accounts={accounts}
+            firms={firms}
+            placeholder="Todas as contas"
+          />
+        </div>
 
-        <div className="spacer" />
         <select
           className="select"
           value={itemsPerPage}
@@ -296,14 +275,15 @@ export default function Payouts() {
             setItemsPerPage(Number(e.target.value))
             setCurrentPage(1)
           }}
-          style={{ width: 'auto' }}
+          style={{ width: 'auto', flex: '0 0 auto' }}
         >
           <option value={10}>10 por página</option>
           <option value={20}>20 por página</option>
           <option value={50}>50 por página</option>
           <option value={100}>100 por página</option>
         </select>
-        <button className="btn" onClick={() => setShowForm(true)}>
+
+        <button className="btn" onClick={() => setShowForm(true)} style={{ flex: '0 0 auto' }}>
           + Adicionar Payout
         </button>
         <ExportCSV rows={processedData} />
@@ -315,7 +295,8 @@ export default function Payouts() {
         </div>
       )}
 
-      <div className="card">
+      {/* Tabela com scroll horizontal */}
+      <div className="card" style={{ overflowX: 'auto' }}>
         <table>
           <thead>
             <tr>
@@ -424,38 +405,39 @@ export default function Payouts() {
                   <td data-label="Fee" className="center" style={{ color: '#ef4444' }}>- {fmt(p.fee)}</td>
                   <td data-label="Net" className="center" style={{ color: '#22c55e', fontWeight: 700 }}>+ {fmt(p.amountReceived)}</td>
                   <td className="right" data-label="Ações">
-                    <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
-                      Edit
-                    </button>{' '}
-                    <button
-                      className="btn secondary"
-                      onClick={() => {
-                        const data = getAll()
-                        const payout = data.payouts.find(pp => pp.id === p.id)
-                        if (payout?.accountIds?.length) {
-                          const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
-                          payout.accountIds.forEach(accId => {
-                            const acc = data.accounts.find(a => a.id === accId)
-                            if (acc) {
-                              const revertedFunding = (acc.currentFunding || 0) + netPerAccount
-                              updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
-                            }
-                          })
-                        }
-                        deletePayout(p.id)
-                        const fresh = getAll()
-                        setPayouts(fresh.payouts)
-                        setAccounts(fresh.accounts)
-                      }}
-                    >
-                      Delete
-                    </button>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
+                        Edit
+                      </button>
+                      <button
+                        className="btn secondary"
+                        onClick={() => {
+                          const data = getAll()
+                          const payout = data.payouts.find(pp => pp.id === p.id)
+                          if (payout?.accountIds?.length) {
+                            const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
+                            payout.accountIds.forEach(accId => {
+                              const acc = data.accounts.find(a => a.id === accId)
+                              if (acc) {
+                                const revertedFunding = (acc.currentFunding || 0) + netPerAccount
+                                updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+                              }
+                            })
+                          }
+                          deletePayout(p.id)
+                          const fresh = getAll()
+                          setPayouts(fresh.payouts)
+                          setAccounts(fresh.accounts)
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
             })}
           </tbody>
-
         </table>
 
         {currentPageData.length === 0 && (
@@ -465,7 +447,6 @@ export default function Payouts() {
         )}
       </div>
 
-      {/* Paginação simples */}
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
           <button
@@ -498,7 +479,6 @@ export default function Payouts() {
             const payoutId = showForm.edit?.id
             const data = getAll()
 
-            // Antes de atualizar, se for edição, desfaz impacto antigo nas contas
             if (isEdit) {
               const oldPayout = data.payouts.find(p => p.id === payoutId)
               if (oldPayout?.accountIds?.length) {
@@ -506,7 +486,6 @@ export default function Payouts() {
                 oldPayout.accountIds.forEach(accId => {
                   const acc = data.accounts.find(a => a.id === accId)
                   if (acc) {
-                    // reverte o débito anterior
                     const revertedFunding = (acc.currentFunding || 0) + oldNetPerAccount
                     updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
                   }
@@ -514,12 +493,10 @@ export default function Payouts() {
               }
             }
 
-            // Agora aplica o novo payout (criação ou edição)
             const updatedPayout = isEdit
               ? updatePayout(payoutId, payload)
               : createPayout(payload)
 
-            // Aplica o novo impacto nas contas
             const netPerAccount = (payload.amountSolicited || 0) / (payload.accountIds?.length || 1)
             payload.accountIds?.forEach(accId => {
               const acc = getAll().accounts.find(a => a.id === accId)
@@ -528,26 +505,19 @@ export default function Payouts() {
                 updateAccount(acc.id, { ...acc, currentFunding: updatedFunding })
                 if (!payload.attachments) payload.attachments = {};
               }
-
             })
 
-            // Atualiza o estado local
             const fresh = getAll()
             setPayouts(fresh.payouts)
             setAccounts(fresh.accounts)
             setShowForm(false)
           }}
-
-
         />
       )}
     </div>
   )
 }
 
-// ---------------------------
-// Exportação CSV
-// ---------------------------
 function ExportCSV({ rows }) {
   const download = () => {
     const header = ['dateCreated', 'type', 'status', 'method', 'amountSolicited', 'fee', 'amountReceived', 'accountIds']
@@ -571,7 +541,7 @@ function ExportCSV({ rows }) {
     URL.revokeObjectURL(url)
   }
 
-  return <button className="btn ghost" onClick={download}>Export CSV</button>
+  return <button className="btn ghost" style={{ flex: '0 0 auto' }} onClick={download}>Export CSV</button>
 }
 
 // ---------------------------
@@ -615,12 +585,14 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       accountStatusFilter.includes(a.status?.toLowerCase())
     return matchesSearch && matchesStatus
   })
+
   const accountStatuses = useMemo(() => {
     const all = pool
       .map((a) => a.status?.toLowerCase() || '')
       .filter((s) => !!s)
     return Array.from(new Set(all))
   }, [pool])
+
   useEffect(() => {
     function onDocClick(e) {
       if (!statusDropdownRef.current) return
@@ -631,6 +603,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
     if (statusDropdownOpen) document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [statusDropdownOpen])
+
   const selectedSet = new Set(state.accountIds)
   const selectedAccounts = pool.filter(a => selectedSet.has(a.id))
 
@@ -669,10 +642,9 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       setState({ ...state, method: updated.methods[0] || '' })
     }
   }
-  // estado local para acompanhar uploads (opcional: para UI)
-  const [uploadingMap, setUploadingMap] = useState({}) // { accountId: boolean }
 
-  // helper: upload file and attach metadata to payout (creates folder path then upload)
+  const [uploadingMap, setUploadingMap] = useState({})
+
   async function handleUploadForAccount(accountId, file) {
     try {
       if (!file) {
@@ -680,29 +652,20 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
         return null;
       }
 
-      console.log('📤 Iniciando upload para conta:', accountId);
-      console.log('📄 Arquivo:', file.name, file.type, file.size);
-
-      // Inicializa Google Drive
       const initialized = await initGoogleDrive();
       if (!initialized) {
         throw new Error('Falha ao inicializar Google Drive');
       }
-      console.log('✅ Google Drive inicializado');
 
-      // ✅ APENAS verifica se está logado, SEM verificar expiração
       if (!isSignedIn()) {
         throw new Error('Você precisa estar logado no Google Drive. Por favor, faça login na página de configurações.');
       }
 
-      // Busca dados da conta
       const account = accounts.find(a => a.id === accountId);
       if (!account) {
         throw new Error('Conta não encontrada: ' + accountId);
       }
-      console.log('🏦 Conta encontrada:', account.name);
 
-      // Monta caminho de pastas
       const allFirms = getAll().firms || [];
       const firm = account.firmId ? allFirms.find(f => f.id === account.firmId) : null;
       const company = firm?.name || 'UnknownCompany';
@@ -712,24 +675,14 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       const dataPart = `${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0, 10)}`;
       const folderSegments = ['payouts', tipo, company, nomeConta, dataPart];
 
-      console.log('📁 Criando caminho:', folderSegments.join('/'));
-
-      // Mostra loading
       setUploadingMap(m => ({ ...m, [accountId]: true }));
-
-      // Cria/encontra pasta
       const folderId = await getOrCreateFolderByPath(folderSegments);
-      console.log('✅ Pasta criada/encontrada, ID:', folderId);
 
-      // Upload do arquivo
       const ext = file.name.split('.').pop() || 'png';
       const displayName = `payout_${state.amountSolicited || 0}_${state.dateCreated || new Date().toISOString().slice(0, 10)}.${ext}`;
 
-      console.log('📤 Enviando arquivo:', displayName);
       const uploaded = await uploadFileToFolder(folderId, file, displayName);
-      console.log('✅ Upload concluído:', uploaded);
 
-      // Monta metadados do anexo
       const attachment = {
         folderPath: folderSegments.join('/'),
         folderId,
@@ -739,7 +692,6 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
         uploadedAt: new Date().toISOString()
       };
 
-      // Salva no estado
       if (!state.id) {
         setState(s => ({
           ...s,
@@ -748,10 +700,8 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
             [accountId]: attachment
           }
         }));
-        console.log('💾 Anexo salvo no estado (novo payout)');
       } else {
         store.setPayoutAttachment(state.id, accountId, attachment);
-        console.log('💾 Anexo salvo no dataStore (payout existente)');
       }
 
       setUploadingMap(m => ({ ...m, [accountId]: false }));
@@ -771,10 +721,9 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
   }
 
   return (
-    <div className="payouts-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()} style={{ backdropFilter: 'blur(8px)' }}>
-      <div className="payouts-modal-content" style={{ border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+    <div className="payouts-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div className="payouts-modal-content" style={{ background: 'var(--card-bg, #1e1e2b)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12, display: 'flex', flexDirection: 'column', maxHeight: '90vh', width: '100%', maxWidth: 800, overflow: 'hidden' }}>
 
-        {/* Header Dinâmico */}
         <div style={{ padding: '24px', background: `linear-gradient(180deg, ${headerColor} 0%, transparent 100%)`, borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {currentFirm && currentFirm.logo ? (
@@ -792,38 +741,40 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
               </div>
             </div>
           </div>
-          <button className="payouts-modal-close" onClick={onClose} style={{ alignSelf: 'flex-start' }}>×</button>
+          <button className="payouts-modal-close" onClick={onClose} style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', zIndex: 1001, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>×</button>
         </div>
 
         <div className="payouts-modal-body" style={{ padding: 24, overflowY: 'auto' }}>
 
-          {/* Informações Básicas - Data, Data Aprovação e Status do PAYOUT */}
           <div className="payouts-section">
-            <div className="payouts-section-title">Informações Básicas</div>
+            <div className="payouts-section-title" style={{ marginBottom: 12, fontWeight: 'bold' }}>Informações Básicas</div>
 
-            <div className="payouts-field-row payouts-field-row-3">
-              <div className="payouts-field">
+            <div className="payouts-field-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              <div className="payouts-field" style={{ flex: '1 1 150px' }}>
                 <label>📅 Data</label>
                 <input
                   type="date"
-                  className="payouts-input"
+                  className="input"
+                  style={{ width: '100%' }}
                   value={state.dateCreated}
                   onChange={(e) => setState({ ...state, dateCreated: e.target.value })}
                 />
               </div>
-              <div className="payouts-field">
+              <div className="payouts-field" style={{ flex: '1 1 150px' }}>
                 <label>✅ Data Aprovação</label>
                 <input
                   type="date"
-                  className="payouts-input"
+                  className="input"
+                  style={{ width: '100%' }}
                   value={state.approvedDate || ''}
                   onChange={(e) => setState({ ...state, approvedDate: e.target.value || null })}
                 />
               </div>
-              <div className="payouts-field">
+              <div className="payouts-field" style={{ flex: '1 1 150px' }}>
                 <label>📊 Status do Payout</label>
                 <select
-                  className="payouts-input"
+                  className="select"
+                  style={{ width: '100%' }}
                   value={state.status}
                   onChange={(e) => setState({ ...state, status: e.target.value })}
                 >
@@ -835,22 +786,18 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
             </div>
           </div>
 
-
-
-          {/* Seleção de Conta Única */}
-          <div className="payouts-section" style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="payouts-section-title">🏦 Conta Vinculada</div>
-
+          <div className="payouts-section" style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,0.04)', marginTop: 24 }}>
+            <div className="payouts-section-title" style={{ marginBottom: 12, fontWeight: 'bold' }}>🏦 Conta Vinculada</div>
             <div className="payouts-field">
               <label>Selecione a Conta de Origem</label>
               <select
-                className="payouts-input"
+                className="select"
                 value={currentAccId || ''}
                 onChange={(e) => {
                   const selected = accounts.find(a => a.id === e.target.value);
                   setState({ ...state, accountIds: [e.target.value], type: selected?.type || 'Todas' });
                 }}
-                style={{ fontSize: 15, padding: '10px 14px' }}
+                style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
                 <option value="" disabled>Selecione uma conta ativa...</option>
                 {accounts.map(a => (
@@ -861,13 +808,12 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
               </select>
             </div>
           </div>
-          {/* Upload de comprovantes por conta selecionada */}
+
           {selectedAccounts.length > 0 && (
             <div className="payouts-section" style={{ marginTop: 20 }}>
-              <div className="payouts-section-title">📎 Comprovantes por Conta</div>
+              <div className="payouts-section-title" style={{ marginBottom: 12, fontWeight: 'bold' }}>📎 Comprovantes por Conta</div>
 
               {selectedAccounts.map((acc) => {
-                // Verifica se já existe anexo no estado atual (novo payout) ou no banco (editando payout)
                 const existingAttachment =
                   (state.attachments && state.attachments[acc.id]) ||
                   (state.id &&
@@ -882,19 +828,18 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                       alignItems: 'center',
                       padding: '10px 0',
                       borderBottom: '1px solid var(--border)',
+                      flexWrap: 'wrap',
+                      gap: '10px'
                     }}
                   >
-                    {/* Nome da conta e infos */}
                     <div>
                       <strong>{acc.name}</strong>
-                      <p style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
                         {acc.type?.toUpperCase()} • {acc.status}
                       </p>
                     </div>
 
-                    {/* Botões de Upload / Ver / Trocar */}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                      {/* Input escondido */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                       <input
                         type="file"
                         accept="image/*,application/pdf"
@@ -904,11 +849,10 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                           const file = e?.target?.files?.[0];
                           if (!file) return;
                           await handleUploadForAccount(acc.id, file);
-                          e.target.value = ''; // Reseta para permitir re-upload
+                          e.target.value = '';
                         }}
                       />
 
-                      {/* Botão de upload com loading */}
                       <button
                         className="btn secondary small"
                         onClick={() => document.getElementById(`file-upload-${acc.id}`).click()}
@@ -916,7 +860,8 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                         style={{
                           opacity: uploadingMap[acc.id] ? 0.6 : 1,
                           cursor: uploadingMap[acc.id] ? 'wait' : 'pointer',
-                          position: 'relative'
+                          position: 'relative',
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         {uploadingMap[acc.id] ? (
@@ -928,13 +873,13 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                         )}
                       </button>
 
-                      {/* Se já existir comprovante */}
                       {existingAttachment && (
                         <a
                           href={existingAttachment.url}
                           target="_blank"
                           rel="noreferrer"
                           className="btn small"
+                          style={{ whiteSpace: 'nowrap' }}
                         >
                           📁 Ver Arquivo
                         </a>
@@ -946,15 +891,15 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
             </div>
           )}
 
-          {/* Método de Pagamento */}
-          <div className="payouts-section">
-            <div className="payouts-section-title">Método de Pagamento</div>
+          <div className="payouts-section" style={{ marginTop: 24 }}>
+            <div className="payouts-section-title" style={{ marginBottom: 12, fontWeight: 'bold' }}>Método de Pagamento</div>
 
-            <div className="payouts-field-row payouts-field-row-2">
-              <div className="payouts-field">
+            <div className="payouts-field-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              <div className="payouts-field" style={{ flex: '1 1 150px' }}>
                 <label>Método Atual</label>
                 <select
-                  className="payouts-input"
+                  className="select"
+                  style={{ width: '100%' }}
                   value={state.method}
                   onChange={(e) => setState({ ...state, method: e.target.value })}
                 >
@@ -963,18 +908,18 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                   ))}
                 </select>
               </div>
-              <div className="payouts-field">
+              <div className="payouts-field" style={{ flex: '1 1 150px' }}>
                 <label>Adicionar Novo</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     type="text"
-                    className="payouts-input"
+                    className="input"
                     placeholder="Nome do método..."
                     style={{ flex: 1 }}
                     value={newMethod}
                     onChange={(e) => setNewMethod(e.target.value)}
                   />
-                  <button className="payouts-btn payouts-btn-ghost" onClick={addMethod}>+</button>
+                  <button className="btn ghost" onClick={addMethod}>+</button>
                 </div>
               </div>
             </div>
@@ -985,14 +930,14 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {methods.map((m) => (
-                  <span key={m} className="payouts-chip" onClick={() => removeMethod(m)}>
+                  <span key={m} className="pill gray" style={{ cursor: 'pointer', padding: '4px 8px' }} onClick={() => removeMethod(m)}>
                     {m} ✕
                   </span>
                 ))}
               </div>
             </div>
           </div>
-          {/* Preview de Distribuição simplificado */}
+
           {currentAcc && (
             <div className="payouts-preview" style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, marginTop: 24, border: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="payouts-preview-header" style={{ marginBottom: 16 }}>
@@ -1000,57 +945,54 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
               </div>
 
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 150 }}>
+                <div style={{ flex: '1 1 150px' }}>
                   <label style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, display: 'block', textTransform: 'uppercase' }}>
                     💵 GROSS ($) Solicitado
                   </label>
                   <input
                     type="number"
-                    className="payouts-input"
+                    className="input"
                     value={state.amountSolicited || ''}
                     onChange={(e) =>
                       setState({ ...state, amountSolicited: parseFloat(e.target.value) || 0 })
                     }
                     placeholder="0.00"
-                    style={{ padding: '12px 16px', fontSize: 18, fontWeight: 700 }}
+                    style={{ padding: '12px 16px', fontSize: 18, fontWeight: 700, width: '100%' }}
                   />
                 </div>
 
-                <div style={{ flex: 1, minWidth: 150, background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ flex: '1 1 150px', background: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase' }}>Taxa da Firm / Split</div>
                   <div style={{ fontSize: 18, color: 'var(--yellow)', fontWeight: 600 }}>- {fmt(totals.fee)}</div>
                 </div>
 
-                <div style={{ flex: 1, minWidth: 150, background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ flex: '1 1 150px', background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: 16, borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                   <div style={{ fontSize: 11, color: '#86efac', textTransform: 'uppercase' }}>Net Líquido</div>
                   <div style={{ fontSize: 24, color: '#4ade80', fontWeight: 800 }}>+ {fmt(totals.net)}</div>
                 </div>
               </div>
             </div>
           )}
-
         </div>
 
-        {/* Footer Actions */}
-        <div className="payouts-modal-footer">
-          <button className="payouts-btn payouts-btn-secondary" onClick={onClose}>
+        <div className="payouts-modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <button className="btn ghost" onClick={onClose}>
             Cancelar
           </button>
           <button
-            className="payouts-btn payouts-btn-primary"
+            className="btn"
             onClick={() => {
               const payload = {
                 ...state,
                 fee: totals.fee,
                 amountReceived: totals.net,
-                attachments: state.attachments || {}   // ✅ garante que os arquivos enviados sejam salvos junto
+                attachments: state.attachments || {}
               }
-              onSave(payload) // quem salva de verdade é a função enviada pelo componente Payouts
+              onSave(payload)
             }}
           >
             💾 {edit ? 'Salvar' : 'Criar Payout'}
           </button>
-
         </div>
 
       </div>
