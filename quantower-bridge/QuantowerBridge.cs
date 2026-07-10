@@ -274,81 +274,84 @@ namespace QuantowerBridge
             DateTime? fromDate = null;
             DateTime? toDate = null;
 
-            if (!string.IsNullOrEmpty(query["from"]))
+    if (!string.IsNullOrEmpty(query["from"]))
+    {
+        if (DateTime.TryParse(query["from"], out DateTime f))
+            fromDate = f;
+    }
+
+    if (!string.IsNullOrEmpty(query["to"]))
+    {
+        if (DateTime.TryParse(query["to"], out DateTime t))
+            toDate = t;
+    }
+
+    var reqParams = new TradesHistoryRequestParameters
+    {
+        From = fromDate ?? DateTime.UtcNow.AddYears(-10),
+        To = toDate ?? DateTime.UtcNow
+    };
+
+    var tradeList = Core.Instance.GetTrades(reqParams);
+    var trades = new List<object>();
+
+    foreach (Trade trade in tradeList)
+    {
+        string connName = "";
+        string accountId = "";
+        string accountName = "";
+        string symbol = "";
+        string side = "";
+        string positionId = "";  // ← DECLARE HERE before try block
+
+        try
+        {
+            var conn = Core.Instance.Connections.Connected
+                .FirstOrDefault(c => c.Id == trade.ConnectionId);
+            connName = conn?.Name ?? "";
+
+            symbol = trade.Symbol?.Name ?? "";
+            side = trade.Side.ToString();
+
+            if (trade.Account != null)
             {
-                if (DateTime.TryParse(query["from"], out DateTime f))
-                    fromDate = f;
+                accountId = trade.Account.Id ?? "";
+                accountName = trade.Account.Name ?? "";
             }
-
-            if (!string.IsNullOrEmpty(query["to"]))
-            {
-                if (DateTime.TryParse(query["to"], out DateTime t))
-                    toDate = t;
-            }
-
-            var reqParams = new TradesHistoryRequestParameters
-            {
-                From = fromDate ?? DateTime.UtcNow.AddYears(-10),
-                To = toDate ?? DateTime.UtcNow
-            };
-
-            var tradeList = Core.Instance.GetTrades(reqParams);
-            var trades = new List<object>();
-
-            foreach (Trade trade in tradeList)
-            {
-                string connName = "";
-                string accountId = "";
-                string accountName = "";
-                string symbol = "";
-                string side = "";
-
-                try
-                {
-                    var conn = Core.Instance.Connections.Connected
-                        .FirstOrDefault(c => c.Id == trade.ConnectionId);
-                    connName = conn?.Name ?? "";
-
-                    symbol = trade.Symbol?.Name ?? "";
-                    side = trade.Side.ToString();
-
-                    if (trade.Account != null)
-                    {
-                        accountId = trade.Account.Id ?? "";
-                        accountName = trade.Account.Name ?? "";
-                    }
-                }
-                catch { }
-
-                trades.Add(new
-                {
-                    id = trade.Id,
-                    symbol,
-                    side,
-                    quantity = trade.Quantity,
-                    price = trade.Price,
-                    dateTime = trade.DateTime.ToString("O"),
-                    grossPnl = trade.GrossPnl?.Value ?? 0,
-                    netPnl = trade.NetPnl?.Value ?? 0,
-                    fee = trade.Fee?.Value ?? 0,
-                    orderId = trade.OrderId ?? "",
-                    positionId = trade.PositionId ?? "",
-                    accountId,
-                    accountName,
-                    connectionId = trade.ConnectionId ?? "",
-                    connectionName = connName
-                });
-            }
-
-            var result = new
-            {
-                trades,
-                count = trades.Count,
-                timestamp = DateTime.UtcNow.ToString("O")
-            };
-
-            return JsonSerializer.Serialize(result, JsonOptions);
+            
+            positionId = trade.PositionId ?? "";  // ← ASSIGN HERE (optional, since we use trade.PositionId below)
         }
+        catch { }
+
+        trades.Add(new
+        {
+            id = trade.Id,
+            symbol,
+            side,
+            quantity = trade.Quantity,
+            price = trade.Price,
+            dateTime = trade.DateTime.ToString("O"),
+            grossPnl = trade.GrossPnl?.Value ?? 0,
+            netPnl = trade.NetPnl?.Value ?? 0,
+            fee = trade.Fee?.Value ?? 0,
+            orderId = trade.OrderId ?? "",
+            positionId = trade.PositionId ?? "",  // ← Uses trade.PositionId directly
+            accountId,
+            accountName,
+            connectionId = trade.ConnectionId ?? "",
+            connectionName = connName
+        });
+    }
+
+    var result = new
+    {
+        trades,
+        count = trades.Count,
+        timestamp = DateTime.UtcNow.ToString("O")
+    };
+
+    return JsonSerializer.Serialize(result, JsonOptions);
+}
 
         private static string BuildPositionsJson()
         {

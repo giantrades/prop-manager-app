@@ -4,7 +4,7 @@
  * Bloco 1: Bridge Config (URL + Test + status geral)
  * Bloco 2: Connection Health — conexões do Quantower (sem logo) com Firms abaixo (com logo)
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   getPlatformSettings, setPlatformSettings, getAll,
   getConnectionFirmMap, setConnectionFirmEntry,
@@ -67,6 +67,9 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
 
   const glowColor = firm.color || '#6366f1';
 
+  // Helper to get account unique key (platformAccountId for bridge, id for internal)
+  const getAccountKey = (acc) => acc.platformAccountId || acc.id;
+
   return (
     <div style={{
       background: 'rgba(255,255,255,0.03)',
@@ -107,28 +110,30 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
             </p>
           ) : (
             accounts.map(acc => {
-              const currentFirmId = accFirmOverride[acc.id] || (connectionId ? connFirmMap[connectionId] : null) || acc.firmId;
+              const accountKey = acc.platformAccountId || acc.id;
+              const currentFirmId = accFirmOverride[accountKey] || (connectionId ? connFirmMap[connectionId] : null) || acc.firmId;
               return (
-                <div key={acc.id} style={{
+                <div key={accountKey} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '7px 0',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#e6e6e9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {acc.name || acc.id?.slice(0, 10)}
+                      {acc.name || accountKey?.slice(0, 10)}
                     </div>
                     <div style={{ fontSize: 11, color: '#6b7280' }}>
                       {acc.connectionName || connectionId} · ${(acc.balance || acc.currentFunding || 0).toLocaleString()}
                       {acc.status ? ` · ${acc.status}` : ''}
+                      {acc.type ? ` · ${acc.type}` : ''}
                     </div>
                   </div>
 
                   {/* Override por conta */}
                   <select
                     className="select"
-                    value={accFirmOverride[acc.id] || ''}
-                    onChange={e => onSetAccFirm(acc.id, e.target.value || null)}
+                    value={accFirmOverride[accountKey] || ''}
+                    onChange={e => onSetAccFirm(accountKey, e.target.value || null)}
                     title="Override: vincular conta a uma Firm específica"
                     style={{ fontSize: 11, width: 150, padding: '3px 6px' }}
                   >
@@ -153,28 +158,63 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
 function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmOverride, onSetConnFirm, onSetAccFirm, onSyncAccounts, syncingConnId, backfillEnabled, setBackfillEnabled }) {
   const [expanded, setExpanded] = useState(true);
 
-  // Contas desta conexão
+  // Contas desta conexão (bridge accounts)
   const connAccounts = bridgeAccounts.filter(a =>
     a.connectionId === conn.id || a.connectionName === conn.name
   );
 
+  // Internal accounts from dataStore that belong to this connection
+  const allData = getAll();
+  const internalAccounts = allData.accounts.filter(a => 
+    a.platformName === 'quantower' && 
+    (a.connectionId === conn.id || a.connectionName === conn.name)
+  );
+
+  // Combine bridge + internal accounts for display
+  const allAccounts = useMemo(() => {
+    const map = new Map();
+    // Add bridge accounts first
+    connAccounts.forEach(acc => map.set(acc.platformAccountId, { ...acc, _source: 'bridge' }));
+    // Add/merge internal accounts
+    internalAccounts.forEach(acc => map.set(acc.platformAccountId, { ...acc, _source: 'internal' }));
+    return Array.from(map.values());
+  }, [connAccounts, internalAccounts, conn.id]);
+
   // Firms que têm contas nesta conexão (via mapeamento ou firmId)
-  const firmsInConn = React.useMemo(() => {
+  const firmsInConn = useMemo(() => {
     const firmIds = new Set();
-    connAccounts.forEach(acc => {
-      const fid = accFirmOverride[acc.id] || connFirmMap[conn.id] || acc.firmId;
+    allAccounts.forEach(acc => {
+      const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
       if (fid) firmIds.add(fid);
     });
     return allFirms.filter(f => firmIds.has(f.id));
-  }, [connAccounts, accFirmOverride, connFirmMap, conn.id, allFirms]);
+  }, [allAccounts, accFirmOverride, connFirmMap, conn.id, allFirms]);
 
   // Contas SEM firm atribuída nesta conexão
-  const unmappedAccounts = connAccounts.filter(acc => {
-    const fid = accFirmOverride[acc.id] || connFirmMap[conn.id] || acc.firmId;
+  const unmappedAccounts = allAccounts.filter(acc => {
+    const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
     return !fid;
   });
 
   const isSyncing = syncingConnId === conn.id;
+
+  // Sync status per firm for this connection
+  const firmSyncStatus = useMemo(() => {
+    const status = {};
+    firmsInConn.forEach(firm => {
+      const firmAccounts = allAccounts.filter(acc => {
+        const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
+        return fid === firm.id;
+      });
+      const total = firmAccounts.length;
+      const synced = firmAccounts.filter(acc => acc._source === 'internal').length;
+      if (total === 0) status[firm.id] = 'none';
+      else if (synced === total) status[firm.id] = 'synced';
+      else if (synced > 0) status[firm.id] = 'partial';
+      else status[firm.id] = 'unsynced';
+    });
+    return status;
+  }, [allAccounts, firmsInConn, accFirmOverride, connFirmMap, conn.id]);
 
   return (
     <div style={{
@@ -196,7 +236,7 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
         </div>
         <StatusDot online={conn.online} />
         <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>
-          {connAccounts.length} {connAccounts.length === 1 ? 'conta' : 'contas'}
+          {allAccounts.length} {allAccounts.length === 1 ? 'conta' : 'contas'}
         </span>
       </div>
 
@@ -220,23 +260,63 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
             </select>
           </div>
 
-          {/* Firm cards */}
-          {firmsInConn.map(firm => (
-            <FirmCard
-              key={firm.id}
-              firm={firm}
-              accounts={connAccounts.filter(acc => {
-                const fid = accFirmOverride[acc.id] || connFirmMap[conn.id] || acc.firmId;
-                return fid === firm.id;
-              })}
-              connFirmMap={connFirmMap}
-              accFirmOverride={accFirmOverride}
-              allFirms={allFirms}
-              connectionId={conn.id}
-              onSetConnFirm={onSetConnFirm}
-              onSetAccFirm={onSetAccFirm}
-            />
-          ))}
+          {/* Firm cards with sync status */}
+          {firmsInConn.map(firm => {
+            const syncState = firmSyncStatus[firm.id] || 'none';
+            const syncColor = syncState === 'synced' ? '#22c55e' : syncState === 'partial' ? '#f59e0b' : syncState === 'unsynced' ? '#ef4444' : '#6b7280';
+            const syncLabel = syncState === 'synced' ? 'Todas sincronizadas' : syncState === 'partial' ? 'Parcial' : syncState === 'unsynced' ? 'Não sincronizadas' : '—';
+            
+            return (
+              <React.Fragment key={firm.id}>
+                <FirmCard
+                  firm={firm}
+                  accounts={allAccounts.filter(acc => {
+                    const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
+                    return fid === firm.id;
+                  })}
+                  connFirmMap={connFirmMap}
+                  accFirmOverride={accFirmOverride}
+                  allFirms={allFirms}
+                  connectionId={conn.id}
+                  onSetConnFirm={onSetConnFirm}
+                  onSetAccFirm={onSetAccFirm}
+                />
+                <div style={{ marginTop: 6, padding: '6px 10px', background: syncColor + '15', borderRadius: 6, border: `1px solid ${syncColor}33`, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: syncColor }} />
+                  <span style={{ fontSize: 11, color: syncColor, fontWeight: 500 }}>
+                    {firm.name}: {syncLabel}
+                  </span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+
+          {/* Firm sync status indicators */}
+          {firmsInConn.length > 0 && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 6 }}>
+                Status de sincronização por Firm:
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {firmsInConn.map(firm => {
+                  const syncState = firmSyncStatus[firm.id] || 'none';
+                  const syncColor = syncState === 'synced' ? '#22c55e' : syncState === 'partial' ? '#f59e0b' : syncState === 'unsynced' ? '#ef4444' : '#6b7280';
+                  const syncLabel = syncState === 'synced' ? '✅ Sincronizada' : syncState === 'partial' ? '⚠️ Parcial' : syncState === 'unsynced' ? '❌ Não sincronizada' : '—';
+                  return (
+                    <span key={firm.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '4px 8px', borderRadius: 6,
+                      background: syncColor + '22', border: `1px solid ${syncColor}44`,
+                      fontSize: 11, color: syncColor,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: syncColor }} />
+                      {firm.name}: {syncLabel}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Sync Accounts Button - shows when connection has a firm mapped */}
           {connFirmMap[conn.id] && (
@@ -273,14 +353,14 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
                 ⚠️ {unmappedAccounts.length} conta(s) sem Firm vinculada:
               </div>
               {unmappedAccounts.map(acc => (
-                <div key={acc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                <div key={acc.platformAccountId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
                   <span style={{ flex: 1, fontSize: 12, color: '#9ca3af' }}>
-                    {acc.name || acc.id?.slice(0, 12)}
+                    {acc.name || acc.platformAccountId?.slice(0, 12)}
                   </span>
                   <select
                     className="select"
-                    value={accFirmOverride[acc.id] || ''}
-                    onChange={e => onSetAccFirm(acc.id, e.target.value || null)}
+                    value={accFirmOverride[acc.platformAccountId] || ''}
+                    onChange={e => onSetAccFirm(acc.platformAccountId, e.target.value || null)}
                     style={{ fontSize: 11, width: 160, padding: '3px 6px' }}
                   >
                     <option value="">— Vincular à Firm —</option>
@@ -293,7 +373,7 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
             </div>
           )}
 
-          {connAccounts.length === 0 && (
+          {allAccounts.length === 0 && (
             <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0' }}>
               {conn.online ? 'Nenhuma conta nesta conexão.' : 'Conexão offline — sem dados disponíveis.'}
             </p>
@@ -433,7 +513,7 @@ export default function PlatformConnectionSettings() {
 
   /* --- Derive connections list --- */
   // From bridge status or fallback to known connections from mapping
-  const connections = React.useMemo(() => {
+  const connections = useMemo(() => {
     if (bridgeStatus?.connections?.length) {
       return bridgeStatus.connections.map(c => ({ ...c, online: true }));
     }
@@ -447,7 +527,7 @@ export default function PlatformConnectionSettings() {
   /* --- Firms with NO accounts in any connection --- */
   const firmsWithAccounts = new Set();
   bridgeAccounts.forEach(acc => {
-    const fid = accFirmOverride[acc.id] || (acc.connectionId ? connFirmMap[acc.connectionId] : null) || acc.firmId;
+    const fid = accFirmOverride[acc.platformAccountId] || (acc.connectionId ? connFirmMap[acc.connectionId] : null) || acc.firmId;
     if (fid) firmsWithAccounts.add(fid);
   });
   // Also count from connection-level mapping
@@ -539,7 +619,7 @@ export default function PlatformConnectionSettings() {
                 onSetConnFirm={handleSetConnFirm}
                 onSetAccFirm={handleSetAccFirm}
                 onSyncAccounts={handleSyncAccounts}
-                isSyncing={syncingConnId === conn.id}
+                syncingConnId={syncingConnId}
                 backfillEnabled={backfillEnabled}
                 setBackfillEnabled={setBackfillEnabled}
               />

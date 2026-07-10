@@ -1117,9 +1117,16 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const now = new Date().toISOString();
   const balance = Number(platformAccount.balance) || 0;
 
+  // Determine account type from connection name or default to Futures
+  let accountType = 'Futures';
+  const connName = (connectionName || '').toLowerCase();
+  if (connName.includes('forex') || connName.includes('fx')) accountType = 'Forex';
+  else if (connName.includes('crypto') || connName.includes('bitcoin') || connName.includes('binance') || connName.includes('bybit')) accountType = 'Cripto';
+  else if (connName.includes('personal') || connName.includes('demo')) accountType = 'Personal';
+
   const accountData = {
     name: platformAccount.name || platformAccountId,
-    type: 'Futures', // default, can be changed by user
+    type: accountType, // inferred from connection name
     status: 'Live',
     initialFunding: balance,
     currentFunding: balance,
@@ -1137,8 +1144,9 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
 
   let internalAccountId;
   if (existingIdx !== -1) {
-    // Update existing
-    data.accounts[existingIdx] = { ...data.accounts[existingIdx], ...accountData };
+    // Update existing - preserve user-set type/firm if they changed it
+    const existing = data.accounts[existingIdx];
+    data.accounts[existingIdx] = { ...existing, ...accountData };
     internalAccountId = data.accounts[existingIdx].id;
   } else {
     // Create new
@@ -1314,6 +1322,54 @@ export function resolveFirmForAccount(account, firms) {
 }
 
 /* --------------------
+   TRADE DEDUPLICATION
+   Removes duplicate trades from the same position (Quantower entry+exit issue).
+   Keeps the trade with actual PnL (the exit trade).
+   -------------------- */
+export function deduplicateTradesByPosition() {
+  const data = load();
+  const trades = data.trades || [];
+  
+  // Group trades by positionId
+  const tradesByPosition = new Map();
+  for (const trade of trades) {
+    const key = trade.positionId || trade.platformTradeId || trade.id;
+    if (!tradesByPosition.has(key)) {
+      tradesByPosition.set(key, []);
+    }
+    tradesByPosition.get(key).push(trade);
+  }
+
+  // For each position, keep the trade with actual PnL (the exit trade)
+  const deduplicatedTrades = [];
+  let removedCount = 0;
+  
+  for (const [positionId, positionTrades] of tradesByPosition) {
+    if (positionTrades.length === 1) {
+      deduplicatedTrades.push(positionTrades[0]);
+    } else {
+      // Keep the trade with non-zero PnL (the exit trade)
+      const exitTrade = positionTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
+      if (exitTrade) {
+        deduplicatedTrades.push(exitTrade);
+      } else {
+        // All zero PnL, keep the last one (most recent)
+        deduplicatedTrades.push(positionTrades[positionTrades.length - 1]);
+      }
+      removedCount += positionTrades.length - 1;
+    }
+  }
+
+  if (removedCount > 0) {
+    data.trades = deduplicatedTrades;
+    save(data);
+    console.log(`[deduplicateTradesByPosition] Removed ${removedCount} duplicate trades`);
+  }
+  
+  return { removedCount, totalRemaining: deduplicatedTrades.length };
+}
+
+/* --------------------
    Export default summary (optional)
    -------------------- */
 export default {
@@ -1333,6 +1389,8 @@ export default {
   // Trade Ledger
   getTradeLedger, getTradeLedgerEntry, setTradeLedgerEntry, deleteTradeLedgerEntry,
   isTradeImported, markTradeDeleted, markTradeIgnored,
+  // Trade Deduplication
+  deduplicateTradesByPosition,
   // Connection → Firm mapping
   getConnectionFirmMap, setConnectionFirmMap, setConnectionFirmEntry,
   getAccountFirmOverride, setAccountFirmOverride, setAccountFirmEntry,
