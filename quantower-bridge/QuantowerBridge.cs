@@ -21,16 +21,17 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TradingPlatform.BusinessLayer;
 
 namespace QuantowerBridge
 {
-    // CORREÇÃO CS1520: O nome da classe deve ser exatamente igual ao do construtor
     public class QuantowerBridge : Strategy
     {
         public QuantowerBridge() : base()
@@ -49,6 +50,13 @@ namespace QuantowerBridge
         private HttpListener _listener;
         private CancellationTokenSource _cts;
         private Thread _serverThread;
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            WriteIndented = false,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals
+        };
 
         // ── Lifecycle ──────────────────────────────────────
         protected override void OnCreated()
@@ -172,7 +180,7 @@ namespace QuantowerBridge
                         json = BuildOrdersJson();
                         break;
                     default:
-                        json = "{\"error\":\"Unknown endpoint\",\"endpoints\":[\"/status\",\"/accounts\",\"/trades\",\"/positions\",\"/orders\"]}";
+                        json = JsonSerializer.Serialize(new { error = "Unknown endpoint", endpoints = new[] { "/status", "/accounts", "/trades", "/positions", "/orders" } }, JsonOptions);
                         response.StatusCode = 404;
                         break;
                 }
@@ -185,7 +193,7 @@ namespace QuantowerBridge
             {
                 try
                 {
-                    byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{EscapeJson(ex.Message)}\"}}");
+                    byte[] err = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions));
                     response.StatusCode = 500;
                     response.ContentLength64 = err.Length;
                     response.OutputStream.Write(err, 0, err.Length);
@@ -198,34 +206,36 @@ namespace QuantowerBridge
             }
         }
 
-        // ── JSON Builders ──────────────────────────────────
-        // AVISOS RESOLVIDOS: Métodos marcados como static e Count alterado para Length/propriedades diretas.
+        // ── JSON Builders (using System.Text.Json) ───────────
 
         private static string BuildStatusJson(int port)
         {
             var connections = Core.Instance.Connections.Connected
-                .Select(c => $"{{\"id\":\"{EscapeJson(c.Id)}\",\"name\":\"{EscapeJson(c.Name)}\"}}")
+                .Select(c => new { id = c.Id, name = c.Name })
                 .ToArray();
 
             var tradesCount = Core.Instance.GetTrades(new TradesHistoryRequestParameters()).Count;
 
-            return $"{{" +
-                $"\"online\":true," +
-                $"\"version\":\"1.0.0\"," +
-                $"\"platform\":\"quantower\"," +
-                $"\"port\":{port}," +
-                $"\"timestamp\":\"{DateTime.UtcNow:O}\"," +
-                $"\"connectionsCount\":{connections.Length}," +
-                $"\"connections\":[{string.Join(",", connections)}]," +
-                $"\"accountsCount\":{Core.Instance.Accounts.Length}," +
-                $"\"positionsCount\":{Core.Instance.Positions.Length}," +
-                $"\"tradesCount\":{tradesCount}" +
-                $"}}";
+            var status = new
+            {
+                online = true,
+                version = "1.0.0",
+                platform = "quantower",
+                port,
+                timestamp = DateTime.UtcNow.ToString("O"),
+                connectionsCount = connections.Length,
+                connections,
+                accountsCount = Core.Instance.Accounts.Length,
+                positionsCount = Core.Instance.Positions.Length,
+                tradesCount
+            };
+
+            return JsonSerializer.Serialize(status, JsonOptions);
         }
 
         private static string BuildAccountsJson()
         {
-            var items = new List<string>();
+            var accounts = new List<object>();
 
             foreach (Account acc in Core.Instance.Accounts)
             {
@@ -238,17 +248,25 @@ namespace QuantowerBridge
                 }
                 catch { }
 
-                items.Add($"{{" +
-                    $"\"id\":\"{EscapeJson(acc.Id)}\"," +
-                    $"\"name\":\"{EscapeJson(acc.Name)}\"," +
-                    $"\"balance\":{acc.Balance}," +
-                    $"\"currency\":\"{EscapeJson(acc.AccountCurrency?.Name ?? "USD")}\"," +
-                    $"\"connectionId\":\"{EscapeJson(acc.ConnectionId)}\"," +
-                    $"\"connectionName\":\"{EscapeJson(connName)}\"" +
-                    $"}}");
+                accounts.Add(new
+                {
+                    id = acc.Id,
+                    name = acc.Name,
+                    balance = acc.Balance,
+                    currency = acc.AccountCurrency?.Name ?? "USD",
+                    connectionId = acc.ConnectionId,
+                    connectionName = connName
+                });
             }
 
-            return $"{{\"accounts\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
+            var result = new
+            {
+                accounts,
+                count = accounts.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
+
+            return JsonSerializer.Serialize(result, JsonOptions);
         }
 
         private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
@@ -275,7 +293,7 @@ namespace QuantowerBridge
             };
 
             var tradeList = Core.Instance.GetTrades(reqParams);
-            var items = new List<string>();
+            var trades = new List<object>();
 
             foreach (Trade trade in tradeList)
             {
@@ -302,31 +320,39 @@ namespace QuantowerBridge
                 }
                 catch { }
 
-                items.Add($"{{" +
-                    $"\"id\":\"{EscapeJson(trade.Id)}\"," +
-                    $"\"symbol\":\"{EscapeJson(symbol)}\"," +
-                    $"\"side\":\"{EscapeJson(side)}\"," +
-                    $"\"quantity\":{trade.Quantity}," +
-                    $"\"price\":{trade.Price}," +
-                    $"\"dateTime\":\"{trade.DateTime:O}\"," +
-                    $"\"grossPnl\":{trade.GrossPnl?.Value ?? 0}," +
-                    $"\"netPnl\":{trade.NetPnl?.Value ?? 0}," +
-                    $"\"fee\":{trade.Fee?.Value ?? 0}," +
-                    $"\"orderId\":\"{EscapeJson(trade.OrderId ?? "")}\"," +
-                    $"\"positionId\":\"{EscapeJson(trade.PositionId ?? "")}\"," +
-                    $"\"accountId\":\"{EscapeJson(accountId)}\"," +
-                    $"\"accountName\":\"{EscapeJson(accountName)}\"," +
-                    $"\"connectionId\":\"{EscapeJson(trade.ConnectionId ?? "")}\"," +
-                    $"\"connectionName\":\"{EscapeJson(connName)}\"" +
-                    $"}}");
+                trades.Add(new
+                {
+                    id = trade.Id,
+                    symbol,
+                    side,
+                    quantity = trade.Quantity,
+                    price = trade.Price,
+                    dateTime = trade.DateTime.ToString("O"),
+                    grossPnl = trade.GrossPnl?.Value ?? 0,
+                    netPnl = trade.NetPnl?.Value ?? 0,
+                    fee = trade.Fee?.Value ?? 0,
+                    orderId = trade.OrderId ?? "",
+                    positionId = trade.PositionId ?? "",
+                    accountId,
+                    accountName,
+                    connectionId = trade.ConnectionId ?? "",
+                    connectionName = connName
+                });
             }
 
-            return $"{{\"trades\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
+            var result = new
+            {
+                trades,
+                count = trades.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
+
+            return JsonSerializer.Serialize(result, JsonOptions);
         }
 
         private static string BuildPositionsJson()
         {
-            var items = new List<string>();
+            var positions = new List<object>();
 
             foreach (Position pos in Core.Instance.Positions)
             {
@@ -352,31 +378,39 @@ namespace QuantowerBridge
                 }
                 catch { }
 
-                items.Add($"{{" +
-                    $"\"id\":\"{EscapeJson(pos.Id)}\"," +
-                    $"\"symbol\":\"{EscapeJson(symbol)}\"," +
-                    $"\"side\":\"{EscapeJson(side)}\"," +
-                    $"\"quantity\":{pos.Quantity}," +
-                    $"\"openPrice\":{pos.OpenPrice}," +
-                    $"\"currentPrice\":{pos.CurrentPrice}," +
-                    $"\"openTime\":\"{pos.OpenTime:O}\"," +
-                    $"\"grossPnl\":{pos.GrossPnL?.Value ?? 0}," +
-                    $"\"netPnl\":{pos.NetPnL?.Value ?? 0}," +
-                    $"\"fee\":{pos.Fee?.Value ?? 0}," +
-                    $"\"accountId\":\"{EscapeJson(accountId)}\"," +
-                    $"\"accountName\":\"{EscapeJson(accountName)}\"," +
-                    $"\"connectionId\":\"{EscapeJson(pos.ConnectionId ?? "")}\"," +
-                    $"\"connectionName\":\"{EscapeJson(connName)}\"," +
-                    $"\"isLive\":true" +
-                    $"}}");
+                positions.Add(new
+                {
+                    id = pos.Id,
+                    symbol,
+                    side,
+                    quantity = pos.Quantity,
+                    openPrice = pos.OpenPrice,
+                    currentPrice = pos.CurrentPrice,
+                    openTime = pos.OpenTime.ToString("O"),
+                    grossPnl = pos.GrossPnL?.Value ?? 0,
+                    netPnl = pos.NetPnL?.Value ?? 0,
+                    fee = pos.Fee?.Value ?? 0,
+                    accountId,
+                    accountName,
+                    connectionId = pos.ConnectionId ?? "",
+                    connectionName = connName,
+                    isLive = true
+                });
             }
 
-            return $"{{\"positions\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
+            var result = new
+            {
+                positions,
+                count = positions.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
+
+            return JsonSerializer.Serialize(result, JsonOptions);
         }
 
         private static string BuildOrdersJson()
         {
-            var items = new List<string>();
+            var orders = new List<object>();
 
             foreach (Order order in Core.Instance.Orders)
             {
@@ -394,29 +428,26 @@ namespace QuantowerBridge
                 }
                 catch { }
 
-                items.Add($"{{" +
-                    $"\"id\":\"{EscapeJson(order.Id)}\"," +
-                    $"\"symbol\":\"{EscapeJson(symbol)}\"," +
-                    $"\"side\":\"{EscapeJson(side)}\"," +
-                    $"\"quantity\":{order.TotalQuantity}," +
-                    $"\"price\":{order.Price}," +
-                    $"\"connectionId\":\"{EscapeJson(order.ConnectionId ?? "")}\"," +
-                    $"\"connectionName\":\"{EscapeJson(connName)}\"" +
-                    $"}}");
+                orders.Add(new
+                {
+                    id = order.Id,
+                    symbol,
+                    side,
+                    quantity = order.TotalQuantity,
+                    price = order.Price,
+                    connectionId = order.ConnectionId ?? "",
+                    connectionName = connName
+                });
             }
 
-            return $"{{\"orders\":[{string.Join(",", items)}],\"count\":{items.Count},\"timestamp\":\"{DateTime.UtcNow:O}\"}}";
-        }
+            var result = new
+            {
+                orders,
+                count = orders.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
 
-        // ── Helpers ────────────────────────────────────────
-        private static string EscapeJson(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return "";
-            return s.Replace("\\", "\\\\")
-                    .Replace("\"", "\\\"")
-                    .Replace("\n", "\\n")
-                    .Replace("\r", "\\r")
-                    .Replace("\t", "\\t");
+            return JsonSerializer.Serialize(result, JsonOptions);
         }
     }
 }

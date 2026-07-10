@@ -37,7 +37,8 @@ const seed = {
   firms: [],
   trades: [],   // armazena trades
   goals: [],    // armazena goals
-  livePositions: []  // posições abertas em tempo real
+  livePositions: [],  // posições abertas em tempo real
+  tradeLedger: {},  // { platformTradeId: { internalTradeId, status, platformAccountId, internalAccountId, firstSeenAt, lastSeenAt } }
 }
 
 function load() {
@@ -112,12 +113,25 @@ function load() {
 }
 
 // SAVE agora dispara evento datastore:change
-function save(data){ 
+let _broadcastChannel = null;
+try {
+  _broadcastChannel = new BroadcastChannel('propmanager-datastore');
+} catch (e) {
+  console.warn('[dataStore] BroadcastChannel not available:', e);
+}
+
+export function save(data){ 
   localStorage.setItem(LS_KEY, JSON.stringify(data))
   // Dispara evento para as UIs sincronizarem
   try {
     window.dispatchEvent(new CustomEvent('datastore:change', { detail: { timestamp: Date.now() } }))
   } catch(e) {}
+  // Broadcast to other tabs/apps
+  if (_broadcastChannel) {
+    try {
+      _broadcastChannel.postMessage({ type: 'datastore:change', timestamp: Date.now() });
+    } catch (e) {}
+  }
 }
 
 /* --------------------
@@ -1088,6 +1102,143 @@ export function setAccountMapping(platformId, platformAccountId, internalAccount
 }
 
 /* --------------------
+   QUANTOWER ACCOUNT UPSERT
+   Creates or updates internal account from Quantower bridge data.
+   -------------------- */
+export function upsertQuantowerAccount(platformAccount, firmId, connectionId, connectionName) {
+  const data = load();
+  const platformAccountId = platformAccount.platformAccountId;
+  
+  // Find existing account by platformAccountId + platformName
+  let existingIdx = data.accounts.findIndex(a => 
+    a.platformName === 'quantower' && a.platformAccountId === platformAccountId
+  );
+
+  const now = new Date().toISOString();
+  const balance = Number(platformAccount.balance) || 0;
+
+  const accountData = {
+    name: platformAccount.name || platformAccountId,
+    type: 'Futures', // default, can be changed by user
+    status: 'Live',
+    initialFunding: balance,
+    currentFunding: balance,
+    profitSplit: 0.8,
+    payoutFrequency: 'monthly',
+    defaultWeight: 1,
+    currency: platformAccount.currency || 'USD',
+    connectionId: connectionId || '',
+    connectionName: connectionName || '',
+    platformAccountId: platformAccountId,
+    platformName: 'quantower',
+    lastPlatformSync: now,
+    firmId: firmId || null,
+  };
+
+  let internalAccountId;
+  if (existingIdx !== -1) {
+    // Update existing
+    data.accounts[existingIdx] = { ...data.accounts[existingIdx], ...accountData };
+    internalAccountId = data.accounts[existingIdx].id;
+  } else {
+    // Create new
+    internalAccountId = uuid();
+    data.accounts.push({ id: internalAccountId, dateCreated: now.split('T')[0], ...accountData });
+  }
+
+  // Update account mapping
+  if (!data.settings.platforms.quantower) {
+    data.settings.platforms.quantower = { enabled: true, bridgeUrl: 'http://localhost:8787', autoSync: true, accountMapping: {} };
+  }
+  if (!data.settings.platforms.quantower.accountMapping) {
+    data.settings.platforms.quantower.accountMapping = {};
+  }
+  data.settings.platforms.quantower.accountMapping[platformAccountId] = internalAccountId;
+  data.settings.platforms.quantower.enabled = true;
+
+  save(data);
+  return { internalAccountId, isNew: existingIdx === -1 };
+}
+
+/* --------------------
+   TRADE LEDGER (IndexedDB for performance + localStorage backup)
+   Deduplicates trades by platformTradeId across reconnections.
+   status: 'imported' | 'deleted' | 'ignored'
+   -------------------- */
+
+async function getLedgerDB() {
+  return openDB('quantower-ledger', 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('tradeLedger')) {
+        const store = db.createObjectStore('tradeLedger', { keyPath: 'platformTradeId' });
+        store.createIndex('internalAccountId', 'internalAccountId');
+        store.createIndex('platformAccountId', 'platformAccountId');
+      }
+    }
+  });
+}
+
+export async function getTradeLedger() {
+  try {
+    const db = await getLedgerDB();
+    return await db.getAll('tradeLedger');
+  } catch (err) {
+    console.warn('[TradeLedger] Failed to load from IndexedDB:', err);
+    const data = load();
+    return Object.values(data.tradeLedger || {});
+  }
+}
+
+export async function getTradeLedgerEntry(platformTradeId) {
+  try {
+    const db = await getLedgerDB();
+    return await db.get('tradeLedger', platformTradeId);
+  } catch (err) {
+    const data = load();
+    return data.tradeLedger?.[platformTradeId] || null;
+  }
+}
+
+export async function setTradeLedgerEntry(platformTradeId, entry) {
+  try {
+    const db = await getLedgerDB();
+    await db.put('tradeLedger', { platformTradeId, ...entry });
+  } catch (err) {
+    console.warn('[TradeLedger] Failed to save to IndexedDB:', err);
+  }
+  // Also persist to localStorage as backup
+  const data = load();
+  if (!data.tradeLedger) data.tradeLedger = {};
+  data.tradeLedger[platformTradeId] = { platformTradeId, ...entry };
+  save(data);
+}
+
+export async function deleteTradeLedgerEntry(platformTradeId) {
+  try {
+    const db = await getLedgerDB();
+    await db.delete('tradeLedger', platformTradeId);
+  } catch (err) {
+    console.warn('[TradeLedger] Failed to delete from IndexedDB:', err);
+  }
+  const data = load();
+  if (data.tradeLedger) delete data.tradeLedger[platformTradeId];
+  save(data);
+}
+
+export async function isTradeImported(platformTradeId) {
+  const entry = await getTradeLedgerEntry(platformTradeId);
+  return entry?.status === 'imported';
+}
+
+export async function markTradeDeleted(platformTradeId) {
+  await setTradeLedgerEntry(platformTradeId, { status: 'deleted', deletedAt: new Date().toISOString() });
+}
+
+export async function markTradeIgnored(platformTradeId) {
+  await setTradeLedgerEntry(platformTradeId, { status: 'ignored', ignoredAt: new Date().toISOString() });
+}
+
+/* --------------------
    CONNECTION → FIRM MAPPING (Nível 1)
    Vincula toda uma conexão do Quantower a uma Firm.
    -------------------- */
@@ -1178,6 +1329,10 @@ export default {
   getTradeByPlatformId, upsertTradeFromPlatform,
   getLivePositions, updateLivePositions, closeLivePosition,
   getAccountMapping, setAccountMapping,
+  upsertQuantowerAccount,
+  // Trade Ledger
+  getTradeLedger, getTradeLedgerEntry, setTradeLedgerEntry, deleteTradeLedgerEntry,
+  isTradeImported, markTradeDeleted, markTradeIgnored,
   // Connection → Firm mapping
   getConnectionFirmMap, setConnectionFirmMap, setConnectionFirmEntry,
   getAccountFirmOverride, setAccountFirmOverride, setAccountFirmEntry,

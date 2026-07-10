@@ -19,6 +19,7 @@ import {
   upsertTradeFromPlatform,
   updateLivePositions,
   closeLivePosition,
+  getLivePositions,
   getAccountMapping,
   setAccountMapping as dsSetAccountMapping,
   recalcAccountFunding,
@@ -37,6 +38,13 @@ export function usePlatform() {
   useEffect(() => {
     const pm = getPlatformManager();
     pmRef.current = pm;
+
+    // Load persisted live positions from dataStore
+    const persistedPositions = getLivePositions();
+    if (persistedPositions?.length) {
+      setLivePositions(persistedPositions);
+      setLiveCount(persistedPositions.length);
+    }
 
     // Configure adapters from stored settings
     const qtSettings = getPlatformSettings('quantower');
@@ -61,11 +69,12 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // Import new trades into dataStore
-      if (data.newTrades?.length > 0) {
+      // Import new trades into dataStore - handle both newTrades (auto) and trades (manual)
+      const tradesToProcess = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
+      if (tradesToProcess.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
 
-        data.newTrades.forEach(trade => {
+        tradesToProcess.forEach(trade => {
           const internalAccountId = accountMapping[trade.platformAccountId] || null;
           upsertTradeFromPlatform({
             entry_datetime: trade.dateTime,
@@ -109,6 +118,8 @@ export function usePlatform() {
         const others = prev.filter(p => p.platformId !== data.platformId);
         return [...others, ...enriched.map(p => ({ ...p, platformId: data.platformId }))];
       });
+      // Persist to dataStore
+      updateLivePositions(enriched.map(p => ({ ...p, platformId: data.platformId })));
       setLiveCount(c => {
         const newCount = data.positions.length;
         return newCount;

@@ -10,6 +10,7 @@ import {
   getConnectionFirmMap, setConnectionFirmEntry,
   getAccountFirmOverride, setAccountFirmEntry,
   getFirms,
+  upsertQuantowerAccount,
 } from '@apps/lib/dataStore';
 import { getPlatformManager } from '@apps/utils/platformManager';
 
@@ -149,7 +150,7 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
 /* ============================================================
    ConnectionBlock — bloco de uma conexão (sem logo)
    ============================================================ */
-function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmOverride, onSetConnFirm, onSetAccFirm }) {
+function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmOverride, onSetConnFirm, onSetAccFirm, onSyncAccounts, syncingConnId, backfillEnabled, setBackfillEnabled }) {
   const [expanded, setExpanded] = useState(true);
 
   // Contas desta conexão
@@ -172,6 +173,8 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
     const fid = accFirmOverride[acc.id] || connFirmMap[conn.id] || acc.firmId;
     return !fid;
   });
+
+  const isSyncing = syncingConnId === conn.id;
 
   return (
     <div style={{
@@ -235,6 +238,30 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
             />
           ))}
 
+          {/* Sync Accounts Button - shows when connection has a firm mapped */}
+          {connFirmMap[conn.id] && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="btn"
+                  onClick={() => onSyncAccounts(conn.id, conn.name)}
+                  disabled={isSyncing}
+                  style={{ fontSize: 12 }}
+                >
+                  {isSyncing ? '⏳ Sincronizando...' : '🔄 Sincronizar contas'}
+                </button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={backfillEnabled}
+                    onChange={e => setBackfillEnabled(e.target.checked)}
+                  />
+                  Importar histórico completo
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Unmapped accounts */}
           {unmappedAccounts.length > 0 && (
             <div style={{
@@ -295,6 +322,10 @@ export default function PlatformConnectionSettings() {
   const [allFirms, setAllFirms] = useState(() => getFirms());
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Sync accounts state
+  const [syncingConnId, setSyncingConnId] = useState(null);
+  const [backfillEnabled, setBackfillEnabled] = useState(false);
+
   // Reload firms on change
   useEffect(() => {
     setAllFirms(getFirms());
@@ -302,7 +333,61 @@ export default function PlatformConnectionSettings() {
     setAccFirmOverrideState(getAccountFirmOverride());
   }, [refreshKey]);
 
+  // Auto-test bridge on mount if URL configured and enabled
+  useEffect(() => {
+    const s = getPlatformSettings('quantower');
+    if (s?.bridgeUrl && s?.enabled) {
+      handleTest();
+    }
+  }, []);
+
   const refresh = () => setRefreshKey(k => k + 1);
+
+  /* --- Sync Accounts for a connection --- */
+  const handleSyncAccounts = useCallback(async (connectionId, connectionName) => {
+    const firmId = connFirmMap[connectionId];
+    if (!firmId) {
+      alert('Vincule a conexão a uma Firm antes de sincronizar.');
+      return;
+    }
+    setSyncingConnId(connectionId);
+    try {
+      const pm = getPlatformManager();
+      const adapter = pm.getAdapter('quantower');
+      if (!adapter) throw new Error('Quantower adapter not registered');
+
+      // Fetch accounts from bridge
+      const accounts = await adapter.getAccounts();
+      const connAccounts = accounts.filter(a => 
+        a.connectionId === connectionId || a.connectionName === connectionName
+      );
+
+      if (connAccounts.length === 0) {
+        alert('Nenhuma conta encontrada para esta conexão.');
+        return;
+      }
+
+      // Upsert each account
+      let created = 0, updated = 0;
+      for (const acc of connAccounts) {
+        const result = await upsertQuantowerAccount(acc, firmId, connectionId, connectionName);
+        if (result.isNew) created++; else updated++;
+      }
+
+      // Optionally backfill trades
+      if (backfillEnabled) {
+        // TODO: trigger full backfill sync for these accounts
+        console.log('[SyncAccounts] Backfill enabled for', connAccounts.length, 'accounts');
+      }
+
+      alert(`✅ Sincronizado: ${created} criadas, ${updated} atualizadas`);
+      refresh();
+    } catch (err) {
+      alert('❌ Erro ao sincronizar: ' + err.message);
+    } finally {
+      setSyncingConnId(null);
+    }
+  }, [connFirmMap, backfillEnabled]);
 
   /* --- Bridge Test --- */
   const handleTest = useCallback(async () => {
@@ -453,6 +538,10 @@ export default function PlatformConnectionSettings() {
                 accFirmOverride={accFirmOverride}
                 onSetConnFirm={handleSetConnFirm}
                 onSetAccFirm={handleSetAccFirm}
+                onSyncAccounts={handleSyncAccounts}
+                isSyncing={syncingConnId === conn.id}
+                backfillEnabled={backfillEnabled}
+                setBackfillEnabled={setBackfillEnabled}
               />
             ))}
           </div>

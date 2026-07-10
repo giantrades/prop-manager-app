@@ -116,7 +116,7 @@ export class QuantowerAdapter extends BaseAdapter {
       }));
     } catch (err) {
       this._markError(err);
-      return [];
+      throw err;
     }
   }
 
@@ -127,7 +127,10 @@ export class QuantowerAdapter extends BaseAdapter {
    */
   async getTrades(from, to) {
     try {
-      const data = await this._fetch('/trades', { from, to });
+      const params = {};
+      if (from) params.from = from;
+      if (to) params.to = to;
+      const data = await this._fetch('/trades', params);
       this._markSynced();
       return (data.trades || []).map(t => ({
         platformTradeId: `qt_${t.id}`,
@@ -148,8 +151,16 @@ export class QuantowerAdapter extends BaseAdapter {
       }));
     } catch (err) {
       this._markError(err);
-      return [];
+      throw err;
     }
+  }
+
+  /**
+   * Fetch ALL trades without date filter (for initial backfill)
+   * @returns {Promise<import('./baseAdapter.js').PlatformTrade[]>}
+   */
+  async getAllTrades() {
+    return this.getTrades(undefined, undefined);
   }
 
   /** @returns {Promise<import('./baseAdapter.js').PlatformPosition[]>} */
@@ -176,7 +187,7 @@ export class QuantowerAdapter extends BaseAdapter {
       }));
     } catch (err) {
       this._markError(err);
-      return [];
+      throw err;
     }
   }
 

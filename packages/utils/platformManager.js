@@ -21,6 +21,14 @@
 
 import { QuantowerAdapter } from './adapters/quantowerAdapter.js';
 import { CTraderAdapter } from './adapters/ctraderAdapter.js';
+import {
+  getTradeLedger,
+  getTradeLedgerEntry,
+  setTradeLedgerEntry,
+  isTradeImported,
+  markTradeDeleted,
+  markTradeIgnored,
+} from '@apps/lib/dataStore.js';
 
 // ── Event names ────────────────────────────────────────
 export const PLATFORM_EVENTS = {
@@ -52,8 +60,8 @@ class PlatformManager {
     this._wasOnline = new Map();
     /** @type {Map<string, import('./adapters/baseAdapter.js').PlatformPosition[]>} */
     this._lastPositions = new Map();
-    /** @type {Map<string, Set<string>>} platform id → set of known trade IDs */
-    this._knownTradeIds = new Map();
+    // Trade ledger is now persisted in dataStore/IndexedDB
+    this._tradeLedgerLoaded = new Map(); // platform id → boolean
 
     this._syncInterval = null;
     this._positionInterval = null;
@@ -72,7 +80,19 @@ class PlatformManager {
     this.adapters.set(adapter.id, adapter);
     this._wasOnline.set(adapter.id, false);
     this._lastPositions.set(adapter.id, []);
-    this._knownTradeIds.set(adapter.id, new Set());
+    // Load trade ledger for this platform
+    this._loadTradeLedger(adapter.id);
+  }
+
+  async _loadTradeLedger(platformId) {
+    if (this._tradeLedgerLoaded.get(platformId)) return;
+    try {
+      const ledger = await getTradeLedger();
+      // The ledger is global, we filter by platform when checking
+      this._tradeLedgerLoaded.set(platformId, true);
+    } catch (err) {
+      console.warn(`[PlatformManager] Failed to load trade ledger for ${platformId}:`, err);
+    }
   }
 
   /**
@@ -83,7 +103,7 @@ class PlatformManager {
     this.adapters.delete(platformId);
     this._wasOnline.delete(platformId);
     this._lastPositions.delete(platformId);
-    this._knownTradeIds.delete(platformId);
+    this._tradeLedgerLoaded.delete(platformId);
   }
 
   /**
@@ -164,15 +184,43 @@ class PlatformManager {
       adapter.getPositions(),
     ]);
 
+    // Filter trades using ledger (same logic as auto-sync)
+    const newTrades = [];
+    for (const trade of trades) {
+      if (trade.platformTradeId) {
+        const ledgerEntry = await getTradeLedgerEntry(trade.platformTradeId);
+        if (!ledgerEntry || ledgerEntry.status === 'imported') {
+          if (!ledgerEntry || ledgerEntry.status !== 'imported') {
+            newTrades.push(trade);
+          }
+        }
+      } else {
+        newTrades.push(trade);
+      }
+    }
+
+    // Mark new trades as imported
+    for (const trade of newTrades) {
+      if (trade.platformTradeId) {
+        await setTradeLedgerEntry(trade.platformTradeId, {
+          status: 'imported',
+          platformAccountId: trade.platformAccountId,
+          internalAccountId: trade.internalAccountId || null,
+          firstSeenAt: new Date().toISOString(),
+          lastSeenAt: new Date().toISOString(),
+        });
+      }
+    }
+
     this._emit(PLATFORM_EVENTS.SYNCED, {
       platformId,
       accounts,
-      trades,
+      trades: newTrades, // Only emit new trades
       positions,
       timestamp: new Date().toISOString(),
     });
 
-    return { accounts, trades, positions };
+    return { accounts, trades: newTrades, positions };
   }
 
   /**
@@ -269,112 +317,200 @@ class PlatformManager {
 
   /** @private Check connection status for all adapters */
   async _checkAllStatuses() {
-    for (const [id, adapter] of this.adapters) {
-      try {
-        const status = await adapter.getStatus();
-        const wasOnline = this._wasOnline.get(id) || false;
+    // Status check lock - prevent multiple tabs polling status simultaneously
+    const lockKey = 'platform:statusLock';
+    const now = Date.now();
+    const lockTimeout = 3000;
+    
+    try {
+      const existingLock = localStorage.getItem(lockKey);
+      if (existingLock) {
+        const lockTime = parseInt(existingLock, 10);
+        if (now - lockTime < lockTimeout) return;
+      }
+      localStorage.setItem(lockKey, now.toString());
+    } catch (e) {}
 
-        if (status.online && !wasOnline) {
-          this._wasOnline.set(id, true);
-          this._emit(PLATFORM_EVENTS.CONNECTED, {
-            platformId: id,
-            platformName: adapter.name,
-            connections: status.connections,
-          });
-        } else if (!status.online && wasOnline) {
-          this._wasOnline.set(id, false);
-          this._emit(PLATFORM_EVENTS.DISCONNECTED, {
-            platformId: id,
-            platformName: adapter.name,
-            error: status.error,
-          });
-        }
-      } catch (err) {
-        if (this._wasOnline.get(id)) {
-          this._wasOnline.set(id, false);
-          this._emit(PLATFORM_EVENTS.DISCONNECTED, {
-            platformId: id,
-            error: err.message,
-          });
+    try {
+      for (const [id, adapter] of this.adapters) {
+        try {
+          const status = await adapter.getStatus();
+          const wasOnline = this._wasOnline.get(id) || false;
+
+          if (status.online && !wasOnline) {
+            this._wasOnline.set(id, true);
+            this._emit(PLATFORM_EVENTS.CONNECTED, {
+              platformId: id,
+              platformName: adapter.name,
+              connections: status.connections,
+            });
+          } else if (!status.online && wasOnline) {
+            this._wasOnline.set(id, false);
+            this._emit(PLATFORM_EVENTS.DISCONNECTED, {
+              platformId: id,
+              platformName: adapter.name,
+              error: status.error,
+            });
+          }
+        } catch (err) {
+          if (this._wasOnline.get(id)) {
+            this._wasOnline.set(id, false);
+            this._emit(PLATFORM_EVENTS.DISCONNECTED, {
+              platformId: id,
+              error: err.message,
+            });
+          }
         }
       }
+    } finally {
+      try { localStorage.removeItem(lockKey); } catch (e) {}
     }
   }
 
   /** @private Sync trades for all adapters */
   async _syncAllTrades() {
-    for (const [id, adapter] of this.adapters) {
-      if (!this._wasOnline.get(id)) continue;
+    // Sync lock - only one tab/app should sync at a time (per origin)
+    const lockKey = 'platform:syncLock';
+    const now = Date.now();
+    const lockTimeout = 5000; // 5 seconds max lock
+    
+    try {
+      const existingLock = localStorage.getItem(lockKey);
+      if (existingLock) {
+        const lockTime = parseInt(existingLock, 10);
+        if (now - lockTime < lockTimeout) {
+          // Another tab/app is syncing, skip this round
+          return;
+        }
+      }
+      // Acquire lock
+      localStorage.setItem(lockKey, now.toString());
+    } catch (e) {
+      // If localStorage not available, proceed without lock
+    }
 
-      try {
-        const trades = await adapter.getTrades();
-        const knownIds = this._knownTradeIds.get(id);
-        const newTrades = trades.filter(t => !knownIds.has(t.platformTradeId));
+    try {
+      for (const [id, adapter] of this.adapters) {
+        if (!this._wasOnline.get(id)) continue;
 
-        if (newTrades.length > 0) {
-          newTrades.forEach(t => knownIds.add(t.platformTradeId));
+        try {
+          const trades = await adapter.getTrades();
+          
+          // Filter out trades that are already in ledger (imported, deleted, or ignored)
+          const newTrades = [];
+          for (const trade of trades) {
+            if (trade.platformTradeId) {
+              const ledgerEntry = await getTradeLedgerEntry(trade.platformTradeId);
+              if (!ledgerEntry || ledgerEntry.status === 'imported') {
+                // Check if it's already imported - if not, it's new
+                if (!ledgerEntry || ledgerEntry.status !== 'imported') {
+                  newTrades.push(trade);
+                }
+              }
+              // If status is 'deleted' or 'ignored', skip it
+            } else {
+              // No platformTradeId, treat as new
+              newTrades.push(trade);
+            }
+          }
 
-          this._emit(PLATFORM_EVENTS.SYNCED, {
+          if (newTrades.length > 0) {
+            // Mark new trades as imported in ledger
+            for (const trade of newTrades) {
+              if (trade.platformTradeId) {
+                await setTradeLedgerEntry(trade.platformTradeId, {
+                  status: 'imported',
+                  platformAccountId: trade.platformAccountId,
+                  internalAccountId: trade.internalAccountId || null,
+                  firstSeenAt: new Date().toISOString(),
+                  lastSeenAt: new Date().toISOString(),
+                });
+              }
+            }
+
+            this._emit(PLATFORM_EVENTS.SYNCED, {
+              platformId: id,
+              newTrades,
+              totalTrades: trades.length,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          this._emit(PLATFORM_EVENTS.ERROR, {
             platformId: id,
-            newTrades,
-            totalTrades: trades.length,
-            timestamp: new Date().toISOString(),
+            error: err.message,
+            phase: 'trades',
           });
         }
-      } catch (err) {
-        this._emit(PLATFORM_EVENTS.ERROR, {
-          platformId: id,
-          error: err.message,
-          phase: 'trades',
-        });
       }
+    } finally {
+      // Release lock
+      try {
+        localStorage.removeItem(lockKey);
+      } catch (e) {}
     }
   }
 
   /** @private Poll positions for all adapters — detects opens and closes */
   async _pollAllPositions() {
-    for (const [id, adapter] of this.adapters) {
-      if (!this._wasOnline.get(id)) continue;
+    // Position poll lock - prevent multiple tabs polling positions simultaneously
+    const lockKey = 'platform:positionLock';
+    const now = Date.now();
+    const lockTimeout = 2000;
+    
+    try {
+      const existingLock = localStorage.getItem(lockKey);
+      if (existingLock) {
+        const lockTime = parseInt(existingLock, 10);
+        if (now - lockTime < lockTimeout) return;
+      }
+      localStorage.setItem(lockKey, now.toString());
+    } catch (e) {}
 
-      try {
-        const currentPositions = await adapter.getPositions();
-        const previousPositions = this._lastPositions.get(id) || [];
+    try {
+      for (const [id, adapter] of this.adapters) {
+        if (!this._wasOnline.get(id)) continue;
 
-        const prevIds = new Set(previousPositions.map(p => p.platformPositionId));
-        const currIds = new Set(currentPositions.map(p => p.platformPositionId));
+        try {
+          const currentPositions = await adapter.getPositions();
+          const previousPositions = this._lastPositions.get(id) || [];
 
-        // Detect newly opened positions
-        for (const pos of currentPositions) {
-          if (!prevIds.has(pos.platformPositionId)) {
-            this._emit(PLATFORM_EVENTS.POSITION_OPENED, {
-              platformId: id,
-              position: pos,
-            });
+          const prevIds = new Set(previousPositions.map(p => p.platformPositionId));
+          const currIds = new Set(currentPositions.map(p => p.platformPositionId));
+
+          // Detect newly opened positions
+          for (const pos of currentPositions) {
+            if (!prevIds.has(pos.platformPositionId)) {
+              this._emit(PLATFORM_EVENTS.POSITION_OPENED, {
+                platformId: id,
+                position: pos,
+              });
+            }
           }
-        }
 
-        // Detect closed positions
-        for (const pos of previousPositions) {
-          if (!currIds.has(pos.platformPositionId)) {
-            this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
-              platformId: id,
-              position: pos,
-            });
+          // Detect closed positions
+          for (const pos of previousPositions) {
+            if (!currIds.has(pos.platformPositionId)) {
+              this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
+                platformId: id,
+                position: pos,
+              });
+            }
           }
-        }
 
-        // Always emit updated positions for live P&L refresh
-        if (currentPositions.length > 0) {
+          // Always emit updated positions for live P&L refresh (even empty array to clear UI)
           this._emit(PLATFORM_EVENTS.POSITION_UPDATED, {
             platformId: id,
             positions: currentPositions,
           });
-        }
 
-        this._lastPositions.set(id, currentPositions);
-      } catch (err) {
-        // Silent fail for position polling — don't spam errors
+          this._lastPositions.set(id, currentPositions);
+        } catch (err) {
+          // Silent fail for position polling — don't spam errors
+        }
       }
+    } finally {
+      try { localStorage.removeItem(lockKey); } catch (e) {}
     }
   }
 
@@ -387,7 +523,7 @@ class PlatformManager {
     this._listeners.clear();
     this._wasOnline.clear();
     this._lastPositions.clear();
-    this._knownTradeIds.clear();
+    this._tradeLedgerLoaded.clear();
   }
 }
 

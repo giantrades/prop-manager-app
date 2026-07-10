@@ -92,8 +92,7 @@ export default function JournalProvider({ children }) {
 
         // 🔹 Sincroniza trades com o dataStore (só se realmente mudou)
         try {
-          const ds = await import('@apps/lib/dataStore.js');
-          const { getAll, save } = ds.default || ds;
+          const { getAll, save } = await import('@apps/lib/dataStore.js');
           const all = await getAll();
 
           if (JSON.stringify(all.trades || []) !== JSON.stringify(allTrades || [])) {
@@ -221,8 +220,7 @@ export default function JournalProvider({ children }) {
 
     // 🔹 Atualiza também o dataStore local
     try {
-      const ds = await import("@apps/lib/dataStore.js");
-      const { getAll, save } = ds.default || ds;
+      const { getAll, save } = await import('@apps/lib/dataStore.js');
 
       const all = await getAll();
 
@@ -242,8 +240,7 @@ export default function JournalProvider({ children }) {
     // 🔹 Atualiza funding incremental com correção de delta
     if (Array.isArray(payload.accounts)) {
       try {
-        const ds = await import("@apps/lib/dataStore.js");
-        const { getAll, updateAccount } = ds.default || ds;
+        const { getAll, updateAccount } = await import('@apps/lib/dataStore.js');
         const all = await getAll();
         const accounts = all?.accounts || [];
 
@@ -297,8 +294,7 @@ export default function JournalProvider({ children }) {
 
     // 🔹 Remove trade também do dataStore
     try {
-      const ds = await import("@apps/lib/dataStore.js");
-      const { getAll, save } = ds.default || ds;
+      const { getAll, save } = await import('@apps/lib/dataStore.js');
       const all = await getAll();
       const remainingTrades = (all.trades || []).filter(t => t.id !== tradeId);
       await save({ ...all, trades: remainingTrades });
@@ -312,8 +308,7 @@ export default function JournalProvider({ children }) {
     // 🔹 Reverte impacto do PnL nas contas
     if (Array.isArray(trade.accounts)) {
       try {
-        const ds = await import("@apps/lib/dataStore.js");
-        const { getAll, updateAccount } = ds.default || ds;
+        const { getAll, updateAccount } = await import('@apps/lib/dataStore.js');
         const all = await getAll();
         const accounts = all?.accounts || [];
 
