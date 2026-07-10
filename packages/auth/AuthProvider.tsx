@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../supabase/client';
 import { User, Session } from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -8,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  supabase: typeof supabase; // Export supabase client for use in components
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -16,6 +18,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Get initial session
@@ -23,6 +26,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // Redirect to login if no session and not on login/callback page
+      if (!session && !window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth/callback')) {
+        navigate('/login', { replace: true });
+      }
     });
 
     // Listen for auth changes
@@ -31,13 +39,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Redirect logic
+        if (session && window.location.pathname === '/login') {
+          navigate('/', { replace: true }); // Redirect to home after login
+        } else if (!session && !window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth/callback')) {
+          navigate('/login', { replace: true }); // Redirect to login if session lost
+        }
       }
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
-  const signIn = async (email: string) => {
+  const signIn = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -45,14 +60,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       },
     });
     if (error) throw error;
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  };
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signOut, supabase }}>
       {children}
     </AuthContext.Provider>
   );
