@@ -1,0 +1,21 @@
+{
+  "name": "@apps/auth",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./AuthProvider.tsx",
+  "exports": {
+    ".": "./AuthProvider.tsx",
+    "./AuthCallback": "./AuthCallback.tsx",
+    "./useAuth": "./useAuth.ts"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-router-dom": "^6.26.2",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
+  }
+}
