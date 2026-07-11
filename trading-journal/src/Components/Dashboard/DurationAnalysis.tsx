@@ -67,7 +67,7 @@ const BarTooltip = ({ active, payload }: any) => {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0].payload;
   const winrate = data.total ? ((data.wins / data.total) * 100).toFixed(1) : "0";
-  
+
   return (
     <div style={{
       background: "rgba(26, 31, 46, 0.98)",
@@ -82,9 +82,9 @@ const BarTooltip = ({ active, payload }: any) => {
       wordWrap: "break-word",
       overflowWrap: "break-word",
     }}>
-      <div style={{ 
-        fontWeight: 700, 
-        marginBottom: 10, 
+      <div style={{
+        fontWeight: 700,
+        marginBottom: 10,
         fontSize: 14,
         color: "#fff",
         paddingBottom: 8,
@@ -94,7 +94,7 @@ const BarTooltip = ({ active, payload }: any) => {
       }}>
         {data.bucket}
       </div>
-      
+
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#60a5fa", flexShrink: 0 }}></div>
@@ -102,17 +102,17 @@ const BarTooltip = ({ active, payload }: any) => {
         </div>
         <div style={{ color: "#a78bfa", fontWeight: 600, whiteSpace: "nowrap" }}>{data.wins}</div>
       </div>
-      
+
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background:"#a78bfa", flexShrink: 0 }}></div>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#a78bfa", flexShrink: 0 }}></div>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Losses</span>
         </div>
         <div style={{ color: "#60a5fa", fontWeight: 600, whiteSpace: "nowrap" }}>{data.losses}</div>
       </div>
-      
-      <div style={{ 
-        display: "flex", 
+
+      <div style={{
+        display: "flex",
         justifyContent: "space-between",
         paddingTop: 8,
         borderTop: "1px solid rgba(255,255,255,0.1)",
@@ -120,7 +120,7 @@ const BarTooltip = ({ active, payload }: any) => {
         fontSize: 12
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Win Rate</span>
-        <span style={{ 
+        <span style={{
           color: parseFloat(winrate) >= 50 ? "#4ade80" : "#f87171",
           fontWeight: 700,
           whiteSpace: "nowrap"
@@ -135,7 +135,7 @@ const BarTooltip = ({ active, payload }: any) => {
 const ScatterTooltip = ({ active, payload }: any) => {
   if (!active || !payload || !payload.length) return null;
   const d = payload[0].payload;
-  
+
   return (
     <div style={{
       background: "rgba(26, 31, 46, 0.98)",
@@ -150,8 +150,8 @@ const ScatterTooltip = ({ active, payload }: any) => {
       wordWrap: "break-word",
       overflowWrap: "break-word",
     }}>
-      <div style={{ 
-        fontWeight: 700, 
+      <div style={{
+        fontWeight: 700,
         marginBottom: 10,
         fontSize: 14,
         color: "#fff",
@@ -162,19 +162,19 @@ const ScatterTooltip = ({ active, payload }: any) => {
       }}>
         {d.asset || "Unknown"}
       </div>
-      
+
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, minWidth: 0 }}>
         <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Strategy</span>
         <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.strategyName || d.strategyId || "—"}</span>
       </div>
-      
+
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, minWidth: 0 }}>
         <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Duration</span>
         <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtMinutes(d.duration)}</span>
       </div>
-      
-      <div style={{ 
-        display: "flex", 
+
+      <div style={{
+        display: "flex",
         justifyContent: "space-between",
         marginTop: 10,
         paddingTop: 8,
@@ -182,8 +182,8 @@ const ScatterTooltip = ({ active, payload }: any) => {
         minWidth: 0
       }}>
         <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Result (R)</span>
-        <span style={{ 
-          color: d.result_R >= 0 ? "#4ade80" : "#f87171", 
+        <span style={{
+          color: d.result_R >= 0 ? "#4ade80" : "#f87171",
           fontWeight: 700,
           fontSize: 15,
           whiteSpace: "nowrap"
@@ -197,83 +197,83 @@ const ScatterTooltip = ({ active, payload }: any) => {
 
 /* Main component */
 export default function DurationAnalysis({ trades = [] }: { trades: any[] }) {
-const parsed = useMemo(() => {
-  return (trades || []).map((t: any) => {
-    let entryDate: Date | null = null;
-    let exitDate: Date | null = null;
+  const parsed = useMemo(() => {
+    return (trades || []).map((t: any) => {
+      let entryDate: Date | null = null;
+      let exitDate: Date | null = null;
 
-    try {
-      if (t.entry_datetime) entryDate = new Date(t.entry_datetime);
-    } catch {
-      entryDate = null;
-    }
+      try {
+        if (t.entry_datetime) entryDate = new Date(t.entry_datetime);
+      } catch {
+        entryDate = null;
+      }
 
-    try {
-      if (t.exit_datetime) exitDate = new Date(t.exit_datetime);
-    } catch {
-      exitDate = null;
-    }
+      try {
+        if (t.exit_datetime) exitDate = new Date(t.exit_datetime);
+      } catch {
+        exitDate = null;
+      }
 
-    let durationMin = 0;
-    if (entryDate && exitDate && !isNaN(entryDate.getTime()) && !isNaN(exitDate.getTime())) {
-      durationMin = Math.max(0, (exitDate.getTime() - entryDate.getTime()) / 60000);
-    }
+      let durationMin = 0;
+      if (entryDate && exitDate && !isNaN(entryDate.getTime()) && !isNaN(exitDate.getTime())) {
+        durationMin = Math.max(0, (exitDate.getTime() - entryDate.getTime()) / 60000);
+      }
+
+      return {
+        ...t,
+        entryDate,
+        exitDate,
+        duration: durationMin,
+        bucket: bucketLabel(durationMin),
+      };
+    });
+  }, [trades]);
+
+
+  const stats = useMemo(() => {
+    if (!parsed.length) return { avg: "—", fastest: "—", longest: "—", sweet: "—" };
+
+    // todas as durações válidas (em minutos)
+    const durationsAll = parsed
+      .map((p: any) => p.duration)
+      .filter((d: any) => Number.isFinite(d) && d >= 0)
+      .sort((a: number, b: number) => a - b);
+
+    if (!durationsAll.length) return { avg: "—", fastest: "—", longest: "—", sweet: "—" };
+
+    const avgAll = durationsAll.reduce((s: number, v: number) => s + v, 0) / durationsAll.length;
+    const fastestAll = durationsAll[0];
+    const longestAll = durationsAll[durationsAll.length - 1];
+
+    // --- FASTEST WIN (corrigido) ---
+    const winDurations = parsed
+      .filter((p: any) => getRealR(p) > 0)
+      .map((p: any) => p.duration)
+      .filter((d: any) => Number.isFinite(d) && d >= 0)
+      .sort((a: number, b: number) => a - b);
+
+    const fastestWin = winDurations.length ? winDurations[0] : null;
+
+    // --- SWEET SPOT: bucket mais comum entre WINS (se preferir entre todas, mude para durationsAll) ---
+    const counts: Record<string, number> = {};
+    // usar wins para sweet spot:
+    const sourceForSweet = parsed.filter((p: any) => getRealR(p) > 0);
+    // se quiser sweet entre todas as trades, use: const sourceForSweet = parsed;
+    sourceForSweet.forEach((p: any) => {
+      const b = bucketLabel(p.duration || 0);
+      counts[b] = (counts[b] || 0) + 1;
+    });
+    const sweet = Object.entries(counts).length
+      ? Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+      : "—";
 
     return {
-      ...t,
-      entryDate,
-      exitDate,
-      duration: durationMin,
-      bucket: bucketLabel(durationMin),
+      avg: fmtMinutes(avgAll),
+      fastest: fastestWin ? fmtMinutes(fastestWin) : "—", // mostra apenas fastest win
+      longest: fmtMinutes(longestAll),
+      sweet,
     };
-  });
-}, [trades]);
-
-
-const stats = useMemo(() => {
-  if (!parsed.length) return { avg: "—", fastest: "—", longest: "—", sweet: "—" };
-
-  // todas as durações válidas (em minutos)
-  const durationsAll = parsed
-    .map((p: any) => p.duration)
-    .filter((d: any) => Number.isFinite(d) && d >= 0)
-    .sort((a: number, b: number) => a - b);
-
-  if (!durationsAll.length) return { avg: "—", fastest: "—", longest: "—", sweet: "—" };
-
-  const avgAll = durationsAll.reduce((s: number, v: number) => s + v, 0) / durationsAll.length;
-  const fastestAll = durationsAll[0];
-  const longestAll = durationsAll[durationsAll.length - 1];
-
-  // --- FASTEST WIN (corrigido) ---
-  const winDurations = parsed
-    .filter((p: any) => getRealR(p) > 0)
-    .map((p: any) => p.duration)
-    .filter((d: any) => Number.isFinite(d) && d >= 0)
-    .sort((a: number, b: number) => a - b);
-
-  const fastestWin = winDurations.length ? winDurations[0] : null;
-
-  // --- SWEET SPOT: bucket mais comum entre WINS (se preferir entre todas, mude para durationsAll) ---
-  const counts: Record<string, number> = {};
-  // usar wins para sweet spot:
-  const sourceForSweet = parsed.filter((p: any) => getRealR(p) > 0);
-  // se quiser sweet entre todas as trades, use: const sourceForSweet = parsed;
-  sourceForSweet.forEach((p: any) => {
-    const b = bucketLabel(p.duration || 0);
-    counts[b] = (counts[b] || 0) + 1;
-  });
-  const sweet = Object.entries(counts).length
-    ? Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-    : "—";
-
-  return {
-    avg: fmtMinutes(avgAll),
-    fastest: fastestWin ? fmtMinutes(fastestWin) : "—", // mostra apenas fastest win
-    longest: fmtMinutes(longestAll),
-    sweet,
-  };
-}, [parsed]);
+  }, [parsed]);
 
 
   const bucketData = useMemo(() => {
@@ -285,7 +285,7 @@ const stats = useMemo(() => {
       if (getRealR(p) > 0) map[b].wins++;
       else map[b].losses++;
     });
-    
+
     // ORDEM DOS NOVOS BUCKETS
     const order = ["<30min", "30min-1h", "1-2h", "2-4h", "4-12h", "12-24h", "1-3d", "3-7d", ">7d"];
     const arr = order.map(k => map[k]).filter(Boolean);
@@ -330,13 +330,17 @@ const stats = useMemo(() => {
       background: "linear-gradient(180deg, #1a1f2e 0%, #151a27 100%)",
       border: "1px solid rgba(255,255,255,0.08)",
       borderRadius: 12,
-      padding: 24,
+      padding: 16,
+      width: "100%",
+      maxWidth: "100%",
+      boxSizing: "border-box",
+      overflow: "hidden",
       color: "#e5e7eb",
     }}>
-      <h2 style={{ 
-        fontSize: 18, 
-        fontWeight: 700, 
-        marginBottom: 20, 
+      <h2 style={{
+        fontSize: 18,
+        fontWeight: 700,
+        marginBottom: 20,
         color: "#f3f4f6",
         display: "flex",
         alignItems: "center",
@@ -346,73 +350,76 @@ const stats = useMemo(() => {
       </h2>
 
       {/* Mini stats */}
-      <div style={{ 
-        display: "grid", 
-        gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", 
-        gap: 12, 
-        marginBottom: 24 
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+        gap: 12,
+        marginBottom: 24
       }}>
-        <div style={{ 
-          background: "rgba(96, 165, 250, 0.1)", 
-          border: "1px solid rgba(96, 165, 250, 0.2)", 
-          borderRadius: 8, 
-          padding: 12 
+        <div style={{
+          background: "rgba(96, 165, 250, 0.1)",
+          border: "1px solid rgba(96, 165, 250, 0.2)",
+          borderRadius: 8,
+          padding: 12
         }}>
           <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Avg Duration</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{stats.avg}</div>
         </div>
-        <div style={{ 
-          background: "rgba(96, 165, 250, 0.1)", 
-          border: "1px solid rgba(96, 165, 250, 0.2)", 
-          borderRadius: 8, 
-          padding: 12 
+        <div style={{
+          background: "rgba(96, 165, 250, 0.1)",
+          border: "1px solid rgba(96, 165, 250, 0.2)",
+          borderRadius: 8,
+          padding: 12
         }}>
           <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Fastest Win</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{stats.fastest}</div>
         </div>
-        <div style={{ 
-          background: "rgba(96, 165, 250, 0.1)", 
-          border: "1px solid rgba(96, 165, 250, 0.2)", 
-          borderRadius: 8, 
-          padding: 12 
+        <div style={{
+          background: "rgba(96, 165, 250, 0.1)",
+          border: "1px solid rgba(96, 165, 250, 0.2)",
+          borderRadius: 8,
+          padding: 12
         }}>
           <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Longest Trade</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{stats.longest}</div>
         </div>
-        <div style={{ 
-          background: "rgba(96, 165, 250, 0.1)", 
-          border: "1px solid rgba(96, 165, 250, 0.2)", 
-          borderRadius: 8, 
-          padding: 12 
+        <div style={{
+          background: "rgba(96, 165, 250, 0.1)",
+          border: "1px solid rgba(96, 165, 250, 0.2)",
+          borderRadius: 8,
+          padding: 12
         }}>
           <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Sweet Spot</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#60a5fa" }}>{stats.sweet}</div>
         </div>
       </div>
 
-{/* BARCHART LADO A LADO */}
-      <div style={{ 
-        background: "rgba(0, 0, 0, 0.2)", 
-        borderRadius: 8, 
-        padding: 20,
-        marginBottom: 24
+      {/* BARCHART LADO A LADO */}
+      <div style={{
+        background: "rgba(0, 0, 0, 0.2)",
+        borderRadius: 8,
+        padding: 16,
+        marginBottom: 24,
+        minWidth: 0
       }}>
         <div style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 12
+          marginBottom: 12,
+          flexWrap: "wrap",
+          gap: 12
         }}>
-          <h3 style={{ 
-            fontSize: 14, 
-            color: "#d1d5db", 
+          <h3 style={{
+            fontSize: 14,
+            color: "#d1d5db",
             fontWeight: 600,
             margin: 0
           }}>
             Wins vs Losses por Duration
           </h3>
           {/* LEGENDA NO HEADER */}
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 12, height: 12, borderRadius: "50%", background: colorWin }}></div>
               <span style={{ color: "#9ca3af", fontSize: 12 }}>Wins</span>
@@ -423,8 +430,8 @@ const stats = useMemo(() => {
             </div>
           </div>
         </div>
-        
-        <div style={{ height: 280 }}>
+
+        <div style={{ height: 280, width: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               layout="vertical"
@@ -464,18 +471,21 @@ const stats = useMemo(() => {
       </div>
 
       {/* SCATTER MELHORADO */}
-      <div style={{ 
-        background: "rgba(0, 0, 0, 0.2)", 
-        borderRadius: 8, 
-        padding: 20 
+      <div style={{
+        background: "rgba(0, 0, 0, 0.2)",
+        borderRadius: 8,
+        padding: '16px',
+        minWidth: 0
       }}>
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center", 
-          marginBottom: 16 
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 16,
+          flexWrap: "wrap",
+          gap: 12
         }}>
-          <h3 style={{ fontSize: 14, color: "#d1d5db", fontWeight: 600 }}>
+          <h3 style={{ fontSize: 14, color: "#d1d5db", fontWeight: 600, margin: 0 }}>
             Duration × Result (R)
           </h3>
           <div style={{
@@ -502,29 +512,29 @@ const stats = useMemo(() => {
                 scale="log"
                 tickFormatter={(v) => (Number.isFinite(v) ? fmtMinutes(Math.round(v)) : "")}
                 tick={{ fill: "#9ca3af", fontSize: 11 }}
-                label={{ 
-                  value: "Duration (log scale)", 
-                  position: "insideBottom", 
-                  offset: -10, 
+                label={{
+                  value: "Duration (log scale)",
+                  position: "insideBottom",
+                  offset: -10,
                   fill: "#9ca3af",
                   fontSize: 12
                 }}
               />
-              <YAxis 
-                dataKey="result_R" 
-                name="Result (R)" 
+              <YAxis
+                dataKey="result_R"
+                name="Result (R)"
                 tick={{ fill: "#9ca3af", fontSize: 11 }}
-                label={{ 
-                  value: "Result (R)", 
-                  angle: -90, 
-                  position: "insideLeft", 
+                label={{
+                  value: "Result (R)",
+                  angle: -90,
+                  position: "insideLeft",
                   fill: "#9ca3af",
                   fontSize: 12
                 }}
               />
               <ZAxis range={[40, 400]} />
               <ReTooltip content={<ScatterTooltip />} />
-              <Legend 
+              <Legend
                 verticalAlign="top"
                 height={36}
                 iconType="circle"
@@ -543,8 +553,8 @@ const stats = useMemo(() => {
                 shape="circle"
               >
                 {scatter.map((entry: any, idx: number) => (
-                  <Cell 
-                    key={`c-${idx}`} 
+                  <Cell
+                    key={`c-${idx}`}
                     fill={entry.result_R >= 0 ? scatterWin : scatterLoss}
                     opacity={0.7}
                   />
