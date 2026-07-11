@@ -35,6 +35,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       };
       
       save(merged);
+      console.log(`✅ Sync: pulled ${remote.firms.length} firms, ${remote.accounts.length} accounts, ${remote.payouts.length} payouts, ${remote.trades.length} trades`);
       window.dispatchEvent(new CustomEvent('sync:pulled', { detail: remote }));
       setLastSync(new Date());
     } catch (e) {
@@ -50,6 +51,8 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const local = getAll();
       await pushChanges(local, user.id);
+      const totalRecords = (local.firms?.length || 0) + (local.accounts?.length || 0) + (local.payouts?.length || 0) + (local.trades?.length || 0);
+      console.log(`✅ Sync: pushed ${totalRecords} records`);
       window.dispatchEvent(new CustomEvent('sync:pushed'));
     } catch (e) {
       console.error('Push failed:', e);
@@ -62,6 +65,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!user) return;
     
+    console.log('🔄 Sync: connecting to cloud...');
     pull();
     const interval = setInterval(pull, 30000); // 30s
     const onFocus = () => pull();

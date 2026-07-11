@@ -30,6 +30,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(session?.user ?? null);
       setLoading(false);
       
+      if (session) {
+        console.log('✅ Supabase auth session: active');
+      }
       // Redirect to login if no session and not on login/callback page
       if (!session && !window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth/callback')) {
         navigate('/login', { replace: true });

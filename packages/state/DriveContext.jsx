@@ -97,12 +97,17 @@ export function DriveProvider({ children }) {
 
   // Inicialização do Proton Drive
   useEffect(() => {
+    console.log(`✅ Proton Drive suportado: ${protonSupported}`);
     if (!protonSupported) {
       // Navegador sem suporte: nunca haverá "conexão" de pasta real
       setProtonLogged(false);
+      console.log('✅ Proton Drive logado: false');
       return;
     }
-    isProtonDriveLogged().then(status => setProtonLogged(status));
+    isProtonDriveLogged().then(status => {
+      setProtonLogged(status);
+      console.log(`✅ Proton Drive logado: ${status}`);
+    });
   }, [protonSupported]);
 
   // ===========================================================

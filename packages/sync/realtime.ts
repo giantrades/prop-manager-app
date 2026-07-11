@@ -13,7 +13,9 @@ export function subscribeToChanges(
         onChange(payload.table, payload);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log('✅ Supabase Realtime:', status);
+    });
 
   return () => supabase.removeChannel(channel);
 }
