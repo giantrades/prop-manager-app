@@ -14,9 +14,9 @@ function useFmtCurrencyFallback() {
       currency === "USD"
         ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v || 0)
         : new Intl.NumberFormat("pt-BR", {
-            style: "currency",
-            currency: currency || "BRL",
-          }).format((v || 0) * (rate || 1));
+          style: "currency",
+          currency: currency || "BRL",
+        }).format((v || 0) * (rate || 1));
     return fmt;
   } catch {
     return (v: number) =>
@@ -78,14 +78,14 @@ function detectDrawdowns(series: any[]) {
           1,
           Math.round(
             (new Date(end.date).getTime() - new Date(start.date).getTime()) /
-              (1000 * 3600 * 24)
+            (1000 * 3600 * 24)
           )
         );
         const recovery = Math.max(
           0,
           Math.round(
             (new Date(end.date).getTime() - new Date(trough.date).getTime()) /
-              (1000 * 3600 * 24)
+            (1000 * 3600 * 24)
           )
         );
         drawdowns.push({
@@ -120,7 +120,7 @@ function detectDrawdowns(series: any[]) {
       1,
       Math.round(
         (new Date(series.at(-1).date).getTime() - new Date(start.date).getTime()) /
-          (1000 * 3600 * 24)
+        (1000 * 3600 * 24)
       )
     );
     drawdowns.push({
@@ -168,11 +168,11 @@ export default function DrawdownSection({
     : 0;
   const avgRecovery = drawdowns.filter((d) => d.recovered).length
     ? Math.round(
-        drawdowns
-          .filter((d) => d.recovered)
-          .reduce((s, d) => s + (d.recoveryDays || 0), 0) /
-          drawdowns.filter((d) => d.recovered).length
-      )
+      drawdowns
+        .filter((d) => d.recovered)
+        .reduce((s, d) => s + (d.recoveryDays || 0), 0) /
+      drawdowns.filter((d) => d.recovered).length
+    )
     : null;
 
   const peakEquity = Math.max(...equitySeries.map((e) => e.equity || 0));
@@ -195,15 +195,15 @@ export default function DrawdownSection({
   const pageItems = drawdowns.slice(page * perPage, page * perPage + perPage);
 
   return (
-    <div className="card" style={{ padding: 20 }}>
+    <div className="card" style={{ padding: 20, width: '100%', maxWidth: '100%', boxSizing: "border-box", overflow: "hidden" }}>
       <h2 style={{ fontSize: 18, marginBottom: 16 }}>📉 Drawdown Deep Dive</h2>
 
-{/* Métricas principais */}
+      {/* Métricas principais */}
       <div
         className="dd-metrics"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
           gap: 12,
           marginBottom: 16,
         }}
@@ -249,7 +249,7 @@ export default function DrawdownSection({
       </div>
 
       {/* Gráfico Underwater */}
-      <div style={{ height: 200, marginBottom: 16 }}>
+      <div style={{ height: 200, marginBottom: 16, minWidth: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={underwater} margin={{ top: 10, right: 20, left: 20, bottom: 20 }}>
             <defs>
@@ -279,55 +279,56 @@ export default function DrawdownSection({
       <div style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 14, marginBottom: 8 }}>🔻 Worst Drawdowns</h3>
         <div style={{ overflowX: 'auto', width: '100%' }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
-          <thead>
-            <tr style={{ color: "#9ca3af", textAlign: "left" }}>
-              <th>#</th>
-              <th>Period</th>
-              <th>Max DD</th>
-              <th>Duration</th>
-              <th>Recovery</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageItems.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: 8, color: "#9ca3af" }}>
-                  No drawdowns detected
-                </td>
+          <div style={{ overflowX: 'auto', width: '100%', maxWidth: '100%', WebkitOverflowScrolling: 'touch' }}></div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
+            <thead>
+              <tr style={{ color: "#9ca3af", textAlign: "left" }}>
+                <th>#</th>
+                <th>Period</th>
+                <th>Max DD</th>
+                <th>Duration</th>
+                <th>Recovery</th>
               </tr>
-            )}
-            {pageItems.map((d, i) => (
-              <tr key={d.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                <td>{page * perPage + i + 1}</td>
-                <td>
-                  {d.startDate} — {d.recoveryDate || "ongoing"}
-                </td>
-                <td style={{ color: "#ef4444" }}>
-                  {fmtCurrency(-safeNumber(d.drawdownAbs))} ({d.drawdownPct}%)
-                </td>
-                <td>{d.durationDays} days</td>
-                <td>
-                  {d.recovered ? (
-                    `${d.recoveryDays} days`
-                  ) : (
-                    <span
-                      style={{
-                        background: "#dc2626",
-                        color: "#fff",
-                        borderRadius: 6,
-                        padding: "2px 6px",
-                        fontSize: 12,
-                      }}
-                    >
-                      ONGOING
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {pageItems.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: 8, color: "#9ca3af" }}>
+                    No drawdowns detected
+                  </td>
+                </tr>
+              )}
+              {pageItems.map((d, i) => (
+                <tr key={d.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                  <td>{page * perPage + i + 1}</td>
+                  <td>
+                    {d.startDate} — {d.recoveryDate || "ongoing"}
+                  </td>
+                  <td style={{ color: "#ef4444" }}>
+                    {fmtCurrency(-safeNumber(d.drawdownAbs))} ({d.drawdownPct}%)
+                  </td>
+                  <td>{d.durationDays} days</td>
+                  <td>
+                    {d.recovered ? (
+                      `${d.recoveryDays} days`
+                    ) : (
+                      <span
+                        style={{
+                          background: "#dc2626",
+                          color: "#fff",
+                          borderRadius: 6,
+                          padding: "2px 6px",
+                          fontSize: 12,
+                        }}
+                      >
+                        ONGOING
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* Paginação */}
@@ -353,54 +354,54 @@ export default function DrawdownSection({
           </button>
         </div>
         {/* Insights */}
-<div
-  className="insights"
-  style={{
-    marginTop: 16,
-    background: "rgba(26,31,46,0.6)",
-    borderRadius: 8,
-    padding: 12,
-  }}
->
-  <ul style={{ color: "#e5e7eb", fontSize: 13, lineHeight: 1.8 }}>
-    <li>
-      📊 Total significant drawdowns (&gt;5%):{" "}
-      <strong>{drawdowns.filter((d) => d.drawdownPct >= 5).length}</strong>
-    </li>
-    <li>
-      ⏱️ Average time in drawdown:{" "}
-      <strong>
-        {drawdowns.length
-          ? Math.round(
-              drawdowns.reduce((s, d) => s + d.durationDays, 0) / drawdowns.length
-            )
-          : 0}{" "}
-        days
-      </strong>
-    </li>
-    <li>
-      📈 Recovery rate:{" "}
-      <strong>
-        {drawdowns.length
-          ? Math.round(
-              (drawdowns.filter((d) => d.recovered).length / drawdowns.length) *
-                100
-            )
-          : 0}
-        %
-      </strong>
-    </li>
-    <li>
-      ⚠️ Longest period without new peak:{" "}
-      <strong>
-        {drawdowns.length
-          ? Math.max(...drawdowns.map((d) => d.durationDays))
-          : 0}{" "}
-        days
-      </strong>
-    </li>
-  </ul>
-</div>
+        <div
+          className="insights"
+          style={{
+            marginTop: 16,
+            background: "rgba(26,31,46,0.6)",
+            borderRadius: 8,
+            padding: 12,
+          }}
+        >
+          <ul style={{ color: "#e5e7eb", fontSize: 13, lineHeight: 1.8 }}>
+            <li>
+              📊 Total significant drawdowns (&gt;5%):{" "}
+              <strong>{drawdowns.filter((d) => d.drawdownPct >= 5).length}</strong>
+            </li>
+            <li>
+              ⏱️ Average time in drawdown:{" "}
+              <strong>
+                {drawdowns.length
+                  ? Math.round(
+                    drawdowns.reduce((s, d) => s + d.durationDays, 0) / drawdowns.length
+                  )
+                  : 0}{" "}
+                days
+              </strong>
+            </li>
+            <li>
+              📈 Recovery rate:{" "}
+              <strong>
+                {drawdowns.length
+                  ? Math.round(
+                    (drawdowns.filter((d) => d.recovered).length / drawdowns.length) *
+                    100
+                  )
+                  : 0}
+                %
+              </strong>
+            </li>
+            <li>
+              ⚠️ Longest period without new peak:{" "}
+              <strong>
+                {drawdowns.length
+                  ? Math.max(...drawdowns.map((d) => d.durationDays))
+                  : 0}{" "}
+                days
+              </strong>
+            </li>
+          </ul>
+        </div>
 
       </div>
     </div>
