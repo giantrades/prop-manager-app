@@ -198,13 +198,13 @@ export default function DrawdownSection({
     <div className="card" style={{ padding: 20 }}>
       <h2 style={{ fontSize: 18, marginBottom: 16 }}>📉 Drawdown Deep Dive</h2>
 
-      {/* Métricas principais */}
+{/* Métricas principais */}
       <div
         className="dd-metrics"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 16,
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 12,
           marginBottom: 16,
         }}
       >
@@ -278,7 +278,8 @@ export default function DrawdownSection({
       {/* Worst Drawdowns */}
       <div style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 14, marginBottom: 8 }}>🔻 Worst Drawdowns</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', width: '100%' }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 600 }}>
           <thead>
             <tr style={{ color: "#9ca3af", textAlign: "left" }}>
               <th>#</th>
@@ -327,6 +328,7 @@ export default function DrawdownSection({
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Paginação */}
         <div

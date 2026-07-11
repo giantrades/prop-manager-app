@@ -62,7 +62,7 @@ const limit = (v: number, dec = 2) => {
   return Math.round(v * pow) / pow;
 };
 
-/* Custom Tooltip Melhorado */
+/* Custom Tooltip Melhorado - Mobile Friendly */
 const BarTooltip = ({ active, payload }: any) => {
   if (!active || !payload || !payload.length) return null;
   const data = payload[0].payload;
@@ -77,7 +77,10 @@ const BarTooltip = ({ active, payload }: any) => {
       border: "1px solid rgba(255,255,255,0.1)",
       fontSize: 13,
       minWidth: 180,
-      boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+      maxWidth: 280,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+      wordWrap: "break-word",
+      overflowWrap: "break-word",
     }}>
       <div style={{ 
         fontWeight: 700, 
@@ -85,25 +88,27 @@ const BarTooltip = ({ active, payload }: any) => {
         fontSize: 14,
         color: "#fff",
         paddingBottom: 8,
-        borderBottom: "1px solid rgba(255,255,255,0.1)"
+        borderBottom: "1px solid rgba(255,255,255,0.1)",
+        wordWrap: "break-word",
+        overflowWrap: "break-word",
       }}>
         {data.bucket}
       </div>
       
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#60a5fa" }}></div>
-          <span>Wins</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#60a5fa", flexShrink: 0 }}></div>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Wins</span>
         </div>
-        <div style={{ color: "#a78bfa", fontWeight: 600 }}>{data.wins}</div>
+        <div style={{ color: "#a78bfa", fontWeight: 600, whiteSpace: "nowrap" }}>{data.wins}</div>
       </div>
       
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background:"#a78bfa"  }}></div>
-          <span>Losses</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background:"#a78bfa", flexShrink: 0 }}></div>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Losses</span>
         </div>
-        <div style={{ color: "#60a5fa", fontWeight: 600 }}>{data.losses}</div>
+        <div style={{ color: "#60a5fa", fontWeight: 600, whiteSpace: "nowrap" }}>{data.losses}</div>
       </div>
       
       <div style={{ 
@@ -114,10 +119,11 @@ const BarTooltip = ({ active, payload }: any) => {
         color: "#9ca3af",
         fontSize: 12
       }}>
-        <span>Win Rate</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Win Rate</span>
         <span style={{ 
           color: parseFloat(winrate) >= 50 ? "#4ade80" : "#f87171",
-          fontWeight: 700 
+          fontWeight: 700,
+          whiteSpace: "nowrap"
         }}>
           {winrate}%
         </span>
@@ -139,7 +145,10 @@ const ScatterTooltip = ({ active, payload }: any) => {
       border: "1px solid rgba(255,255,255,0.1)",
       fontSize: 13,
       minWidth: 200,
-      boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+      maxWidth: 280,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+      wordWrap: "break-word",
+      overflowWrap: "break-word",
     }}>
       <div style={{ 
         fontWeight: 700, 
@@ -147,19 +156,21 @@ const ScatterTooltip = ({ active, payload }: any) => {
         fontSize: 14,
         color: "#fff",
         paddingBottom: 8,
-        borderBottom: "1px solid rgba(255,255,255,0.1)"
+        borderBottom: "1px solid rgba(255,255,255,0.1)",
+        wordWrap: "break-word",
+        overflowWrap: "break-word",
       }}>
         {d.asset || "Unknown"}
       </div>
       
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ color: "#9ca3af" }}>Strategy</span>
-        <span style={{ fontWeight: 600 }}>{d.strategyName || d.strategyId || "—"}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, minWidth: 0 }}>
+        <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Strategy</span>
+        <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.strategyName || d.strategyId || "—"}</span>
       </div>
       
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ color: "#9ca3af" }}>Duration</span>
-        <span style={{ fontWeight: 600 }}>{fmtMinutes(d.duration)}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, minWidth: 0 }}>
+        <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Duration</span>
+        <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtMinutes(d.duration)}</span>
       </div>
       
       <div style={{ 
@@ -167,13 +178,15 @@ const ScatterTooltip = ({ active, payload }: any) => {
         justifyContent: "space-between",
         marginTop: 10,
         paddingTop: 8,
-        borderTop: "1px solid rgba(255,255,255,0.1)"
+        borderTop: "1px solid rgba(255,255,255,0.1)",
+        minWidth: 0
       }}>
-        <span style={{ color: "#9ca3af" }}>Result (R)</span>
+        <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Result (R)</span>
         <span style={{ 
           color: d.result_R >= 0 ? "#4ade80" : "#f87171", 
           fontWeight: 700,
-          fontSize: 15
+          fontSize: 15,
+          whiteSpace: "nowrap"
         }}>
           {d.result_R >= 0 ? "+" : ""}{limit(d.result_R, 2)}
         </span>
@@ -335,7 +348,7 @@ const stats = useMemo(() => {
       {/* Mini stats */}
       <div style={{ 
         display: "grid", 
-        gridTemplateColumns: "repeat(4, 1fr)", 
+        gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", 
         gap: 12, 
         marginBottom: 24 
       }}>
@@ -414,25 +427,25 @@ const stats = useMemo(() => {
         <div style={{ height: 280 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              layout="vertical"
               data={bucketData}
-              margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+              margin={{ top: 10, right: 20, left: 12, bottom: 10 }}
               barGap={8}
               barCategoryGap="25%"
             >
               <XAxis
-                dataKey="bucket"
+                type="number"
                 tick={{ fill: "#9ca3af", fontSize: 11 }}
                 axisLine={{ stroke: "rgba(255,255,255,0.2)" }}
                 tickLine={{ stroke: "rgba(255,255,255,0.2)" }}
-                angle={-45}
-                textAnchor="end"
-                height={50}
               />
               <YAxis
+                dataKey="bucket"
+                type="category"
                 tick={{ fill: "#9ca3af", fontSize: 11 }}
                 axisLine={{ stroke: "rgba(255,255,255,0.2)" }}
                 tickLine={{ stroke: "rgba(255,255,255,0.2)" }}
-                width={45}
+                width={80}
                 label={{
                   value: "Trades",
                   angle: -90,
@@ -479,7 +492,7 @@ const stats = useMemo(() => {
 
         <div style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ left: 10, right: 30, top: 20, bottom: 20 }}>
+            <ScatterChart margin={{ left: 20, right: 30, top: 20, bottom: 20 }}>
               <CartesianGrid stroke="#374151" strokeOpacity={0.2} strokeDasharray="3 3" />
               <XAxis
                 dataKey="duration"
