@@ -1417,120 +1417,122 @@ const RecentTrades = ({ trades, fmt }: any) => {
   return (
     <div className="card">
       <h3>📝 Recent Trades</h3>
-      <table className="responsive-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Asset / TF</th>
-            <th>Markets / Accounts</th>
-            <th>Direction</th>
-            <th>R</th>
-            <th>PnL</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {rows.map((t: any) => (
-            <tr
-              key={t.id}
-              onClick={() => (window.location.href = `/journal/trades#${t.id}`)}
-              style={{ cursor: "pointer" }}
-            >
-              {/* Date */}
-              <td data-label="Date">
-                {(() => {
-                  const entry = t.entry_datetime?.slice(0, 10);
-                  const exit = t.exit_datetime?.slice(0, 10);
-                  const sameDay = !exit || entry === exit;
-
-                  const formatDate = (iso?: string) =>
-                    iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
-                  const entryDate = formatDate(t.entry_datetime);
-                  const exitDate = formatDate(t.exit_datetime);
-
-                  const formatTime = (iso?: string) =>
-                    iso
-                      ? new Date(iso).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                      : "";
-
-                  const entryTime = formatTime(t.entry_datetime);
-                  const exitTime = formatTime(t.exit_datetime);
-
-                  const duration =
-                    t.exit_datetime && t.entry_datetime
-                      ? calculateDuration(t.entry_datetime, t.exit_datetime)
-                      : "";
-
-                  return (
-                    <>
-                      <div style={{ fontWeight: 500, paddingRight: 10 }}>
-                        {sameDay ? entryDate : `${entryDate} → ${exitDate}`}
-                      </div>
-                      <div className="muted" style={{ fontSize: 11, paddingRight: 3 }}>
-                        {entryTime}
-                        {exitTime && ` → ${exitTime}`}
-                      </div>
-                      {duration && (
-                        <div className="muted" style={{ fontSize: 10 }}>
-                          ({duration})
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </td>
-
-              {/* Asset / TF */}
-              <td data-label="Asset / TF">
-                {t.asset} <span className="muted">• {t.tf_signal || t.timeframe || ""}</span>
-              </td>
-
-              {/* Accounts */}
-              <td data-label="Markets / Accounts">
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {t.accountType && (
-                    <span
-                      className={`pill ${getAccountTypeClass(t.accountType)}`}
-                      style={{ fontSize: 9, padding: "2px 4px" }}
-                    >
-                      {t.accountType}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 11 }}>{resolveAccountDisplay(t)}</span>
-                </div>
-              </td>
-
-              {/* Direction */}
-              <td data-label="Direction">
-                <span
-                  className={`pill ${t.direction === "Long" ? "lavander" : "orange"}`}
-                  style={{ padding: "4px 10px" }}
-                >
-                  {t.direction}
-                </span>
-              </td>
-
-              {/* R */}
-              <td data-label="R">
-                {getTotalR(t).toFixed(2)}
-              </td>
-
-              {/* PnL */}
-              <td
-                data-label="PnL"
-                style={{
-                  color: Number(t.result_net) >= 0 ? "#4ade80" : "#f87171",
-                }}
-              >
-                {fmt(Number(t.result_net) || 0)}
-              </td>
+      <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table className="responsive-table" style={{ width: "100%", minWidth: "600px" }}>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Asset / TF</th>
+              <th>Markets / Accounts</th>
+              <th>Direction</th>
+              <th>R</th>
+              <th>PnL</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody>
+            {rows.map((t: any) => (
+              <tr
+                key={t.id}
+                onClick={() => (window.location.href = `/journal/trades#${t.id}`)}
+                style={{ cursor: "pointer" }}
+              >
+                {/* Date */}
+                <td data-label="Date">
+                  {(() => {
+                    const entry = t.entry_datetime?.slice(0, 10);
+                    const exit = t.exit_datetime?.slice(0, 10);
+                    const sameDay = !exit || entry === exit;
+
+                    const formatDate = (iso?: string) =>
+                      iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
+                    const entryDate = formatDate(t.entry_datetime);
+                    const exitDate = formatDate(t.exit_datetime);
+
+                    const formatTime = (iso?: string) =>
+                      iso
+                        ? new Date(iso).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                        : "";
+
+                    const entryTime = formatTime(t.entry_datetime);
+                    const exitTime = formatTime(t.exit_datetime);
+
+                    const duration =
+                      t.exit_datetime && t.entry_datetime
+                        ? calculateDuration(t.entry_datetime, t.exit_datetime)
+                        : "";
+
+                    return (
+                      <>
+                        <div style={{ fontWeight: 500, paddingRight: 10 }}>
+                          {sameDay ? entryDate : `${entryDate} → ${exitDate}`}
+                        </div>
+                        <div className="muted" style={{ fontSize: 11, paddingRight: 3 }}>
+                          {entryTime}
+                          {exitTime && ` → ${exitTime}`}
+                        </div>
+                        {duration && (
+                          <div className="muted" style={{ fontSize: 10 }}>
+                            ({duration})
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </td>
+
+                {/* Asset / TF */}
+                <td data-label="Asset / TF">
+                  {t.asset} <span className="muted">• {t.tf_signal || t.timeframe || ""}</span>
+                </td>
+
+                {/* Accounts */}
+                <td data-label="Markets / Accounts">
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    {t.accountType && (
+                      <span
+                        className={`pill ${getAccountTypeClass(t.accountType)}`}
+                        style={{ fontSize: 9, padding: "2px 4px" }}
+                      >
+                        {t.accountType}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 11 }}>{resolveAccountDisplay(t)}</span>
+                  </div>
+                </td>
+
+                {/* Direction */}
+                <td data-label="Direction">
+                  <span
+                    className={`pill ${t.direction === "Long" ? "lavander" : "orange"}`}
+                    style={{ padding: "4px 10px" }}
+                  >
+                    {t.direction}
+                  </span>
+                </td>
+
+                {/* R */}
+                <td data-label="R">
+                  {getTotalR(t).toFixed(2)}
+                </td>
+
+                {/* PnL */}
+                <td
+                  data-label="PnL"
+                  style={{
+                    color: Number(t.result_net) >= 0 ? "#4ade80" : "#f87171",
+                  }}
+                >
+                  {fmt(Number(t.result_net) || 0)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
