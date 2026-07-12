@@ -73,9 +73,13 @@ export default function JournalProvider({ children }) {
         return s;
       });
 
-      setTrades(allTrades || []);
+      // Strip zero-PnL platform trades (entry fills) at source — affects ALL components
+      const filtered = (allTrades || []).filter(t =>
+        !(t.source && t.source !== 'manual' && (t.result_net ?? 0) === 0 && (t.result_gross ?? 0) === 0)
+      );
+      setTrades(filtered);
       setStrategies(normalized);
-      return { trades: allTrades || [], strategies: normalized };
+      return { trades: filtered, strategies: normalized };
     } catch (error) {
       console.error('Falha ao recarregar dados do journal-db:', error);
       return { trades: [], strategies: [] };
@@ -95,8 +99,24 @@ export default function JournalProvider({ children }) {
           const all = await getAll();
           const dsTrades = all.trades || [];
 
+          // One-time cleanup: remove 0 PnL platform trades (entry fills)
+          if (!localStorage.getItem('journal:cleanedZeroPnl')) {
+            const zeroPnlTrades = dsTrades.filter(t =>
+              t.source && t.source !== 'manual' &&
+              (t.result_net ?? 0) === 0 && (t.result_gross ?? 0) === 0
+            );
+            if (zeroPnlTrades.length > 0) {
+              const zeroIds = new Set(zeroPnlTrades.map(t => t.id));
+              all.trades = dsTrades.filter(t => !zeroIds.has(t.id));
+              const { save } = await import('@apps/lib/dataStore.js');
+              await save(all);
+              console.log(`🧹 Cleaned ${zeroPnlTrades.length} zero-PnL trades from dataStore`);
+            }
+            localStorage.setItem('journal:cleanedZeroPnl', '1');
+          }
+
           // Import platform trades from dataStore → journal-db
-          const platformTrades = dsTrades.filter(t =>
+          const platformTrades = (all.trades || []).filter(t =>
             t.source && t.source !== 'manual' && t.platformTradeId
           );
 
@@ -128,24 +148,15 @@ export default function JournalProvider({ children }) {
     return () => { mounted = false; };
   }, [reloadFromDB]);
 
-  // 🔗 Listen for platform sync events → persist new trades into IndexedDB
-  // 🔗 Listen for restore events → recarrega trades/strategies do journal-db
+  // Listen for dataStore changes → import platform trades into IndexedDB
   useEffect(() => {
     const handleDatastoreChange = async (e) => {
       const detail = e.detail || {};
 
-      // Caso 1: dados restaurados de um backup (Google/Proton) —
-      // trades e strategies já foram escritos direto no journal-db,
-      // só precisamos recarregar o estado em memória.
       if (detail.source === 'restore') {
-        console.log('♻️ Restore detectado — recarregando trades/strategies do journal-db...');
         await reloadFromDB();
         return;
       }
-
-      // Caso 2: sync de plataforma (Quantower/cTrader) — importa
-      // trades novos vindos do dataStore para o journal-db.
-      if (detail.source !== 'platform-sync' && detail.source !== 'position-closed') return;
 
       try {
         const ds = await import('@apps/lib/dataStore.js');
@@ -171,12 +182,14 @@ export default function JournalProvider({ children }) {
         }
 
         if (added > 0) {
-          console.log(`🔗 Platform sync: ${added} new trades imported to journal`);
-          const allTrades = await db.getAll('trades');
-          setTrades(allTrades || []);
+          console.log(`🔗 Journal: ${added} platform trades imported`);
+          const allTrades = (await db.getAll('trades') || []).filter(t =>
+            !(t.source && t.source !== 'manual' && (t.result_net ?? 0) === 0 && (t.result_gross ?? 0) === 0)
+          );
+          setTrades(allTrades);
         }
       } catch (err) {
-        console.warn('⚠️ Platform sync → journal import failed:', err);
+        console.warn('⚠️ Journal import failed:', err);
       }
     };
 
@@ -306,14 +319,18 @@ export default function JournalProvider({ children }) {
     await db.delete("trades", tradeId);
     setTrades(prev => prev.filter(t => t.id !== tradeId));
 
-    // 🔹 Remove trade também do dataStore
+    // 🔹 Remove trade também do dataStore e marca no ledger
     try {
-      const { getAll, save } = await import('@apps/lib/dataStore.js');
+      const ds = await import('@apps/lib/dataStore.js');
+      const { getAll, save, markTradeDeleted } = ds.default || ds;
       const all = await getAll();
       const remainingTrades = (all.trades || []).filter(t => t.id !== tradeId);
       await save({ ...all, trades: remainingTrades });
+      // Marca no ledger para não ser re-importado pelo sync
+      if (trade.platformTradeId) {
+        await markTradeDeleted(trade.platformTradeId);
+      }
       window.dispatchEvent(new CustomEvent('datastore:change'));
-      // 🔔 Notifica listeners globais (Goals, Dashboard etc.)
       window.dispatchEvent(new CustomEvent('journal:change'));
     } catch (err) {
       console.warn("⚠️ Falha ao remover trade do dataStore:", err);

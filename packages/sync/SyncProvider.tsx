@@ -125,6 +125,9 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     if (!user) return;
     console.log('🔄 Sync: starting realtime (visible)');
     
+    // Initial pull on mount
+    pull();
+    
     // General realtime for all tables except live_positions
     generalRealtimeUnsub.current = subscribeToChanges(user.id, () => { 
       if (!isPushing.current) pull(); 

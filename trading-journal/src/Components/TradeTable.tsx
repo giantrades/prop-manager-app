@@ -77,16 +77,24 @@ const fmt = (v: number) => currency === 'USD'
 
   // Filtrar e ordenar trades
   const filtered = useMemo(() => {
+    // Skip zero-PnL platform trades (entry fills, not complete trades)
+    let list = trades.filter(t =>
+      t.source && t.source !== 'manual'
+        ? (t.result_net ?? 0) !== 0 || (t.result_gross ?? 0) !== 0
+        : true
+    );
     const lower = query.toLowerCase();
-    return trades.filter(t => {
-      if (!query) return true;
-      return (t.asset || '').toLowerCase().includes(lower)
+    if (query) {
+      list = list.filter(t =>
+        (t.asset || '').toLowerCase().includes(lower)
         || (t.accountName || '').toLowerCase().includes(lower)
         || (t.strategyId || '').toLowerCase().includes(lower)
         || (t.notes || '').toLowerCase().includes(lower)
         || (t.direction || '').toLowerCase().includes(lower)
-        || (t.tf_signal||'').toLowerCase().includes(lower);
-    }).sort((a, b) => {
+        || (t.tf_signal||'').toLowerCase().includes(lower)
+      );
+    }
+    return list.sort((a, b) => {
       let av: any = (a as any)[sortKey] || 0;
       let bv: any = (b as any)[sortKey] || 0;
       

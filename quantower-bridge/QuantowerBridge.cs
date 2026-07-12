@@ -447,7 +447,7 @@ namespace QuantowerBridge
 
             var reqParams = new TradesHistoryRequestParameters
             {
-                From = fromDate ?? DateTime.UtcNow.AddYears(-10),
+                From = fromDate ?? DateTime.UtcNow.AddDays(-1),
                 To = toDate ?? DateTime.UtcNow
             };
 

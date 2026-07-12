@@ -44,9 +44,9 @@ export const PLATFORM_EVENTS = {
 
 // ── Default configuration ──────────────────────────────
 const DEFAULT_CONFIG = {
-  syncIntervalMs: 2000,         // 2 seconds for near-live experience
-  positionPollMs: 1500,         // 1.5s for live positions (even faster)
-  statusCheckMs: 5000,          // 5s for connection status checks
+  syncIntervalMs: 30000,        // 30s for trade sync (ledger prevents re-import)
+  positionPollMs: 2000,         // 2s for live positions
+  statusCheckMs: 10000,         // 10s for connection status checks
   maxRetries: 3,
   retryDelayMs: 2000,
 };
@@ -60,7 +60,8 @@ class PlatformManager {
     this._wasOnline = new Map();
     /** @type {Map<string, import('./adapters/baseAdapter.js').PlatformPosition[]>} */
     this._lastPositions = new Map();
-    // Trade ledger is now persisted in dataStore/IndexedDB
+    /** @type {Map<string, string>} platform id → last successful sync timestamp (ISO) */
+    this._lastSyncTime = new Map();
     this._tradeLedgerLoaded = new Map(); // platform id → boolean
 
     this._syncInterval = null;
@@ -178,9 +179,10 @@ class PlatformManager {
     const adapter = this.adapters.get(platformId);
     if (!adapter) throw new Error(`Unknown platform: ${platformId}`);
 
+    const from = this._lastSyncTime.get(platformId);
     const [accounts, trades, positions] = await Promise.all([
       adapter.getAccounts(),
-      adapter.getTrades(),
+      adapter.getTrades(from),
       adapter.getPositions(),
     ]);
 
@@ -188,12 +190,11 @@ class PlatformManager {
     for (const trade of trades) {
       if (trade.platformTradeId) {
         const entry = await getTradeLedgerEntry(trade.platformTradeId);
-        if (entry && entry.status !== 'imported') continue;
+        if (entry) continue;
       }
       newTrades.push(trade);
     }
 
-    // Mark new trades as imported
     for (const trade of newTrades) {
       if (trade.platformTradeId) {
         await setTradeLedgerEntry(trade.platformTradeId, {
@@ -206,10 +207,12 @@ class PlatformManager {
       }
     }
 
+    this._lastSyncTime.set(platformId, new Date().toISOString());
+
     this._emit(PLATFORM_EVENTS.SYNCED, {
       platformId,
       accounts,
-      trades: newTrades, // Only emit new trades
+      trades: newTrades,
       positions,
       timestamp: new Date().toISOString(),
     });
@@ -388,13 +391,14 @@ class PlatformManager {
         if (!this._wasOnline.get(id)) continue;
 
         try {
-          const trades = await adapter.getTrades();
+          const from = this._lastSyncTime.get(id);
+          const trades = await adapter.getTrades(from);
 
           const newTrades = [];
           for (const trade of trades) {
             if (trade.platformTradeId) {
               const entry = await getTradeLedgerEntry(trade.platformTradeId);
-              if (entry && entry.status !== 'imported') continue;
+              if (entry) continue;
             }
             newTrades.push(trade);
           }
@@ -419,6 +423,7 @@ class PlatformManager {
               timestamp: new Date().toISOString(),
             });
           }
+          this._lastSyncTime.set(id, new Date().toISOString());
         } catch (err) {
           this._emit(PLATFORM_EVENTS.ERROR, {
             platformId: id,
