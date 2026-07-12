@@ -79,9 +79,13 @@ namespace QuantowerBridge
 
                 if (AllowExternal)
                 {
-                    TryReserveUrlAcl(Port);
-
                     started = TryStartListener($"http://*:{Port}/");
+                    
+                    if (!started)
+                    {
+                        TryReserveUrlAcl(Port);
+                        started = TryStartListener($"http://*:{Port}/");
+                    }
                     
                     if (!started)
                         started = TryStartListener($"http://+:{Port}/");
@@ -152,37 +156,21 @@ namespace QuantowerBridge
         {
             try
             {
-                // Check if already reserved
-                var check = Process.Start(new ProcessStartInfo
+                var reserve = Process.Start(new ProcessStartInfo
                 {
                     FileName = "netsh.exe",
-                    Arguments = $"http show urlacl url=http://+:{port}/",
+                    Arguments = $"http add urlacl url=http://+:{port}/ user=Everyone",
                     Verb = "runas",
                     UseShellExecute = true,
                     CreateNoWindow = true,
                     WindowStyle = ProcessWindowStyle.Hidden
                 });
-                check?.WaitForExit(2000);
-
-                if (check?.ExitCode != 0)
-                {
-                    // Reserve URL ACL for Everyone (allows non-admin to bind)
-                    var reserve = Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "netsh.exe",
-                        Arguments = $"http add urlacl url=http://+:{port}/ user=Everyone",
-                        Verb = "runas",
-                        UseShellExecute = true,
-                        CreateNoWindow = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    });
-                    reserve?.WaitForExit(3000);
-                    
-                    if (reserve?.ExitCode == 0)
-                        Log($"🔐 URL ACL reserved for port {port}", StrategyLoggingLevel.Trading);
-                    else
-                        Log($"⚠️ Could not reserve URL ACL (run Quantower as Admin for external access)", StrategyLoggingLevel.Trading);
-                }
+                reserve?.WaitForExit(3000);
+                
+                if (reserve?.ExitCode == 0)
+                    Log($"🔐 URL ACL reserved for port {port}", StrategyLoggingLevel.Trading);
+                else
+                    Log($"⚠️ Could not reserve URL ACL (run Quantower as Admin for external access)", StrategyLoggingLevel.Trading);
             }
             catch (Exception ex)
             {
@@ -292,6 +280,16 @@ namespace QuantowerBridge
                 else if (path.StartsWith("/trades")) path = "/trades";
                 else if (path.StartsWith("/positions")) path = "/positions";
                 else if (path.StartsWith("/orders")) path = "/orders";
+
+                // Silently ignore common scanner/bot paths (no log, no 404)
+                if (path == "/auth" || path == "/robots.txt" || path == "/.env" ||
+                    path == "/favicon.ico" || path == "/wp-admin" || path == "/xmlrpc.php" ||
+                    path == "/administrator" || path == "/.git/config" || path == "/aws.yml")
+                {
+                    response.StatusCode = 204;
+                    response.Close();
+                    return;
+                }
 
                 string json;
 
