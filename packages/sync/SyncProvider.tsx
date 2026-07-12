@@ -45,10 +45,27 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       const remote = await pullAllData(user.id);
       
       const local = getAll();
+
+      function fillMissing<T extends Record<string, any>>(remoteItems: T[], localItems: T[]): T[] {
+        if (!remoteItems?.length) return localItems;
+        if (!localItems?.length) return remoteItems;
+        return remoteItems.map(r => {
+          const l = localItems.find(x => x.id === r.id);
+          if (!l) return r;
+          const out = { ...r };
+          for (const key of Object.keys(l)) {
+            if (!(key in r) || r[key] === null || r[key] === undefined) {
+              (out as any)[key] = l[key];
+            }
+          }
+          return out;
+        });
+      }
+
       const merged = {
         ...local,
-        firms: remote.firms?.length ? remote.firms : local.firms,
-        accounts: remote.accounts?.length ? remote.accounts : local.accounts,
+        firms: remote.firms?.length ? fillMissing(remote.firms, local.firms) : local.firms,
+        accounts: remote.accounts?.length ? fillMissing(remote.accounts, local.accounts) : local.accounts,
         payouts: remote.payouts?.length ? remote.payouts : local.payouts,
         trades: remote.trades?.length ? remote.trades : local.trades,
         livePositions: remote.livePositions?.length ? remote.livePositions : local.livePositions,
