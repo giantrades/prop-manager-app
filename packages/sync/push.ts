@@ -76,17 +76,27 @@ export async function pushChanges(localData: any, userId: string) {
     if (error) errors.push(`payouts: ${error.message}`);
   }
 
+  const validAccountIds = new Set((localData.accounts || []).map(a => a.id));
+
   if (localData.trades?.length) {
+    const filtered = localData.trades.map((t: any) => ({
+      ...t,
+      accountId: validAccountIds.has(t.accountId) ? t.accountId : null,
+    }));
     const { error } = await supabase.from('trades').upsert(
-      prepare('trades', localData.trades, userId),
+      prepare('trades', filtered, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`trades: ${error.message}`);
   }
 
   if (localData.livePositions?.length) {
+    const filtered = localData.livePositions.map((p: any) => ({
+      ...p,
+      accountId: validAccountIds.has(p.accountId) ? p.accountId : null,
+    }));
     const { error } = await supabase.from('live_positions').upsert(
-      prepare('live_positions', localData.livePositions, userId),
+      prepare('live_positions', filtered, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`live_positions: ${error.message}`);

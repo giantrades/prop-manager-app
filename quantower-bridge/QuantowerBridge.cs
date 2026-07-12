@@ -225,22 +225,29 @@ namespace QuantowerBridge
         // ── HTTP Server Loop ───────────────────────────────
         private void ServerLoop()
         {
-            FileLog("ServerLoop started");
-            while (!_cts.IsCancellationRequested && _listener.IsListening)
+            while (!_cts.IsCancellationRequested)
             {
+                FileLog("ServerLoop: waiting for requests");
                 try
                 {
-                    var context = _listener.GetContext();
-                    Task.Run(() => HandleRequest(context));
+                    while (!_cts.IsCancellationRequested && _listener.IsListening)
+                    {
+                        var context = _listener.GetContext();
+                        Task.Run(() => HandleRequest(context));
+                    }
+                }
+                catch (HttpListenerException ex) when (ex.ErrorCode == 995)
+                {
+                    FileLog($"ServerLoop: listener closed (995), stopping");
+                    break;
                 }
                 catch (HttpListenerException ex)
                 {
-                    FileLog($"ServerLoop HttpListenerException: {ex.Message} (code={ex.ErrorCode})");
-                    break;
+                    FileLog($"ServerLoop HttpListenerException: {ex.Message} (code={ex.ErrorCode}) — restarting in 2s");
                 }
-                catch (ObjectDisposedException ex)
+                catch (ObjectDisposedException)
                 {
-                    FileLog($"ServerLoop ObjectDisposedException: {ex.Message}");
+                    FileLog("ServerLoop: listener disposed, stopping");
                     break;
                 }
                 catch (Exception ex)
@@ -249,6 +256,9 @@ namespace QuantowerBridge
                     Log(em, StrategyLoggingLevel.Error);
                     FileLog(em);
                 }
+
+                if (!_cts.IsCancellationRequested)
+                    Thread.Sleep(2000);
             }
             FileLog("ServerLoop exited");
         }
@@ -444,49 +454,105 @@ namespace QuantowerBridge
             var tradeList = Core.Instance.GetTrades(reqParams);
             var trades = new List<object>();
 
-            foreach (Trade trade in tradeList)
+            // Group by PositionId, then unify each position into one entry+exit trade
+            var grouped = tradeList
+                .Where(t => !string.IsNullOrEmpty(t.PositionId))
+                .GroupBy(t => t.PositionId);
+
+            foreach (var group in grouped)
             {
+                var entries = group.Where(t => t.Side == Side.Buy).ToList();
+                var exits = group.Where(t => t.Side == Side.Sell).ToList();
+
+                if (entries.Count == 0 && exits.Count == 0) continue;
+
+                Trade firstTrade = group.First();
                 string connName = "";
                 string accountId = "";
                 string accountName = "";
-                string symbol = "";
-                string side = "";
-                string positionId = "";
+                try
+                {
+                    var conn = Core.Instance.Connections.Connected
+                        .FirstOrDefault(c => c.Id == firstTrade.ConnectionId);
+                    connName = conn?.Name ?? "";
+                    accountId = firstTrade.Account?.Id ?? "";
+                    accountName = firstTrade.Account?.Name ?? "";
+                }
+                catch { }
 
+                double totalQty = (double)group.Sum(t => (double)t.Quantity);
+                double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
+                double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
+                double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
+
+                double entryPrice = entries.Count > 0
+                    ? (double)entries.Sum(t => (double)t.Price * (double)t.Quantity) / (double)entries.Sum(t => (double)t.Quantity)
+                    : 0;
+                double exitPrice = exits.Count > 0
+                    ? (double)exits.Sum(t => (double)t.Price * (double)t.Quantity) / (double)exits.Sum(t => (double)t.Quantity)
+                    : 0;
+
+                DateTime entryTime = entries.Count > 0
+                    ? entries.Min(t => t.DateTime)
+                    : group.Min(t => t.DateTime);
+                DateTime exitTime = exits.Count > 0
+                    ? exits.Max(t => t.DateTime)
+                    : entryTime;
+
+                trades.Add(new
+                {
+                    id = group.Key,
+                    symbol = firstTrade.Symbol?.Name ?? "",
+                    side = entries.Count > 0 ? "Long" : "Short",
+                    quantity = totalQty,
+                    entryPrice = Math.Round(entryPrice, 6),
+                    exitPrice = Math.Round(exitPrice, 6),
+                    entryDateTime = entryTime.ToString("O"),
+                    exitDateTime = exitTime.ToString("O"),
+                    grossPnl = Math.Round(grossPnl, 2),
+                    netPnl = Math.Round(netPnl, 2),
+                    fee = Math.Round(totalFee, 2),
+                    positionId = group.Key,
+                    accountId,
+                    accountName,
+                    connectionId = firstTrade.ConnectionId ?? "",
+                    connectionName = connName
+                });
+            }
+
+            // Trades without PositionId (should be rare) — keep as individual fills
+            var ungrouped = tradeList.Where(t => string.IsNullOrEmpty(t.PositionId));
+            foreach (Trade trade in ungrouped)
+            {
+                string connName = "";
+                string accId = "";
+                string accName = "";
                 try
                 {
                     var conn = Core.Instance.Connections.Connected
                         .FirstOrDefault(c => c.Id == trade.ConnectionId);
                     connName = conn?.Name ?? "";
-
-                    symbol = trade.Symbol?.Name ?? "";
-                    side = trade.Side.ToString();
-
-                    if (trade.Account != null)
-                    {
-                        accountId = trade.Account.Id ?? "";
-                        accountName = trade.Account.Name ?? "";
-                    }
-                    
-                    positionId = trade.PositionId ?? "";
+                    accId = trade.Account?.Id ?? "";
+                    accName = trade.Account?.Name ?? "";
                 }
                 catch { }
 
                 trades.Add(new
                 {
                     id = trade.Id,
-                    symbol,
-                    side,
-                    quantity = trade.Quantity,
-                    price = trade.Price,
-                    dateTime = trade.DateTime.ToString("O"),
+                    symbol = trade.Symbol?.Name ?? "",
+                    side = trade.Side.ToString(),
+                    quantity = (double)trade.Quantity,
+                    entryPrice = (double)trade.Price,
+                    exitPrice = (double)0,
+                    entryDateTime = trade.DateTime.ToString("O"),
+                    exitDateTime = "",
                     grossPnl = trade.GrossPnl?.Value ?? 0,
                     netPnl = trade.NetPnl?.Value ?? 0,
                     fee = trade.Fee?.Value ?? 0,
-                    orderId = trade.OrderId ?? "",
-                    positionId = trade.PositionId ?? "",
-                    accountId,
-                    accountName,
+                    positionId = "",
+                    accountId = accId,
+                    accountName = accName,
                     connectionId = trade.ConnectionId ?? "",
                     connectionName = connName
                 });

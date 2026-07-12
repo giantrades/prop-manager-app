@@ -77,14 +77,14 @@ export function usePlatform() {
         tradesToProcess.forEach(trade => {
           const internalAccountId = accountMapping[trade.platformAccountId] || null;
           upsertTradeFromPlatform({
-            entry_datetime: trade.dateTime,
-            exit_datetime: trade.dateTime,
+            entry_datetime: trade.entryDateTime || trade.entry_datetime,
+            exit_datetime: trade.exitDateTime || trade.exit_datetime,
             asset: trade.symbol,
             accountId: internalAccountId,
             direction: trade.side === 'Sell' ? 'Short' : 'Long',
             volume: trade.quantity,
-            entry_price: trade.price,
-            exit_price: trade.price,
+            entry_price: trade.entryPrice ?? trade.entry_price,
+            exit_price: trade.exitPrice ?? trade.exit_price,
             result_net: trade.netPnl,
             result_gross: trade.grossPnl,
             source: data.platformId,
