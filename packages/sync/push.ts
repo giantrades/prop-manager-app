@@ -1,20 +1,23 @@
 import { supabase } from '../supabase/client';
 
 const ALLOWED_COLUMNS: Record<string, string[]> = {
-  firms: ['id', 'user_id', 'name', 'type', 'logo', 'color', 'created_at'],
+  firms: ['id', 'user_id', 'name', 'type', 'logo', 'color', 'created_at', 'date_created'],
   accounts: ['id', 'user_id', 'firm_id', 'name', 'type', 'status', 'initial_funding',
     'current_funding', 'profit_split', 'payout_frequency', 'platform_account_id',
-    'platform_name', 'connection_id', 'connection_name', 'last_platform_sync', 'created_at'],
+    'platform_name', 'connection_id', 'connection_name', 'last_platform_sync',
+    'created_at', 'currency'],
   payouts: ['id', 'user_id', 'account_id', 'account_ids', 'accounts', 'amount_solicited',
     'amount_received', 'fee', 'method', 'status', 'date_created', 'approved_date',
     'split_by_account', 'attachments', '_archived_accounts'],
   trades: ['id', 'user_id', 'account_id', 'entry_datetime', 'exit_datetime', 'asset',
     'direction', 'volume', 'entry_price', 'exit_price', 'result_net', 'result_gross',
     'fee', 'risk', 'notes', 'source', 'platform_trade_id', 'platform_name',
-    'connection_name', 'position_id', 'is_live', 'created_at', 'internal_account_id'],
+    'connection_name', 'position_id', 'is_live', 'created_at', 'internal_account_id', 'strategy_id'],
   live_positions: ['id', 'user_id', 'account_id', 'symbol', 'side', 'quantity',
     'entry_price', 'current_price', 'unrealized_pnl', 'entry_time',
-    'platform_position_id', 'platform_name', 'connection_name'],
+    'platform_position_id', 'platform_name', 'connection_name',
+    'open_price', 'open_time', 'gross_pnl', 'net_pnl', 'fee',
+    'connection_id', 'platform_account_id'],
   strategies: ['id', 'user_id', 'name', 'description', 'rules', 'created_at'],
 };
 
