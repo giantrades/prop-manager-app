@@ -1,5 +1,35 @@
 import { supabase } from '../supabase/client';
 
+const ALLOWED_COLUMNS: Record<string, string[]> = {
+  firms: ['id', 'user_id', 'name', 'type', 'logo', 'color', 'created_at'],
+  accounts: ['id', 'user_id', 'firm_id', 'name', 'type', 'status', 'initial_funding',
+    'current_funding', 'profit_split', 'payout_frequency', 'platform_account_id',
+    'platform_name', 'connection_id', 'connection_name', 'last_platform_sync', 'created_at'],
+  payouts: ['id', 'user_id', 'account_id', 'account_ids', 'accounts', 'amount_solicited',
+    'amount_received', 'fee', 'method', 'status', 'created_at', 'payout_month',
+    'split_by_account', '_archived_accounts'],
+  trades: ['id', 'user_id', 'symbol', 'side', 'quantity', 'price', 'date_time',
+    'gross_pnl', 'net_pnl', 'fee', 'order_id', 'position_id', 'account_id',
+    'account_name', 'connection_id', 'connection_name', 'platform_account_id',
+    'platform_name', 'is_live', 'created_at', 'entry_datetime', 'entry_price',
+    'exit_datetime', 'exit_price', 'result_net', 'result_gross', 'direction',
+    'volume', 'asset', 'source', 'platform_trade_id', 'internal_account_id'],
+  live_positions: ['id', 'user_id', 'symbol', 'side', 'quantity', 'open_price',
+    'current_price', 'open_time', 'gross_pnl', 'net_pnl', 'fee', 'account_id',
+    'connection_id', 'platform_position_id', 'platform_account_id', 'platform_name'],
+  strategies: ['id', 'user_id', 'name', 'description', 'type', 'parameters', 'enabled', 'created_at'],
+};
+
+function pick(obj: any, allowed: string[]): any {
+  const out: any = {};
+  for (const key of Object.keys(obj)) {
+    if (allowed.includes(key)) {
+      out[key] = obj[key];
+    }
+  }
+  return out;
+}
+
 function toSnakeCase(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(toSnakeCase);
@@ -11,12 +41,19 @@ function toSnakeCase(obj: any): any {
   return out;
 }
 
+function prepare(table: string, rows: any[], userId: string): any[] {
+  return rows.map((r: any) => {
+    const snaked = toSnakeCase({ ...r, user_id: userId });
+    return pick(snaked, ALLOWED_COLUMNS[table] || Object.keys(snaked));
+  });
+}
+
 export async function pushChanges(localData: any, userId: string) {
   const errors: string[] = [];
 
   if (localData.firms?.length) {
     const { error } = await supabase.from('firms').upsert(
-      localData.firms.map((f: any) => toSnakeCase({ ...f, user_id: userId })),
+      prepare('firms', localData.firms, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`firms: ${error.message}`);
@@ -24,7 +61,7 @@ export async function pushChanges(localData: any, userId: string) {
 
   if (localData.accounts?.length) {
     const { error } = await supabase.from('accounts').upsert(
-      localData.accounts.map((a: any) => toSnakeCase({ ...a, user_id: userId })),
+      prepare('accounts', localData.accounts, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`accounts: ${error.message}`);
@@ -32,7 +69,7 @@ export async function pushChanges(localData: any, userId: string) {
 
   if (localData.payouts?.length) {
     const { error } = await supabase.from('payouts').upsert(
-      localData.payouts.map((p: any) => toSnakeCase({ ...p, user_id: userId })),
+      prepare('payouts', localData.payouts, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`payouts: ${error.message}`);
@@ -40,7 +77,7 @@ export async function pushChanges(localData: any, userId: string) {
 
   if (localData.trades?.length) {
     const { error } = await supabase.from('trades').upsert(
-      localData.trades.map((t: any) => toSnakeCase({ ...t, user_id: userId })),
+      prepare('trades', localData.trades, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`trades: ${error.message}`);
@@ -48,7 +85,7 @@ export async function pushChanges(localData: any, userId: string) {
 
   if (localData.livePositions?.length) {
     const { error } = await supabase.from('live_positions').upsert(
-      localData.livePositions.map((p: any) => toSnakeCase({ ...p, user_id: userId })),
+      prepare('live_positions', localData.livePositions, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`live_positions: ${error.message}`);
@@ -56,7 +93,7 @@ export async function pushChanges(localData: any, userId: string) {
 
   if (localData.strategies?.length) {
     const { error } = await supabase.from('strategies').upsert(
-      localData.strategies.map((s: any) => toSnakeCase({ ...s, user_id: userId })),
+      prepare('strategies', localData.strategies, userId),
       { onConflict: 'id' }
     );
     if (error) errors.push(`strategies: ${error.message}`);
