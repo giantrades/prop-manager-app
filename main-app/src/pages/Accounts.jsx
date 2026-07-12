@@ -30,7 +30,8 @@ function CustomDropdown({ value, onChange, options, pillColors = {}, showLogos =
   }, [open]);
 
   const current = options.find(o => o.value === value);
-  const pillClass = pillColors[current?.label] || pillColors[value] || 'gray';
+  const pillColor = current?.color || null;
+  const pillClass = pillColor ? '' : (pillColors[current?.label] || pillColors[value] || 'gray');
 
   // Calcular posição do menu com detecção de overflow
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, maxHeight: 320 });
@@ -74,7 +75,10 @@ function CustomDropdown({ value, onChange, options, pillColors = {}, showLogos =
         <div
           className={`pill ${pillClass}`}
           onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-          style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          style={{
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            ...(pillColor ? { background: pillColor + '22', borderColor: pillColor + '66', color: pillColor } : {}),
+          }}
         >
           {showLogos && current?.logo && (
             <img src={current.logo} alt={current.label} style={{ width: 20, height: 20, objectFit: 'contain' }} />
@@ -616,7 +620,8 @@ export default function Accounts() {
                           ...firms.filter(f => f.type === acc.type).map(f => ({
                             label: f.name,
                             value: f.id,
-                            logo: f.logo
+                            logo: f.logo,
+                            color: f.color
                           }))
                         ]}
                         showLogos={true}
@@ -633,7 +638,8 @@ export default function Accounts() {
                           Live: "green",
                           Funded: "blue",
                           Challenge: "yellow",
-                          Standby: "gray"
+                          Standby: "gray",
+                          Demo: "orange"
                         }}
                       />
                     </td>
