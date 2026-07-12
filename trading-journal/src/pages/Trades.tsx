@@ -63,14 +63,23 @@ export default function TradesPage() {
         primaryAccount = accounts.find((acc) => acc.id === primaryAccId);
       }
 
+      const firm = primaryAccount?.firmId
+        ? firms.find(f => f.id === primaryAccount.firmId)
+        : null;
+
       return {
         ...trade,
         accountName: primaryAccount?.name,
         accountType: primaryAccount?.type,
+        account: primaryAccount,
+        accountId: primaryAccount?.id || trade.accountId,
+        firmLogo: firm?.logo || null,
+        firmColor: firm?.color || null,
+        firmName: firm?.name || null,
         strategyName: trade.strategyId ? strategyMap[trade.strategyId] : undefined
       };
     });
-  }, [trades, accounts, strategies]);
+  }, [trades, accounts, strategies, firms]);
 
   // === FILTRAGEM DE TRADES ===
   const filteredTrades = useMemo(() => {

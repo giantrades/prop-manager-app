@@ -86,28 +86,42 @@ export default function JournalProvider({ children }) {
     let mounted = true;
     (async () => {
       try {
-        const { trades: allTrades } = await reloadFromDB();
+        const { trades: journalTrades } = await reloadFromDB();
 
         if (!mounted) return;
 
-        // 🔹 Sincroniza trades com o dataStore (só se realmente mudou)
         try {
-          const { getAll, save } = await import('@apps/lib/dataStore.js');
+          const { getAll } = await import('@apps/lib/dataStore.js');
           const all = await getAll();
+          const dsTrades = all.trades || [];
 
-          if (JSON.stringify(all.trades || []) !== JSON.stringify(allTrades || [])) {
-            console.log('📦 Sincronizando trades com dataStore...');
-            await save({ ...all, trades: allTrades || [] });
-            window.dispatchEvent(new CustomEvent('datastore:change'));
+          // Import platform trades from dataStore → journal-db
+          const platformTrades = dsTrades.filter(t =>
+            t.source && t.source !== 'manual' && t.platformTradeId
+          );
+
+          if (platformTrades.length > 0) {
+            const db = await getDB();
+            const existingIds = new Set((journalTrades || []).map(t => t.id));
+            let added = 0;
+            for (const trade of platformTrades) {
+              if (!existingIds.has(trade.id)) {
+                await db.put('trades', trade);
+                added++;
+              }
+            }
+            if (added > 0) {
+              console.log(`📦 Imported ${added} platform trades into journal`);
+              await reloadFromDB();
+            }
           }
         } catch (err) {
-          console.warn('⚠️ Falha ao sincronizar trades com dataStore:', err);
+          console.warn('⚠️ Journal init sync failed:', err);
         }
 
         if (mounted) setReady(true);
       } catch (error) {
         console.error('Falha ao inicializar JournalProvider:', error);
-        // Em caso de erro, ainda definimos ready para evitar o loop infinito de "carregando"
         if (mounted) setReady(true);
       }
     })();

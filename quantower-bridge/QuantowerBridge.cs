@@ -461,8 +461,9 @@ namespace QuantowerBridge
 
             foreach (var group in grouped)
             {
-                var entries = group.Where(t => t.Side == Side.Buy).ToList();
-                var exits = group.Where(t => t.Side == Side.Sell).ToList();
+                bool isLong = group.First().Side == Side.Buy;
+                var entries = group.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
+                var exits = group.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
 
                 if (entries.Count == 0 && exits.Count == 0) continue;
 
@@ -480,7 +481,7 @@ namespace QuantowerBridge
                 }
                 catch { }
 
-                double totalQty = (double)group.Sum(t => (double)t.Quantity);
+                double totalQty = (double)entries.Sum(t => (double)t.Quantity);
                 double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
                 double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
                 double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
@@ -503,7 +504,7 @@ namespace QuantowerBridge
                 {
                     id = group.Key,
                     symbol = firstTrade.Symbol?.Name ?? "",
-                    side = entries.Count > 0 ? "Long" : "Short",
+                    side = isLong ? "Long" : "Short",
                     quantity = totalQty,
                     entryPrice = Math.Round(entryPrice, 6),
                     exitPrice = Math.Round(exitPrice, 6),
@@ -546,7 +547,7 @@ namespace QuantowerBridge
                     entryPrice = (double)trade.Price,
                     exitPrice = (double)0,
                     entryDateTime = trade.DateTime.ToString("O"),
-                    exitDateTime = "",
+                    exitDateTime = null as string,
                     grossPnl = trade.GrossPnl?.Value ?? 0,
                     netPnl = trade.NetPnl?.Value ?? 0,
                     fee = trade.Fee?.Value ?? 0,

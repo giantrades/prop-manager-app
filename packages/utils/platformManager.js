@@ -184,44 +184,13 @@ class PlatformManager {
       adapter.getPositions(),
     ]);
 
-    // Deduplicate trades by positionId - Quantower returns entry+exit as separate trades
-    const tradesByPosition = new Map();
-    for (const trade of trades) {
-      const key = trade.positionId || trade.platformTradeId;
-      if (!tradesByPosition.has(key)) {
-        tradesByPosition.set(key, []);
-      }
-      tradesByPosition.get(key).push(trade);
-    }
-    
-    // Aggregate: for each position, keep only the trade that represents the closed position (non-zero PnL)
-    const deduplicatedTrades = [];
-    for (const [positionId, positionTrades] of tradesByPosition) {
-      if (positionTrades.length === 1) {
-        deduplicatedTrades.push(positionTrades[0]);
-      } else {
-        const closingTrade = positionTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
-        if (closingTrade) {
-          deduplicatedTrades.push(closingTrade);
-        } else {
-          deduplicatedTrades.push(positionTrades[positionTrades.length - 1]);
-        }
-      }
-    }
-
-    // Filter trades using ledger (same logic as auto-sync)
     const newTrades = [];
-    for (const trade of deduplicatedTrades) {
+    for (const trade of trades) {
       if (trade.platformTradeId) {
-        const ledgerEntry = await getTradeLedgerEntry(trade.platformTradeId);
-        if (!ledgerEntry || ledgerEntry.status === 'imported') {
-          if (!ledgerEntry || ledgerEntry.status !== 'imported') {
-            newTrades.push(trade);
-          }
-        }
-      } else {
-        newTrades.push(trade);
+        const entry = await getTradeLedgerEntry(trade.platformTradeId);
+        if (entry && entry.status !== 'imported') continue;
       }
+      newTrades.push(trade);
     }
 
     // Mark new trades as imported
@@ -420,52 +389,17 @@ class PlatformManager {
 
         try {
           const trades = await adapter.getTrades();
-          
-          // Deduplicate trades by positionId - Quantower returns entry+exit as separate trades
-          const tradesByPosition = new Map();
-          for (const trade of trades) {
-            const key = trade.positionId || trade.platformTradeId;
-            if (!tradesByPosition.has(key)) {
-              tradesByPosition.set(key, []);
-            }
-            tradesByPosition.get(key).push(trade);
-          }
 
-          // Aggregate: for each position, keep only the trade that represents the closed position (non-zero PnL)
-          const deduplicatedTrades = [];
-          for (const [positionId, positionTrades] of tradesByPosition) {
-            if (positionTrades.length === 1) {
-              deduplicatedTrades.push(positionTrades[0]);
-            } else {
-              const closingTrade = positionTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
-              if (closingTrade) {
-                deduplicatedTrades.push(closingTrade);
-              } else {
-                deduplicatedTrades.push(positionTrades[positionTrades.length - 1]);
-              }
-            }
-          }
-
-          // Filter out trades that are already in ledger (imported, deleted, or ignored)
           const newTrades = [];
-          for (const trade of deduplicatedTrades) {
+          for (const trade of trades) {
             if (trade.platformTradeId) {
-              const ledgerEntry = await getTradeLedgerEntry(trade.platformTradeId);
-              if (!ledgerEntry || ledgerEntry.status === 'imported') {
-                // Check if it's already imported - if not, it's new
-                if (!ledgerEntry || ledgerEntry.status !== 'imported') {
-                  newTrades.push(trade);
-                }
-              }
-              // If status is 'deleted' or 'ignored', skip it
-            } else {
-              // No platformTradeId, treat as new
-              newTrades.push(trade);
+              const entry = await getTradeLedgerEntry(trade.platformTradeId);
+              if (entry && entry.status !== 'imported') continue;
             }
+            newTrades.push(trade);
           }
 
           if (newTrades.length > 0) {
-            // Mark new trades as imported in ledger
             for (const trade of newTrades) {
               if (trade.platformTradeId) {
                 await setTradeLedgerEntry(trade.platformTradeId, {
@@ -481,7 +415,7 @@ class PlatformManager {
             this._emit(PLATFORM_EVENTS.SYNCED, {
               platformId: id,
               newTrades,
-              totalTrades: deduplicatedTrades.length, // Use deduplicated count
+              totalTrades: trades.length,
               timestamp: new Date().toISOString(),
             });
           }

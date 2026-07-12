@@ -47,7 +47,10 @@ function useIntegratedData() {
   const [accounts, setAccounts] = useState(() => getAll().accounts || []);
 
   useEffect(() => {
-    setAccounts(getAll().accounts || []);
+    const refresh = () => setAccounts(getAll().accounts || []);
+    refresh();
+    window.addEventListener('datastore:change', refresh);
+    return () => window.removeEventListener('datastore:change', refresh);
   }, []);
 
 

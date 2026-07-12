@@ -69,19 +69,20 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // Import new trades into dataStore - handle both newTrades (auto) and trades (manual)
-      const tradesToProcess = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
+      // Import new trades into dataStore - skip raw entry fills (0 PnL) since bridge groups by position
+      const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
+      const tradesToProcess = rawTrades.filter(t => (t.netPnl ?? 0) !== 0 || (t.grossPnl ?? 0) !== 0);
       if (tradesToProcess.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
 
         tradesToProcess.forEach(trade => {
           const internalAccountId = accountMapping[trade.platformAccountId] || null;
           upsertTradeFromPlatform({
-            entry_datetime: trade.entryDateTime || trade.entry_datetime,
-            exit_datetime: trade.exitDateTime || trade.exit_datetime,
+            entry_datetime: trade.entryDateTime ?? trade.entry_datetime ?? null,
+            exit_datetime: trade.exitDateTime ?? trade.exit_datetime ?? null,
             asset: trade.symbol,
             accountId: internalAccountId,
-            direction: trade.side === 'Sell' ? 'Short' : 'Long',
+            direction: trade.side === 'Sell' || trade.side === 'Short' ? 'Short' : 'Long',
             volume: trade.quantity,
             entry_price: trade.entryPrice ?? trade.entry_price,
             exit_price: trade.exitPrice ?? trade.exit_price,

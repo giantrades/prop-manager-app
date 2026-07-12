@@ -31,13 +31,23 @@ function pick(obj: any, allowed: string[]): any {
   return out;
 }
 
+const TIMESTAMP_FIELDS = new Set([
+  'entry_datetime', 'exit_datetime', 'date_created', 'created_at',
+  'entry_time', 'open_time', 'approved_date', 'last_platform_sync',
+]);
+
 function toSnakeCase(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(toSnakeCase);
   const out: any = {};
   for (const [key, value] of Object.entries(obj)) {
     const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-    out[snakeKey] = toSnakeCase(value);
+    const val = toSnakeCase(value);
+    if (TIMESTAMP_FIELDS.has(snakeKey) && (val === '' || val === null || val === undefined)) {
+      out[snakeKey] = null;
+    } else {
+      out[snakeKey] = val;
+    }
   }
   return out;
 }

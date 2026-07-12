@@ -4,55 +4,29 @@ import { useJournal } from "@apps/journal-state";
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 import { useCurrency } from '@apps/state';
 
-// Platform source mini-logo badge
-const PLATFORM_LOGOS: Record<string, string> = {
-  quantower: 'assets/logos/quantower.png',
-  ctrader:   'assets/logos/ctrader.png',
-  ibkr:      'assets/logos/ibkr.png',
-  csv:       '', 
-};
-
-function PlatformBadge({ source, isLive }: { source?: string; isLive?: boolean }) {
-  if (!source || source === 'manual') return null;
-  const logo = PLATFORM_LOGOS[source];
-
+function FirmBadge({ firmLogo, firmColor, firmName }: { firmLogo?: string | null; firmColor?: string | null; firmName?: string | null }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-      {logo ? (
-        <img 
-          src={(import.meta as any).env.BASE_URL + logo} 
-          title={source}
-          style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }} 
+      {firmLogo ? (
+        <img
+          src={firmLogo}
+          title={firmName || ''}
+          style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3 }}
         />
-      ) : (
+      ) : firmColor ? (
         <span
-          title={source}
+          title={firmName || ''}
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: 16, height: 16, borderRadius: 3,
-            background: '#6b7280', color: '#fff',
+            background: firmColor, color: '#fff',
             fontSize: 9, fontWeight: 700, lineHeight: 1,
             flexShrink: 0,
           }}
         >
-          {source.charAt(0).toUpperCase()}
+          {(firmName || '?').charAt(0).toUpperCase()}
         </span>
-      )}
-      {isLive && (
-        <span
-          title="Live Position"
-          style={{
-            fontSize: 8, fontWeight: 700,
-            color: '#22c55e',
-            padding: '1px 4px', borderRadius: 4,
-            background: 'rgba(34,197,94,0.15)',
-            border: '1px solid rgba(34,197,94,0.3)',
-            animation: 'pulse-badge 1.5s infinite',
-          }}
-        >
-          LIVE
-        </span>
-      )}
+      ) : null}
     </span>
   );
 }
@@ -85,15 +59,20 @@ const fmt = (v: number) => currency === 'USD'
   ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
   : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate);
   // Função para resolver nomes das contas
-  function resolveAccountNames(tradeAccounts?: Array<{ accountId: string; weight?: number }>) {
-    if (!tradeAccounts || tradeAccounts.length === 0) return 'N/A';
-    
-    return tradeAccounts
-      .map(a => {
-        const acc = accounts.find(x => x.id === a.accountId);
-        return acc ? acc.name : a.accountId;
-      })
-      .join(', ');
+  function resolveAccountNames(t) {
+    if (t.accounts && t.accounts.length > 0) {
+      return t.accounts
+        .map(a => {
+          const acc = accounts.find(x => x.id === a.accountId);
+          return acc ? acc.name : a.accountId;
+        })
+        .join(', ');
+    }
+    if (t.accountId) {
+      const acc = accounts.find(x => x.id === t.accountId);
+      return acc ? acc.name : 'N/A';
+    }
+    return 'N/A';
   }
 
   // Filtrar e ordenar trades
@@ -515,8 +494,23 @@ useEffect(() => {
 
         <td data-label="Asset/TF">
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <PlatformBadge source={t.source} isLive={t.isLive} />
+            <FirmBadge firmLogo={t.firmLogo} firmColor={t.firmColor} firmName={t.firmName} />
             {t.asset} <span className="muted">• {t.tf_signal || ''}</span>
+            {t.isLive && (
+              <span
+                title="Live Position"
+                style={{
+                  fontSize: 8, fontWeight: 700,
+                  color: '#22c55e',
+                  padding: '1px 4px', borderRadius: 4,
+                  background: 'rgba(34,197,94,0.15)',
+                  border: '1px solid rgba(34,197,94,0.3)',
+                  animation: 'pulse-badge 1.5s infinite',
+                }}
+              >
+                LIVE
+              </span>
+            )}
           </div>
         </td>
 
@@ -530,7 +524,7 @@ useEffect(() => {
                 {t.accountType}
               </span>
             )}
-            <span style={{ fontSize: 11 }}>{t.accountName || resolveAccountNames(t.accounts)}</span>
+            <span style={{ fontSize: 11 }}>{t.accountName || resolveAccountNames(t)}</span>
           </div>
         </td>
 
@@ -606,9 +600,9 @@ useEffect(() => {
 <td data-label="PNL" className="font-medium">
   {(() => {
     const partials = t.PartialExecutions || [];
-    // Soma do R de todas as execuções
-    const totalR = partials.reduce((acc, p) => acc + (Number(p.result_R) || 0), 0);
-    // Soma do gross para calcular média (se quiser manter)
+    const totalR = partials.length > 0
+      ? partials.reduce((acc, p) => acc + (Number(p.result_R) || 0), 0)
+      : (Number(t.result_R) || 0);
     const avgGross = partials.length > 0
       ? partials.reduce((acc, p) => acc + (Number(p.result_gross) || 0), 0) / partials.length
       : 0;
@@ -616,18 +610,16 @@ useEffect(() => {
     const pnl = fmt(Number(t.result_net || 0));
     const pnlClass = Number(t.result_net || 0) >= 0 ? 'pos' : 'neg';
     const rClass = totalR >= 0 ? 'pos' : 'neg';
+    const hasR = totalR !== 0 || (partials.length === 0 && t.result_R);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {/* PnL */}
         <span className={pnlClass}>{pnl}</span>
-
-        {/* R baseado apenas em PartialExecutions */}
-        <span className={`${rClass}`} style={{ fontSize: 10, opacity: 0.9 }}>
-          ({totalR.toFixed(2)} R)
-        </span>
-
-        {/* Se houver mais de 1 execução, mostrar Avg */}
+        {hasR && (
+          <span className={`${rClass}`} style={{ fontSize: 10, opacity: 0.9 }}>
+            ({totalR.toFixed(2)} R)
+          </span>
+        )}
         {partials.length > 1 && (
           <span className="muted text-xs ml-1" style={{ fontSize: 10, opacity: 0.8 }}>
             (Avg {fmt(avgGross)})

@@ -62,13 +62,14 @@ export type Trade = {
 };
 
 export interface EnrichedTrade extends Trade {
-  // Campos enriquecidos adicionados em TradesPage.tsx
-  accountType?: string; // Adicionado do primaryAccount?.type
-  accountName?: string; // Adicionado do primaryAccount?.name
-  account?: any; // O objeto Account completo
-  accountId?: string; // O ID da conta principal (opcional, mas útil)
+  accountType?: string;
+  accountName?: string;
+  account?: any;
+  accountId?: string;
+  firmLogo?: string;
+  firmColor?: string;
+  firmName?: string;
   strategyName?: string;
-  
 }
 
 export interface PartialExecution {
