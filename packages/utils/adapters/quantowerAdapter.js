@@ -46,7 +46,6 @@ export class QuantowerAdapter extends BaseAdapter {
       const res = await fetch(url.toString(), {
         signal: controller.signal,
         headers: { Accept: 'application/json' },
-        targetAddressSpace: 'private',
       });
 
       if (!res.ok) {
