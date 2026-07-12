@@ -1117,7 +1117,6 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const data = load();
   const platformAccountId = platformAccount.platformAccountId;
   
-  // Find existing account by platformAccountId + platformName
   let existingIdx = data.accounts.findIndex(a => 
     a.platformName === 'quantower' && a.platformAccountId === platformAccountId
   );
@@ -1125,16 +1124,15 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const now = new Date().toISOString();
   const balance = Number(platformAccount.balance) || 0;
 
-  // Determine account type from connection name or default to Futures
   let accountType = 'Futures';
-  const connName = (connectionName || '').toLowerCase();
-  if (connName.includes('forex') || connName.includes('fx')) accountType = 'Forex';
-  else if (connName.includes('crypto') || connName.includes('bitcoin') || connName.includes('binance') || connName.includes('bybit')) accountType = 'Cripto';
-  else if (connName.includes('personal') || connName.includes('demo')) accountType = 'Personal';
+  if (firmId) {
+    const firm = data.firms.find(f => f.id === firmId);
+    if (firm) accountType = firm.type;
+  }
 
   const accountData = {
     name: platformAccount.name || platformAccountId,
-    type: accountType, // inferred from connection name
+    type: accountType,
     status: 'Live',
     initialFunding: balance,
     currentFunding: balance,
@@ -1148,18 +1146,17 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
     platformName: 'quantower',
     lastPlatformSync: now,
     firmId: firmId || null,
+    dateCreated: now.split('T')[0],
   };
 
   let internalAccountId;
   if (existingIdx !== -1) {
-    // Update existing - preserve user-set type/firm if they changed it
     const existing = data.accounts[existingIdx];
     data.accounts[existingIdx] = { ...existing, ...accountData };
     internalAccountId = data.accounts[existingIdx].id;
   } else {
-    // Create new
     internalAccountId = uuid();
-    data.accounts.push({ id: internalAccountId, dateCreated: now.split('T')[0], ...accountData });
+    data.accounts.push({ id: internalAccountId, ...accountData });
   }
 
   // Update account mapping

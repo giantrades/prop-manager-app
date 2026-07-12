@@ -5,7 +5,7 @@ const ALLOWED_COLUMNS: Record<string, string[]> = {
   accounts: ['id', 'user_id', 'firm_id', 'name', 'type', 'status', 'initial_funding',
     'current_funding', 'profit_split', 'payout_frequency', 'platform_account_id',
     'platform_name', 'connection_id', 'connection_name', 'last_platform_sync',
-    'created_at', 'currency'],
+    'created_at', 'currency', 'date_created'],
   payouts: ['id', 'user_id', 'account_id', 'account_ids', 'accounts', 'amount_solicited',
     'amount_received', 'fee', 'method', 'status', 'date_created', 'approved_date',
     'split_by_account', 'attachments', '_archived_accounts'],
