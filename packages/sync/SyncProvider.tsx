@@ -47,12 +47,12 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       const local = getAll();
       const merged = {
         ...local,
-        firms: remote.firms,
-        accounts: remote.accounts,
-        payouts: remote.payouts,
-        trades: remote.trades,
-        livePositions: remote.livePositions,
-        strategies: remote.strategies,
+        firms: remote.firms?.length ? remote.firms : local.firms,
+        accounts: remote.accounts?.length ? remote.accounts : local.accounts,
+        payouts: remote.payouts?.length ? remote.payouts : local.payouts,
+        trades: remote.trades?.length ? remote.trades : local.trades,
+        livePositions: remote.livePositions?.length ? remote.livePositions : local.livePositions,
+        strategies: remote.strategies?.length ? remote.strategies : local.strategies,
         settings: { ...local.settings, ...remote.settings },
       };
       
