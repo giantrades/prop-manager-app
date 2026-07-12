@@ -1,6 +1,6 @@
 import { supabase } from '../supabase/client';
 
-function toCamelCase(obj: any): any {
+export function toCamelCase(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(toCamelCase);
   const out: any = {};
