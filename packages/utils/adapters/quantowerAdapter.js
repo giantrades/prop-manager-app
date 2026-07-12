@@ -1,21 +1,13 @@
-/**
- * QuantowerAdapter — Connects to the QuantowerBridge C# plugin
- * running inside Quantower desktop via HTTP on localhost.
- * 
- * The bridge exposes: /status, /accounts, /trades, /positions, /orders
- * This adapter normalizes all data into the common platform format.
- */
-
 import { BaseAdapter } from './baseAdapter.js';
 
-const DEFAULT_BRIDGE_URL = 'http://localhost:8787';
+const FALLBACK_URLS = [
+  'http://localhost:8787',
+  'http://100.80.100.89:8787',
+];
 const FETCH_TIMEOUT_MS = 5000;
+const RETRY_DELAYS = [5000, 10000, 30000, 60000];
 
 export class QuantowerAdapter extends BaseAdapter {
-  /**
-   * @param {Object} [options]
-   * @param {string} [options.bridgeUrl] - Override the bridge URL
-   */
   constructor(options = {}) {
     super({
       id: 'quantower',
@@ -23,53 +15,84 @@ export class QuantowerAdapter extends BaseAdapter {
       logoUrl: '/assets/logos/quantower-mini.svg',
     });
 
-    this.bridgeUrl = options.bridgeUrl || DEFAULT_BRIDGE_URL;
+    this.bridgeUrl = options.bridgeUrl || FALLBACK_URLS[0];
+    this._retryCount = 0;
+    this._retryTimer = null;
+    this._lastWorkingUrl = null;
   }
 
-  // ── Internal fetch with timeout + error handling ─────
+  _getUrls(endpoint) {
+    const primary = new URL(endpoint, this.bridgeUrl).toString();
+    const seen = new Set([primary]);
+    const urls = [primary];
+    for (const base of FALLBACK_URLS) {
+      const u = new URL(endpoint, base).toString();
+      if (!seen.has(u)) {
+        seen.add(u);
+        urls.push(u);
+      }
+    }
+    return urls;
+  }
 
-  /**
-   * @param {string} endpoint - e.g. '/status'
-   * @param {Object} [params] - query params
-   * @returns {Promise<Object>}
-   */
-  async _fetch(endpoint, params = {}) {
-    const url = new URL(endpoint, this.bridgeUrl);
-    Object.entries(params).forEach(([k, v]) => {
-      if (v != null) url.searchParams.set(k, v);
-    });
-
-    const controller = new AbortController();
+  async _fetchSingle(url, controller) {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     try {
-      const res = await fetch(url.toString(), {
+      const res = await fetch(url, {
         signal: controller.signal,
         headers: { Accept: 'application/json' },
       });
-
-      if (!res.ok) {
-        throw new Error(`Bridge returned ${res.status}: ${res.statusText}`);
-      }
-
+      if (!res.ok) throw new Error(`Bridge returned ${res.status}: ${res.statusText}`);
       return await res.json();
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        throw new Error('Bridge timeout — is Quantower running?');
-      }
-      // Network error = bridge is not reachable
-      if (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('Failed')) {
-        throw new Error('Bridge offline — start Quantower and run the BridgeStrategy');
-      }
-      throw err;
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  // ── Public API (implements BaseAdapter interface) ────
+  async _fetch(endpoint, params = {}) {
+    const urls = this._getUrls(endpoint);
+    const qs = Object.entries(params)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join('&');
 
-  /** @returns {Promise<import('./baseAdapter.js').PlatformStatus>} */
+    let lastErr;
+
+    for (const url of urls) {
+      const fullUrl = qs ? `${url}${url.includes('?') ? '&' : '?'}${qs}` : url;
+      const controller = new AbortController();
+      try {
+        const data = await this._fetchSingle(fullUrl, controller);
+        if (url !== this.bridgeUrl) this._lastWorkingUrl = url;
+        this._retryCount = 0;
+        this._cancelRetry();
+        return data;
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'AbortError') break;
+      }
+    }
+
+    this._scheduleRetry();
+    throw lastErr || new Error('Bridge offline');
+  }
+
+  _scheduleRetry() {
+    this._cancelRetry();
+    const delay = RETRY_DELAYS[Math.min(this._retryCount, RETRY_DELAYS.length - 1)];
+    this._retryCount++;
+    this._retryTimer = setTimeout(() => {
+      this.getStatus().catch(() => {});
+    }, delay);
+  }
+
+  _cancelRetry() {
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
+  }
+
   async getStatus() {
     try {
       const data = await this._fetch('/status');
@@ -101,102 +124,75 @@ export class QuantowerAdapter extends BaseAdapter {
     }
   }
 
-  /** @returns {Promise<import('./baseAdapter.js').PlatformAccount[]>} */
   async getAccounts() {
-    try {
-      const data = await this._fetch('/accounts');
-      this._markSynced();
-      return (data.accounts || []).map(acc => ({
-        platformAccountId: acc.id,
-        name: acc.name,
-        balance: acc.balance ?? 0,
-        currency: acc.currency || 'USD',
-        connectionId: acc.connectionId || '',
-        connectionName: acc.connectionName || '',
-      }));
-    } catch (err) {
-      this._markError(err);
-      throw err;
-    }
+    const data = await this._fetch('/accounts');
+    this._markSynced();
+    return (data.accounts || []).map(acc => ({
+      platformAccountId: acc.id,
+      name: acc.name,
+      balance: acc.balance ?? 0,
+      currency: acc.currency || 'USD',
+      connectionId: acc.connectionId || '',
+      connectionName: acc.connectionName || '',
+    }));
   }
 
-  /**
-   * @param {string} [from] - ISO date
-   * @param {string} [to]   - ISO date
-   * @returns {Promise<import('./baseAdapter.js').PlatformTrade[]>}
-   */
   async getTrades(from, to) {
-    try {
-      const params = {};
-      if (from) params.from = from;
-      if (to) params.to = to;
-      const data = await this._fetch('/trades', params);
-      this._markSynced();
-      return (data.trades || []).map(t => ({
-        platformTradeId: `qt_${t.id}`,
-        symbol: t.symbol || '',
-        side: t.side || '',
-        quantity: t.quantity ?? 0,
-        price: t.price ?? 0,
-        dateTime: t.dateTime || '',
-        grossPnl: t.grossPnl ?? 0,
-        netPnl: t.netPnl ?? 0,
-        fee: t.fee ?? 0,
-        orderId: t.orderId || '',
-        positionId: t.positionId || '',
-        platformAccountId: t.accountId || '',
-        accountName: t.accountName || '',
-        connectionId: t.connectionId || '',
-        connectionName: t.connectionName || '',
-      }));
-    } catch (err) {
-      this._markError(err);
-      throw err;
-    }
+    const params = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    const data = await this._fetch('/trades', params);
+    this._markSynced();
+    return (data.trades || []).map(t => ({
+      platformTradeId: `qt_${t.id}`,
+      symbol: t.symbol || '',
+      side: t.side || '',
+      quantity: t.quantity ?? 0,
+      price: t.price ?? 0,
+      dateTime: t.dateTime || '',
+      grossPnl: t.grossPnl ?? 0,
+      netPnl: t.netPnl ?? 0,
+      fee: t.fee ?? 0,
+      orderId: t.orderId || '',
+      positionId: t.positionId || '',
+      platformAccountId: t.accountId || '',
+      accountName: t.accountName || '',
+      connectionId: t.connectionId || '',
+      connectionName: t.connectionName || '',
+    }));
   }
 
-  /**
-   * Fetch ALL trades without date filter (for initial backfill)
-   * @returns {Promise<import('./baseAdapter.js').PlatformTrade[]>}
-   */
   async getAllTrades() {
     return this.getTrades(undefined, undefined);
   }
 
-  /** @returns {Promise<import('./baseAdapter.js').PlatformPosition[]>} */
   async getPositions() {
-    try {
-      const data = await this._fetch('/positions');
-      this._markSynced();
-      return (data.positions || []).map(p => ({
-        platformPositionId: `qt_pos_${p.id}`,
-        symbol: p.symbol || '',
-        side: p.side || '',
-        quantity: p.quantity ?? 0,
-        openPrice: p.openPrice ?? 0,
-        currentPrice: p.currentPrice ?? 0,
-        openTime: p.openTime || '',
-        grossPnl: p.grossPnl ?? 0,
-        netPnl: p.netPnl ?? 0,
-        fee: p.fee ?? 0,
-        platformAccountId: p.accountId || '',
-        accountName: p.accountName || '',
-        connectionId: p.connectionId || '',
-        connectionName: p.connectionName || '',
-        isLive: true,
-      }));
-    } catch (err) {
-      this._markError(err);
-      throw err;
-    }
+    const data = await this._fetch('/positions');
+    this._markSynced();
+    return (data.positions || []).map(p => ({
+      platformPositionId: `qt_pos_${p.id}`,
+      symbol: p.symbol || '',
+      side: p.side || '',
+      quantity: p.quantity ?? 0,
+      openPrice: p.openPrice ?? 0,
+      currentPrice: p.currentPrice ?? 0,
+      openTime: p.openTime || '',
+      grossPnl: p.grossPnl ?? 0,
+      netPnl: p.netPnl ?? 0,
+      fee: p.fee ?? 0,
+      platformAccountId: p.accountId || '',
+      accountName: p.accountName || '',
+      connectionId: p.connectionId || '',
+      connectionName: p.connectionName || '',
+      isLive: true,
+    }));
   }
 
-  /**
-   * Configure the bridge URL
-   * @param {string} url
-   */
   setBridgeUrl(url) {
-    this.bridgeUrl = url || DEFAULT_BRIDGE_URL;
+    this.bridgeUrl = url || FALLBACK_URLS[0];
+    this._cancelRetry();
+    this._retryCount = 0;
+    this.getStatus().catch(() => {});
   }
 }
 
