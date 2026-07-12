@@ -8,7 +8,7 @@
 //   1. Compile this file into a DLL (Quantower Algo / Visual Studio)
 //   2. Copy the DLL to Quantower's Strategies folder
 //   3. Start the strategy from Strategies Manager
-//   4. Your webapp connects to http://localhost:8787
+//   4. Your webapp connects to http://localhost:8787 (or external via Tailscale)
 //
 // ENDPOINTS:
 //   GET /status     → connection status + version
@@ -20,7 +20,8 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Metrics;
+using System.IO;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -51,6 +52,8 @@ namespace QuantowerBridge
         private CancellationTokenSource _cts;
         private Thread _serverThread;
 
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health" };
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             WriteIndented = false,
@@ -68,28 +71,122 @@ namespace QuantowerBridge
         {
             try
             {
+                FileLog("OnRun() called");
                 _cts = new CancellationTokenSource();
                 _listener = new HttpListener();
 
-                string prefix = AllowExternal
-                    ? $"http://+:{Port}/"
-                    : $"http://localhost:{Port}/";
+                bool started = false;
 
-                _listener.Prefixes.Add(prefix);
-                _listener.Start();
+                if (AllowExternal)
+                {
+                    TryReserveUrlAcl(Port);
 
-                Log($"✅ QuantowerBridge started on port {Port}", StrategyLoggingLevel.Trading);
+                    started = TryStartListener($"http://*:{Port}/");
+                    
+                    if (!started)
+                        started = TryStartListener($"http://+:{Port}/");
+                    
+                    if (!started)
+                    {
+                        Log($"⚠️ External access failed, falling back to localhost only", StrategyLoggingLevel.Trading);
+                        started = TryStartListener($"http://localhost:{Port}/");
+                    }
+                }
+                else
+                {
+                    started = TryStartListener($"http://localhost:{Port}/");
+                }
+
+                if (!started)
+                {
+                    Log($"❌ Failed to start HTTP listener on any prefix", StrategyLoggingLevel.Error);
+                    return;
+                }
+
+                string msg = $"✅ QuantowerBridge started on port {Port} (External: {AllowExternal})";
+                Log(msg, StrategyLoggingLevel.Trading);
+                FileLog(msg);
 
                 _serverThread = new Thread(ServerLoop)
                 {
-                    IsBackground = true,
+                    IsBackground = false,
                     Name = "QuantowerBridge-HTTP"
                 };
                 _serverThread.Start();
+
+                // Block OnRun until server stops (prevents strategy from auto-stopping)
+                _serverThread.Join();
             }
             catch (Exception ex)
             {
-                Log($"❌ Failed to start bridge: {ex.Message}", StrategyLoggingLevel.Error);
+                string em = $"❌ Failed to start bridge: {ex}";
+                Log(em, StrategyLoggingLevel.Error);
+                FileLog(em);
+            }
+        }
+
+        private bool TryStartListener(string prefix)
+        {
+            try
+            {
+                _listener.Prefixes.Clear();
+                _listener.Prefixes.Add(prefix);
+                _listener.Start();
+                Log($"🌐 Listening on: {prefix}", StrategyLoggingLevel.Trading);
+                return true;
+            }
+            catch (HttpListenerException ex) when (ex.ErrorCode == 5 || ex.ErrorCode == 183)
+            {
+                // Access denied (5) or already exists (183) - try next prefix
+                Log($"⚠️ Cannot bind {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Log($"⚠️ Error starting {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
+                return false;
+            }
+        }
+
+        private void TryReserveUrlAcl(int port)
+        {
+            try
+            {
+                // Check if already reserved
+                var check = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "netsh.exe",
+                    Arguments = $"http show urlacl url=http://+:{port}/",
+                    Verb = "runas",
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+                check?.WaitForExit(2000);
+
+                if (check?.ExitCode != 0)
+                {
+                    // Reserve URL ACL for Everyone (allows non-admin to bind)
+                    var reserve = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "netsh.exe",
+                        Arguments = $"http add urlacl url=http://+:{port}/ user=Everyone",
+                        Verb = "runas",
+                        UseShellExecute = true,
+                        CreateNoWindow = true,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    });
+                    reserve?.WaitForExit(3000);
+                    
+                    if (reserve?.ExitCode == 0)
+                        Log($"🔐 URL ACL reserved for port {port}", StrategyLoggingLevel.Trading);
+                    else
+                        Log($"⚠️ Could not reserve URL ACL (run Quantower as Admin for external access)", StrategyLoggingLevel.Trading);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"⚠️ URL ACL reservation failed: {ex.Message}", StrategyLoggingLevel.Trading);
             }
         }
 
@@ -100,31 +197,47 @@ namespace QuantowerBridge
                 _cts?.Cancel();
                 _listener?.Stop();
                 _listener?.Close();
-                Log("🛑 QuantowerBridge stopped", StrategyLoggingLevel.Trading);
+                string m = "🛑 QuantowerBridge stopped";
+                Log(m, StrategyLoggingLevel.Trading);
+                FileLog(m);
             }
             catch { }
         }
 
-        protected override void OnInitializeMetrics(Meter meter)
+        // ── File Logging (survives even if Quantower log fails) ──
+        private static string _logPath;
+        private static readonly object _logLock = new();
+        private static string LogPath
         {
-            base.OnInitializeMetrics(meter);
-
-            meter.CreateObservableGauge(
-                name: "Bridge Status",
-                observeValue: () => _listener?.IsListening == true ? 1 : 0,
-                description: "1 = 🟢 Online, 0 = 🔴 Offline"
-            );
-
-            meter.CreateObservableGauge(
-                name: "Port",
-                observeValue: () => Port,
-                description: "HTTP Port do bridge"
-            );
+            get
+            {
+                if (_logPath == null)
+                {
+                    try
+                    {
+                        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuantowerBridge");
+                        Directory.CreateDirectory(dir);
+                        _logPath = Path.Combine(dir, $"bridge_{DateTime.Now:yyyyMMdd}.log");
+                    }
+                    catch { _logPath = ""; }
+                }
+                return _logPath;
+            }
+        }
+        private static void FileLog(string message)
+        {
+            try
+            {
+                string line = $"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}";
+                lock (_logLock) { File.AppendAllText(LogPath, line); }
+            }
+            catch { }
         }
 
         // ── HTTP Server Loop ───────────────────────────────
         private void ServerLoop()
         {
+            FileLog("ServerLoop started");
             while (!_cts.IsCancellationRequested && _listener.IsListening)
             {
                 try
@@ -132,34 +245,54 @@ namespace QuantowerBridge
                     var context = _listener.GetContext();
                     Task.Run(() => HandleRequest(context));
                 }
-                catch (HttpListenerException) { break; }
-                catch (ObjectDisposedException) { break; }
+                catch (HttpListenerException ex)
+                {
+                    FileLog($"ServerLoop HttpListenerException: {ex.Message} (code={ex.ErrorCode})");
+                    break;
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    FileLog($"ServerLoop ObjectDisposedException: {ex.Message}");
+                    break;
+                }
                 catch (Exception ex)
                 {
-                    Log($"⚠️ Request error: {ex.Message}", StrategyLoggingLevel.Error);
+                    string em = $"⚠️ ServerLoop error: {ex}";
+                    Log(em, StrategyLoggingLevel.Error);
+                    FileLog(em);
                 }
             }
+            FileLog("ServerLoop exited");
         }
 
         private void HandleRequest(HttpListenerContext context)
         {
+            var request = context.Request;
             var response = context.Response;
 
             try
             {
-                response.Headers.Add("Access-Control-Allow-Origin", "*");
-                response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
-                response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                // ALWAYS set CORS headers first - before any other logic
+                SetCorsHeaders(response);
+
                 response.ContentType = "application/json; charset=utf-8";
 
-                if (context.Request.HttpMethod == "OPTIONS")
+                if (request.HttpMethod == "OPTIONS")
                 {
                     response.StatusCode = 204;
                     response.Close();
                     return;
                 }
 
-                string path = context.Request.Url.AbsolutePath.ToLower().TrimEnd('/');
+                string path = request.Url?.AbsolutePath?.ToLower().TrimEnd('/') ?? "";
+                
+                // Normalize path - handle cases where funnel might add prefix
+                if (path.StartsWith("/status")) path = "/status";
+                else if (path.StartsWith("/accounts")) path = "/accounts";
+                else if (path.StartsWith("/trades")) path = "/trades";
+                else if (path.StartsWith("/positions")) path = "/positions";
+                else if (path.StartsWith("/orders")) path = "/orders";
+
                 string json;
 
                 switch (path)
@@ -171,7 +304,7 @@ namespace QuantowerBridge
                         json = BuildAccountsJson();
                         break;
                     case "/trades":
-                        json = BuildTradesJson(context.Request.QueryString);
+                        json = BuildTradesJson(request.QueryString);
                         break;
                     case "/positions":
                         json = BuildPositionsJson();
@@ -179,9 +312,13 @@ namespace QuantowerBridge
                     case "/orders":
                         json = BuildOrdersJson();
                         break;
+                    case "/health":
+                        json = JsonSerializer.Serialize(new { status = "ok", timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
+                        break;
                     default:
-                        json = JsonSerializer.Serialize(new { error = "Unknown endpoint", endpoints = new[] { "/status", "/accounts", "/trades", "/positions", "/orders" } }, JsonOptions);
+                        Log($"⚠️ 404 Not Found: {path}", StrategyLoggingLevel.Trading);
                         response.StatusCode = 404;
+                        json = JsonSerializer.Serialize(new { error = "Unknown endpoint", endpoints = EndpointsList }, JsonOptions);
                         break;
                 }
 
@@ -191,11 +328,16 @@ namespace QuantowerBridge
             }
             catch (Exception ex)
             {
+                string em = $"❌ Request handling error: {ex}";
+                Log(em, StrategyLoggingLevel.Error);
+                FileLog(em);
                 try
                 {
-                    byte[] err = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions));
+                    SetCorsHeaders(response);
                     response.StatusCode = 500;
+                    byte[] err = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions));
                     response.ContentLength64 = err.Length;
+                    response.ContentType = "application/json; charset=utf-8";
                     response.OutputStream.Write(err, 0, err.Length);
                 }
                 catch { }
@@ -204,6 +346,15 @@ namespace QuantowerBridge
             {
                 try { response.Close(); } catch { }
             }
+        }
+
+        private static void SetCorsHeaders(HttpListenerResponse response)
+        {
+            response.Headers.Add("Access-Control-Allow-Origin", "*");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            response.Headers.Add("Access-Control-Max-Age", "86400");
+            response.Headers.Add("Access-Control-Allow-Private-Network", "true");
         }
 
         // ── JSON Builders (using System.Text.Json) ───────────
@@ -274,84 +425,84 @@ namespace QuantowerBridge
             DateTime? fromDate = null;
             DateTime? toDate = null;
 
-    if (!string.IsNullOrEmpty(query["from"]))
-    {
-        if (DateTime.TryParse(query["from"], out DateTime f))
-            fromDate = f;
-    }
-
-    if (!string.IsNullOrEmpty(query["to"]))
-    {
-        if (DateTime.TryParse(query["to"], out DateTime t))
-            toDate = t;
-    }
-
-    var reqParams = new TradesHistoryRequestParameters
-    {
-        From = fromDate ?? DateTime.UtcNow.AddYears(-10),
-        To = toDate ?? DateTime.UtcNow
-    };
-
-    var tradeList = Core.Instance.GetTrades(reqParams);
-    var trades = new List<object>();
-
-    foreach (Trade trade in tradeList)
-    {
-        string connName = "";
-        string accountId = "";
-        string accountName = "";
-        string symbol = "";
-        string side = "";
-        string positionId = "";  // ← DECLARE HERE before try block
-
-        try
-        {
-            var conn = Core.Instance.Connections.Connected
-                .FirstOrDefault(c => c.Id == trade.ConnectionId);
-            connName = conn?.Name ?? "";
-
-            symbol = trade.Symbol?.Name ?? "";
-            side = trade.Side.ToString();
-
-            if (trade.Account != null)
+            if (!string.IsNullOrEmpty(query["from"]))
             {
-                accountId = trade.Account.Id ?? "";
-                accountName = trade.Account.Name ?? "";
+                if (DateTime.TryParse(query["from"], out DateTime f))
+                    fromDate = f;
             }
-            
-            positionId = trade.PositionId ?? "";  // ← ASSIGN HERE (optional, since we use trade.PositionId below)
+
+            if (!string.IsNullOrEmpty(query["to"]))
+            {
+                if (DateTime.TryParse(query["to"], out DateTime t))
+                    toDate = t;
+            }
+
+            var reqParams = new TradesHistoryRequestParameters
+            {
+                From = fromDate ?? DateTime.UtcNow.AddYears(-10),
+                To = toDate ?? DateTime.UtcNow
+            };
+
+            var tradeList = Core.Instance.GetTrades(reqParams);
+            var trades = new List<object>();
+
+            foreach (Trade trade in tradeList)
+            {
+                string connName = "";
+                string accountId = "";
+                string accountName = "";
+                string symbol = "";
+                string side = "";
+                string positionId = "";
+
+                try
+                {
+                    var conn = Core.Instance.Connections.Connected
+                        .FirstOrDefault(c => c.Id == trade.ConnectionId);
+                    connName = conn?.Name ?? "";
+
+                    symbol = trade.Symbol?.Name ?? "";
+                    side = trade.Side.ToString();
+
+                    if (trade.Account != null)
+                    {
+                        accountId = trade.Account.Id ?? "";
+                        accountName = trade.Account.Name ?? "";
+                    }
+                    
+                    positionId = trade.PositionId ?? "";
+                }
+                catch { }
+
+                trades.Add(new
+                {
+                    id = trade.Id,
+                    symbol,
+                    side,
+                    quantity = trade.Quantity,
+                    price = trade.Price,
+                    dateTime = trade.DateTime.ToString("O"),
+                    grossPnl = trade.GrossPnl?.Value ?? 0,
+                    netPnl = trade.NetPnl?.Value ?? 0,
+                    fee = trade.Fee?.Value ?? 0,
+                    orderId = trade.OrderId ?? "",
+                    positionId = trade.PositionId ?? "",
+                    accountId,
+                    accountName,
+                    connectionId = trade.ConnectionId ?? "",
+                    connectionName = connName
+                });
+            }
+
+            var result = new
+            {
+                trades,
+                count = trades.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            };
+
+            return JsonSerializer.Serialize(result, JsonOptions);
         }
-        catch { }
-
-        trades.Add(new
-        {
-            id = trade.Id,
-            symbol,
-            side,
-            quantity = trade.Quantity,
-            price = trade.Price,
-            dateTime = trade.DateTime.ToString("O"),
-            grossPnl = trade.GrossPnl?.Value ?? 0,
-            netPnl = trade.NetPnl?.Value ?? 0,
-            fee = trade.Fee?.Value ?? 0,
-            orderId = trade.OrderId ?? "",
-            positionId = trade.PositionId ?? "",  // ← Uses trade.PositionId directly
-            accountId,
-            accountName,
-            connectionId = trade.ConnectionId ?? "",
-            connectionName = connName
-        });
-    }
-
-    var result = new
-    {
-        trades,
-        count = trades.Count,
-        timestamp = DateTime.UtcNow.ToString("O")
-    };
-
-    return JsonSerializer.Serialize(result, JsonOptions);
-}
 
         private static string BuildPositionsJson()
         {
