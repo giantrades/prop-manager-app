@@ -118,7 +118,7 @@ export default function TradesPage() {
 
   const filteredStats = useMemo(() => {
     const total = filteredTrades.length;
-    const wins = filteredTrades.filter((t) => (t.result_R || 0) > 0).length;
+    const wins = filteredTrades.filter((t) => (t.result_net || 0) > 0).length;
     const winrate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0';
     const totalPnL = filteredTrades.reduce((sum, t) => sum + (t.result_net || 0), 0);
     const avgR = total > 0 ? filteredTrades.reduce((sum, t) => sum + (t.result_R || 0), 0) / total : 0;
