@@ -189,8 +189,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
           const isShort = pos.side === 'Short' || pos.side === 'Sell';
 
           const badgeBg = pos.firmColor || (pos.platformId ? '#6366f1' : '#888');
-          const badgeLetter = pos.firmLogo?.[0]
-            || (pos.firmName && pos.firmName.charAt(0).toUpperCase())
+          const badgeLetter = (pos.firmName && pos.firmName.charAt(0).toUpperCase())
             || PLATFORM_LETTERS[pos.platformId]
             || (pos.accountName && pos.accountName.charAt(0).toUpperCase())
             || '?';
@@ -213,15 +212,22 @@ export default function LivePositions({ positions = [], compact: initialCompact 
             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
             >
-              {/* Firm badge */}
-              <span style={{
-                width: compact ? 18 : 20, height: compact ? 18 : 20, borderRadius: 4,
-                background: badgeBg, color: '#fff',
-                fontSize: compact ? 9 : 10, fontWeight: 700,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {badgeLetter}
-              </span>
+              {/* Firm badge — logo image or colored letter fallback */}
+              {pos.firmLogo ? (
+                <img src={pos.firmLogo} alt="" style={{
+                  width: compact ? 18 : 20, height: compact ? 18 : 20, borderRadius: 4,
+                  objectFit: 'cover', display: 'block',
+                }} />
+              ) : (
+                <span style={{
+                  width: compact ? 18 : 20, height: compact ? 18 : 20, borderRadius: 4,
+                  background: badgeBg, color: '#fff',
+                  fontSize: compact ? 9 : 10, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {badgeLetter}
+                </span>
+              )}
 
               {/* Symbol + Side */}
               <div>
@@ -229,7 +235,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
                   {pos.symbol}
                 </div>
                 <div style={{
-                  fontSize: compact ? 9 : 10, fontWeight: 600,
+                  fontSize: compact ? 10 : 11, fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap',
                 }}>
                   <span style={{ color: isShort ? '#ef4444' : '#22c55e' }}>
@@ -239,7 +245,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
                   {!compact && pos.accountName && (
                     <>
                       <span style={{ color: 'var(--muted)', opacity: 0.4 }}>·</span>
-                      <span style={{ color: 'var(--muted)' }}>{pos.accountName}</span>
+                      <span style={{ color: 'var(--muted)' }}>Account: {pos.accountName}</span>
                     </>
                   )}
                 </div>
