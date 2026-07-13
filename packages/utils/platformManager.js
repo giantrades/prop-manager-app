@@ -180,9 +180,10 @@ class PlatformManager {
     if (!adapter) throw new Error(`Unknown platform: ${platformId}`);
 
     const from = this._lastSyncTime.get(platformId);
+    const fromParam = from || new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
     const [accounts, trades, positions] = await Promise.all([
       adapter.getAccounts(),
-      adapter.getTrades(from),
+      adapter.getTrades(fromParam, undefined),
       adapter.getPositions(),
     ]);
 
@@ -190,18 +191,19 @@ class PlatformManager {
     for (const trade of trades) {
       if (trade.platformTradeId) {
         const entry = await getTradeLedgerEntry(trade.platformTradeId);
-        if (entry) continue;
+        if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
       }
       newTrades.push(trade);
     }
 
     for (const trade of newTrades) {
       if (trade.platformTradeId) {
+        const existingEntry = await getTradeLedgerEntry(trade.platformTradeId);
         await setTradeLedgerEntry(trade.platformTradeId, {
           status: 'imported',
           platformAccountId: trade.platformAccountId,
           internalAccountId: trade.internalAccountId || null,
-          firstSeenAt: new Date().toISOString(),
+          firstSeenAt: existingEntry?.firstSeenAt || new Date().toISOString(),
           lastSeenAt: new Date().toISOString(),
         });
       }

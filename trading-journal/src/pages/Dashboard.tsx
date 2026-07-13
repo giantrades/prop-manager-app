@@ -1659,8 +1659,11 @@ export default function Dashboard() {
     }
 
     // ✅ Filtro adicional: conta selecionada OU status filtrado
-    const allowedIds = filteredAccounts.map(a => a.id);
-    out = out.filter((t) => allowedIds.includes(t.accountId));
+    // Só filtra quando existem contas; trades sem accountId (ex: bridge sem mapeamento) passam
+    if (filteredAccounts.length > 0) {
+      const allowedIds = new Set(filteredAccounts.map(a => a.id));
+      out = out.filter((t) => !t.accountId || allowedIds.has(t.accountId));
+    }
 
     return out;
   }, [

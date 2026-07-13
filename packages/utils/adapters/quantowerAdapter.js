@@ -141,6 +141,7 @@ export class QuantowerAdapter extends BaseAdapter {
     const params = {};
     if (from) params.from = from;
     if (to) params.to = to;
+    if (!from && !to) params.from = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
     const data = await this._fetch('/trades', params);
     this._markSynced();
     return (data.trades || []).map(t => ({

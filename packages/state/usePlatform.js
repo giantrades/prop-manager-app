@@ -17,6 +17,7 @@ import {
   getPlatformSettings,
   setPlatformSettings,
   upsertTradeFromPlatform,
+  upsertQuantowerAccount,
   updateLivePositions,
   closeLivePosition,
   getLivePositions,
@@ -105,6 +106,14 @@ export function usePlatform() {
         window.dispatchEvent(new CustomEvent('datastore:change', {
           detail: { source: 'platform-sync', platformId: data.platformId }
         }));
+      }
+
+      // Persist accounts from sync into dataStore
+      const platformAccounts = data.accounts || [];
+      if (platformAccounts.length > 0) {
+        for (const acc of platformAccounts) {
+          upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
+        }
       }
     }));
 
