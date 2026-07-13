@@ -1544,7 +1544,7 @@ export default function Dashboard() {
   // Usar dados integrados ou fallback para mock
   const integratedData = useIntegratedData();
   const journal = useJournal();
-  const { livePositions } = usePlatform();
+  const { livePositions, closePosition } = usePlatform();
   const strategies = journal?.strategies || [];
 
   // Se não tem dados reais, usar mock
@@ -1745,7 +1745,7 @@ export default function Dashboard() {
       {/* Live Positions Widget — only shown when positions exist */}
       {livePositions.length > 0 && (
         <div className="card" style={{ marginBottom: 4 }}>
-          <LivePositions positions={livePositions} />
+          <LivePositions positions={livePositions} onClosePosition={closePosition} />
         </div>
       )}
 

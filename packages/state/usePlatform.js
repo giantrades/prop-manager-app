@@ -132,17 +132,25 @@ export function usePlatform() {
 
     unsubs.push(pm.on(PLATFORM_EVENTS.POSITION_UPDATED, (data) => {
       const accountMapping = getAccountMapping(data.platformId);
-      const enriched = data.positions.map(p => ({
-        ...p,
-        internalAccountId: accountMapping[p.platformAccountId] || null,
-      }));
-      // Filter: only keep positions from mapped accounts (accounts in the app with a firm)
+      const storeData = getAll();
+      const enriched = data.positions.map(p => {
+        const internalAccountId = accountMapping[p.platformAccountId] || null;
+        const account = internalAccountId ? storeData.accounts.find(a => a.id === internalAccountId) : null;
+        const firm = account?.firmId ? storeData.firms.find(f => f.id === account.firmId) : null;
+        return {
+          ...p,
+          internalAccountId,
+          firmName: firm?.name || '',
+          firmColor: firm?.color || '#6366f1',
+          firmLogo: firm?.logo || null,
+          accountName: account?.name || p.accountName || '',
+        };
+      });
       const mappedPositions = enriched.filter(p => p.internalAccountId != null);
       setLivePositions(prev => {
         const others = prev.filter(p => p.platformId !== data.platformId);
         return [...others, ...mappedPositions.map(p => ({ ...p, platformId: data.platformId }))];
       });
-      // Persist to dataStore (only mapped positions)
       updateLivePositions(mappedPositions.map(p => ({ ...p, platformId: data.platformId })));
       setLiveCount(mappedPositions.length);
     }));
@@ -231,6 +239,22 @@ export function usePlatform() {
     dsSetAccountMapping(platformId, platformAccountId, internalAccountId);
   }, []);
 
+  const closePosition = useCallback((position) => {
+    if (!position || !position.internalAccountId) return;
+    closeLivePosition(position.platformPositionId, {
+      exitPrice: position.currentPrice,
+      exitTime: new Date().toISOString(),
+      netPnl: position.netPnl,
+      grossPnl: position.grossPnl,
+      fee: position.fee,
+    });
+    recalcAccountFunding(position.internalAccountId);
+    window.dispatchEvent(new CustomEvent('datastore:change', {
+      detail: { source: 'manual-close', platformId: position.platformId }
+    }));
+    setLivePositions(prev => prev.filter(p => p.platformPositionId !== position.platformPositionId));
+  }, []);
+
   // Count live positions across all platforms
   useEffect(() => {
     const total = livePositions.length;
@@ -249,6 +273,7 @@ export function usePlatform() {
     testConnection,
     refreshStatuses,
     updateAccountMapping,
+    closePosition,
     getPlatformManager: () => pmRef.current,
   };
 }
