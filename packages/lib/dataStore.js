@@ -1068,7 +1068,7 @@ export function closeLivePosition(platformPositionId, exitData = {}) {
     entry_datetime: entryTime,
     exit_datetime: exitData.exitTime || new Date().toISOString(),
     asset: pos.symbol,
-    accountId: pos.internalAccountId || null,
+    accountId: pos.internalAccountId || (pos.platformAccountId ? getAccountMapping(pos.platformId)?.[pos.platformAccountId] : null) || null,
     direction: pos.side === 'Short' ? 'Short' : 'Long',
     volume: pos.quantity,
     entry_price: entryPrice,
