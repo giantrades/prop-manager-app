@@ -100,18 +100,6 @@ export async function pushChanges(localData: any, userId: string) {
     if (error) errors.push(`trades: ${error.message}`);
   }
 
-  if (localData.livePositions?.length) {
-    const filtered = localData.livePositions.map((p: any) => ({
-      ...p,
-      accountId: validAccountIds.has(p.accountId) ? p.accountId : null,
-    }));
-    const { error } = await supabase.from('live_positions').upsert(
-      prepare('live_positions', filtered, userId),
-      { onConflict: 'id' }
-    );
-    if (error) errors.push(`live_positions: ${error.message}`);
-  }
-
   if (localData.strategies?.length) {
     const { error } = await supabase.from('strategies').upsert(
       prepare('strategies', localData.strategies, userId),

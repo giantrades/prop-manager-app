@@ -68,7 +68,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         accounts: remote.accounts?.length ? fillMissing(remote.accounts, local.accounts) : local.accounts,
         payouts: remote.payouts?.length ? remote.payouts : local.payouts,
         trades: remote.trades?.length ? remote.trades : local.trades,
-        livePositions: remote.livePositions?.length ? remote.livePositions : local.livePositions,
+        livePositions: local.livePositions,
         strategies: remote.strategies?.length ? remote.strategies : local.strategies,
         settings: { ...local.settings, ...remote.settings },
       };
@@ -92,8 +92,6 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       const { data, error } = await supabase.from('live_positions').select('*').eq('user_id', user.id);
       if (error) throw error;
       if (data && data.length > 0) {
-        const local = getAll();
-        save({ ...local, livePositions: toCamelCase(data) });
         window.dispatchEvent(new CustomEvent('sync:livePositions', { detail: data }));
       }
     } catch (e) {
@@ -135,11 +133,6 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     
     // Dedicated realtime for live_positions
     livePositionsRealtimeUnsub.current = subscribeToLivePositions(user.id, (position) => {
-      const local = getAll();
-      const current = local.livePositions || [];
-      const idx = current.findIndex((p: any) => p.id === position.id);
-      const updated = idx >= 0 ? [...current.slice(0, idx), position, ...current.slice(idx + 1)] : [...current, position];
-      save({ ...local, livePositions: updated });
       window.dispatchEvent(new CustomEvent('sync:livePositions', { detail: [position] }));
     });
   }, [user, pull]);
