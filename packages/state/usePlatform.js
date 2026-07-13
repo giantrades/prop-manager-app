@@ -18,10 +18,13 @@ import {
   setPlatformSettings,
   upsertTradeFromPlatform,
   upsertQuantowerAccount,
+  updateAccount,
   updateLivePositions,
   closeLivePosition,
   getLivePositions,
   getAccountMapping,
+  getConnectionFirmMap,
+  getAccountFirmOverride,
   setAccountMapping as dsSetAccountMapping,
   recalcAccountFunding,
   getAll,
@@ -163,7 +166,24 @@ export function usePlatform() {
       const enriched = data.positions.map(p => {
         const internalAccountId = accountMapping[p.platformAccountId] || null;
         const account = internalAccountId ? storeData.accounts.find(a => a.id === internalAccountId) : null;
-        const firm = account?.firmId ? storeData.firms.find(f => f.id === account.firmId) : null;
+
+        // Resolve firm: account.firmId → accountFirmOverride → connectionFirmMap
+        let firm = account?.firmId ? storeData.firms.find(f => f.id === account.firmId) : null;
+        if (!firm && account) {
+          const overrideFirmId = getAccountFirmOverride()[account.id];
+          if (overrideFirmId) {
+            firm = storeData.firms.find(f => f.id === overrideFirmId) || null;
+            if (firm) updateAccount(account.id, { firmId: overrideFirmId });
+          }
+        }
+        if (!firm && account && p.connectionId) {
+          const connFirmId = getConnectionFirmMap()[p.connectionId];
+          if (connFirmId) {
+            firm = storeData.firms.find(f => f.id === connFirmId) || null;
+            if (firm) updateAccount(account.id, { firmId: connFirmId });
+          }
+        }
+
         return {
           ...p,
           internalAccountId,
