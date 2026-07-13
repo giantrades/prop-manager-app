@@ -15,7 +15,6 @@ import {
 } from "recharts";
 
 function getRealR(trade: any) {
-  // usa partialExecutions ou result_net / risk
   if (trade.partialExecutions?.length > 0) {
     const totalPnL = trade.partialExecutions.reduce((sum, p) => sum + (Number(p.net) || 0), 0);
     const risk = Number(trade.risk) || 0;
@@ -24,7 +23,8 @@ function getRealR(trade: any) {
   if (trade.result_net && trade.risk) {
     return trade.result_net / trade.risk;
   }
-  return Number(trade.result_R) || 0;
+  if (typeof trade.result_R === "number" && !isNaN(trade.result_R)) return trade.result_R;
+  return 0;
 }
 
 /* Helpers */
@@ -183,12 +183,12 @@ const ScatterTooltip = ({ active, payload }: any) => {
       }}>
         <span style={{ color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Result (R)</span>
         <span style={{
-          color: d.result_R >= 0 ? "#4ade80" : "#f87171",
+          color: (d.result_R || d.netPnL || 0) >= 0 ? "#4ade80" : "#f87171",
           fontWeight: 700,
           fontSize: 15,
           whiteSpace: "nowrap"
         }}>
-          {d.result_R >= 0 ? "+" : ""}{limit(d.result_R, 2)}
+          {(d.result_R || 0) >= 0 ? "+" : ""}{limit(d.result_R || 0, 2)}
         </span>
       </div>
     </div>
@@ -247,17 +247,16 @@ export default function DurationAnalysis({ trades = [] }: { trades: any[] }) {
 
     // --- FASTEST WIN (corrigido) ---
     const winDurations = parsed
-      .filter((p: any) => getRealR(p) > 0)
+      .filter((p: any) => safeNumber(p.result_net) > 0)
       .map((p: any) => p.duration)
       .filter((d: any) => Number.isFinite(d) && d >= 0)
       .sort((a: number, b: number) => a - b);
 
     const fastestWin = winDurations.length ? winDurations[0] : null;
 
-    // --- SWEET SPOT: bucket mais comum entre WINS (se preferir entre todas, mude para durationsAll) ---
+    // --- SWEET SPOT: bucket mais comum entre WINS ---
     const counts: Record<string, number> = {};
-    // usar wins para sweet spot:
-    const sourceForSweet = parsed.filter((p: any) => getRealR(p) > 0);
+    const sourceForSweet = parsed.filter((p: any) => safeNumber(p.result_net) > 0);
     // se quiser sweet entre todas as trades, use: const sourceForSweet = parsed;
     sourceForSweet.forEach((p: any) => {
       const b = bucketLabel(p.duration || 0);
@@ -282,7 +281,7 @@ export default function DurationAnalysis({ trades = [] }: { trades: any[] }) {
       const b = p.bucket || bucketLabel(p.duration || 0);
       if (!map[b]) map[b] = { bucket: b, wins: 0, losses: 0, total: 0 };
       map[b].total++;
-      if (getRealR(p) > 0) map[b].wins++;
+      if (safeNumber(p.result_net) > 0) map[b].wins++;
       else map[b].losses++;
     });
 
@@ -295,10 +294,11 @@ export default function DurationAnalysis({ trades = [] }: { trades: any[] }) {
 
   const scatter = useMemo(() => {
     return parsed
-      .filter((p: any) => Number.isFinite(p.duration) && p.duration >= 0 && typeof p.result_R === "number")
+      .filter((p: any) => Number.isFinite(p.duration) && p.duration >= 0)
       .map((p: any) => ({
         duration: p.duration,
         result_R: getRealR(p),
+        netPnL: safeNumber(p.result_net),
         asset: p.asset,
         strategyName: p.strategyName || p.strategyId || p.strategy || null,
       }));
@@ -555,7 +555,7 @@ export default function DurationAnalysis({ trades = [] }: { trades: any[] }) {
                 {scatter.map((entry: any, idx: number) => (
                   <Cell
                     key={`c-${idx}`}
-                    fill={entry.result_R >= 0 ? scatterWin : scatterLoss}
+                    fill={(entry.result_R || entry.netPnL || 0) >= 0 ? scatterWin : scatterLoss}
                     opacity={0.7}
                   />
                 ))}

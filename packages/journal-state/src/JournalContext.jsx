@@ -321,8 +321,7 @@ export default function JournalProvider({ children }) {
 
     // 🔹 Remove trade também do dataStore e marca no ledger
     try {
-      const ds = await import('@apps/lib/dataStore.js');
-      const { getAll, save, markTradeDeleted } = ds.default || ds;
+      const { getAll, save, markTradeDeleted } = await import('@apps/lib/dataStore.js');
       const all = await getAll();
       const remainingTrades = (all.trades || []).filter(t => t.id !== tradeId);
       await save({ ...all, trades: remainingTrades });

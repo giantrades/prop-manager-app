@@ -181,20 +181,16 @@ function getTotalR(trade) {
 function calcBasicStats(trades: any[]) {
   const total = trades.length;
 
-  // ✅ Winrate usando soma correta de R (PartialExecutions)
-  const wins = trades.filter(t => getTotalR(t) > 0).length;
+  // Win/loss by PnL (result_net is always set; result_R may be missing for platform trades)
+  const wins = trades.filter(t => safeNumber(t.result_net) > 0).length;
   const losses = total - wins;
   const winrate = total ? wins / total : 0;
 
-  // ✅ Vetor de R consolidado (sempre vindo das partials)
   const R_values = trades.map(t => getTotalR(t));
-
-  // ✅ Média de R
   const avgR = total ? R_values.reduce((s, r) => s + r, 0) / total : 0;
 
-  // ✅ Trades com R positivo e negativo
-  const winningTrades = trades.filter(t => getTotalR(t) > 0);
-  const losingTrades = trades.filter(t => getTotalR(t) <= 0);
+  const winningTrades = trades.filter(t => safeNumber(t.result_net) > 0);
+  const losingTrades = trades.filter(t => safeNumber(t.result_net) <= 0);
 
   const avgWinR = winningTrades.length
     ? winningTrades.reduce((s, t) => s + getTotalR(t), 0) / winningTrades.length
@@ -204,13 +200,10 @@ function calcBasicStats(trades: any[]) {
     ? losingTrades.reduce((s, t) => s + getTotalR(t), 0) / losingTrades.length
     : 0;
 
-  // ✅ Expected R (EV)
   const expectedR = (winrate * avgWinR) + ((1 - winrate) * avgLossR);
 
-  // ✅ PnL continua igual (já está correto)
   const pnl = trades.reduce((s, t) => s + safeNumber(t.result_net), 0);
 
-  // ✅ Profit Factor (mantido como antes)
   const profitFactor = (() => {
     const profits = trades.filter(t => safeNumber(t.result_net) > 0).reduce((s, t) => s + t.result_net, 0);
     const losses = Math.abs(trades.filter(t => safeNumber(t.result_net) < 0).reduce((s, t) => s + t.result_net, 0));
@@ -218,7 +211,6 @@ function calcBasicStats(trades: any[]) {
     return profits / losses;
   })();
 
-  // ✅ Sharpe, skew, kurtosis mantidos (com result_net)
   const returns = trades.map(t => (safeNumber(t.result_net) / 10000));
   const mean = returns.reduce((s, r) => s + r, 0) / (returns.length || 1);
   const variance = returns.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / (returns.length || 1);
@@ -231,7 +223,6 @@ function calcBasicStats(trades: any[]) {
   const skew = m2 === 0 ? 0 : m3 / Math.pow(m2, 1.5);
   const kurt = m2 === 0 ? 0 : m4 / (m2 * m2) - 3;
 
-  // ✅ Risk of Ruin com R correto
   const RoR = (() => {
     const p = winrate;
     const q = 1 - p;
@@ -305,7 +296,7 @@ function pnlByCategory(trades: any[]) {
     map[cat] = map[cat] || { pnl: 0, count: 0, wins: 0 };
     map[cat].pnl += safeNumber(t.result_net);
     map[cat].count += 1;
-    if (safeNumber(t.result_R) > 0) map[cat].wins += 1;
+    if (safeNumber(t.result_net) > 0) map[cat].wins += 1;
   });
   return Object.entries(map).map(([name, v]) => ({
     name,
@@ -1058,7 +1049,7 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
   // Aplica os filtros da Dashboard
   const filteredTrades = React.useMemo(() => {
     if (!trades?.length) return [];
-    return trades.filter(t => t && (t.result_R !== undefined) && !isNaN(Number(t.result_R)));
+    return trades.filter(t => t && getTotalR(t) != null);
   }, [trades]);
 
   // 🔥 Bins dinâmicos: usa regra de Sturges para calcular número ideal
