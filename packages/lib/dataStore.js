@@ -1060,8 +1060,7 @@ export function closeLivePosition(platformPositionId, exitData = {}) {
   data.livePositions.splice(posIdx, 1);
 
   // Handle both old (entryPrice/entryTime) and new (openPrice/openTime) field names
-  // Use nullish coalescing (??) to properly handle empty strings
-  const entryTime = pos.openTime ?? pos.entryTime;
+  const entryTime = pos.openTime || pos.entryTime;
   const entryPrice = pos.openPrice ?? pos.entryPrice;
 
   // Create or update trade from the closed position
