@@ -165,6 +165,7 @@ export function usePlatform() {
 
       closeLivePosition(data.position.platformPositionId, {
         exitPrice: data.position.currentPrice,
+        exitTime: new Date().toISOString(),
         netPnl: data.position.netPnl,
         grossPnl: data.position.grossPnl,
         fee: data.position.fee,
