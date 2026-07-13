@@ -74,8 +74,8 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       };
       
       save(merged);
-      const pulledTotal = remote.firms.length + remote.accounts.length + remote.payouts.length + remote.trades.length + remote.livePositions.length + remote.strategies.length;
-      if (pulledTotal > 0) console.log(`✅ Sync: pulled ${remote.firms.length} firms, ${remote.accounts.length} accounts, ${remote.payouts.length} payouts, ${remote.trades.length} trades, ${remote.livePositions.length} live positions, ${remote.strategies.length} strategies`);
+      const pulledTotal = remote.firms.length + remote.accounts.length + remote.payouts.length + remote.trades.length + remote.strategies.length;
+      if (pulledTotal > 0) console.log(`✅ Sync: pulled ${remote.firms.length} firms, ${remote.accounts.length} accounts, ${remote.payouts.length} payouts, ${remote.trades.length} trades, ${remote.strategies.length} strategies (live positions from bridge: ${local.livePositions.length})`);
       window.dispatchEvent(new CustomEvent('sync:pulled', { detail: remote }));
       setLastSync(new Date());
     } catch (e) {
