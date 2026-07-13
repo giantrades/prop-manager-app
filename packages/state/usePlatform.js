@@ -70,9 +70,9 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // Import new trades into dataStore - skip raw entry fills (0 PnL) since bridge groups by position
+      // Import new trades into dataStore - bridge groups by PositionId, each item is a complete trade
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
-      const tradesToProcess = rawTrades.filter(t => (t.netPnl ?? 0) !== 0 || (t.grossPnl ?? 0) !== 0);
+      const tradesToProcess = rawTrades;
       if (tradesToProcess.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
 

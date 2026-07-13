@@ -73,10 +73,8 @@ export default function JournalProvider({ children }) {
         return s;
       });
 
-      // Strip zero-PnL platform trades (entry fills) at source — affects ALL components
-      const filtered = (allTrades || []).filter(t =>
-        !(t.source && t.source !== 'manual' && (t.result_net ?? 0) === 0 && (t.result_gross ?? 0) === 0)
-      );
+      // Load all trades from IndexedDB (no zero-PnL filter)
+      const filtered = allTrades || [];
       setTrades(filtered);
       setStrategies(normalized);
       return { trades: filtered, strategies: normalized };
@@ -183,9 +181,7 @@ export default function JournalProvider({ children }) {
 
         if (added > 0) {
           console.log(`🔗 Journal: ${added} platform trades imported`);
-          const allTrades = (await db.getAll('trades') || []).filter(t =>
-            !(t.source && t.source !== 'manual' && (t.result_net ?? 0) === 0 && (t.result_gross ?? 0) === 0)
-          );
+          const allTrades = (await db.getAll('trades') || []);
           setTrades(allTrades);
         }
       } catch (err) {
@@ -335,6 +331,15 @@ export default function JournalProvider({ children }) {
       console.warn("⚠️ Falha ao remover trade do dataStore:", err);
     }
 
+// 🔹 Deleta do Supabase se for trade sincronizado
+    try {
+      const { supabase } = await import('@apps/supabase/client');
+      if (trade.id) {
+        await supabase.from('trades').delete().eq('id', trade.id);
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao deletar trade do Supabase:', e);
+    }
     // 🔹 Reverte impacto do PnL nas contas
     if (Array.isArray(trade.accounts)) {
       try {

@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getTradeLedger } from '@apps/lib/dataStore';
 
 export function toCamelCase(obj: any): any {
   if (!obj || typeof obj !== 'object') return obj;
@@ -22,11 +23,15 @@ export async function pullAllData(userId: string) {
     supabase.from('profiles').select('settings').eq('id', userId).single(),
   ]);
 
+  // Get ledger to filter out deleted trades
+  const ledger = await getTradeLedger();
+  const deletedTradeIds = new Set(ledger.filter(e => e.status === 'deleted').map(e => e.platformTradeId));
+
   return {
     firms: toCamelCase(firms.data || []),
     accounts: toCamelCase(accounts.data || []),
     payouts: toCamelCase(payouts.data || []),
-    trades: toCamelCase(trades.data || []),
+    trades: toCamelCase((trades.data || []).filter(t => !deletedTradeIds.has(t.platformTradeId))),
     livePositions: toCamelCase(livePositions.data || []),
     strategies: toCamelCase(strategies.data || []),
     settings: profile.data?.settings || {},

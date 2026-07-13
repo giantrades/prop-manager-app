@@ -115,7 +115,7 @@ function useIntegratedData() {
     trades: enrichedTrades,
     accounts,
     availableCategories,
-    hasRealData: enrichedTrades.length > 0 && accounts.length > 0
+    hasRealData: enrichedTrades.length > 0
   };
 }
 
@@ -1660,7 +1660,7 @@ export default function Dashboard() {
 
     // ✅ Filtro adicional: conta selecionada OU status filtrado
     // Só filtra quando existem contas; trades sem accountId (ex: bridge sem mapeamento) passam
-    if (filteredAccounts.length > 0) {
+    if (selectedAccountIds.length > 0) {
       const allowedIds = new Set(filteredAccounts.map(a => a.id));
       out = out.filter((t) => !t.accountId || allowedIds.has(t.accountId));
     }
@@ -1674,6 +1674,7 @@ export default function Dashboard() {
     rangeFilter,
     dateFilter,
     filteredAccounts,
+    selectedAccountIds,
   ]);
 
 
