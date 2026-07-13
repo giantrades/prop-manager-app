@@ -75,11 +75,15 @@ function useIntegratedData() {
   // Enriquecer trades com informações das contas
   const enrichedTrades = useMemo(() => {
     return trades.map(trade => {
-      // Tentar encontrar a conta associada
+      // Tentar encontrar a conta associada (igual ao TradesPage)
       let account = null;
 
       if (trade.accountId) {
         account = accountsById.get(trade.accountId);
+      } else if (trade.accounts && trade.accounts.length > 0) {
+        const primaryAccId = trade.accounts
+          .sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]?.accountId;
+        account = accountsById.get(primaryAccId);
       } else if (trade.accountName) {
         account = accountsByName.get(trade.accountName);
       } else if (trade.account) {
@@ -91,7 +95,8 @@ function useIntegratedData() {
         // Se encontrou conta, usar o tipo dela; senão, usar categoria do trade ou fallback
         accountType: account?.type || trade.marketCategory || trade.category || 'Unknown',
         accountName: account?.name || trade.accountName || trade.account || 'Unknown Account',
-        account: account
+        account: account,
+        accountId: account?.id || trade.accountId
       };
     });
   }, [trades, accountsById, accountsByName]);
@@ -1659,10 +1664,18 @@ export default function Dashboard() {
     }
 
     // ✅ Filtro adicional: conta selecionada OU status filtrado
-    // Só filtra quando existem contas; trades sem accountId (ex: bridge sem mapeamento) passam
+    // Só filtra quando usuário escolhe contas no AccountPicker
     if (selectedAccountIds.length > 0) {
       const allowedIds = new Set(filteredAccounts.map(a => a.id));
-      out = out.filter((t) => !t.accountId || allowedIds.has(t.accountId));
+      const allowedNames = new Set(
+        accounts.filter(a => selectedAccountIds.includes(a.id)).map(a => a.name)
+      );
+      out = out.filter((t) => {
+        if (t.accountId && allowedIds.has(t.accountId)) return true;
+        if (t.accounts && t.accounts.some((acc: any) => allowedIds.has(acc.accountId))) return true;
+        if (t.accountName && allowedNames.has(t.accountName)) return true;
+        return false;
+      });
     }
 
     return out;
@@ -1675,6 +1688,7 @@ export default function Dashboard() {
     dateFilter,
     filteredAccounts,
     selectedAccountIds,
+    accounts,
   ]);
 
 
