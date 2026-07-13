@@ -171,23 +171,26 @@ export class QuantowerAdapter extends BaseAdapter {
   async getPositions() {
     const data = await this._fetch('/positions');
     this._markSynced();
-    return (data.positions || []).map(p => ({
-      platformPositionId: `qt_pos_${p.id}`,
-      symbol: p.symbol || '',
-      side: p.side || '',
-      quantity: p.quantity ?? 0,
-      entryPrice: p.openPrice ?? 0,
-      currentPrice: p.currentPrice ?? 0,
-      entryTime: p.openTime || '',
-      grossPnl: p.grossPnl ?? 0,
-      netPnl: p.netPnl ?? 0,
-      fee: p.fee ?? 0,
-      platformAccountId: p.accountId || '',
-      accountName: p.accountName || '',
-      connectionId: p.connectionId || '',
-      connectionName: p.connectionName || '',
-      isLive: true,
-    }));
+    return (data.positions || []).map(p => {
+      const side = p.side?.toLowerCase() === 'long' ? 'Long' : 'Short';
+      return {
+        platformPositionId: `qt_pos_${p.id}`,
+        symbol: p.symbol || '',
+        side,
+        quantity: p.quantity ?? 0,
+        entryPrice: p.openPrice ?? 0,
+        currentPrice: p.currentPrice ?? 0,
+        entryTime: p.openTime || '',
+        grossPnl: p.grossPnl ?? 0,
+        netPnl: p.netPnl ?? 0,
+        fee: p.fee ?? 0,
+        platformAccountId: p.accountId || '',
+        accountName: p.accountName || '',
+        connectionId: p.connectionId || '',
+        connectionName: p.connectionName || '',
+        isLive: true,
+      };
+    });
   }
 
   setBridgeUrl(url) {
