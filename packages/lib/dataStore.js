@@ -1116,10 +1116,19 @@ export function setAccountMapping(platformId, platformAccountId, internalAccount
 export function upsertQuantowerAccount(platformAccount, firmId, connectionId, connectionName) {
   const data = load();
   const platformAccountId = platformAccount.platformAccountId;
+  const platformAccountName = platformAccount.name || platformAccountId;
   
+  // First try exact platform match
   let existingIdx = data.accounts.findIndex(a => 
     a.platformName === 'quantower' && a.platformAccountId === platformAccountId
   );
+
+  // Fallback: match by name if platform fields missing (user created account manually)
+  if (existingIdx === -1) {
+    existingIdx = data.accounts.findIndex(a => 
+      (!a.platformName || !a.platformAccountId) && a.name === platformAccountName
+    );
+  }
 
   const now = new Date().toISOString();
   const balance = Number(platformAccount.balance) || 0;
@@ -1131,7 +1140,7 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   }
 
   const accountData = {
-    name: platformAccount.name || platformAccountId,
+    name: platformAccountName,
     type: accountType,
     status: 'Live',
     initialFunding: balance,

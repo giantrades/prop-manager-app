@@ -77,12 +77,6 @@ const fmt = (v: number) => currency === 'USD'
 
   // Filtrar e ordenar trades
   const filtered = useMemo(() => {
-    // Skip zero-PnL platform trades (entry fills, not complete trades)
-    let list = trades.filter(t =>
-      t.source && t.source !== 'manual'
-        ? (t.result_net ?? 0) !== 0 || (t.result_gross ?? 0) !== 0
-        : true
-    );
     const lower = query.toLowerCase();
     if (query) {
       list = list.filter(t =>

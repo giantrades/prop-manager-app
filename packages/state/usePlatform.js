@@ -70,7 +70,38 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // Import new trades into dataStore - bridge groups by PositionId, each item is a complete trade
+      // 1) FIRST: Persist accounts from sync into dataStore (creates mapping)
+      const platformAccounts = data.accounts || [];
+      if (platformAccounts.length > 0) {
+        for (const acc of platformAccounts) {
+          upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
+        }
+      }
+
+      // 1b) BACKFILL: Fix existing trades with accountId: null that now have a mapping
+      const accountMapping = getAccountMapping(data.platformId);
+      const hasNewMapping = Object.keys(accountMapping).length > 0;
+      if (hasNewMapping) {
+        const { getAll, save } = require('@apps/lib/dataStore');
+        const all = getAll();
+        let updated = false;
+        if (all.trades?.length) {
+          all.trades.forEach(t => {
+            if (!t.accountId && t.platformAccountId && accountMapping[t.platformAccountId]) {
+              t.accountId = accountMapping[t.platformAccountId];
+              updated = true;
+            }
+          });
+          if (updated) {
+            save(all);
+            window.dispatchEvent(new CustomEvent('datastore:change', {
+              detail: { source: 'account-backfill', platformId: data.platformId }
+            }));
+          }
+        }
+      }
+
+      // 2) THEN: Import new trades using the now-available account mapping
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
       const tradesToProcess = rawTrades;
       if (tradesToProcess.length > 0) {
@@ -106,14 +137,6 @@ export function usePlatform() {
         window.dispatchEvent(new CustomEvent('datastore:change', {
           detail: { source: 'platform-sync', platformId: data.platformId }
         }));
-      }
-
-      // Persist accounts from sync into dataStore
-      const platformAccounts = data.accounts || [];
-      if (platformAccounts.length > 0) {
-        for (const acc of platformAccounts) {
-          upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
-        }
       }
     }));
 
