@@ -1068,7 +1068,21 @@ export function closeLivePosition(platformPositionId, exitData = {}) {
     entry_datetime: entryTime,
     exit_datetime: exitData.exitTime || new Date().toISOString(),
     asset: pos.symbol,
-    accountId: pos.internalAccountId || (pos.platformAccountId ? getAccountMapping(pos.platformId)?.[pos.platformAccountId] : null) || null,
+    accountId: (() => {
+      // 1. Try internalAccountId (set by POSITION_UPDATED enrichment)
+      if (pos.internalAccountId) return pos.internalAccountId;
+      // 2. Try platformAccountId -> mapping
+      if (pos.platformAccountId) {
+        const mapping = getAccountMapping(pos.platformId);
+        if (mapping?.[pos.platformAccountId]) return mapping[pos.platformAccountId];
+      }
+      // 3. Fallback: match by accountName (pos.accountName)
+      if (pos.accountName) {
+        const match = data.accounts?.find(a => a.name === pos.accountName);
+        if (match) return match.id;
+      }
+      return null;
+    })(),
     direction: pos.side === 'Short' ? 'Short' : 'Long',
     volume: pos.quantity,
     entry_price: entryPrice,
