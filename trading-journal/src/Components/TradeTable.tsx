@@ -77,6 +77,7 @@ const fmt = (v: number) => currency === 'USD'
 
   // Filtrar e ordenar trades
   const filtered = useMemo(() => {
+    let list = trades;
     const lower = query.toLowerCase();
     if (query) {
       list = list.filter(t =>
