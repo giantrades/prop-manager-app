@@ -1151,9 +1151,18 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const now = new Date().toISOString();
   const balance = Number(platformAccount.balance) || 0;
 
+  let effectiveFirmId = firmId || null;
   let accountType = 'Futures';
-  if (firmId) {
-    const firm = data.firms.find(f => f.id === firmId);
+  if (existingIdx !== -1) {
+    const existing = data.accounts[existingIdx];
+    // Preserve existing firmId if new one is null (auto-created account)
+    if (effectiveFirmId === null && existing.firmId) {
+      effectiveFirmId = existing.firmId;
+    }
+    if (existing.type) accountType = existing.type;
+  }
+  if (effectiveFirmId) {
+    const firm = data.firms.find(f => f.id === effectiveFirmId);
     if (firm) accountType = firm.type;
   }
 
@@ -1172,7 +1181,7 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
     platformAccountId: platformAccountId,
     platformName: 'quantower',
     lastPlatformSync: now,
-    firmId: firmId || null,
+    firmId: effectiveFirmId,
     dateCreated: now.split('T')[0],
   };
 

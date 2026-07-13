@@ -132,22 +132,25 @@ export function usePlatform() {
 
     unsubs.push(pm.on(PLATFORM_EVENTS.POSITION_UPDATED, (data) => {
       let accountMapping = getAccountMapping(data.platformId);
-      const storeData = getAll();
-      const enriched = data.positions.map(p => {
-        let internalAccountId = accountMapping[p.platformAccountId] || null;
 
-        // Auto-create account+mapping if position arrives before first SYNCED event
-        if (!internalAccountId && p.platformAccountId && p.accountName) {
-          const result = upsertQuantowerAccount(
+      // Auto-create accounts for any positions that don't have a mapping yet
+      for (const p of data.positions) {
+        if (!accountMapping[p.platformAccountId] && p.platformAccountId && p.accountName) {
+          upsertQuantowerAccount(
             { platformAccountId: p.platformAccountId, name: p.accountName, balance: 0, currency: 'USD' },
             null,
             p.connectionId || '',
             p.connectionName || ''
           );
-          internalAccountId = result.internalAccountId;
-          accountMapping = getAccountMapping(data.platformId); // refresh
         }
+      }
 
+      // Refresh account mapping and store data after any auto-creations
+      accountMapping = getAccountMapping(data.platformId);
+      const storeData = getAll();
+
+      const enriched = data.positions.map(p => {
+        const internalAccountId = accountMapping[p.platformAccountId] || null;
         const account = internalAccountId ? storeData.accounts.find(a => a.id === internalAccountId) : null;
         const firm = account?.firmId ? storeData.firms.find(f => f.id === account.firmId) : null;
         return {

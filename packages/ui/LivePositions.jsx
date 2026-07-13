@@ -49,7 +49,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
     return pnlA - pnlB;
   });
 
-  const totalPnl = sorted.reduce((sum, p) => sum + (p.netPnl ?? p.grossPnl ?? 0), 0);
+  const totalPnl = sorted.reduce((sum, p) => sum + (p.netPnl || p.grossPnl || 0), 0);
   const totalNotional = sorted.reduce((sum, p) => sum + ((p.openPrice || 0) * (p.quantity || 0)), 0);
   const totalPnlPct = totalNotional > 0 ? (totalPnl / totalNotional) * 100 : 0;
 
@@ -183,7 +183,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
         scrollbarColor: 'rgba(255,255,255,0.15) transparent'
       }}>
         {sorted.map((pos, i) => {
-          const pnl = pos.netPnl ?? pos.grossPnl ?? 0;
+          const pnl = pos.netPnl || pos.grossPnl || 0;
           const isPositive = pnl >= 0;
           const pnlPct = calcPnlPct(pos.openPrice, pos.currentPrice, pos.side);
           const isShort = pos.side === 'Short' || pos.side === 'Sell';
