@@ -82,23 +82,25 @@ export function usePlatform() {
       const accountMapping = getAccountMapping(data.platformId);
       const hasNewMapping = Object.keys(accountMapping).length > 0;
       if (hasNewMapping) {
-        const { getAll, save } = require('@apps/lib/dataStore');
-        const all = getAll();
-        let updated = false;
-        if (all.trades?.length) {
-          all.trades.forEach(t => {
-            if (!t.accountId && t.platformAccountId && accountMapping[t.platformAccountId]) {
-              t.accountId = accountMapping[t.platformAccountId];
-              updated = true;
+        (async () => {
+          const { getAll, save } = await import('@apps/lib/dataStore');
+          const all = getAll();
+          let updated = false;
+          if (all.trades?.length) {
+            all.trades.forEach(t => {
+              if (!t.accountId && t.platformAccountId && accountMapping[t.platformAccountId]) {
+                t.accountId = accountMapping[t.platformAccountId];
+                updated = true;
+              }
+            });
+            if (updated) {
+              save(all);
+              window.dispatchEvent(new CustomEvent('datastore:change', {
+                detail: { source: 'account-backfill', platformId: data.platformId }
+              }));
             }
-          });
-          if (updated) {
-            save(all);
-            window.dispatchEvent(new CustomEvent('datastore:change', {
-              detail: { source: 'account-backfill', platformId: data.platformId }
-            }));
           }
-        }
+        })();
       }
 
       // 2) THEN: Import new trades using the now-available account mapping
