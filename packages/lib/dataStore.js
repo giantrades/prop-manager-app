@@ -1059,15 +1059,19 @@ export function closeLivePosition(platformPositionId, exitData = {}) {
   // Remove from live positions
   data.livePositions.splice(posIdx, 1);
 
+  // Handle both old (entryPrice/entryTime) and new (openPrice/openTime) field names
+  const entryTime = pos.openTime || pos.entryTime;
+  const entryPrice = pos.openPrice ?? pos.entryPrice;
+
   // Create or update trade from the closed position
   const tradeData = {
-    entry_datetime: pos.openTime,
+    entry_datetime: entryTime,
     exit_datetime: exitData.exitTime || new Date().toISOString(),
     asset: pos.symbol,
     accountId: pos.internalAccountId || null,
     direction: pos.side === 'Short' ? 'Short' : 'Long',
     volume: pos.quantity,
-    entry_price: pos.openPrice,
+    entry_price: entryPrice,
     exit_price: exitData.exitPrice || pos.currentPrice,
     result_net: exitData.netPnl ?? pos.netPnl ?? 0,
     source: pos.platformId || 'quantower',
