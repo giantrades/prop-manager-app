@@ -478,8 +478,12 @@ namespace QuantowerBridge
                     connName = conn?.Name ?? "";
                     accountId = firstTrade.Account?.Id ?? "";
                     accountName = firstTrade.Account?.Name ?? "";
+                    FileLog($"[TRADES] Group {group.Key}: accountId={accountId}, accountName={accountName}, entries={entries.Count}, exits={exits.Count}");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    FileLog($"[TRADES] Error getting account for group {group.Key}: {ex.Message}");
+                }
 
                 double totalQty = (double)entries.Sum(t => (double)t.Quantity);
                 double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
@@ -535,8 +539,12 @@ namespace QuantowerBridge
                     connName = conn?.Name ?? "";
                     accId = trade.Account?.Id ?? "";
                     accName = trade.Account?.Name ?? "";
+                    FileLog($"[TRADES] Ungrouped {trade.Id}: accountId={accId}, accountName={accName}, side={trade.Side}, pnl={trade.NetPnl?.Value ?? 0}");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    FileLog($"[TRADES] Error getting account for ungrouped {trade.Id}: {ex.Message}");
+                }
 
                 trades.Add(new
                 {
@@ -594,8 +602,12 @@ namespace QuantowerBridge
                         accountId = pos.Account.Id ?? "";
                         accountName = pos.Account.Name ?? "";
                     }
+                    FileLog($"[POSITIONS] {pos.Id}: accountId={accountId}, accountName={accountName}, symbol={symbol}, side={side}");
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    FileLog($"[POSITIONS] Error for {pos.Id}: {ex.Message}");
+                }
 
                 positions.Add(new
                 {

@@ -78,67 +78,55 @@ export function usePlatform() {
         }
       }
 
-      // 1b) BACKFILL: Fix existing trades with accountId: null that now have a mapping
-      const accountMapping = getAccountMapping(data.platformId);
-      const hasNewMapping = Object.keys(accountMapping).length > 0;
-      if (hasNewMapping) {
-        (async () => {
-          const { getAll, save } = await import('@apps/lib/dataStore');
-          const all = getAll();
-          let updated = false;
-          if (all.trades?.length) {
-            all.trades.forEach(t => {
-              if (!t.accountId && t.platformAccountId && accountMapping[t.platformAccountId]) {
-                t.accountId = accountMapping[t.platformAccountId];
-                updated = true;
-              }
-            });
-            if (updated) {
-              save(all);
-              window.dispatchEvent(new CustomEvent('datastore:change', {
-                detail: { source: 'account-backfill', platformId: data.platformId }
-              }));
-            }
-          }
-        })();
-      }
-
-      // 2) THEN: Import new trades using the now-available account mapping
+      // 2) THEN: Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
-      const tradesToProcess = rawTrades;
-      if (tradesToProcess.length > 0) {
+      if (rawTrades.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
-
-        tradesToProcess.forEach(trade => {
-          const internalAccountId = accountMapping[trade.platformAccountId] || null;
-          upsertTradeFromPlatform({
-            entry_datetime: trade.entryDateTime ?? trade.entry_datetime ?? null,
-            exit_datetime: trade.exitDateTime ?? trade.exit_datetime ?? null,
-            asset: trade.symbol,
-            accountId: internalAccountId,
-            direction: trade.side === 'Sell' || trade.side === 'Short' ? 'Short' : 'Long',
-            volume: trade.quantity,
-            entry_price: trade.entryPrice ?? trade.entry_price,
-            exit_price: trade.exitPrice ?? trade.exit_price,
-            result_net: trade.netPnl,
-            result_gross: trade.grossPnl,
-            source: data.platformId,
-            platformTradeId: trade.platformTradeId,
-            platformName: trade.platformName || data.platformId,
-            connectionName: trade.connectionName || '',
-            isLive: false,
-          });
-
-          // Recalc funding for affected accounts
-          if (internalAccountId) {
-            recalcAccountFunding(internalAccountId);
-          }
+        
+        // Filter: only trades from accounts that have a mapping (i.e., are in the app with a firm)
+        const tradesToImport = rawTrades.filter(trade => {
+          const internalAccountId = accountMapping[trade.platformAccountId];
+          return internalAccountId != null; // must have a mapped account
         });
 
-        // Dispatch global event for UI refresh
-        window.dispatchEvent(new CustomEvent('datastore:change', {
-          detail: { source: 'platform-sync', platformId: data.platformId }
-        }));
+        if (tradesToImport.length > 0) {
+          tradesToImport.forEach(trade => {
+            const internalAccountId = accountMapping[trade.platformAccountId];
+            upsertTradeFromPlatform({
+              entry_datetime: trade.entryDateTime ?? trade.entry_datetime ?? null,
+              exit_datetime: trade.exitDateTime ?? trade.exit_datetime ?? null,
+              asset: trade.symbol,
+              accountId: internalAccountId, // guaranteed to exist now
+              direction: trade.side === 'Sell' || trade.side === 'Short' ? 'Short' : 'Long',
+              volume: trade.quantity,
+              entry_price: trade.entryPrice ?? trade.entry_price,
+              exit_price: trade.exitPrice ?? trade.exit_price,
+              result_net: trade.netPnl,
+              result_gross: trade.grossPnl,
+              source: data.platformId,
+              platformTradeId: trade.platformTradeId,
+              platformName: trade.platformName || data.platformId,
+              connectionName: trade.connectionName || '',
+              isLive: false,
+            });
+
+            // Recalc funding for affected accounts
+            if (internalAccountId) {
+              recalcAccountFunding(internalAccountId);
+            }
+          });
+
+          // Dispatch global event for UI refresh
+          window.dispatchEvent(new CustomEvent('datastore:change', {
+            detail: { source: 'platform-sync', platformId: data.platformId }
+          }));
+        }
+        
+        // Log filtered trades for debugging
+        const filteredCount = rawTrades.length - tradesToImport.length;
+        if (filteredCount > 0) {
+          console.log(`[Quantower Sync] Filtered out ${filteredCount} trades from unmapped accounts`);
+        }
       }
     }));
 
@@ -148,38 +136,39 @@ export function usePlatform() {
         ...p,
         internalAccountId: accountMapping[p.platformAccountId] || null,
       }));
+      // Filter: only keep positions from mapped accounts (accounts in the app with a firm)
+      const mappedPositions = enriched.filter(p => p.internalAccountId != null);
       setLivePositions(prev => {
-        // Replace positions for this platform, keep others
         const others = prev.filter(p => p.platformId !== data.platformId);
-        return [...others, ...enriched.map(p => ({ ...p, platformId: data.platformId }))];
+        return [...others, ...mappedPositions.map(p => ({ ...p, platformId: data.platformId }))];
       });
-      // Persist to dataStore
-      updateLivePositions(enriched.map(p => ({ ...p, platformId: data.platformId })));
-      setLiveCount(c => {
-        const newCount = data.positions.length;
-        return newCount;
-      });
+      // Persist to dataStore (only mapped positions)
+      updateLivePositions(mappedPositions.map(p => ({ ...p, platformId: data.platformId })));
+      setLiveCount(mappedPositions.length);
     }));
 
     unsubs.push(pm.on(PLATFORM_EVENTS.POSITION_CLOSED, (data) => {
       const accountMapping = getAccountMapping(data.platformId);
       const internalAccountId = accountMapping[data.position.platformAccountId] || null;
 
-      closeLivePosition(data.position.platformPositionId, {
-        exitPrice: data.position.currentPrice,
-        exitTime: new Date().toISOString(),
-        netPnl: data.position.netPnl,
-        grossPnl: data.position.grossPnl,
-        fee: data.position.fee,
-      });
-
+      // Only create trade if account is mapped (in the app with a firm)
       if (internalAccountId) {
-        recalcAccountFunding(internalAccountId);
-      }
+        closeLivePosition(data.position.platformPositionId, {
+          exitPrice: data.position.currentPrice,
+          exitTime: new Date().toISOString(),
+          netPnl: data.position.netPnl,
+          grossPnl: data.position.grossPnl,
+          fee: data.position.fee,
+        });
 
-      window.dispatchEvent(new CustomEvent('datastore:change', {
-        detail: { source: 'position-closed', platformId: data.platformId }
-      }));
+        recalcAccountFunding(internalAccountId);
+
+        window.dispatchEvent(new CustomEvent('datastore:change', {
+          detail: { source: 'position-closed', platformId: data.platformId }
+        }));
+      } else {
+        console.log(`[Quantower Sync] Ignored position close for unmapped account: ${data.position.platformAccountId}`);
+      }
     }));
 
     unsubs.push(pm.on(PLATFORM_EVENTS.POSITION_OPENED, (data) => {
