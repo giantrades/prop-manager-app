@@ -465,7 +465,12 @@ namespace QuantowerBridge
                 var entries = group.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
                 var exits = group.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
 
-                if (entries.Count == 0 && exits.Count == 0) continue;
+                // Skip if no exits — position is still open, will come via /positions → POSITION_CLOSED
+                if (entries.Count == 0 || exits.Count == 0)
+                {
+                    FileLog($"[TRADES] Skip open position {group.Key}: entries={entries.Count}, exits={exits.Count}");
+                    continue;
+                }
 
                 Trade firstTrade = group.First();
                 string connName = "";

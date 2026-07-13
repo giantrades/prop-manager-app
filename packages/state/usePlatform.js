@@ -83,21 +83,32 @@ export function usePlatform() {
       if (rawTrades.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
         
-        // Filter: only trades from accounts that have a mapping (i.e., are in the app with a firm)
+        // Filter: only trades from mapped accounts
         const tradesToImport = rawTrades.filter(trade => {
           const internalAccountId = accountMapping[trade.platformAccountId];
-          return internalAccountId != null; // must have a mapped account
+          if (internalAccountId == null) return false;
+          // Safety net: skip entry fills (PnL = 0, no exit data) even if account is mapped
+          const hasExitData = trade.exitDateTime || (trade.exitPrice && trade.exitPrice > 0);
+          if (trade.netPnl === 0 && !hasExitData) return false;
+          return true;
         });
 
         if (tradesToImport.length > 0) {
           tradesToImport.forEach(trade => {
             const internalAccountId = accountMapping[trade.platformAccountId];
+            // Direction: for grouped trades, bridge sends "Long"/"Short" (entry direction)
+            // Safety net for ungrouped exit fills: "Sell" → "Long", "Buy" → "Short"
+            const isExitFill = trade.side === 'Buy' || trade.side === 'Sell';
+            const direction = isExitFill
+              ? (trade.side === 'Sell' ? 'Long' : 'Short')
+              : trade.side === 'Short' ? 'Short' : 'Long';
+
             upsertTradeFromPlatform({
               entry_datetime: trade.entryDateTime ?? trade.entry_datetime ?? null,
               exit_datetime: trade.exitDateTime ?? trade.exit_datetime ?? null,
               asset: trade.symbol,
-              accountId: internalAccountId, // guaranteed to exist now
-              direction: trade.side === 'Sell' || trade.side === 'Short' ? 'Short' : 'Long',
+              accountId: internalAccountId,
+              direction,
               volume: trade.quantity,
               entry_price: trade.entryPrice ?? trade.entry_price,
               exit_price: trade.exitPrice ?? trade.exit_price,
@@ -125,7 +136,7 @@ export function usePlatform() {
         // Log filtered trades for debugging
         const filteredCount = rawTrades.length - tradesToImport.length;
         if (filteredCount > 0) {
-          console.log(`[Quantower Sync] Filtered out ${filteredCount} trades from unmapped accounts`);
+          console.log(`[Quantower Sync] Filtered out ${filteredCount} trades (unmapped accounts + entry fills)`);
         }
       }
     }));

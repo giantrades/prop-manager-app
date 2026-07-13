@@ -20,25 +20,26 @@ export default function TradesPage() {
     timeframe: ''
   });
 
-  const [accounts, setAccounts] = useState(() => {
-    try {
-      return getAll().accounts || [];
-    } catch {
-      return [];
-    }
-  });
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [firms, setFirms] = useState<any[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
 
 
+  // Load accounts and firms on mount + reactively on datastore changes
   useEffect(() => {
-    try {
-      const data = getAll();
-      setAccounts(data.accounts || []);
-      setFirms(getFirms() || []);
-    } catch (err) {
-      console.error('Erro ao atualizar contas:', err);
-    }
+    const loadData = () => {
+      try {
+        const data = getAll();
+        setAccounts(data.accounts || []);
+        setFirms(getFirms() || []);
+      } catch (err) {
+        console.error('Erro ao atualizar contas:', err);
+      }
+    };
+
+    loadData();
+    window.addEventListener('datastore:change', loadData);
+    return () => window.removeEventListener('datastore:change', loadData);
   }, []);
 
 
