@@ -18,7 +18,7 @@ function formatDuration(openTime) {
     const mins = Math.floor((diff % 3600000) / 60000);
     if (hours > 0) return `${hours}h ${mins}m`;
     if (mins > 0) return `${mins}m`;
-    return '< 1m';
+    return '<1m';
   } catch {
     return '';
   }
@@ -30,7 +30,16 @@ function calcPnlPct(entryPrice, currentPrice, side) {
   return (side === 'Short' || side === 'Sell') ? -changePct : changePct;
 }
 
-export default function LivePositions({ positions = [], compact = false, onClosePosition }) {
+const PLATFORM_LETTERS = {
+  quantower: 'Q',
+  ctrader: 'C',
+};
+
+const FULL_GRID = '32px minmax(80px,1fr) 65px 65px 60px 80px 70px 24px';
+const COMPACT_GRID = '24px minmax(60px,1fr) 55px 70px 60px 20px';
+
+export default function LivePositions({ positions = [], compact: initialCompact = false, onClosePosition }) {
+  const [compact, setCompact] = useState(initialCompact);
   const [pulse, setPulse] = useState(false);
   const prevTotal = useRef(0);
 
@@ -73,12 +82,16 @@ export default function LivePositions({ positions = [], compact = false, onClose
     );
   }
 
+  if (sorted.length > 50) {
+    console.warn(`[LivePositions] ${sorted.length} positions — possible accumulation issue`);
+  }
+
   return (
     <div style={{ width: '100%' }}>
       {/* Header */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: compact ? 8 : 14,
+        marginBottom: compact ? 6 : 10,
         padding: compact ? '0' : '0 4px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -88,7 +101,7 @@ export default function LivePositions({ positions = [], compact = false, onClose
             display: 'inline-block',
             animation: 'pulse-dot 1.5s infinite',
           }} />
-          <span style={{ fontWeight: 700, fontSize: compact ? 13 : 15 }}>
+          <span style={{ fontWeight: 700, fontSize: compact ? 12 : 14 }}>
             LIVE POSITIONS
           </span>
           <span style={{
@@ -99,57 +112,71 @@ export default function LivePositions({ positions = [], compact = false, onClose
             {sorted.length}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            fontWeight: 700, fontSize: compact ? 14 : 18,
-            color: totalPnl >= 0 ? '#22c55e' : '#ef4444',
-            transition: 'transform 0.15s ease',
-            transform: pulse ? 'scale(1.1)' : 'scale(1)',
-          }}>
-            {formatPnl(totalPnl)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              fontWeight: 700, fontSize: compact ? 13 : 16,
+              color: totalPnl >= 0 ? '#22c55e' : '#ef4444',
+              transition: 'transform 0.15s ease',
+              transform: pulse ? 'scale(1.1)' : 'scale(1)',
+            }}>
+              {formatPnl(totalPnl)}
+            </div>
+            <div style={{
+              fontSize: compact ? 10 : 12,
+              fontWeight: 600,
+              color: totalPnl >= 0 ? '#22c55e' : '#ef4444',
+              opacity: 0.7,
+            }}>
+              ({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)
+            </div>
           </div>
-          <div style={{
-            fontSize: compact ? 11 : 13,
-            fontWeight: 600,
-            color: totalPnl >= 0 ? '#22c55e' : '#ef4444',
-            opacity: 0.7,
-          }}>
-            ({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)
-          </div>
+          <button
+            onClick={() => setCompact(v => !v)}
+            title={compact ? 'Expand view' : 'Compact view'}
+            style={{
+              border: 'none', background: 'rgba(255,255,255,0.06)',
+              color: 'var(--muted, #a1a7b3)', cursor: 'pointer',
+              fontSize: 11, padding: '2px 6px', borderRadius: 4,
+              lineHeight: 1.4,
+            }}
+          >
+            {compact ? '⤢' : '⤡'}
+          </button>
         </div>
       </div>
 
-      {/* Column Headers */}
+      {/* Column Headers (non-compact only) */}
       {!compact && sorted.length > 0 && (
         <div style={{
-          display: 'flex',
-          padding: '8px 14px',
-          fontSize: 11,
+          display: 'grid',
+          gridTemplateColumns: FULL_GRID,
+          padding: '6px 14px',
+          fontSize: 10,
           fontWeight: 600,
           color: 'var(--muted, #a1a7b3)',
           textTransform: 'uppercase',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
-          marginBottom: 4
+          marginBottom: 4,
+          gap: 8,
         }}>
-          <div style={{ width: 20, flexShrink: 0, marginRight: 12 }}>Firm</div>
-          <div style={{ flex: '0 0 auto', minWidth: 80 }}>Asset / Side</div>
-          <div style={{ flex: 1, display: 'flex', gap: 16 }}>
-            <div>Entry</div>
-            <div>Current</div>
-            <div style={{ minWidth: 60 }}>Duration</div>
-          </div>
-          <div style={{ textAlign: 'right', width: 80 }}>PnL $</div>
-          <div style={{ textAlign: 'right', width: 70, marginLeft: 8 }}>PnL %</div>
-          {onClosePosition && <div style={{ width: 24, flexShrink: 0 }} />}
+          <div>Firm</div>
+          <div>Asset / Side</div>
+          <div style={{ textAlign: 'right' }}>Entry</div>
+          <div style={{ textAlign: 'right' }}>Current</div>
+          <div style={{ textAlign: 'right' }}>Duration</div>
+          <div style={{ textAlign: 'right' }}>PnL $</div>
+          <div style={{ textAlign: 'right' }}>PnL %</div>
+          {onClosePosition && <div />}
         </div>
       )}
 
       {/* Position rows */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: compact ? 4 : 6,
-        maxHeight: 280,
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: compact ? 3 : 4,
+        maxHeight: compact ? 200 : 280,
         overflowY: 'auto',
         paddingRight: 4,
         scrollbarWidth: 'thin',
@@ -159,47 +186,57 @@ export default function LivePositions({ positions = [], compact = false, onClose
           const pnl = pos.netPnl ?? pos.grossPnl ?? 0;
           const isPositive = pnl >= 0;
           const pnlPct = calcPnlPct(pos.openPrice, pos.currentPrice, pos.side);
-          const firmColor = pos.firmColor || '#6366f1';
-          const firmInitial = (pos.firmName || '?').charAt(0).toUpperCase();
           const isShort = pos.side === 'Short' || pos.side === 'Sell';
+
+          const badgeBg = pos.firmColor || (pos.platformId ? '#6366f1' : '#888');
+          const badgeLetter = pos.firmLogo?.[0]
+            || (pos.firmName && pos.firmName.charAt(0).toUpperCase())
+            || PLATFORM_LETTERS[pos.platformId]
+            || (pos.accountName && pos.accountName.charAt(0).toUpperCase())
+            || '?';
+
+          const gridTemplate = compact ? COMPACT_GRID : FULL_GRID;
 
           return (
             <div key={pos.platformPositionId || i} style={{
-              display: 'flex', alignItems: 'center', gap: compact ? 8 : 12,
-              padding: compact ? '6px 10px' : '8px 14px',
+              display: 'grid',
+              gridTemplateColumns: gridTemplate,
+              gap: compact ? 4 : 8,
+              alignItems: 'center',
+              padding: compact ? '5px 10px' : '7px 14px',
               background: 'rgba(255,255,255,0.02)',
               borderRadius: 8,
               border: '1px solid rgba(255,255,255,0.04)',
               transition: 'background 0.2s',
+              fontSize: compact ? 11 : 12,
             }}
             onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
             >
               {/* Firm badge */}
               <span style={{
-                width: 20, height: 20, borderRadius: 4,
-                background: firmColor, color: '#fff',
-                fontSize: 10, fontWeight: 700,
+                width: compact ? 18 : 20, height: compact ? 18 : 20, borderRadius: 4,
+                background: badgeBg, color: '#fff',
+                fontSize: compact ? 9 : 10, fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0,
               }}>
-                {pos.firmLogo?.[0] || firmInitial}
+                {badgeLetter}
               </span>
 
-              {/* Symbol + Side + Account */}
-              <div style={{ flex: '0 0 auto', minWidth: compact ? 60 : 80 }}>
-                <div style={{ fontWeight: 600, fontSize: compact ? 13 : 14 }}>
+              {/* Symbol + Side */}
+              <div>
+                <div style={{ fontWeight: 600, fontSize: compact ? 12 : 13 }}>
                   {pos.symbol}
                 </div>
                 <div style={{
-                  fontSize: 10, fontWeight: 600,
-                  display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap',
+                  fontSize: compact ? 9 : 10, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap',
                 }}>
                   <span style={{ color: isShort ? '#ef4444' : '#22c55e' }}>
-                    {isShort ? '↓ SHORT' : '↑ LONG'}
-                    {pos.quantity ? ` × ${pos.quantity}` : ''}
+                    {isShort ? '↓' : '↑'}
+                    {pos.quantity ? ` ${pos.quantity}` : ''}
                   </span>
-                  {!compact && (
+                  {!compact && pos.accountName && (
                     <>
                       <span style={{ color: 'var(--muted)', opacity: 0.4 }}>·</span>
                       <span style={{ color: 'var(--muted)' }}>{pos.accountName}</span>
@@ -208,49 +245,51 @@ export default function LivePositions({ positions = [], compact = false, onClose
                 </div>
               </div>
 
-              {/* Price + Duration */}
-              <div style={{
-                flex: 1, display: 'flex', gap: compact ? 6 : 16,
-                fontSize: 12, alignItems: 'center',
-              }}>
-                <div style={{ minWidth: 50 }}>
-                  <div style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                    {pos.openPrice?.toFixed(pos.openPrice < 1 ? 5 : 2)}
-                  </div>
+              {/* Entry price (non-compact) */}
+              {!compact && (
+                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {pos.openPrice?.toFixed(pos.openPrice < 1 ? 5 : 2)}
                 </div>
-                <div style={{ minWidth: 50 }}>
-                  <div style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                    {pos.currentPrice?.toFixed(pos.currentPrice < 1 ? 5 : 2)}
-                  </div>
+              )}
+
+              {/* Current price (non-compact) */}
+              {!compact && (
+                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {pos.currentPrice?.toFixed(pos.currentPrice < 1 ? 5 : 2)}
                 </div>
-                <div style={{ minWidth: 50 }}>
-                  <div style={{ fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                    {formatDuration(pos.openTime)}
-                  </div>
-                </div>
+              )}
+
+              {/* Duration (compact+non-compact) */}
+              <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>
+                {formatDuration(pos.openTime)}
               </div>
 
               {/* PnL $ */}
               <div style={{
-                fontWeight: 700,
-                fontSize: compact ? 12 : 14,
-                color: isPositive ? '#22c55e' : '#ef4444',
                 textAlign: 'right',
+                fontWeight: 700,
+                fontSize: compact ? 11 : 13,
+                color: isPositive ? '#22c55e' : '#ef4444',
                 fontVariantNumeric: 'tabular-nums',
-                width: compact ? 70 : 80,
               }}>
                 {formatPnl(pnl)}
+                <div style={{
+                  height: 2,
+                  width: `${Math.min(Math.abs(pnlPct) * 3, 60)}px`,
+                  background: pnlPct >= 0 ? '#22c55e' : '#ef4444',
+                  borderRadius: 1,
+                  marginLeft: 'auto',
+                  marginTop: 2,
+                  opacity: 0.5,
+                }} />
               </div>
 
               {/* PnL % */}
               <div style={{
-                fontWeight: 600,
-                fontSize: compact ? 11 : 13,
-                color: pnlPct >= 0 ? '#22c55e' : '#ef4444',
                 textAlign: 'right',
+                fontWeight: 600,
+                color: pnlPct >= 0 ? '#22c55e' : '#ef4444',
                 fontVariantNumeric: 'tabular-nums',
-                width: compact ? 60 : 70,
-                marginLeft: compact ? 4 : 8,
                 opacity: 0.85,
               }}>
                 {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
@@ -259,22 +298,19 @@ export default function LivePositions({ positions = [], compact = false, onClose
               {/* Close button */}
               {onClosePosition && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClosePosition(pos);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); onClosePosition(pos); }}
                   title="Close position"
                   style={{
-                    width: 22, height: 22, flexShrink: 0,
-                    border: 'none', borderRadius: 4,
+                    width: compact ? 18 : 20, height: compact ? 18 : 20,
+                    border: 'none', borderRadius: 3,
                     background: 'rgba(239,68,68,0.15)',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    fontSize: 12, fontWeight: 700,
+                    color: '#ef4444', cursor: 'pointer',
+                    fontSize: compact ? 9 : 11, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     lineHeight: 1, padding: 0,
                     opacity: 0.6,
                     transition: 'opacity 0.2s, background 0.2s',
+                    justifySelf: 'center',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.opacity = '1';
