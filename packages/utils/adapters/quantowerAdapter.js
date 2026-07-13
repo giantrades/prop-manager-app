@@ -172,7 +172,7 @@ export class QuantowerAdapter extends BaseAdapter {
     const data = await this._fetch('/positions');
     this._markSynced();
     return (data.positions || []).map(p => {
-      const side = p.side?.toLowerCase() === 'long' ? 'Long' : 'Short';
+      const side = ['long', 'buy'].includes((p.side || '').toLowerCase()) ? 'Long' : 'Short';
       return {
         platformPositionId: `qt_pos_${p.id}`,
         symbol: p.symbol || '',
@@ -181,6 +181,8 @@ export class QuantowerAdapter extends BaseAdapter {
         openPrice: p.openPrice ?? 0,
         currentPrice: p.currentPrice ?? 0,
         openTime: p.openTime || '',
+        entryPrice: p.openPrice ?? 0,
+        entryTime: p.openTime || '',
         grossPnl: p.grossPnl ?? 0,
         netPnl: p.netPnl ?? 0,
         fee: p.fee ?? 0,
