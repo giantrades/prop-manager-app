@@ -154,9 +154,11 @@ export function usePlatform() {
       // Auto-create accounts for any positions that don't have a mapping yet
       for (const p of data.positions) {
         if (!accountMapping[p.platformAccountId] && p.platformAccountId && p.accountName) {
+          const connFirmMap = getConnectionFirmMap();
+          const firmId = (p.connectionId && connFirmMap[p.connectionId]) || null;
           upsertQuantowerAccount(
             { platformAccountId: p.platformAccountId, name: p.accountName, balance: 0, currency: 'USD' },
-            null,
+            firmId,
             p.connectionId || '',
             p.connectionName || ''
           );
