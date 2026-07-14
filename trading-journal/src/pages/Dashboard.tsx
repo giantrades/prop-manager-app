@@ -720,10 +720,12 @@ const CategoryCard = ({ data, fmt }: any) => {
     return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
   };
 
-  const paths =
-    data.length > 1
-      ? data.map((entry: any) => {
-        const pct = totalAbsPnl > 0 ? Math.abs(entry.pnl) / totalAbsPnl : 1 / data.length;
+  const chartData = data.filter((d: any) => d.pnl !== 0);
+  const hasChartData = chartData.length > 0;
+
+  const paths = hasChartData && chartData.length > 1
+    ? chartData.map((entry: any) => {
+        const pct = Math.abs(entry.pnl) / totalAbsPnl;
         const endAngle = startAngle + pct * 360;
         const largeArc = endAngle - startAngle > 180 ? 1 : 0;
 
@@ -752,16 +754,27 @@ const CategoryCard = ({ data, fmt }: any) => {
           />
         );
       })
+    : hasChartData
+      ? [
+          <circle
+            key="single"
+            cx={center}
+            cy={center}
+            r={radius}
+            fill={chartData[0]?.pnl >= 0 ? getCategoryColor(chartData[0]?.name || "Unknown") : darken(getCategoryColor(chartData[0]?.name || "Unknown"))}
+            opacity={chartData[0]?.pnl >= 0 ? 0.9 : 0.55}
+          />,
+        ]
       : [
-        <circle
-          key="single"
-          cx={center}
-          cy={center}
-          r={radius}
-          fill={data[0]?.pnl >= 0 ? getCategoryColor(data[0]?.name || "Unknown") : darken(getCategoryColor(data[0]?.name || "Unknown"))}
-          opacity={data[0]?.pnl >= 0 ? 0.9 : 0.55}
-        />,
-      ];
+          <circle
+            key="empty"
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="#2a3246"
+            opacity={0.3}
+          />,
+        ];
 
   return (
     <div
