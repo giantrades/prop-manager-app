@@ -723,7 +723,7 @@ const CategoryCard = ({ data, fmt }: any) => {
   const paths =
     data.length > 1
       ? data.map((entry: any) => {
-        const pct = totalAbsPnl ? Math.abs(entry.pnl) / totalAbsPnl : 0;
+        const pct = totalAbsPnl > 0 ? Math.abs(entry.pnl) / totalAbsPnl : 1 / data.length;
         const endAngle = startAngle + pct * 360;
         const largeArc = endAngle - startAngle > 180 ? 1 : 0;
 
