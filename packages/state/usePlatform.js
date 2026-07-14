@@ -90,9 +90,13 @@ export function usePlatform() {
         const tradesToImport = rawTrades.filter(trade => {
           const internalAccountId = accountMapping[trade.platformAccountId];
           if (internalAccountId == null) return false;
-          // Safety net: skip entry fills (PnL = 0, no exit data) even if account is mapped
-          const hasExitData = trade.exitDateTime || (trade.exitPrice && trade.exitPrice > 0);
-          if (trade.netPnl === 0 && !hasExitData) return false;
+          // Safety net: skip entry fills (PnL = 0, no real exit data)
+          const isEntryFill = trade.netPnl === 0 && (
+            !trade.exitDateTime
+            || trade.exitDateTime === trade.entryDateTime
+            || !trade.exitPrice
+          );
+          if (isEntryFill) return false;
           return true;
         });
 
@@ -286,8 +290,22 @@ export function usePlatform() {
     dsSetAccountMapping(platformId, platformAccountId, internalAccountId);
   }, []);
 
-  const closePosition = useCallback((position) => {
+  const closePosition = useCallback(async (position) => {
     if (!position || !position.internalAccountId) return;
+
+    // Try to close on the platform bridge first
+    if (position.platformId) {
+      try {
+        const pm = getPlatformManager();
+        const adapter = pm.getAdapter(position.platformId);
+        if (adapter && typeof adapter.closePosition === 'function') {
+          await adapter.closePosition(position);
+        }
+      } catch (err) {
+        console.warn('[ClosePosition] Bridge close failed, doing local-only cleanup:', err);
+      }
+    }
+
     closeLivePosition(position.platformPositionId, {
       exitPrice: position.currentPrice,
       exitTime: new Date().toISOString(),

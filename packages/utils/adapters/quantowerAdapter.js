@@ -35,12 +35,13 @@ export class QuantowerAdapter extends BaseAdapter {
     return urls;
   }
 
-  async _fetchSingle(url, controller) {
+  async _fetchSingle(url, controller, fetchOptions = {}) {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...fetchOptions.headers },
+        ...fetchOptions,
       });
       if (!res.ok) throw new Error(`Bridge returned ${res.status}: ${res.statusText}`);
       return await res.json();
@@ -63,6 +64,32 @@ export class QuantowerAdapter extends BaseAdapter {
       const controller = new AbortController();
       try {
         const data = await this._fetchSingle(fullUrl, controller);
+        if (url !== this.bridgeUrl) this._lastWorkingUrl = url;
+        this._retryCount = 0;
+        this._cancelRetry();
+        return data;
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'AbortError') break;
+      }
+    }
+
+    this._scheduleRetry();
+    throw lastErr || new Error('Bridge offline');
+  }
+
+  async _fetchPost(endpoint, body) {
+    const urls = this._getUrls(endpoint);
+    let lastErr;
+
+    for (const url of urls) {
+      const controller = new AbortController();
+      try {
+        const data = await this._fetchSingle(url, controller, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
         if (url !== this.bridgeUrl) this._lastWorkingUrl = url;
         this._retryCount = 0;
         this._cancelRetry();
@@ -193,6 +220,14 @@ export class QuantowerAdapter extends BaseAdapter {
         isLive: true,
       };
     });
+  }
+
+  async closePosition(position) {
+    const rawId = (position.platformPositionId || '').replace(/^qt_pos_/, '');
+    if (!rawId) throw new Error('Invalid position: missing platformPositionId');
+    const result = await this._fetchPost('/positions/close', { id: rawId });
+    if (!result.success) throw new Error(result.error || 'Failed to close position');
+    return result;
   }
 
   setBridgeUrl(url) {

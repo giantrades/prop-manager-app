@@ -368,25 +368,20 @@ class PlatformManager {
 
   /** @private Sync trades for all adapters */
   async _syncAllTrades() {
-    // Sync lock - only one tab/app should sync at a time (per origin)
     const lockKey = 'platform:syncLock';
     const now = Date.now();
-    const lockTimeout = 5000; // 5 seconds max lock
+    const lockTimeout = 5000;
     
     try {
       const existingLock = localStorage.getItem(lockKey);
       if (existingLock) {
         const lockTime = parseInt(existingLock, 10);
         if (now - lockTime < lockTimeout) {
-          // Another tab/app is syncing, skip this round
           return;
         }
       }
-      // Acquire lock
       localStorage.setItem(lockKey, now.toString());
-    } catch (e) {
-      // If localStorage not available, proceed without lock
-    }
+    } catch (e) {}
 
     try {
       for (const [id, adapter] of this.adapters) {
@@ -394,7 +389,11 @@ class PlatformManager {
 
         try {
           const from = this._lastSyncTime.get(id);
-          const trades = await adapter.getTrades(from);
+          const fromParam = from || new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+          const [accounts, trades] = await Promise.all([
+            adapter.getAccounts(),
+            adapter.getTrades(fromParam),
+          ]);
 
           const newTrades = [];
           for (const trade of trades) {
@@ -402,6 +401,13 @@ class PlatformManager {
               const entry = await getTradeLedgerEntry(trade.platformTradeId);
               if (entry) continue;
             }
+            // Safety net: skip entry fills (PnL = 0, no real exit data)
+            const isEntryFill = trade.netPnl === 0 && (
+              !trade.exitDateTime
+              || trade.exitDateTime === trade.entryDateTime
+              || !trade.exitPrice
+            );
+            if (isEntryFill) continue;
             newTrades.push(trade);
           }
 
@@ -420,6 +426,7 @@ class PlatformManager {
 
             this._emit(PLATFORM_EVENTS.SYNCED, {
               platformId: id,
+              accounts,
               newTrades,
               totalTrades: trades.length,
               timestamp: new Date().toISOString(),
@@ -435,7 +442,6 @@ class PlatformManager {
         }
       }
     } finally {
-      // Release lock
       try {
         localStorage.removeItem(lockKey);
       } catch (e) {}

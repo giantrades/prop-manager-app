@@ -288,6 +288,7 @@ namespace QuantowerBridge
                 if (path.StartsWith("/status")) path = "/status";
                 else if (path.StartsWith("/accounts")) path = "/accounts";
                 else if (path.StartsWith("/trades")) path = "/trades";
+                else if (path == "/positions" || path == "/positions/close") { /* keep as-is */ }
                 else if (path.StartsWith("/positions")) path = "/positions";
                 else if (path.StartsWith("/orders")) path = "/orders";
 
@@ -313,6 +314,9 @@ namespace QuantowerBridge
                         break;
                     case "/trades":
                         json = BuildTradesJson(request.QueryString);
+                        break;
+                    case "/positions/close":
+                        json = HandleClosePosition(request);
                         break;
                     case "/positions":
                         json = BuildPositionsJson();
@@ -359,10 +363,54 @@ namespace QuantowerBridge
         private static void SetCorsHeaders(HttpListenerResponse response)
         {
             response.Headers.Add("Access-Control-Allow-Origin", "*");
-            response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
             response.Headers.Add("Access-Control-Max-Age", "86400");
             response.Headers.Add("Access-Control-Allow-Private-Network", "true");
+        }
+
+        private static string HandleClosePosition(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+            {
+                return JsonSerializer.Serialize(new { success = false, error = "Method not allowed. Use POST." }, JsonOptions);
+            }
+
+            try
+            {
+                string body;
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    body = reader.ReadToEnd();
+                }
+
+                var closeRequest = JsonSerializer.Deserialize<ClosePositionRequest>(body, JsonOptions);
+                if (closeRequest == null || string.IsNullOrEmpty(closeRequest.Id))
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = "Missing required field: id" }, JsonOptions);
+                }
+
+                var position = Core.Instance.Positions.FirstOrDefault(p => p.Id == closeRequest.Id);
+                if (position == null)
+                {
+                    return JsonSerializer.Serialize(new { success = false, error = $"Position not found: {closeRequest.Id}" }, JsonOptions);
+                }
+
+                position.Close();
+                string successMsg = $"Position {closeRequest.Id} closed successfully";
+                FileLog($"[CLOSE] {successMsg}");
+                return JsonSerializer.Serialize(new { success = true, message = successMsg }, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[CLOSE] Error: {ex.Message}");
+                return JsonSerializer.Serialize(new { success = false, error = ex.Message }, JsonOptions);
+            }
+        }
+
+        private class ClosePositionRequest
+        {
+            public string Id { get; set; }
         }
 
         // ── JSON Builders (using System.Text.Json) ───────────
