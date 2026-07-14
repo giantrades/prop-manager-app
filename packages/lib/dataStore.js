@@ -1046,7 +1046,7 @@ export function updateLivePositions(positions) {
  * @param {Object} exitData - { exitPrice, exitTime, netPnl, grossPnl, fee }
  * @returns {Object|null} The created/updated trade, or null
  */
-export function closeLivePosition(platformPositionId, exitData = {}) {
+export function closeLivePosition(platformPositionId, exitData = {}, resolvedAccountId = null) {
   const data = load();
   const posIdx = (data.livePositions || []).findIndex(
     p => p.platformPositionId === platformPositionId
@@ -1068,7 +1068,7 @@ export function closeLivePosition(platformPositionId, exitData = {}) {
     entry_datetime: entryTime,
     exit_datetime: exitData.exitTime || new Date().toISOString(),
     asset: pos.symbol,
-    accountId: (() => {
+    accountId: resolvedAccountId || (() => {
       // 1. Try internalAccountId (set by POSITION_UPDATED enrichment)
       if (pos.internalAccountId) return pos.internalAccountId;
       // 2. Try platformAccountId -> mapping
@@ -1262,6 +1262,57 @@ export async function setTradeLedgerEntry(platformTradeId, entry) {
   save(data);
 }
 
+export async function cleanCorruptedLedgerEntries() {
+  const data = load();
+  const trades = data.trades || [];
+
+  // Identify corrupted trades: source=platform, result_net=0, has a platformTradeId
+  // These are open-position snapshots that were incorrectly saved to the DB.
+  const platformSources = new Set(['quantower', 'ctrader', 'platform']);
+  const corruptedTradeIds = new Set();
+  const corruptedPlatformTradeIds = [];
+
+  for (const t of trades) {
+    const isFromPlatform = t.source && platformSources.has(t.source);
+    const hasZeroPnl = (Number(t.result_net) || 0) === 0;
+    const hasPlatformId = !!t.platformTradeId;
+    // Additional heuristic: no exit price or exit_datetime matches entry_datetime
+    const isFakeExit = !t.exit_price
+      || t.exit_price === 0
+      || !t.exit_datetime
+      || t.exit_datetime === t.entry_datetime;
+
+    if (isFromPlatform && hasZeroPnl && hasPlatformId && isFakeExit) {
+      corruptedTradeIds.add(t.id);
+      corruptedPlatformTradeIds.push(t.platformTradeId);
+    }
+  }
+
+  // Delete corrupted trades from data.trades
+  const tradesBefore = trades.length;
+  data.trades = trades.filter(t => !corruptedTradeIds.has(t.id));
+  const tradesRemoved = tradesBefore - data.trades.length;
+
+  if (tradesRemoved > 0) {
+    save(data);
+    console.log(`[cleanCorruptedLedgerEntries] Removed ${tradesRemoved} corrupted trades from data.trades`);
+  }
+
+  // Delete their ledger entries (both IndexedDB + localStorage backup)
+  let ledgerRemoved = 0;
+  for (const platformTradeId of corruptedPlatformTradeIds) {
+    try {
+      await deleteTradeLedgerEntry(platformTradeId);
+      ledgerRemoved++;
+    } catch (err) {
+      console.warn(`[cleanCorruptedLedgerEntries] Failed to delete ledger entry ${platformTradeId}:`, err);
+    }
+  }
+
+  console.log(`[cleanCorruptedLedgerEntries] Done. Trades removed: ${tradesRemoved}, Ledger entries removed: ${ledgerRemoved}`);
+  return { tradesRemoved, ledgerRemoved };
+}
+
 export async function deleteTradeLedgerEntry(platformTradeId) {
   try {
     const db = await getLedgerDB();
@@ -1432,6 +1483,7 @@ export default {
   isTradeImported, markTradeDeleted, markTradeIgnored,
   // Trade Deduplication
   deduplicateTradesByPosition,
+  cleanCorruptedLedgerEntries,
   // Connection → Firm mapping
   getConnectionFirmMap, setConnectionFirmMap, setConnectionFirmEntry,
   getAccountFirmOverride, setAccountFirmOverride, setAccountFirmEntry,

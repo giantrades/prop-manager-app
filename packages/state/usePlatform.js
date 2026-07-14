@@ -28,6 +28,7 @@ import {
   setAccountMapping as dsSetAccountMapping,
   recalcAccountFunding,
   getAll,
+  cleanCorruptedLedgerEntries,
 } from '@apps/lib/dataStore';
 
 export function usePlatform() {
@@ -42,6 +43,17 @@ export function usePlatform() {
   useEffect(() => {
     const pm = getPlatformManager();
     pmRef.current = pm;
+
+    // Self-healing: silently clean up any corrupted ledger entries from previous
+    // broken syncs (open-position trades with PnL=0 saved before safety net fixes).
+    // This runs once on mount; after the safety net fixes, it should find nothing.
+    cleanCorruptedLedgerEntries().then(({ tradesRemoved, ledgerRemoved }) => {
+      if (tradesRemoved > 0 || ledgerRemoved > 0) {
+        console.log(`[usePlatform] Auto-cleaned ${tradesRemoved} corrupted trade(s) + ${ledgerRemoved} ledger entry(ies) on startup`);
+      }
+    }).catch(err => {
+      console.warn('[usePlatform] Auto-clean failed (non-fatal):', err);
+    });
 
     // Load persisted live positions from dataStore
     const persistedPositions = getLivePositions();
@@ -214,13 +226,16 @@ export function usePlatform() {
 
       // Only create trade if account is mapped (in the app with a firm)
       if (internalAccountId) {
+        // Pass the already-resolved internalAccountId so closeLivePosition()
+        // doesn't fall back to getAccountMapping(pos.platformId) where
+        // pos.platformId might be undefined (position from raw poll data).
         closeLivePosition(data.position.platformPositionId, {
           exitPrice: data.position.currentPrice,
           exitTime: new Date().toISOString(),
           netPnl: data.position.netPnl,
           grossPnl: data.position.grossPnl,
           fee: data.position.fee,
-        });
+        }, internalAccountId);
 
         recalcAccountFunding(internalAccountId);
 

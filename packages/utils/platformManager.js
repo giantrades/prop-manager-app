@@ -213,15 +213,27 @@ class PlatformManager {
       adapter.getPositions(),
     ]);
 
+    // Safety net: skip entry fills (open positions with fake exit) BEFORE ledger
     const newTrades = [];
     for (const trade of trades) {
       if (trade.platformTradeId) {
         const entry = await getTradeLedgerEntry(trade.platformTradeId);
         if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
       }
+      // Skip trades that look like open-position fills: PnL=0 + no real exit
+      const isEntryFill = trade.netPnl === 0 && (
+        !trade.exitDateTime
+        || trade.exitDateTime === trade.entryDateTime
+        || !trade.exitPrice
+      );
+      if (isEntryFill) {
+        console.log(`[syncPlatform] Skipping entry fill (open position): ${trade.platformTradeId}`);
+        continue;
+      }
       newTrades.push(trade);
     }
 
+    // Only write to ledger for real (non-fake) trades
     for (const trade of newTrades) {
       if (trade.platformTradeId) {
         const existingEntry = await getTradeLedgerEntry(trade.platformTradeId);
@@ -241,6 +253,7 @@ class PlatformManager {
       platformId,
       accounts,
       trades: newTrades,
+      newTrades,   // alias so SYNCED handler picks it up
       positions,
       timestamp: new Date().toISOString(),
     });
@@ -425,7 +438,10 @@ class PlatformManager {
           for (const trade of trades) {
             if (trade.platformTradeId) {
               const entry = await getTradeLedgerEntry(trade.platformTradeId);
-              if (entry) continue;
+              // Bug #3 fix: only skip if explicitly deleted/ignored.
+              // A stale 'imported' entry from a fake open-position trade should NOT
+              // block the real trade from coming through on the next sync.
+              if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
             }
             // Safety net: skip entry fills (PnL = 0, no real exit data)
             const isEntryFill = trade.netPnl === 0 && (
