@@ -312,7 +312,12 @@ export default function Navbar({ isPinned, onTogglePin }) {
           </div>
 
           {/* Cloud Sync */}
-          <div className="sb-footer-item" title={driveTitle} style={{ height: 'auto', padding: '8px 12px', alignItems: 'flex-start' }}>
+          <div className="sb-footer-item" title={driveTitle} style={{
+            height: isExpanded ? 'auto' : 42,
+            padding: isExpanded ? '8px 12px' : undefined,
+            alignItems: isExpanded ? 'flex-start' : 'center',
+            overflow: 'hidden',
+          }}>
             <div className="sb-footer-icon" style={{ marginTop: 2 }}>
               <Cloud size={18} strokeWidth={1.75} />
               <span
