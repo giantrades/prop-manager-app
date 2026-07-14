@@ -44,7 +44,8 @@ export const PLATFORM_EVENTS = {
 
 // ── Default configuration ──────────────────────────────
 const DEFAULT_CONFIG = {
-  syncIntervalMs: 30000,        // 30s for trade sync (ledger prevents re-import)
+  syncIntervalMs: 3600000,      // 1h for trade sync when tab is hidden
+  fastSyncIntervalMs: 5000,     // 5s for trade sync when tab is visible
   positionPollMs: 2000,         // 2s for live positions
   statusCheckMs: 10000,         // 10s for connection status checks
   maxRetries: 3,
@@ -67,6 +68,7 @@ class PlatformManager {
     this._syncInterval = null;
     this._positionInterval = null;
     this._statusInterval = null;
+    this._visibilityHandler = null;
     this._listeners = new Map(); // event → Set<callback>
     this._isRunning = false;
   }
@@ -134,17 +136,22 @@ class PlatformManager {
       this.config.statusCheckMs
     );
 
-    // Trade sync (fetch new trades)
-    this._syncInterval = setInterval(
-      () => this._syncAllTrades(),
-      this.config.syncIntervalMs
-    );
+    // Trade sync — interval depends on tab visibility
+    this._startSyncInterval();
 
     // Live positions (fast polling)
     this._positionInterval = setInterval(
       () => this._pollAllPositions(),
       this.config.positionPollMs
     );
+
+    // Adjust sync interval when tab visibility changes
+    this._visibilityHandler = () => {
+      this._stopSyncInterval();
+      this._startSyncInterval();
+      if (document.visibilityState === 'visible') this._syncAllTrades();
+    };
+    document.addEventListener('visibilitychange', this._visibilityHandler);
 
     // Immediate first check
     this._checkAllStatuses();
@@ -155,17 +162,36 @@ class PlatformManager {
   /** Stop all auto-sync */
   stopAutoSync() {
     this._isRunning = false;
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
     if (this._statusInterval) clearInterval(this._statusInterval);
-    if (this._syncInterval) clearInterval(this._syncInterval);
+    this._stopSyncInterval();
     if (this._positionInterval) clearInterval(this._positionInterval);
     this._statusInterval = null;
-    this._syncInterval = null;
     this._positionInterval = null;
   }
 
   /** @returns {boolean} Whether auto-sync is running */
   isRunning() {
     return this._isRunning;
+  }
+
+  /** @private Start trade sync interval based on tab visibility */
+  _startSyncInterval() {
+    const interval = document.visibilityState === 'visible'
+      ? this.config.fastSyncIntervalMs
+      : this.config.syncIntervalMs;
+    this._syncInterval = setInterval(() => this._syncAllTrades(), interval);
+  }
+
+  /** @private Stop trade sync interval */
+  _stopSyncInterval() {
+    if (this._syncInterval) {
+      clearInterval(this._syncInterval);
+      this._syncInterval = null;
+    }
   }
 
   // ── Manual Sync ──────────────────────────────────────
