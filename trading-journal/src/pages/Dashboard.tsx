@@ -706,15 +706,24 @@ const CategoryCard = ({ data, fmt }: any) => {
   };
 
   const totalPnl = data.reduce((s: number, d: any) => s + d.pnl, 0);
+  const totalAbsPnl = data.reduce((s: number, d: any) => s + Math.abs(d.pnl), 0);
   const totalFmt = fmt(totalPnl);
   const radius = 80;
   const center = 100;
   let startAngle = 0;
 
+  const darken = (hex: string, amt: number = 35) => {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.max(0, (n >> 16) - amt);
+    const g = Math.max(0, ((n >> 8) & 0xff) - amt);
+    const b = Math.max(0, (n & 0xff) - amt);
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  };
+
   const paths =
     data.length > 1
       ? data.map((entry: any) => {
-        const pct = totalPnl ? entry.pnl / totalPnl : 0;
+        const pct = totalAbsPnl ? Math.abs(entry.pnl) / totalAbsPnl : 0;
         const endAngle = startAngle + pct * 360;
         const largeArc = endAngle - startAngle > 180 ? 1 : 0;
 
@@ -729,15 +738,17 @@ const CategoryCard = ({ data, fmt }: any) => {
 
         const path = `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
         startAngle = endAngle;
+        const isNeg = entry.pnl < 0;
 
         return (
           <path
             key={entry.name}
             d={path}
-            fill={getCategoryColor(entry.name)}
-            opacity="0.9"
-            stroke="#0f1419"
-            strokeWidth={0.5}
+            fill={isNeg ? darken(getCategoryColor(entry.name)) : getCategoryColor(entry.name)}
+            opacity={isNeg ? 0.55 : 0.9}
+            stroke={isNeg ? "#ef4444" : "#0f1419"}
+            strokeWidth={isNeg ? 1 : 0.5}
+            strokeDasharray={isNeg ? "4 2" : "none"}
           />
         );
       })
@@ -747,8 +758,8 @@ const CategoryCard = ({ data, fmt }: any) => {
           cx={center}
           cy={center}
           r={radius}
-          fill={getCategoryColor(data[0]?.name || "Unknown")}
-          opacity="0.9"
+          fill={data[0]?.pnl >= 0 ? getCategoryColor(data[0]?.name || "Unknown") : darken(getCategoryColor(data[0]?.name || "Unknown"))}
+          opacity={data[0]?.pnl >= 0 ? 0.9 : 0.55}
         />,
       ];
 
@@ -812,7 +823,7 @@ const CategoryCard = ({ data, fmt }: any) => {
                       ? 20
                       : 24,
                 fontWeight: 700,
-                color: "#f9fafb",
+                color: totalPnl >= 0 ? "#f9fafb" : "#f87171",
                 textShadow: "0 0 6px rgba(255,255,255,0.08)",
               }}
             >
