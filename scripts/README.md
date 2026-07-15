@@ -1,123 +1,167 @@
-# QuantowerBridge — Setup
+# QuantowerBridge — Setup de PC Novo
 
-## O que é
+Passo a passo para configurar uma máquina Windows do zero com Tailscale, bridge e Funnel.
 
-O **QuantowerBridge** é uma strategy C# que roda dentro do Quantower e expõe uma API HTTP com seus dados de trading (posições, trades, contas). Um webapp companion consome essa API para sincronizar dados automaticamente.
+---
 
-O **Tailscale Funnel** permite acessar o bridge de qualquer lugar (pelo celular, por exemplo) sem abrir portas no roteador ou configurar DNS.
-
-## Como usar num PC novo
-
-### Pré-requisitos
+## Pré-requisitos
 
 - Windows 10/11
-- Conta Tailscale (gratuita em [tailscale.com](https://tailscale.com))
-- Quantower instalado
+- Conta Tailscale gratuita em [tailscale.com](https://tailscale.com)
+- Quantower instalado e logado
 - Node.js 18+ ([nodejs.org](https://nodejs.org))
 - Git ([git-scm.com](https://git-scm.com))
 
-### 1. Clone o repositório
+---
+
+## Setup rápido (automático)
 
 ```powershell
-cd C:\Users\Gian\Desktop
-git clone <url-do-repositorio> apps
-```
-
-### 2. Execute o setup
-
-**Como Administrador:**
-
-```powershell
+# Como Administrador:
 cd C:\Users\Gian\Desktop\apps\scripts
 .\setup-new-pc.bat
 ```
 
-O script vai:
-- Instalar Tailscale (se não tiver)
-- Reservar a URL ACL para porta 8787
-- Copiar o QuantowerBridge.dll para a pasta de Strategies
-- Criar tarefa no Agendador para iniciar o Funnel no boot
-- Ativar o Tailscale Funnel na porta 8787
-- Compilar o webapp (npm install + build)
+O script faz tudo: instala Tailscale, copia a DLL, configura o Funnel, cria a tarefa no Agendador e compila o webapp. Ao final, reinicie o Quantower e inicie a strategy **QuantowerBridge**.
 
-### 3. Inicie a strategy no Quantower
+---
+
+## Setup manual (passo a passo)
+
+### 1. Instalar Tailscale
+
+```powershell
+winget install --name Tailscale.Tailscale
+```
+
+Ou baixe de [tailscale.com/download](https://tailscale.com/download).
+
+Após instalar, faça login e confirme que aparece **Connected** na bandeja do sistema. Anote o nome da máquina (ex: `gian-note`).
+
+### 2. Reservar URL ACL (uma vez)
+
+```powershell
+netsh http add urlacl url=http://+:8787/ user=Everyone
+```
+
+Permite que qualquer aplicação escute na porta 8787 sem precisar de admin toda vez.
+
+### 3. Configurar Tailscale Funnel (uma vez)
+
+```powershell
+# Ativa o túnel público na porta 8787 (--bg = background, persiste com o serviço)
+tailscale funnel --bg 8787
+
+# Testa se está no ar
+curl https://gian-note.tailf...:8787/status
+```
+
+A configuração do Funnel fica salva no servidor do Tailscale. O `--bg` faz o túnel rodar como parte do serviço `tailscaled` — persiste após reboot e não depende de terminal aberto.
+
+### 4. Criar tarefa no Agendador (keepalive)
+
+Para garantir que o Funnel volte automaticamente após boot/hibernação:
+
+**Script #1 (startup + wake via Event ID 107):**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-wake-trigger.ps1
+```
+
+**Script #2 (startup + logon, mais robusto — recomendado):**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-tailscale-funnel.ps1
+```
+
+Diferença:
+
+| Script | Triggers | Aguarda tailscaled? | Log |
+|---|---|---|---|
+| `setup-wake-trigger.ps1` | startup + Event ID 107 (kernel resume) | Não | Não |
+| `setup-tailscale-funnel.ps1` | startup + user logon (cobre resume) | Sim (até 60s) | Sim (`%TEMP%\QuantowerBridge-Funnel.log`) |
+
+Use o **script #2** (`setup-tailscale-funnel.ps1`) — é mais confiável.
+
+### 5. Compilar e copiar bridge DLL
+
+No Quantower, abra o **Quantower Algo**, abra o arquivo `QuantowerBridge.cs`, pressione **Ctrl+Shift+B**. O DLL será gerado em `quantower-bridge\bin\Debug\QuantowerBridge.dll`.
+
+Copie para a pasta de strategies do Quantower:
+
+```powershell
+copy QuantowerBridge.dll "C:\Quantower\Settings\Scripts\Strategies\QuantowerBridge\"
+```
+
+### 6. Iniciar a strategy no Quantower
 
 1. Abra o Quantower
 2. Vá em **Strategies Manager**
 3. Localize **QuantowerBridge**
 4. Clique em **Start**
-5. Verifique se **Allow External Access** está marcado como **True**
+5. Verifique se **Allow External Access** está como **True**
 
-### 4. Teste
-
-No PowerShell:
+### 7. Testar
 
 ```powershell
+# Local (funciona sempre)
 curl http://localhost:8787/status
-curl https://gian-note.tailbafabd.ts.net/status
+
+# Via Funnel (qualquer dispositivo na internet)
+curl https://gian-note.tailf...:8787/status
 ```
 
-No celular (com Tailscale instalado):
+### 8. Configurar URL no app
+
+No Settings do journal, a URL da bridge deve ser:
 
 ```
-https://gian-note.tailbafabd.ts.net/status
+https://gian-note.tailf...:8787
 ```
 
-## Como funciona
+> ⚠️ A porta `:8787` é obrigatória. Sem ela o Tailscale Serve padrão (porta 443/80) não roteia para a bridge.
 
-```
-Celular/Notebook                    PC com Quantower
-┌──────────────┐                   ┌──────────────────────┐
-│ Chrome       │                   │ Quantower            │
-│ Netlify app  │                   │   ┌──────────────┐   │
-│ (HTTPS)      │                   │   │ Bridge DLL   │   │
-│              │                   │   │ :8787        │   │
-│ ┌──────────┐ │                   │   └──────────────┘   │
-│ │Adapter   │─┼── HTTPS ─────────┼──▶ HTTP localhost     │
-│ │fetch()   │ │  Tailscale       │                      │
-│ └──────────┘ │  Funnel          │                      │
-└──────────────┘                   └──────────────────────┘
-```
+---
 
-O Chrome (HTTPS) → Tailscale Funnel (público) → PC → localhost:8787 (HTTP)
+## Se trocar de máquina principal
 
-## Comandos úteis
+1. Instalar Tailscale na máquina nova e fazer login
+2. Rodar `tailscale funnel 8787` (uma vez)
+3. Rodar `setup-tailscale-funnel.ps1` (cria tarefa keepalive)
+4. Instalar Quantower e copiar bridge DLL
+5. Instalar Node.js + Git, clonar o repositório
+6. Rodar `pnpm install && pnpm build:journal`
+7. Iniciar a strategy no Quantower
 
-| Comando | O que faz |
-|---------|-----------|
-| `tailscale funnel 8787` | Ativa o túnel público |
-| `tailscale funnel status` | Mostra status do túnel |
-| `netsh http show urlacl` | Lista reservas de URL |
-| `npm run build` | Compila o webapp |
+---
 
+## Troubleshooting
 
-## Resolução de problemas
+### 503 Service Unavailable (localhost:8787)
 
-### 503 Service Unavailable
+A bridge não está rodando. No Quantower: pare e inicie a strategy.
 
-O listener do bridge parou. No Quantower:
-1. Pare a strategy (Stop)
-2. Inicie novamente (Start)
+### ERR_CONNECTION_CLOSED (HTTPS Funnel)
 
-### Chrome bloqueia requisições (Private Network Access)
+- O Funnel caiu. Rode `tailscale funnel --bg 8787`
+- Verifique o log em `%TEMP%\QuantowerBridge-Funnel.log`
+- Verifique se o Tailscale está conectado (ícone na bandeja)
+- Verifique o status: `tailscale funnel status`
 
-O webapp foi servido pelo Netlify (HTTPS) e tenta acessar `localhost` (HTTP). Solução:
-- Use a URL do Funnel (`https://gian-note.tailbafabd.ts.net`) configurada no app
-- Ou sirva o webapp localmente via `serve` + Funnel
+### Mixed Content (HTTPS → HTTP)
 
-### Funnel caiu
+O app no Netlify (HTTPS) tentou acessar `http://localhost:8787`. Use a URL do Funnel com `https://`.
 
-```powershell
-tailscale funnel 8787
-```
+### CORS bloqueado
 
-O Agendador de Tarefas reinicia automaticamente no boot.
+A bridge precisa enviar headers CORS. Verifique no código do bridge se `Access-Control-Allow-Origin: *` está sendo enviado nas respostas HTTP.
 
-## Recompilar o bridge DLL
+---
 
-No Quantower Algo:
-1. Abra `quantower-bridge\QuantowerBridge.cs`
-2. Pressione **Ctrl+Shift+B**
-3. O DLL será gerado em `quantower-bridge\bin\Debug\QuantowerBridge.dll`
-4. Copie para `C:\Quantower\Settings\Scripts\Strategies\QuantowerBridge\`
-5. No Quantower, pare e inicie a strategy
+## Scripts disponíveis
+
+| Script | O que faz |
+|---|---|
+| `setup-new-pc.bat` | Automação completa de setup (admin) |
+| `setup-wake-trigger.ps1` | Cria tarefa agendada com startup + wake (Event ID 107) |
+| `setup-tailscale-funnel.ps1` | Cria tarefa agendada com startup + logon, aguarda tailscaled, com log |
+| `merge-builds.js` | Utilitário de build |
+| `migrate-to-supabase.ts` | Migração de dados |

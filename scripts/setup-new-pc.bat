@@ -65,20 +65,15 @@ if exist "%DLL_SRC%" (
     pause
 )
 
-:: ── 5. Task Scheduler ─────────────────────────
-echo [4/6] Criando tarefa no agendador (inicializacao)...
-schtasks /query /tn "QuantowerBridge-Funnel" >nul 2>&1
-if %errorlevel% neq 0 (
-    schtasks /create /tn "QuantowerBridge-Funnel" /tr "tailscale funnel %BRIDGE_PORT%" /sc onstart /delay 0000:30 /rl highest /f >nul 2>&1
-    if %errorlevel% equ 0 (echo     OK) else (echo     [!] Falha ao criar tarefa)
-) else (
-    echo     Ja existe
-)
+:: ── 5. Task Scheduler (Funnel KeepAlive) ──────
+echo [4/6] Configurando tarefa no agendador para manter Funnel ativo...
+powershell -ExecutionPolicy Bypass -File "%~dp0setup-tailscale-funnel.ps1" >nul 2>&1
+if %errorlevel% equ 0 (echo     OK) else (echo     [!] Falha ao configurar tarefa. Execute manualmente: setup-tailscale-funnel.ps1)
 
 :: ── 6. Funnel ─────────────────────────────────
 echo [5/6] Ativando Tailscale Funnel (porta %BRIDGE_PORT%)...
-tailscale funnel %BRIDGE_PORT% >nul 2>&1
-echo     OK — URL: https://gian-note.tailbafabd.ts.net/
+tailscale funnel --bg %BRIDGE_PORT% >nul 2>&1
+echo     OK — URL: https://gian-note.tailf...:8787/
 
 :: ── 7. Build webapp ───────────────────────────
 echo [6/6] Compilando webapp...

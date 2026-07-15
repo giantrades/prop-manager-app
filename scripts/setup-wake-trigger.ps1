@@ -26,7 +26,7 @@ $wakeTrigger = New-CimInstance -ClassName MSFT_TaskEventTrigger -Namespace "Root
 $triggers += $wakeTrigger
 
 # Define a ação
-$action = New-ScheduledTaskAction -Execute $actionPath -Argument "funnel 8787"
+$action = New-ScheduledTaskAction -Execute $actionPath -Argument "funnel --bg 8787"
 
 # Configurações
 $settings = New-ScheduledTaskSettingsSet `
