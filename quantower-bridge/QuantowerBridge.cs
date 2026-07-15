@@ -476,165 +476,174 @@ namespace QuantowerBridge
             return JsonSerializer.Serialize(result, JsonOptions);
         }
 
-        private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
+private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
+{
+    DateTime? fromDate = null;
+    DateTime? toDate   = null;
+
+    if (!string.IsNullOrEmpty(query["from"]))
+        if (DateTime.TryParse(query["from"], out DateTime f)) fromDate = f;
+
+    if (!string.IsNullOrEmpty(query["to"]))
+        if (DateTime.TryParse(query["to"], out DateTime t)) toDate = t;
+
+    // ── Janela solicitada (ex: últimos 30s no sync periódico) ──────────────
+    var reqParams = new TradesHistoryRequestParameters
+    {
+        From = fromDate ?? DateTime.UtcNow.AddDays(-1),
+        To   = toDate   ?? DateTime.UtcNow
+    };
+    var tradeList = Core.Instance.GetTrades(reqParams);
+
+    // ── Janela larga para encontrar fills de ENTRADA mais antigos ──────────
+    // Core.Instance.History não existe na API — o único acesso é GetTrades().
+    // Uma única chamada antes do loop evita N chamadas redundantes.
+    var wideParams = new TradesHistoryRequestParameters
+    {
+        From = DateTime.UtcNow.AddYears(-2),
+        To   = toDate ?? DateTime.UtcNow
+    };
+    var allHistorical = Core.Instance.GetTrades(wideParams);
+
+    // Dicionário positionId → lista de fills (para lookup O(1) no loop)
+    var fillsByPosition = allHistorical
+        .Where(t => !string.IsNullOrEmpty(t.PositionId))
+        .GroupBy(t => t.PositionId)
+        .ToDictionary(g => g.Key, g => g.ToList());
+
+    // ── Agrupa fills da janela solicitada por PositionId ───────────────────
+    var grouped = tradeList
+        .Where(t => !string.IsNullOrEmpty(t.PositionId))
+        .GroupBy(t => t.PositionId);
+
+    var trades = new List<object>();
+
+    foreach (var group in grouped)
+    {
+        // USA o dicionário largo para reconstruir entrada + saída corretamente.
+        // Se não achou no histórico largo, cai no grupo restrito (fallback).
+        var allTradesForPos = fillsByPosition.TryGetValue(group.Key, out var hist)
+            ? hist
+            : group.ToList();
+
+        if (allTradesForPos.Count == 0) allTradesForPos = group.ToList();
+
+        bool isLong   = allTradesForPos.First().Side == Side.Buy;
+        var entries   = allTradesForPos.Where(t => t.Side == (isLong ? Side.Buy  : Side.Sell)).ToList();
+        var exits     = allTradesForPos.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy )).ToList();
+
+        // Posição ainda aberta → aparece em /positions
+        if (entries.Count == 0 || exits.Count == 0)
         {
-            DateTime? fromDate = null;
-            DateTime? toDate = null;
-
-            if (!string.IsNullOrEmpty(query["from"]))
-            {
-                if (DateTime.TryParse(query["from"], out DateTime f))
-                    fromDate = f;
-            }
-
-            if (!string.IsNullOrEmpty(query["to"]))
-            {
-                if (DateTime.TryParse(query["to"], out DateTime t))
-                    toDate = t;
-            }
-
-            var reqParams = new TradesHistoryRequestParameters
-            {
-                From = fromDate ?? DateTime.UtcNow.AddDays(-1),
-                To = toDate ?? DateTime.UtcNow
-            };
-
-            var tradeList = Core.Instance.GetTrades(reqParams);
-            var trades = new List<object>();
-
-            // Group by PositionId, then unify each position into one entry+exit trade
-            var grouped = tradeList
-                .Where(t => !string.IsNullOrEmpty(t.PositionId))
-                .GroupBy(t => t.PositionId);
-
-            foreach (var group in grouped)
-            {
-                // Fix: tradeList only contains trades AFTER fromDate.
-                // If a position was opened yesterday and closed today, the entry fill is missing from tradeList.
-                // We must pull ALL fills for this position from the full history to construct it properly.
-                var allTradesForPos = Core.Instance.History.Trades.Where(t => t.PositionId == group.Key).ToList();
-                if (allTradesForPos.Count == 0) allTradesForPos = group.ToList();
-
-                bool isLong = allTradesForPos.First().Side == Side.Buy;
-                var entries = allTradesForPos.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
-                var exits = allTradesForPos.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
-
-                // Skip if no exits — position is still open, will come via /positions → POSITION_CLOSED
-                if (entries.Count == 0 || exits.Count == 0)
-                {
-                    FileLog($"[TRADES] Skip open position {group.Key}: entries={entries.Count}, exits={exits.Count}");
-                    continue;
-                }
-
-                Trade firstTrade = group.First();
-                string connName = "";
-                string accountId = "";
-                string accountName = "";
-                try
-                {
-                    var conn = Core.Instance.Connections.Connected
-                        .FirstOrDefault(c => c.Id == firstTrade.ConnectionId);
-                    connName = conn?.Name ?? "";
-                    accountId = firstTrade.Account?.Id ?? "";
-                    accountName = firstTrade.Account?.Name ?? "";
-                    FileLog($"[TRADES] Group {group.Key}: accountId={accountId}, accountName={accountName}, entries={entries.Count}, exits={exits.Count}");
-                }
-                catch (Exception ex)
-                {
-                    FileLog($"[TRADES] Error getting account for group {group.Key}: {ex.Message}");
-                }
-
-                double totalQty = (double)entries.Sum(t => (double)t.Quantity);
-                double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
-                double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
-                double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
-
-                double entryPrice = entries.Count > 0
-                    ? (double)entries.Sum(t => (double)t.Price * (double)t.Quantity) / (double)entries.Sum(t => (double)t.Quantity)
-                    : 0;
-                double exitPrice = exits.Count > 0
-                    ? (double)exits.Sum(t => (double)t.Price * (double)t.Quantity) / (double)exits.Sum(t => (double)t.Quantity)
-                    : 0;
-
-                DateTime entryTime = entries.Count > 0
-                    ? entries.Min(t => t.DateTime)
-                    : group.Min(t => t.DateTime);
-                DateTime exitTime = exits.Count > 0
-                    ? exits.Max(t => t.DateTime)
-                    : entryTime;
-
-                trades.Add(new
-                {
-                    id = group.Key,
-                    symbol = firstTrade.Symbol?.Name ?? "",
-                    side = isLong ? "Long" : "Short",
-                    quantity = totalQty,
-                    entryPrice = Math.Round(entryPrice, 6),
-                    exitPrice = Math.Round(exitPrice, 6),
-                    entryDateTime = entryTime.ToString("O"),
-                    exitDateTime = exitTime.ToString("O"),
-                    grossPnl = Math.Round(grossPnl, 2),
-                    netPnl = Math.Round(netPnl, 2),
-                    fee = Math.Round(totalFee, 2),
-                    positionId = group.Key,
-                    accountId,
-                    accountName,
-                    connectionId = firstTrade.ConnectionId ?? "",
-                    connectionName = connName
-                });
-            }
-
-            // Trades without PositionId (should be rare) — keep as individual fills
-            var ungrouped = tradeList.Where(t => string.IsNullOrEmpty(t.PositionId));
-            foreach (Trade trade in ungrouped)
-            {
-                string connName = "";
-                string accId = "";
-                string accName = "";
-                try
-                {
-                    var conn = Core.Instance.Connections.Connected
-                        .FirstOrDefault(c => c.Id == trade.ConnectionId);
-                    connName = conn?.Name ?? "";
-                    accId = trade.Account?.Id ?? "";
-                    accName = trade.Account?.Name ?? "";
-                    FileLog($"[TRADES] Ungrouped {trade.Id}: accountId={accId}, accountName={accName}, side={trade.Side}, pnl={trade.NetPnl?.Value ?? 0}");
-                }
-                catch (Exception ex)
-                {
-                    FileLog($"[TRADES] Error getting account for ungrouped {trade.Id}: {ex.Message}");
-                }
-
-                trades.Add(new
-                {
-                    id = trade.Id,
-                    symbol = trade.Symbol?.Name ?? "",
-                    side = trade.Side.ToString(),
-                    quantity = (double)trade.Quantity,
-                    entryPrice = (double)trade.Price,
-                    exitPrice = (double)0,
-                    entryDateTime = trade.DateTime.ToString("O"),
-                    exitDateTime = null as string,
-                    grossPnl = trade.GrossPnl?.Value ?? 0,
-                    netPnl = trade.NetPnl?.Value ?? 0,
-                    fee = trade.Fee?.Value ?? 0,
-                    positionId = "",
-                    accountId = accId,
-                    accountName = accName,
-                    connectionId = trade.ConnectionId ?? "",
-                    connectionName = connName
-                });
-            }
-
-            var result = new
-            {
-                trades,
-                count = trades.Count,
-                timestamp = DateTime.UtcNow.ToString("O")
-            };
-
-            return JsonSerializer.Serialize(result, JsonOptions);
+            FileLog($"[TRADES] Skip open position {group.Key}: entries={entries.Count}, exits={exits.Count}");
+            continue;
         }
+
+        Trade firstTrade = group.First();
+        string connName   = "";
+        string accountId  = "";
+        string accountName = "";
+
+        try
+        {
+            var conn    = Core.Instance.Connections.Connected
+                .FirstOrDefault(c => c.Id == firstTrade.ConnectionId);
+            connName    = conn?.Name ?? "";
+            accountId   = firstTrade.Account?.Id   ?? "";
+            accountName = firstTrade.Account?.Name ?? "";
+            FileLog($"[TRADES] Group {group.Key}: accountId={accountId}, entries={entries.Count}, exits={exits.Count}");
+        }
+        catch (Exception ex)
+        {
+            FileLog($"[TRADES] Error getting account for group {group.Key}: {ex.Message}");
+        }
+
+        double totalQty  = (double)entries.Sum(t => (double)t.Quantity);
+        double totalFee  = (double)group.Sum(t => t.Fee?.Value ?? 0);
+        double grossPnl  = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
+        double netPnl    = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
+
+        double entryPrice = entries.Count > 0
+            ? (double)entries.Sum(t => (double)t.Price * (double)t.Quantity)
+              / (double)entries.Sum(t => (double)t.Quantity)
+            : 0;
+        double exitPrice = exits.Count > 0
+            ? (double)exits.Sum(t => (double)t.Price * (double)t.Quantity)
+              / (double)exits.Sum(t => (double)t.Quantity)
+            : 0;
+
+        DateTime entryTime = entries.Count > 0 ? entries.Min(t => t.DateTime) : group.Min(t => t.DateTime);
+        DateTime exitTime  = exits.Count  > 0 ? exits.Max(t => t.DateTime)   : entryTime;
+
+        trades.Add(new
+        {
+            id             = group.Key,
+            symbol         = firstTrade.Symbol?.Name ?? "",
+            side           = isLong ? "Long" : "Short",
+            quantity       = totalQty,
+            entryPrice     = Math.Round(entryPrice, 6),
+            exitPrice      = Math.Round(exitPrice,  6),
+            entryDateTime  = entryTime.ToString("O"),
+            exitDateTime   = exitTime.ToString("O"),
+            grossPnl       = Math.Round(grossPnl, 2),
+            netPnl         = Math.Round(netPnl,   2),
+            fee            = Math.Round(totalFee,  2),
+            positionId     = group.Key,
+            accountId,
+            accountName,
+            connectionId   = firstTrade.ConnectionId ?? "",
+            connectionName = connName
+        });
+    }
+
+    // ── Fills sem PositionId (raro) ────────────────────────────────────────
+    var ungrouped = tradeList.Where(t => string.IsNullOrEmpty(t.PositionId));
+    foreach (Trade trade in ungrouped)
+    {
+        string connName = "";
+        string accId    = "";
+        string accName  = "";
+        try
+        {
+            var conn = Core.Instance.Connections.Connected
+                .FirstOrDefault(c => c.Id == trade.ConnectionId);
+            connName = conn?.Name ?? "";
+            accId    = trade.Account?.Id   ?? "";
+            accName  = trade.Account?.Name ?? "";
+        }
+        catch (Exception ex)
+        {
+            FileLog($"[TRADES] Error getting account for ungrouped {trade.Id}: {ex.Message}");
+        }
+
+        trades.Add(new
+        {
+            id            = trade.Id,
+            symbol        = trade.Symbol?.Name ?? "",
+            side          = trade.Side.ToString(),
+            quantity      = (double)trade.Quantity,
+            entryPrice    = (double)trade.Price,
+            exitPrice     = (double)0,
+            entryDateTime = trade.DateTime.ToString("O"),
+            exitDateTime  = null as string,
+            grossPnl      = trade.GrossPnl?.Value ?? 0,
+            netPnl        = trade.NetPnl?.Value   ?? 0,
+            fee           = trade.Fee?.Value       ?? 0,
+            positionId    = "",
+            accountId     = accId,
+            accountName   = accName,
+            connectionId  = trade.ConnectionId ?? "",
+            connectionName = connName
+        });
+    }
+
+    return JsonSerializer.Serialize(new
+    {
+        trades,
+        count     = trades.Count,
+        timestamp = DateTime.UtcNow.ToString("O")
+    }, JsonOptions);
+}
 
         private static string BuildPositionsJson()
         {
