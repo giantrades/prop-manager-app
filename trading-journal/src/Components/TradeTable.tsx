@@ -31,6 +31,25 @@ function FirmBadge({ firmLogo, firmColor, firmName }: { firmLogo?: string | null
   );
 }
 
+function PlatformBadge({ source, isLive }: { source?: string; isLive?: boolean }) {
+  const label = isLive ? 'Live' : (source || '?');
+  const color = isLive ? '#10b981' : source === 'quantower' ? '#6366f1' : '#8b5cf6';
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center',
+        padding: '1px 6px', borderRadius: 4,
+        fontSize: 10, fontWeight: 600, lineHeight: '16px',
+        background: color + '20', color,
+        marginRight: 4, textTransform: 'uppercase',
+        letterSpacing: '0.3px',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 type Props = {
   trades: EnrichedTrade[];
   onEdit?: (t: EnrichedTrade) => void;
