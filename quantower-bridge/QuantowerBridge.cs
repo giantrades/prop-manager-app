@@ -509,9 +509,15 @@ namespace QuantowerBridge
 
             foreach (var group in grouped)
             {
-                bool isLong = group.First().Side == Side.Buy;
-                var entries = group.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
-                var exits = group.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
+                // Fix: tradeList only contains trades AFTER fromDate.
+                // If a position was opened yesterday and closed today, the entry fill is missing from tradeList.
+                // We must pull ALL fills for this position from the full history to construct it properly.
+                var allTradesForPos = Core.Instance.History.Trades.Where(t => t.PositionId == group.Key).ToList();
+                if (allTradesForPos.Count == 0) allTradesForPos = group.ToList();
+
+                bool isLong = allTradesForPos.First().Side == Side.Buy;
+                var entries = allTradesForPos.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
+                var exits = allTradesForPos.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
 
                 // Skip if no exits — position is still open, will come via /positions → POSITION_CLOSED
                 if (entries.Count == 0 || exits.Count == 0)

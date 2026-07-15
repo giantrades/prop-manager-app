@@ -1058,46 +1058,9 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
 
   // Remove from live positions
   data.livePositions.splice(posIdx, 1);
-
-  // Handle both old (entryPrice/entryTime) and new (openPrice/openTime) field names
-  const entryTime = pos.openTime || pos.entryTime;
-  const entryPrice = pos.openPrice ?? pos.entryPrice;
-
-  // Create or update trade from the closed position
-  const tradeData = {
-    entry_datetime: entryTime,
-    exit_datetime: exitData.exitTime || new Date().toISOString(),
-    asset: pos.symbol,
-    accountId: resolvedAccountId || (() => {
-      // 1. Try internalAccountId (set by POSITION_UPDATED enrichment)
-      if (pos.internalAccountId) return pos.internalAccountId;
-      // 2. Try platformAccountId -> mapping
-      if (pos.platformAccountId) {
-        const mapping = getAccountMapping(pos.platformId);
-        if (mapping?.[pos.platformAccountId]) return mapping[pos.platformAccountId];
-      }
-      // 3. Fallback: match by accountName (pos.accountName)
-      if (pos.accountName) {
-        const match = data.accounts?.find(a => a.name === pos.accountName);
-        if (match) return match.id;
-      }
-      return null;
-    })(),
-    direction: pos.side === 'Short' ? 'Short' : 'Long',
-    volume: pos.quantity,
-    entry_price: entryPrice,
-    exit_price: exitData.exitPrice || pos.currentPrice,
-    result_net: exitData.netPnl ?? pos.netPnl ?? 0,
-    source: pos.platformId || 'quantower',
-    platformTradeId: pos.platformPositionId,
-    platformName: pos.platformName || 'Quantower',
-    connectionName: pos.connectionName || '',
-    isLive: false,
-  };
-
-  const result = upsertTradeFromPlatform(tradeData);
   save(data);
-  return result.trade;
+
+  return null;
 }
 
 /**
