@@ -108,20 +108,22 @@ export default function AccountPicker({
       : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v * rate);
   };
 
-  /* Filtered list */
+  /* Filtered list — exclude hidden accounts */
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return accounts.filter(a =>
-      !q ||
-      (a.name || '').toLowerCase().includes(q) ||
-      (a.type || '').toLowerCase().includes(q) ||
-      (a.status || '').toLowerCase().includes(q)
+      a.hidden !== true && (
+        !q ||
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.type || '').toLowerCase().includes(q) ||
+        (a.status || '').toLowerCase().includes(q)
+      )
     );
   }, [accounts, query]);
 
-  /* Selected account objects */
+  /* Selected account objects — exclude hidden */
   const selectedAccounts = useMemo(() =>
-    accounts.filter(a => selectedIds.includes(a.id)),
+    accounts.filter(a => a.hidden !== true && selectedIds.includes(a.id)),
     [accounts, selectedIds]
   );
 

@@ -44,7 +44,7 @@ export default function TradeForm({ onClose, editing }: Props) {
   const statusDropdownRef = useRef<HTMLDivElement | null>(null);
   // Pegar contas do main-app
   const [accounts, setAccounts] = useState(() => {  try {
-        return getAll().accounts || [];
+        return (getAll().accounts || []).filter(a => a.hidden !== true);
       } catch {
         return [];
       }
@@ -54,8 +54,7 @@ export default function TradeForm({ onClose, editing }: Props) {
     const loadAccounts = () => {
       try {
         const data = getAll();
-        console.log('📦 Contas carregadas no TradeForm:', data.accounts); // DEBUG
-        setAccounts(data.accounts || []);
+        setAccounts((data.accounts || []).filter(a => a.hidden !== true));
       } catch (err) {
         console.error('❌ Erro ao carregar contas:', err);
         setAccounts([]);

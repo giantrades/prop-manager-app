@@ -1,6 +1,7 @@
 // src/state/DashboardDataContext.jsx
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import * as store from "@apps/lib/dataStore";
+import { getVisibleAccounts } from "@apps/lib/dataStore";
 import { isSignedIn, uploadOrUpdateJSON, downloadLatestJSON } from "../utils/googleDrive.js";
 import { isProtonDriveLogged, backupToProtonDrive, ensureProtonPermission } from "../utils/protonDrive.js";
 import { getFullBackupPayload, applyFullBackupPayload } from "../utils/backupPayload.js";
@@ -10,7 +11,7 @@ const DataCtx = createContext(null);
 export function DataProvider({ children }) {
   // inicializa a partir do store local (cache)
   const all = store.getAll() || {}
-  const [accounts, setAccounts] = useState(all.accounts || []);
+  const [accounts, setAccounts] = useState((all.accounts || []).filter(a => a.hidden !== true));
   const [payouts, setPayouts] = useState(all.payouts || []);
   const [settings, setSettings] = useState(all.settings || { methods: ['Rise', 'Wise', 'Pix', 'Paypal', 'Cripto'] });
   const [firms, setFirms] = useState(all.firms || []);
@@ -18,7 +19,7 @@ export function DataProvider({ children }) {
     const syncFromStorage = () => {
       try {
         const data = JSON.parse(localStorage.getItem('propmanager-data-v1') || '{}');
-        if (data.accounts) setAccounts(data.accounts);
+        if (data.accounts) setAccounts(data.accounts.filter(a => a.hidden !== true));
         if (data.payouts) setPayouts(data.payouts);
         if (data.settings) setSettings(data.settings);
         if (data.firms) setFirms(data.firms);
@@ -53,7 +54,7 @@ export function DataProvider({ children }) {
     // Atualiza os states que este contexto expõe, lendo de volta do
     // store já mesclado (garante consistência com o que foi persistido)
     const merged = store.getAll();
-    setAccounts(merged.accounts || []);
+    setAccounts((merged.accounts || []).filter(a => a.hidden !== true));
     setPayouts(merged.payouts || []);
     setSettings(merged.settings || settings);
     setFirms(merged.firms || []);
@@ -79,19 +80,19 @@ export function DataProvider({ children }) {
   const createAccount = (partial) => {
     const a = store.createAccount(partial)
     const all = store.getAll()
-    setAccounts(all.accounts)
+    setAccounts(all.accounts.filter(a => a.hidden !== true))
     return a
   }
   const updateAccount = (id, patch) => {
     const a = store.updateAccount(id, patch)
     const all = store.getAll()
-    setAccounts(all.accounts)
+    setAccounts(all.accounts.filter(a => a.hidden !== true))
     return a
   }
   const deleteAccount = (id) => {
     store.deleteAccount(id)
     const all = store.getAll()
-    setAccounts(all.accounts)
+    setAccounts(all.accounts.filter(a => a.hidden !== true))
     setPayouts(all.payouts)
   }
 
@@ -100,21 +101,21 @@ export function DataProvider({ children }) {
     const p = store.createPayout(partial)
     const all = store.getAll()
     setPayouts(all.payouts)
-    setAccounts(all.accounts) // caso currentFunding tenha sido atualizado no store
+    setAccounts(all.accounts.filter(a => a.hidden !== true)) // caso currentFunding tenha sido atualizado no store
     return p
   }
   const updatePayout = (id, patch) => {
     const p = store.updatePayout(id, patch)
     const all = store.getAll()
     setPayouts(all.payouts)
-    setAccounts(all.accounts)
+    setAccounts(all.accounts.filter(a => a.hidden !== true))
     return p
   }
   const deletePayout = (id) => {
     store.deletePayout(id)
     const all = store.getAll()
     setPayouts(all.payouts)
-    setAccounts(all.accounts)
+    setAccounts(all.accounts.filter(a => a.hidden !== true))
   }
 
   // SETTINGS
@@ -142,7 +143,7 @@ export function DataProvider({ children }) {
     store.deleteFirm(id)
     const all = store.getAll()
     setFirms(all.firms)
-    setAccounts(all.accounts) // contas possivelmente desvinculadas
+    setAccounts(all.accounts.filter(a => a.hidden !== true)) // contas possivelmente desvinculadas
   }
   const getFirmStats = (id) => store.getFirmStats(id)
 

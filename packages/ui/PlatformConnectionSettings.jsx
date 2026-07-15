@@ -11,6 +11,7 @@ import {
   getAccountFirmOverride, setAccountFirmEntry,
   getFirms,
   upsertQuantowerAccount,
+  updateAccount,
 } from '@apps/lib/dataStore';
 import { getPlatformManager } from '@apps/utils/platformManager';
 
@@ -62,7 +63,7 @@ function StatusDot({ online }) {
 /* ============================================================
    FirmCard — card glassmorphism de uma firma dentro de uma conexão
    ============================================================ */
-function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, connectionId, onSetConnFirm, onSetAccFirm }) {
+function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, connectionId, onSetConnFirm, onSetAccFirm, showHidden, onToggleHide }) {
   const [expanded, setExpanded] = useState(false);
 
   const glowColor = firm.color || '#6366f1';
@@ -109,18 +110,23 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
               Nenhuma conta vinculada.
             </p>
           ) : (
-            accounts.map(acc => {
+              accounts.map(acc => {
               const accountKey = acc.platformAccountId || acc.id;
               const currentFirmId = accFirmOverride[accountKey] || (connectionId ? connFirmMap[connectionId] : null) || acc.firmId;
+              const isHidden = acc.hidden === true;
               return (
                 <div key={accountKey} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '7px 0',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  opacity: isHidden ? 0.4 : 1,
+                  textDecoration: isHidden ? 'line-through' : 'none',
+                  transition: 'opacity 0.2s, text-decoration 0.2s',
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#e6e6e9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {acc.name || accountKey?.slice(0, 10)}
+                      {isHidden && <span style={{ marginLeft: 6, fontSize: 10, color: '#ef4444', fontWeight: 400 }}>(oculta)</span>}
                     </div>
                     <div style={{ fontSize: 11, color: '#6b7280' }}>
                       {acc.connectionName || connectionId} · ${(acc.balance || acc.currentFunding || 0).toLocaleString()}
@@ -128,6 +134,22 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
                       {acc.type ? ` · ${acc.type}` : ''}
                     </div>
                   </div>
+
+                  {/* Botão ocultar/revelar */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleHide?.(acc); }}
+                    title={isHidden ? 'Revelar conta' : 'Ocultar conta'}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontSize: 16, padding: '2px 6px', borderRadius: 4,
+                      color: isHidden ? '#ef4444' : '#6b7280',
+                      opacity: 0.6, transition: 'opacity 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                  >
+                    {isHidden ? '👁️‍🗨️' : '👁️'}
+                  </button>
 
                   {/* Override por conta */}
                   <select
@@ -155,8 +177,9 @@ function FirmCard({ firm, accounts, connFirmMap, accFirmOverride, allFirms, conn
 /* ============================================================
    ConnectionBlock — bloco de uma conexão (sem logo)
    ============================================================ */
-function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmOverride, onSetConnFirm, onSetAccFirm, onSyncAccounts, syncingConnId, backfillEnabled, setBackfillEnabled }) {
+function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmOverride, onSetConnFirm, onSetAccFirm, onSyncAccounts, syncingConnId, backfillEnabled, setBackfillEnabled, onToggleHide }) {
   const [expanded, setExpanded] = useState(true);
+  const [showHidden, setShowHidden] = useState(false);
 
   // Contas desta conexão (bridge accounts)
   const connAccounts = bridgeAccounts.filter(a =>
@@ -180,18 +203,25 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
     return Array.from(map.values());
   }, [connAccounts, internalAccounts, conn.id]);
 
+  // Filter hidden accounts unless showHidden is active
+  const hiddenCount = useMemo(() => allAccounts.filter(a => a.hidden === true).length, [allAccounts]);
+  const displayAccounts = useMemo(() =>
+    showHidden ? allAccounts : allAccounts.filter(a => a.hidden !== true),
+    [allAccounts, showHidden]
+  );
+
   // Firms que têm contas nesta conexão (via mapeamento ou firmId)
   const firmsInConn = useMemo(() => {
     const firmIds = new Set();
-    allAccounts.forEach(acc => {
+    displayAccounts.forEach(acc => {
       const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
       if (fid) firmIds.add(fid);
     });
     return allFirms.filter(f => firmIds.has(f.id));
-  }, [allAccounts, accFirmOverride, connFirmMap, conn.id, allFirms]);
+  }, [displayAccounts, accFirmOverride, connFirmMap, conn.id, allFirms]);
 
   // Contas SEM firm atribuída nesta conexão
-  const unmappedAccounts = allAccounts.filter(acc => {
+  const unmappedAccounts = displayAccounts.filter(acc => {
     const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
     return !fid;
   });
@@ -202,7 +232,7 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
   const firmSyncStatus = useMemo(() => {
     const status = {};
     firmsInConn.forEach(firm => {
-      const firmAccounts = allAccounts.filter(acc => {
+      const firmAccounts = displayAccounts.filter(acc => {
         const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
         return fid === firm.id;
       });
@@ -214,7 +244,7 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
       else status[firm.id] = 'unsynced';
     });
     return status;
-  }, [allAccounts, firmsInConn, accFirmOverride, connFirmMap, conn.id]);
+  }, [displayAccounts, firmsInConn, accFirmOverride, connFirmMap, conn.id]);
 
   return (
     <div style={{
@@ -236,8 +266,28 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
         </div>
         <StatusDot online={conn.online} />
         <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 8 }}>
-          {allAccounts.length} {allAccounts.length === 1 ? 'conta' : 'contas'}
+          {displayAccounts.length} {displayAccounts.length === 1 ? 'conta' : 'contas'}
+          {hiddenCount > 0 && (
+            <span style={{ color: '#ef4444', marginLeft: 4 }}>
+              ({hiddenCount} oculta{hiddenCount > 1 ? 's' : ''})
+            </span>
+          )}
         </span>
+        {hiddenCount > 0 && (
+          <button
+            onClick={() => setShowHidden(v => !v)}
+            title={showHidden ? 'Ocultar contas ocultas' : 'Mostrar contas ocultas'}
+            style={{
+              background: showHidden ? 'rgba(239,68,68,0.15)' : 'none',
+              border: `1px solid ${showHidden ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`,
+              cursor: 'pointer', borderRadius: 6, padding: '3px 8px',
+              fontSize: 12, color: showHidden ? '#ef4444' : '#6b7280',
+              whiteSpace: 'nowrap', transition: 'all 0.2s',
+            }}
+          >
+            {showHidden ? '🙈 Ocultas' : '👁️ Mostrar ocultas'}
+          </button>
+        )}
       </div>
 
       {expanded && (
@@ -267,10 +317,10 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
             const syncLabel = syncState === 'synced' ? 'Todas sincronizadas' : syncState === 'partial' ? 'Parcial' : syncState === 'unsynced' ? 'Não sincronizadas' : '—';
             
             return (
-              <React.Fragment key={firm.id}>
+               <React.Fragment key={firm.id}>
                 <FirmCard
                   firm={firm}
-                  accounts={allAccounts.filter(acc => {
+                  accounts={displayAccounts.filter(acc => {
                     const fid = accFirmOverride[acc.platformAccountId] || connFirmMap[conn.id] || acc.firmId;
                     return fid === firm.id;
                   })}
@@ -280,6 +330,8 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
                   connectionId={conn.id}
                   onSetConnFirm={onSetConnFirm}
                   onSetAccFirm={onSetAccFirm}
+                  showHidden={showHidden}
+                  onToggleHide={onToggleHide}
                 />
                 <div style={{ marginTop: 6, padding: '6px 10px', background: syncColor + '15', borderRadius: 6, border: `1px solid ${syncColor}33`, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: syncColor }} />
@@ -373,7 +425,7 @@ function ConnectionBlock({ conn, allFirms, bridgeAccounts, connFirmMap, accFirmO
             </div>
           )}
 
-          {allAccounts.length === 0 && (
+          {displayAccounts.length === 0 && (
             <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0' }}>
               {conn.online ? 'Nenhuma conta nesta conexão.' : 'Conexão offline — sem dados disponíveis.'}
             </p>
@@ -447,20 +499,30 @@ export default function PlatformConnectionSettings() {
         return;
       }
 
+      // Pular contas marcadas como ocultas
+      const existing = getAll().accounts.filter(a => 
+        a.platformName === 'quantower' && a.hidden === true &&
+        (a.connectionId === connectionId || a.connectionName === connectionName)
+      );
+      const hiddenIds = new Set(existing.map(a => a.platformAccountId));
+      const toSync = connAccounts.filter(a => !hiddenIds.has(a.platformAccountId));
+
       // Upsert each account
       let created = 0, updated = 0;
-      for (const acc of connAccounts) {
+      for (const acc of toSync) {
         const result = await upsertQuantowerAccount(acc, firmId, connectionId, connectionName);
         if (result.isNew) created++; else updated++;
       }
 
+      const skipped = connAccounts.length - toSync.length;
+
       // Optionally backfill trades
       if (backfillEnabled) {
         // TODO: trigger full backfill sync for these accounts
-        console.log('[SyncAccounts] Backfill enabled for', connAccounts.length, 'accounts');
+        console.log('[SyncAccounts] Backfill enabled for', toSync.length, 'accounts');
       }
 
-      alert(`✅ Sincronizado: ${created} criadas, ${updated} atualizadas`);
+      alert(`✅ Sincronizado: ${created} criadas, ${updated} atualizadas${skipped > 0 ? `, ${skipped} puladas (ocultas)` : ''}`);
       refresh();
     } catch (err) {
       alert('❌ Erro ao sincronizar: ' + err.message);
@@ -499,6 +561,14 @@ export default function PlatformConnectionSettings() {
     const adapter = pm.getAdapter('quantower');
     if (adapter?.setBridgeUrl) adapter.setBridgeUrl(url);
   };
+
+  /* --- Toggle hide account --- */
+  const handleToggleHide = useCallback((acc) => {
+    if (acc.id) {
+      updateAccount(acc.id, { hidden: !acc.hidden });
+      refresh();
+    }
+  }, []);
 
   /* --- Mapping handlers --- */
   const handleSetConnFirm = (connectionId, firmId) => {
@@ -622,6 +692,7 @@ export default function PlatformConnectionSettings() {
                 syncingConnId={syncingConnId}
                 backfillEnabled={backfillEnabled}
                 setBackfillEnabled={setBackfillEnabled}
+                onToggleHide={handleToggleHide}
               />
             ))}
           </div>

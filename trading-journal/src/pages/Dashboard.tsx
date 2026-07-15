@@ -44,10 +44,10 @@ function useIntegratedData() {
   const trades = journal?.trades || [];
 
   // Dados do main-app (contas)
-  const [accounts, setAccounts] = useState(() => getAll().accounts || []);
+  const [accounts, setAccounts] = useState(() => (getAll().accounts || []).filter(a => a.hidden !== true));
 
   useEffect(() => {
-    const refresh = () => setAccounts(getAll().accounts || []);
+    const refresh = () => setAccounts((getAll().accounts || []).filter(a => a.hidden !== true));
     refresh();
     window.addEventListener('datastore:change', refresh);
     return () => window.removeEventListener('datastore:change', refresh);
@@ -1398,7 +1398,7 @@ const HistogramR = ({ trades = [] }: { trades: any[] }) => {
 // Recent trades table with account info
 const RecentTrades = ({ trades, fmt }: any) => {
   const allData = getAll();
-  const accounts = allData.accounts || [];
+  const accounts = (allData.accounts || []).filter(a => a.hidden !== true);
   const rows = trades.slice(-8).reverse();
 
   const getAccountTypeClass = (type: string) => {

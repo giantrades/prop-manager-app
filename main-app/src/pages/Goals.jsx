@@ -214,7 +214,7 @@ export default function Goals() {
       const d = getAll();
       const g = getAllGoals({ includeArchived: true }) || [];
 
-      setAccounts(d.accounts || []);
+      setAccounts((d.accounts || []).filter(a => a.hidden !== true));
       setStrategies(d.strategies || []);
 
       const sourceTrades = Array.isArray(trades) && trades.length > 0 ? trades : (d.trades || []);

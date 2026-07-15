@@ -153,7 +153,7 @@ export default function DrawdownSection({
 
   const allData = getAll();
   const effectiveTrades = trades.length ? trades : allData.trades || [];
-  const effectiveAccounts = accounts.length ? accounts : allData.accounts || [];
+  const effectiveAccounts = accounts.length ? accounts : (allData.accounts || []).filter(a => a.hidden !== true);
 
   const equitySeries = useMemo(
     () => buildEquitySeries(effectiveTrades, effectiveAccounts),

@@ -8,7 +8,7 @@ import { openDB } from 'idb';
 const LS_KEY = 'propmanager-data-v1'
 
 const seed = {
-  accounts: [],
+  accounts: [],  // cada conta pode ter { ... hidden: true } para ocultar
   payouts: [],
   settings: {
     methods: ['Rise','Wise','Pix','Paypal','Cripto'],
@@ -199,6 +199,7 @@ export function createAccount(partial){
   const acc = { id: uuid(), name:'', type:'Forex', dateCreated: new Date().toISOString().slice(0,10), status:'Standby',
     initialFunding:0, currentFunding:0, profitSplit:0.8, payoutFrequency:'monthly', defaultWeight:1,
     platformAccountId: null, platformName: null, lastPlatformSync: null,
+    hidden: false,
     ...partial }
   data.accounts.push(acc); save(data); return acc
 }
@@ -363,6 +364,10 @@ export function deletePayout(id){
 /* --------------------
    Account stats
    -------------------- */
+export function getVisibleAccounts() {
+  return (load().accounts || []).filter(a => !a.hidden);
+}
+
 export function getAccountStats(accountId){
   const data = load()
   const acc = data.accounts.find(a=>a.id===accountId)
@@ -1146,6 +1151,7 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
     lastPlatformSync: now,
     firmId: effectiveFirmId,
     dateCreated: now.split('T')[0],
+    hidden: existingIdx !== -1 ? data.accounts[existingIdx].hidden || false : false,
   };
 
   let internalAccountId;
@@ -1430,8 +1436,7 @@ export function deduplicateTradesByPosition() {
 export default {
   getAll, getSettings, setSettings,
   createAccount, updateAccount, deleteAccount, recalcAccountFunding,
-  createPayout, updatePayout, deletePayout,
-  getAccountStats,
+  getVisibleAccounts, getAccountStats,
   getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
   getTrades, createTrade, updateTrade, deleteTrade,
   getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal, calculateMetric, getAllTradesSafe,

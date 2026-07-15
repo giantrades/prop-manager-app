@@ -569,7 +569,7 @@ export default function StrategiesPage() {
   // === Contas ===
   const [accounts, setAccounts] = useState(() => {
     try {
-      return getAll().accounts || [];
+      return (getAll().accounts || []).filter(a => a.hidden !== true);
     } catch {
       return [];
     }
@@ -578,7 +578,7 @@ export default function StrategiesPage() {
   useEffect(() => {
     try {
       const data = getAll();
-      setAccounts(data.accounts || []);
+      setAccounts((data.accounts || []).filter(a => a.hidden !== true));
     } catch (err) {
       console.error("Erro ao atualizar contas:", err);
     }

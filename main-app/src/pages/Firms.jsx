@@ -327,7 +327,7 @@ export default function FirmsPage() {
                   {(() => {
                     if (s.accountCount === 0) return <span className="muted" style={{ fontSize: '13px' }}>Nenhuma conta</span>;
 
-                    const allAccounts = getAll().accounts || [];
+                    const allAccounts = (getAll().accounts || []).filter(a => a.hidden !== true);
                     const firmAccounts = allAccounts.filter(a => a.firmId === f.id);
 
                     const statusCounts = {

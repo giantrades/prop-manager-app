@@ -227,7 +227,7 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
 
   useEffect(() => {
     const data = getAll()
-    setAccounts(data.accounts || [])
+    setAccounts((data.accounts || []).filter(a => a.hidden !== true))
     setPayouts(data.payouts || [])
     setFirms(data.firms || [])
   }, [])
@@ -1187,7 +1187,7 @@ export default function Dashboard() {
   const [allAccountsData, setAllAccountsData] = useState([])
 
   useEffect(() => {
-    const data = getAll(); setAllAccountsData(data.accounts || []); setFirms(getFirms())
+    const data = getAll(); setAllAccountsData((data.accounts || []).filter(a => a.hidden !== true)); setFirms(getFirms())
   }, [])
 
   const cats = useMemo(() => Array.from(new Set(allAccountsData.map(a => a.type))), [allAccountsData])

@@ -30,7 +30,7 @@ export default function TradesPage() {
     const loadData = () => {
       try {
         const data = getAll();
-        setAccounts(data.accounts || []);
+        setAccounts((data.accounts || []).filter(a => a.hidden !== true));
         setFirms(getFirms() || []);
       } catch (err) {
         console.error('Erro ao atualizar contas:', err);

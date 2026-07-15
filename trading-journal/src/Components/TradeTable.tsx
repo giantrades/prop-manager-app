@@ -57,14 +57,14 @@ type Props = {
 };
 
 export default function TradeTable({ trades, onEdit, onDelete }: Props) {
-  const [accounts, setAccounts] = useState(() => getAll().accounts || []);
+  const [accounts, setAccounts] = useState(() => (getAll().accounts || []).filter(a => a.hidden !== true));
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 const isMobile = useMemo(() => window.innerWidth < 768, []);
 
 useEffect(() => {
-  setAccounts(getAll().accounts || []);
+  setAccounts((getAll().accounts || []).filter(a => a.hidden !== true));
 }, []);
 
   

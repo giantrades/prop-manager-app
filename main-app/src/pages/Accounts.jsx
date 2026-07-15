@@ -211,7 +211,7 @@ export default function Accounts() {
 
   useEffect(() => {
     const data = getAll()
-    setAccounts(data.accounts || [])
+    setAccounts((data.accounts || []).filter(a => a.hidden !== true))
     setFirms(data.firms || [])
   }, [])
 
@@ -223,7 +223,7 @@ export default function Accounts() {
   useEffect(() => {
     const sync = () => {
       const data = getAll()
-      setAccounts(data.accounts || [])
+      setAccounts((data.accounts || []).filter(a => a.hidden !== true))
     }
     window.addEventListener('storage', sync)
     return () => window.removeEventListener('storage', sync)
@@ -293,7 +293,7 @@ export default function Accounts() {
     if (!confirmed) return;
 
     deleteAccount(accountId);
-    setAccounts(getAll().accounts);
+    setAccounts((getAll().accounts || []).filter(a => a.hidden !== true));
     if (selected === accountId) setSelected(null);
   };
 
@@ -336,7 +336,7 @@ export default function Accounts() {
 
     setEditedAccounts({});
     setHasChanges(false);
-    setAccounts(getAll().accounts);
+    setAccounts((getAll().accounts || []).filter(a => a.hidden !== true));
     window.dispatchEvent(new Event("storage"));
   };
 
@@ -507,7 +507,7 @@ export default function Accounts() {
             <button onClick={() => setSelected(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'transparent', border: 'none', color: '#fff', fontSize: 24, cursor: 'pointer', zIndex: 1001, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', transition: 'background 0.2s' }} onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>×</button>
 
             {selected === 'new' ? (
-              <NewAccountForm firms={firms} onCreate={(accountData) => { createAccount(accountData); setAccounts(getAll().accounts); setSelected(null); }} onCancel={() => setSelected(null)} />
+              <NewAccountForm firms={firms} onCreate={(accountData) => { createAccount(accountData); setAccounts((getAll().accounts || []).filter(a => a.hidden !== true)); setSelected(null); }} onCancel={() => setSelected(null)} />
             ) : (
               <AccountDetail id={selected} update={updateAccount} getStats={getAccountStats} firms={firms} onClose={() => setSelected(null)} />
             )}

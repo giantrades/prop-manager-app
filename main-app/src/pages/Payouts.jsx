@@ -576,15 +576,8 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
       : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((v || 0) * rate)
 
   const pool = state.type === 'Todas'
-    ? accounts
-    : accounts.filter(a => a.type === state.type)
-
-  const filteredPool = pool.filter(a => {
-    const matchesSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = accountStatusFilter.length === 0 ||
-      accountStatusFilter.includes(a.status?.toLowerCase())
-    return matchesSearch && matchesStatus
-  })
+    ? accounts.filter(a => a.hidden !== true)
+    : accounts.filter(a => a.hidden !== true && a.type === state.type)
 
   const accountStatuses = useMemo(() => {
     const all = pool
@@ -800,7 +793,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                 style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
                 <option value="" disabled>Selecione uma conta ativa...</option>
-                {accounts.map(a => (
+                {accounts.filter(a => a.hidden !== true).map(a => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.type}) - {a.status}
                   </option>
