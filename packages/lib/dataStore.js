@@ -1137,7 +1137,7 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const accountData = {
     name: platformAccountName,
     type: accountType,
-    status: 'Live',
+    status: existingIdx !== -1 ? data.accounts[existingIdx].status || 'Live' : 'Live',
     initialFunding: balance,
     currentFunding: balance,
     profitSplit: 0.8,
