@@ -32,9 +32,7 @@ $action = New-ScheduledTaskAction -Execute $actionPath -Argument "funnel --bg 87
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -AllowHardTerminate:$false `
-    -MultipleInstances IgnoreNew
+    -StartWhenAvailable
 
 # Se a tarefa já existe, atualiza; senão, cria
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue

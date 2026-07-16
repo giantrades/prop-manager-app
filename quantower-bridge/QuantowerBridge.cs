@@ -487,7 +487,6 @@ namespace QuantowerBridge
             if (!string.IsNullOrEmpty(query["to"]))
                 if (DateTime.TryParse(query["to"], out DateTime t)) toDate = t;
 
-            // ── Janela solicitada (ex: últimos 30s no sync periódico) ──────────────
             var reqParams = new TradesHistoryRequestParameters
             {
                 From = fromDate ?? DateTime.UtcNow.AddDays(-1),
@@ -495,23 +494,6 @@ namespace QuantowerBridge
             };
             var tradeList = Core.Instance.GetTrades(reqParams);
 
-            // ── Janela larga para encontrar fills de ENTRADA mais antigos ──────────
-            // Core.Instance.History não existe na API — o único acesso é GetTrades().
-            // Uma única chamada antes do loop evita N chamadas redundantes.
-            var wideParams = new TradesHistoryRequestParameters
-            {
-                From = DateTime.UtcNow.AddYears(-2),
-                To = toDate ?? DateTime.UtcNow
-            };
-            var allHistorical = Core.Instance.GetTrades(wideParams);
-
-            // Dicionário positionId → lista de fills (para lookup O(1) no loop)
-            var fillsByPosition = allHistorical
-                .Where(t => !string.IsNullOrEmpty(t.PositionId))
-                .GroupBy(t => t.PositionId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            // ── Agrupa fills da janela solicitada por PositionId ───────────────────
             var grouped = tradeList
                 .Where(t => !string.IsNullOrEmpty(t.PositionId))
                 .GroupBy(t => t.PositionId);
@@ -520,17 +502,11 @@ namespace QuantowerBridge
 
             foreach (var group in grouped)
             {
-                // USA o dicionário largo para reconstruir entrada + saída corretamente.
-                // Se não achou no histórico largo, cai no grupo restrito (fallback).
-                var allTradesForPos = fillsByPosition.TryGetValue(group.Key, out var hist)
-                    ? hist
-                    : group.ToList();
+                var fillList = group.ToList();
 
-                if (allTradesForPos.Count == 0) allTradesForPos = group.ToList();
-
-                bool isLong = allTradesForPos.First().Side == Side.Buy;
-                var entries = allTradesForPos.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
-                var exits = allTradesForPos.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
+                bool isLong = fillList.First().Side == Side.Buy;
+                var entries = fillList.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
+                var exits = fillList.Where(t => t.Side == (isLong ? Side.Sell : Side.Buy)).ToList();
 
                 // Posição ainda aberta → aparece em /positions
                 if (entries.Count == 0 || exits.Count == 0)

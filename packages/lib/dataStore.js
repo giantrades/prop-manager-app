@@ -15,7 +15,7 @@ const seed = {
     platforms: {
       quantower: {
         enabled: false,
-        bridgeUrl: 'http://localhost:8787',
+        bridgeUrl: 'http://127.0.0.1:8787',
         autoSync: true,
         syncIntervalMs: 2000,
         lastSync: null,
@@ -1047,8 +1047,11 @@ export function updateLivePositions(positions) {
 
 /**
  * Mark a live position as closed — converts it into a completed trade.
+ * Uses the same platformTradeId format as the bridge ("qt_" + raw PositionId)
+ * so subsequent /trades syncs update (not duplicate) this trade.
  * @param {string} platformPositionId
  * @param {Object} exitData - { exitPrice, exitTime, netPnl, grossPnl, fee }
+ * @param {string|null} resolvedAccountId - internalAccountId resolved by caller
  * @returns {Object|null} The created/updated trade, or null
  */
 export function closeLivePosition(platformPositionId, exitData = {}, resolvedAccountId = null) {
@@ -1060,6 +1063,51 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
   if (posIdx === -1) return null;
 
   const pos = data.livePositions[posIdx];
+
+  // Build platformTradeId in the same format as the bridge: "qt_<raw_id>"
+  const rawId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
+  const platformTradeId = rawId ? `qt_${rawId}` : pos.platformPositionId;
+
+  // Fallback account resolution if caller didn't provide one
+  let accountId = resolvedAccountId;
+  if (!accountId) {
+    if (pos.platformAccountId) {
+      const mapping = getAccountMapping(pos.platformId);
+      if (mapping?.[pos.platformAccountId]) accountId = mapping[pos.platformAccountId];
+    }
+    if (!accountId && pos.accountName) {
+      const match = data.accounts?.find(a => a.name === pos.accountName);
+      if (match) accountId = match.id;
+    }
+  }
+
+  if (accountId) {
+    const entryTime = pos.openTime || pos.entryTime;
+    const entryPrice = pos.openPrice ?? pos.entryPrice;
+    const netPnl = exitData.netPnl ?? pos.netPnl ?? 0;
+    const grossPnl = exitData.grossPnl ?? pos.grossPnl ?? 0;
+
+    const tradeData = {
+      entry_datetime: entryTime || new Date().toISOString(),
+      exit_datetime: exitData.exitTime || new Date().toISOString(),
+      asset: pos.symbol || '',
+      accountId,
+      direction: pos.side === 'Short' ? 'Short' : 'Long',
+      volume: pos.quantity || 0,
+      entry_price: entryPrice || 0,
+      exit_price: exitData.exitPrice || pos.currentPrice || 0,
+      result_net: netPnl,
+      result_gross: grossPnl,
+      fee: exitData.fee ?? pos.fee ?? 0,
+      source: pos.platformId || 'quantower',
+      platformTradeId,
+      platformName: pos.platformName || 'Quantower',
+      connectionName: pos.connectionName || '',
+      isLive: false,
+    };
+
+    upsertTradeFromPlatform(tradeData);
+  }
 
   // Remove from live positions
   data.livePositions.splice(posIdx, 1);

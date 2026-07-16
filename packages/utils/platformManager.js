@@ -44,9 +44,8 @@ export const PLATFORM_EVENTS = {
 
 // ── Default configuration ──────────────────────────────
 const DEFAULT_CONFIG = {
-  syncIntervalMs: 3600000,      // 1h for trade sync when tab is hidden
-  fastSyncIntervalMs: 5000,     // 5s for trade sync when tab is visible
-  positionPollMs: 2000,         // 2s for live positions
+  syncIntervalMs: 3600000,      // 1h consistency sync for trades
+  positionPollMs: 1500,         // 1.5s for live positions
   statusCheckMs: 10000,         // 10s for connection status checks
   maxRetries: 3,
   retryDelayMs: 2000,
@@ -136,8 +135,11 @@ class PlatformManager {
       this.config.statusCheckMs
     );
 
-    // Trade sync — interval depends on tab visibility
-    this._startSyncInterval();
+    // Trade sync — 1h consistency check for any trades that closeLivePosition missed
+    this._syncInterval = setInterval(
+      () => this._syncAllTrades(),
+      this.config.syncIntervalMs
+    );
 
     // Live positions (fast polling)
     this._positionInterval = setInterval(
@@ -145,15 +147,7 @@ class PlatformManager {
       this.config.positionPollMs
     );
 
-    // Adjust sync interval when tab visibility changes
-    this._visibilityHandler = () => {
-      this._stopSyncInterval();
-      this._startSyncInterval();
-      if (document.visibilityState === 'visible') this._syncAllTrades();
-    };
-    document.addEventListener('visibilitychange', this._visibilityHandler);
-
-    // Immediate first check
+    // Immediate first checks
     this._checkAllStatuses();
     this._syncAllTrades();
     this._pollAllPositions();
@@ -162,14 +156,11 @@ class PlatformManager {
   /** Stop all auto-sync */
   stopAutoSync() {
     this._isRunning = false;
-    if (this._visibilityHandler) {
-      document.removeEventListener('visibilitychange', this._visibilityHandler);
-      this._visibilityHandler = null;
-    }
     if (this._statusInterval) clearInterval(this._statusInterval);
-    this._stopSyncInterval();
+    if (this._syncInterval) clearInterval(this._syncInterval);
     if (this._positionInterval) clearInterval(this._positionInterval);
     this._statusInterval = null;
+    this._syncInterval = null;
     this._positionInterval = null;
   }
 
@@ -178,21 +169,7 @@ class PlatformManager {
     return this._isRunning;
   }
 
-  /** @private Start trade sync interval based on tab visibility */
-  _startSyncInterval() {
-    const interval = document.visibilityState === 'visible'
-      ? this.config.fastSyncIntervalMs
-      : this.config.syncIntervalMs;
-    this._syncInterval = setInterval(() => this._syncAllTrades(), interval);
-  }
 
-  /** @private Stop trade sync interval */
-  _stopSyncInterval() {
-    if (this._syncInterval) {
-      clearInterval(this._syncInterval);
-      this._syncInterval = null;
-    }
-  }
 
   // ── Manual Sync ──────────────────────────────────────
 
@@ -382,6 +359,8 @@ class PlatformManager {
               platformName: adapter.name,
               connections: status.connections,
             });
+            // Sync trades on reconnect to catch any missed while offline
+            this.syncPlatform(id).catch(() => {});
           } else if (!status.online && wasOnline) {
             this._wasOnline.set(id, false);
             this._emit(PLATFORM_EVENTS.DISCONNECTED, {

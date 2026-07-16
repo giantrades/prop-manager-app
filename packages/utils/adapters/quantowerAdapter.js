@@ -1,7 +1,7 @@
 import { BaseAdapter } from './baseAdapter.js';
 
 const FALLBACK_URLS = [
-  'http://localhost:8787',
+  'http://127.0.0.1:8787',
   'http://100.80.100.89:8787',
 ];
 const FETCH_TIMEOUT_MS = 5000;
