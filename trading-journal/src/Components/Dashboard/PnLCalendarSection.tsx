@@ -170,6 +170,8 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 12,
         padding: isMobile ? "16px 12px" : 24,
+        boxSizing: "border-box", // Correção: Garante que o padding não adicione largura extra
+        width: "100%",           // Correção: Garante que o container não extrapole a tela
         color: "#e5e7eb",
         position: "relative",
         overflow: "hidden",
@@ -209,7 +211,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             >
               {monthNames.map((name, i) => {
                 const hasTrade = availableMonthsSet.has(`${viewYear}-${i}`);
-                return <option key={i} value={i} disabled={!hasTrade} style={{ background: "#10151f", color: hasTrade ? "#f3f4f6" : "#4b5563" }}>{isMobile ? name.substring(0,3) : name}</option>;
+                return <option key={i} value={i} disabled={!hasTrade} style={{ background: "#10151f", color: hasTrade ? "#f3f4f6" : "#4b5563" }}>{isMobile ? name.substring(0, 3) : name}</option>;
               })}
             </select>
             <div style={{ width: 1, background: "rgba(255,255,255,0.12)", margin: "0 2px" }} />
@@ -248,11 +250,12 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
+      {/* Correção: Uso de minmax(0, 1fr) no grid template para forçar os itens a respeitarem o container */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 2 : 4, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
         {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 2 : 4 }}>
         {calendarData.map((item, idx) => {
           if (item.day === null) return <div key={`pad-${idx}`} />;
 
