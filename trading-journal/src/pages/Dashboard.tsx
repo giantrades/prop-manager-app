@@ -2147,14 +2147,14 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid two-cols">
-        <HistogramR trades={filteredTrades} />
-        <TimeframeBar data={tf} fmt={fmt} />
-      </div>
-
       <div className="grid two-cols" style={{ gridTemplateColumns: "minmax(360px, 440px) 1fr" }}>
         <PnLCalendarSection trades={filteredTrades} />
         <HeatMapSection trades={filteredTrades} />
+      </div>
+
+      <div className="grid two-cols">
+        <HistogramR trades={filteredTrades} />
+        <TimeframeBar data={tf} fmt={fmt} />
       </div>
 
       <div className="grid two-cols">

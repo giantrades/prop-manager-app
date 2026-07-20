@@ -169,140 +169,90 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         background: "linear-gradient(180deg,#10151f 0%,#0c1119 100%)",
         border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 12,
-        padding: 24,
+        padding: isMobile ? "16px 12px" : 24,
         color: "#e5e7eb",
         position: "relative",
         overflow: "hidden",
       }}
     >
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "#f3f4f6" }}>
+      <h2 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600, marginBottom: 16, color: "#f3f4f6" }}>
         📅 PnL Calendar
       </h2>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 6 }}>
-        <button
-          onClick={goToPrevMonth}
-          disabled={isFirstMonth}
-          title="Mês anterior"
-          style={{
-            background: isFirstMonth ? "transparent" : "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            color: isFirstMonth ? "#4b5563" : "#e5e7eb",
-            borderRadius: 8,
-            padding: "8px 10px",
-            cursor: isFirstMonth ? "default" : "pointer",
-            fontSize: 14,
-            lineHeight: 1,
-            transition: "background 0.15s",
-          }}
-        >
-          ◀
-        </button>
+      <div style={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "stretch" : "center",
+        justifyContent: "space-between",
+        marginBottom: 16,
+        gap: 12
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+          <button
+            onClick={goToPrevMonth}
+            disabled={isFirstMonth}
+            style={{
+              background: isFirstMonth ? "transparent" : "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: isFirstMonth ? "#4b5563" : "#e5e7eb",
+              borderRadius: 8, padding: "8px 12px", cursor: isFirstMonth ? "default" : "pointer"
+            }}
+          >
+            ◀
+          </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
-          <div style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 999, overflow: "hidden", display: "flex", colorScheme: "dark", padding: "2px 6px" }}>
+          <div style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 999, overflow: "hidden", display: "flex", padding: "2px 6px" }}>
             <select
               value={viewMonth}
               onChange={(e) => setViewDate(new Date(viewYear, Number(e.target.value), 1))}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#f3f4f6",
-                padding: "5px 8px",
-                fontSize: isMobile ? 12 : 14,
-                fontWeight: 700,
-                cursor: "pointer",
-                outline: "none",
-              }}
+              style={{ background: "transparent", border: "none", color: "#f3f4f6", padding: "5px", fontSize: 13, fontWeight: 700, outline: "none" }}
             >
               {monthNames.map((name, i) => {
                 const hasTrade = availableMonthsSet.has(`${viewYear}-${i}`);
-                return (
-                  <option key={i} value={i} disabled={!hasTrade} style={{ background: "#10151f", color: hasTrade ? "#f3f4f6" : "#4b5563" }}>{name}</option>
-                );
+                return <option key={i} value={i} disabled={!hasTrade} style={{ background: "#10151f", color: hasTrade ? "#f3f4f6" : "#4b5563" }}>{isMobile ? name.substring(0,3) : name}</option>;
               })}
             </select>
-
-            <div style={{ width: 1, background: "rgba(255,255,255,0.12)" }} />
-
+            <div style={{ width: 1, background: "rgba(255,255,255,0.12)", margin: "0 2px" }} />
             <select
               value={viewYear}
               onChange={(e) => setViewDate(new Date(Number(e.target.value), viewMonth, 1))}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#f3f4f6",
-                padding: "5px 8px",
-                fontSize: isMobile ? 12 : 14,
-                fontWeight: 700,
-                cursor: "pointer",
-                outline: "none",
-              }}
+              style={{ background: "transparent", border: "none", color: "#f3f4f6", padding: "5px", fontSize: 13, fontWeight: 700, outline: "none" }}
             >
-              {yearList.map(y => (
-                <option key={y} value={y} style={{ background: "#10151f", color: "#f3f4f6" }}>{y}</option>
-              ))}
+              {yearList.map(y => <option key={y} value={y} style={{ background: "#10151f", color: "#f3f4f6" }}>{y}</option>)}
             </select>
           </div>
 
           <button
-            onClick={goToToday}
-            title="Ir para o mês atual"
+            onClick={goToNextMonth}
+            disabled={isLastMonth}
             style={{
-              background: "rgba(96,165,250,0.12)",
-              border: "1px solid rgba(96,165,250,0.25)",
-              color: "#93c5fd",
-              borderRadius: 8,
-              padding: "7px 10px",
-              cursor: "pointer",
-              fontSize: isMobile ? 11 : 12,
-              fontWeight: 600,
-              lineHeight: 1,
-              transition: "background 0.15s",
-              whiteSpace: "nowrap",
+              background: isLastMonth ? "transparent" : "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: isLastMonth ? "#4b5563" : "#e5e7eb",
+              borderRadius: 8, padding: "8px 12px", cursor: isLastMonth ? "default" : "pointer"
             }}
           >
-            ● Hoje
+            ▶
           </button>
         </div>
 
         <button
-          onClick={goToNextMonth}
-          disabled={isLastMonth}
-          title="Próximo mês"
+          onClick={goToToday}
           style={{
-            background: isLastMonth ? "transparent" : "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            color: isLastMonth ? "#4b5563" : "#e5e7eb",
-            borderRadius: 8,
-            padding: "8px 10px",
-            cursor: isLastMonth ? "default" : "pointer",
-            fontSize: 14,
-            lineHeight: 1,
-            transition: "background 0.15s",
+            background: "rgba(96,165,250,0.12)", border: "1px solid rgba(96,165,250,0.25)", color: "#93c5fd",
+            borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600,
+            alignSelf: isMobile ? "center" : "auto", width: isMobile ? "100%" : "auto"
           }}
         >
-          ▶
+          ● Hoje
         </button>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 4,
-          marginBottom: 8,
-          fontSize: isMobile ? 10 : 12,
-          color: "#9ca3af",
-          textAlign: "center",
-        }}
-      >
-        {daysShort.map(d => (
-          <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
+        {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMobile ? 2 : 4 }}>
         {calendarData.map((item, idx) => {
           if (item.day === null) return <div key={`pad-${idx}`} />;
 
@@ -315,105 +265,49 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               key={item.day}
               data-tooltip-cell
               onMouseEnter={(e) => {
-                if (!hasData) return;
+                if (!hasData || isMobile) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const cellCenterX = rect.left + rect.width / 2;
                 const aboveSpace = rect.top - 10 - 12 - 160 * 1.1;
                 const belowSpace = window.innerHeight - rect.bottom - 12 - 160 * 0.1;
                 const showAbove = aboveSpace >= 0 || aboveSpace > belowSpace;
                 const y = showAbove ? rect.top - 10 : rect.bottom + 10;
-                const pos = constrainTooltip(cellCenterX, y, 260, 160);
                 setTooltip({
-                  x: pos.x,
-                  y: pos.y,
-                  above: showAbove,
-                  day: item.day,
-                  totalPnl: item.totalPnl,
-                  count: item.count,
-                  wins: item.wins,
-                  losses: item.losses,
+                  ...constrainTooltip(cellCenterX, y, 260, 160), above: showAbove, day: item.day,
+                  totalPnl: item.totalPnl, count: item.count, wins: item.wins, losses: item.losses,
                   color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
                 });
               }}
-              onMouseLeave={() => { if (window.innerWidth > 768) setTooltip(null); }}
+              onMouseLeave={() => { if (!isMobile) setTooltip(null); }}
               onClick={(e) => {
-                if (!hasData || window.innerWidth > 768) return;
+                if (!hasData || !isMobile) return;
                 e.stopPropagation();
-                setTooltip(prev =>
-                  prev && prev.day === item.day
-                    ? null
-                    : {
-                        x: window.innerWidth / 2,
-                        y: window.innerHeight / 2,
-                        above: true,
-                        day: item.day,
-                        totalPnl: item.totalPnl,
-                        count: item.count,
-                        wins: item.wins,
-                        losses: item.losses,
-                        color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
-                      }
-                );
+                setTooltip(prev => prev && prev.day === item.day ? null : {
+                  x: window.innerWidth / 2, y: window.innerHeight / 2, above: true, day: item.day,
+                  totalPnl: item.totalPnl, count: item.count, wins: item.wins, losses: item.losses,
+                  color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
+                });
               }}
               style={{
-                aspectRatio: "1",
+                aspectRatio: isMobile ? "auto" : "1",
+                minHeight: isMobile ? 52 : 56,
                 borderRadius: 8,
                 background: hasData ? getColor(item.totalPnl) : "rgba(15,23,42,0.4)",
-                border: isToday
-                  ? "1px solid #60a5fa"
-                  : hasData
-                    ? "1px solid rgba(255,255,255,0.08)"
-                    : "1px solid rgba(255,255,255,0.02)",
+                border: isToday ? "1px solid #60a5fa" : hasData ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.02)",
                 cursor: hasData ? "pointer" : "default",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                padding: 2,
+                justifyContent: "flex-start",
+                padding: "4px 2px",
                 position: "relative",
-                minHeight: isMobile ? 40 : 56,
-                transition: "box-shadow 0.2s ease",
-                boxShadow: hasData ? "inset 0 0 10px rgba(0,0,0,0.15)" : "none",
-              }}
-              onMouseOver={(e) => {
-                if (hasData) {
-                  e.currentTarget.style.outline = "2px solid rgba(255,255,255,0.15)";
-                  e.currentTarget.style.outlineOffset = "1px";
-                  e.currentTarget.style.zIndex = "10";
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
-                }
-              }}
-              onMouseOut={(e) => {
-                if (hasData) {
-                  e.currentTarget.style.outline = "";
-                  e.currentTarget.style.outlineOffset = "";
-                  e.currentTarget.style.zIndex = "1";
-                  e.currentTarget.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.15)";
-                }
               }}
             >
-              <div style={{
-                fontSize: isMobile ? 9 : 11,
-                color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"),
-                fontWeight: isToday || hasData ? 600 : 400,
-                position: "absolute",
-                top: 4,
-                left: 6,
-                lineHeight: 1,
-              }}>
+              <div style={{ fontSize: isMobile ? 10 : 11, color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"), fontWeight: isToday || hasData ? 600 : 400, lineHeight: 1 }}>
                 {item.day}
               </div>
               {hasData && (
-                <div style={{
-                  fontSize: isMobile ? 8 : 10,
-                  fontWeight: 800,
-                  color: (item.totalPnl || 0) > 0 ? "#4ade80" : (item.totalPnl || 0) < 0 ? "#f87171" : "#9ca3af",
-                  marginTop: isMobile ? 4 : 8,
-                  lineHeight: 1.2,
-                  textAlign: "center",
-                  wordBreak: "break-all",
-                  textShadow: "0px 1px 3px rgba(0,0,0,0.5)",
-                }}>
+                <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 800, color: (item.totalPnl || 0) > 0 ? "#4ade80" : (item.totalPnl || 0) < 0 ? "#f87171" : "#9ca3af", marginTop: isMobile ? 10 : 12, lineHeight: 1.2, textAlign: "center", wordBreak: "break-all" }}>
                   {fmtShort(item.totalPnl || 0)}
                 </div>
               )}
@@ -429,35 +323,22 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             position: "fixed",
             top: window.innerWidth <= 768 ? "50%" : `${tooltip.y}px`,
             left: window.innerWidth <= 768 ? "50%" : `${tooltip.x}px`,
-            transform: window.innerWidth <= 768
-              ? "translate(-50%, -50%)"
-              : tooltip.above
-                ? "translate(-50%, -110%)"
-                : "translate(-50%, 10px)",
-            background: "rgba(10,14,22,0.95)",
-            border: `1px solid ${tooltip.color}`,
-            padding: "12px 14px",
-            borderRadius: 10,
-            color: "#f3f4f6",
-            minWidth: window.innerWidth <= 768 ? "80%" : 220,
-            maxWidth: window.innerWidth <= 768 ? "90%" : 320,
-            zIndex: 99999,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-            fontSize: 13,
-            pointerEvents: "none",
+            transform: window.innerWidth <= 768 ? "translate(-50%, -50%)" : tooltip.above ? "translate(-50%, -110%)" : "translate(-50%, 10px)",
+            background: "rgba(10,14,22,0.95)", border: `1px solid ${tooltip.color}`, padding: "12px 14px", borderRadius: 10,
+            color: "#f3f4f6", minWidth: window.innerWidth <= 768 ? "80%" : 220, zIndex: 99999, boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 8, color: tooltip.color, fontSize: 14 }}>
             {`${tooltip.day} de ${monthNames[viewMonth]} de ${viewYear}`}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ color: "#cbd5e1" }}>PnL:</div>
-            <div style={{ fontWeight: 800, color: tooltip.totalPnl > 0 ? "#4ade80" : tooltip.totalPnl < 0 ? "#f87171" : "#e5e7eb" }}>
+            <div style={{ color: "#cbd5e1", fontSize: 13 }}>PnL:</div>
+            <div style={{ fontWeight: 800, color: tooltip.totalPnl > 0 ? "#4ade80" : tooltip.totalPnl < 0 ? "#f87171" : "#e5e7eb", fontSize: 13 }}>
               {fmt(tooltip.totalPnl || 0)}
             </div>
           </div>
           {tooltip.count > 0 && (
-            <div style={{ color: "#9ca3af" }}>
+            <div style={{ color: "#9ca3af", fontSize: 13 }}>
               <div><strong style={{ color: "#fff" }}>{tooltip.count}</strong> trades</div>
               <div style={{ marginTop: 4 }}>({tooltip.wins}W / {tooltip.losses}L)</div>
             </div>

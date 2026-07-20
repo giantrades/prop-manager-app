@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { useCurrency } from "@apps/state"; // se não existir, pode remover
+import { useCurrency } from "@apps/state";
 
 const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
 const isMobile = window.innerWidth < 768;
@@ -23,7 +23,6 @@ function useFmtCurrencyFallback() {
   }
 }
 
-// ✅ Usa sempre entry_datetime (ISO completo)
 function parseTradeDate(t: any): Date | null {
   if (!t) return null;
   if (t.entry_datetime) {
@@ -99,17 +98,17 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
     const cy = Math.max(pad + h * 1.1, Math.min(y, window.innerHeight - pad + h * 0.1));
     return { x: cx, y: cy };
   };
-// Fecha tooltip ao clicar fora
-React.useEffect(() => {
-  const handleClickOutside = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest('[data-tooltip-cell]') && !target.closest('[data-tooltip]')) {
-      setTooltip(null);
-    }
-  };
-  window.addEventListener("click", handleClickOutside);
-  return () => window.removeEventListener("click", handleClickOutside);
-}, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-tooltip-cell]') && !target.closest('[data-tooltip]')) {
+        setTooltip(null);
+      }
+    };
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
     <div
@@ -118,264 +117,175 @@ React.useEffect(() => {
         background: "linear-gradient(180deg,#1a1f2e 0%,#151a27 100%)",
         border: "1px solid rgba(255,255,255,0.06)",
         borderRadius: 12,
-        padding: 24,
+        padding: isMobile ? "16px 12px" : 24,
         color: "#e5e7eb",
         position: "relative",
       }}
     >
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 20, color: "#f3f4f6" }}>
+      <h2 style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600, marginBottom: 20, color: "#f3f4f6" }}>
         🔥 Performance Heatmap: Dia × Hora
       </h2>
 
-      {/* Top stats */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)", borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 150 }}>
-          <div style={{ color: "#9ca3af", fontSize: 13 }}>Melhor Dia</div>
-          <strong style={{ color: "#4ade80", fontSize: 16 }}>{heatmap.bestDay}</strong>
+      <div style={{ display: "flex", gap: isMobile ? 8 : 16, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)", borderRadius: 8, padding: isMobile ? "10px 12px" : "12px 16px", flex: 1, minWidth: "45%" }}>
+          <div style={{ color: "#9ca3af", fontSize: isMobile ? 12 : 13 }}>Melhor Dia</div>
+          <strong style={{ color: "#4ade80", fontSize: isMobile ? 14 : 16 }}>{heatmap.bestDay}</strong>
         </div>
 
-        <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)", borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 150 }}>
-          <div style={{ color: "#9ca3af", fontSize: 13 }}>Melhor Hora</div>
-          <strong style={{ color: "#4ade80", fontSize: 16 }}>{heatmap.bestHour}</strong>
+        <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)", borderRadius: 8, padding: isMobile ? "10px 12px" : "12px 16px", flex: 1, minWidth: "45%" }}>
+          <div style={{ color: "#9ca3af", fontSize: isMobile ? 12 : 13 }}>Melhor Hora</div>
+          <strong style={{ color: "#4ade80", fontSize: isMobile ? 14 : 16 }}>{heatmap.bestHour}</strong>
         </div>
       </div>
-      
-{/* GRID */}
-{!isMobile ? (
-  // === DESKTOP ===
-  <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-around",
-        paddingRight: 8,
-        fontSize: 11,
-        color: "#9ca3af",
-      }}
-    >
-      {daysShort.map((d) => (
-        <div key={d} style={{ height: 24, display: "flex", alignItems: "center" }}>{d}</div>
-      ))}
-    </div>
 
-    <div style={{ flex: 1, minWidth: 600 }}>
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(24, 1fr)",
-          gap: 2,
-          marginBottom: 6,
-          fontSize: 9,
-          color: "#6b7280",
-          textAlign: "center",
+          display: "flex",
+          gap: 8,
+          overflowX: "auto",
+          paddingBottom: 8,
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        {Array.from({ length: 24 }).map((_, i) => (
-          <div key={i}>{i}</div>
-        ))}
-      </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-around",
+            paddingRight: 8,
+            fontSize: 11,
+            color: "#9ca3af",
+            position: isMobile ? "sticky" : "static",
+            left: 0,
+            backgroundColor: isMobile ? "#171c29" : "transparent",
+            zIndex: 2,
+          }}
+        >
+          {daysShort.map((d) => (
+            <div key={d} style={{ height: isMobile ? 28 : 24, display: "flex", alignItems: "center" }}>{d}</div>
+          ))}
+        </div>
 
-      <div style={{ display: "grid", gap: 2 }}>
-        {heatmap.matrix.map((row, day) => (
+        <div style={{ flex: 1, minWidth: isMobile ? 700 : 600 }}>
           <div
-            key={day}
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(24, 1fr)",
-              gap: 2,
+              gap: isMobile ? 4 : 2,
+              marginBottom: 6,
+              fontSize: 9,
+              color: "#6b7280",
+              textAlign: "center",
             }}
           >
-            {row.map((cell, hour) => (
-              <div
-                key={hour}
-                data-tooltip-cell
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const cellCenterX = rect.left + rect.width / 2;
-                  const aboveSpace = rect.top - 10 - 12 - 160 * 1.1;
-                  const belowSpace = window.innerHeight - rect.bottom - 12 - 160 * 0.1;
-                  const showAbove = aboveSpace >= 0 || aboveSpace > belowSpace;
-                  const y = showAbove ? rect.top - 10 : rect.bottom + 10;
-                  const pos = constrainTooltip(cellCenterX, y, 260, 160);
-                  setTooltip({
-                    x: pos.x,
-                    y: pos.y,
-                    above: showAbove,
-                    day,
-                    hour,
-                    ...cell,
-                    color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
-                  });
-                }}
-                onMouseLeave={() => setTooltip(null)}
-                style={{
-                  aspectRatio: "1",
-                  borderRadius: 6,
-                  background: color(heatmap.norm[day][hour]),
-                  border: "1px solid rgba(255,255,255,0.02)",
-                  cursor: "pointer",
-                }}
-              />
+            {Array.from({ length: 24 }).map((_, i) => (
+              <div key={i}>{i}</div>
             ))}
           </div>
-        ))}
-      </div>
-    </div>
-  </div>
-) : (
-  // === MOBILE === (inversão eixo)
-  <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto" }}>
-    {/* Cabeçalho dias */}
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(7, 1fr)",
-        gap: 2,
-        fontSize: 10,
-        color: "#9ca3af",
-        textAlign: "center",
-      }}
-    >
-      {daysShort.map((d) => (
-        <div key={d}>{d}</div>
-      ))}
-    </div>
 
-    {/* Linhas: uma por hora */}
-    <div style={{ display: "grid", gap: 4 }}>
-      {Array.from({ length: 24 }).map((_, hour) => (
-        <div key={hour}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              fontSize: 10,
-              color: "#6b7280",
-              marginBottom: 2,
-            }}
-          >
-            {hour}
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 2,
-            }}
-          >
-            {Array.from({ length: 7 }).map((_, day) => {
-              const cell = heatmap.matrix[day][hour];
-              return (
-                <div
-                  key={day}
-                  data-tooltip-cell
-                  onClick={(e) => {
-  e.stopPropagation();
-  if (window.innerWidth > 768) return;
-
-  setTooltip((prev) =>
-    prev && prev.day === day && prev.hour === hour
-      ? null
-      : {
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-          above: true,
-          day,
-          hour,
-          ...cell,
-          color:
-            cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
-        }
-  );
-}}
-
-                  style={{
-                    aspectRatio: "1",
-                    borderRadius: 6,
-                    background: color(heatmap.norm[day][hour]),
-                    border: "1px solid rgba(255,255,255,0.02)",
-                    cursor: "pointer",
-                  }}
-                />
-              );
-            })}
+          <div style={{ display: "grid", gap: isMobile ? 4 : 2 }}>
+            {heatmap.matrix.map((row, day) => (
+              <div
+                key={day}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(24, 1fr)",
+                  gap: isMobile ? 4 : 2,
+                }}
+              >
+                {row.map((cell, hour) => (
+                  <div
+                    key={hour}
+                    data-tooltip-cell
+                    onMouseEnter={(e) => {
+                      if (isMobile) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const cellCenterX = rect.left + rect.width / 2;
+                      const aboveSpace = rect.top - 10 - 12 - 160 * 1.1;
+                      const belowSpace = window.innerHeight - rect.bottom - 12 - 160 * 0.1;
+                      const showAbove = aboveSpace >= 0 || aboveSpace > belowSpace;
+                      const y = showAbove ? rect.top - 10 : rect.bottom + 10;
+                      const pos = constrainTooltip(cellCenterX, y, 260, 160);
+                      setTooltip({
+                        x: pos.x, y: pos.y, above: showAbove, day, hour, ...cell,
+                        color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
+                      });
+                    }}
+                    onMouseLeave={() => { if (!isMobile) setTooltip(null) }}
+                    onClick={(e) => {
+                      if (!isMobile) return;
+                      e.stopPropagation();
+                      setTooltip((prev) =>
+                        prev && prev.day === day && prev.hour === hour
+                          ? null
+                          : {
+                              x: window.innerWidth / 2, y: window.innerHeight / 2, above: true, day, hour, ...cell,
+                              color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
+                            }
+                      );
+                    }}
+                    style={{
+                      aspectRatio: isMobile ? "auto" : "1",
+                      height: isMobile ? 28 : "auto",
+                      borderRadius: isMobile ? 4 : 6,
+                      background: color(heatmap.norm[day][hour]),
+                      border: "1px solid rgba(255,255,255,0.02)",
+                      cursor: "pointer",
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
           </div>
         </div>
-      ))}
-    </div>
-  </div>
-)}
-
-      {/* Tooltip */}
-{tooltip && createPortal(
-  <div
-    data-tooltip
-    style={{
-      position: "fixed",
-      top:
-        window.innerWidth <= 768
-          ? "50%"
-          : `${tooltip.y}px`,
-      left:
-        window.innerWidth <= 768
-          ? "50%"
-          : `${tooltip.x}px`,
-      transform:
-        window.innerWidth <= 768
-          ? "translate(-50%, -50%)"
-          : tooltip.above
-            ? "translate(-50%, -110%)"
-            : "translate(-50%, 10px)",
-      background: "rgba(10,14,22,0.95)",
-      border: `1px solid ${tooltip.color}`,
-      padding: "12px 14px",
-      borderRadius: 10,
-      color: "#f3f4f6",
-      minWidth: window.innerWidth <= 768 ? "80%" : 260,
-      maxWidth: window.innerWidth <= 768 ? "90%" : 320,
-      zIndex: 99999,
-      boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
-      fontSize: 13,
-      pointerEvents: "none",
-    }}
-  >
-    <div style={{ fontWeight: 800, marginBottom: 8, color: tooltip.color }}>
-      {daysFull[tooltip.day]}
-    </div>
-    <div style={{ color: "#9ca3af", marginBottom: 8 }}>
-      ⏰ {fmtHourRange(tooltip.hour)}
-    </div>
-    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-      <div style={{ color: "#cbd5e1" }}>Lucro líquido:</div>
-      <div
-        style={{
-          fontWeight: 800,
-          color:
-            tooltip.sum > 0 ? "#4ade80" : tooltip.sum < 0 ? "#f87171" : "#e5e7eb",
-        }}
-      >
-        {fmtCurrency(tooltip.sum)}
       </div>
-    </div>
-    <div style={{ color: "#9ca3af" }}>
-      {tooltip.count > 0 ? (
-        <div>
-          <div>
-            <strong style={{ color: "#fff" }}>{tooltip.count}</strong> trades
+
+      {tooltip && createPortal(
+        <div
+          data-tooltip
+          style={{
+            position: "fixed",
+            top: window.innerWidth <= 768 ? "50%" : `${tooltip.y}px`,
+            left: window.innerWidth <= 768 ? "50%" : `${tooltip.x}px`,
+            transform: window.innerWidth <= 768 ? "translate(-50%, -50%)" : tooltip.above ? "translate(-50%, -110%)" : "translate(-50%, 10px)",
+            background: "rgba(10,14,22,0.95)",
+            border: `1px solid ${tooltip.color}`,
+            padding: "12px 14px",
+            borderRadius: 10,
+            color: "#f3f4f6",
+            minWidth: window.innerWidth <= 768 ? "80%" : 260,
+            maxWidth: window.innerWidth <= 768 ? "90%" : 320,
+            zIndex: 99999,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+            fontSize: 13,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontWeight: 800, marginBottom: 8, color: tooltip.color }}>
+            {daysFull[tooltip.day]}
           </div>
-          <div style={{ marginTop: 4 }}>
-            ({tooltip.wins}W / {tooltip.losses}L)
+          <div style={{ color: "#9ca3af", marginBottom: 8 }}>
+            ⏰ {fmtHourRange(tooltip.hour)}
           </div>
-        </div>
-      ) : (
-        <div style={{ color: "#6b7280" }}>Sem trades neste horário</div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ color: "#cbd5e1" }}>Lucro líquido:</div>
+            <div style={{ fontWeight: 800, color: tooltip.sum > 0 ? "#4ade80" : tooltip.sum < 0 ? "#f87171" : "#e5e7eb" }}>
+              {fmtCurrency(tooltip.sum)}
+            </div>
+          </div>
+          <div style={{ color: "#9ca3af" }}>
+            {tooltip.count > 0 ? (
+              <div>
+                <div><strong style={{ color: "#fff" }}>{tooltip.count}</strong> trades</div>
+                <div style={{ marginTop: 4 }}>({tooltip.wins}W / {tooltip.losses}L)</div>
+              </div>
+            ) : (
+              <div style={{ color: "#6b7280" }}>Sem trades neste horário</div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
-    </div>
-  </div>,
-  document.body
-)}
-
     </div>
   );
 };
