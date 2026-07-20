@@ -162,15 +162,12 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
     const month = viewDate.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days: {
-      day: number | null;
-      totalPnl?: number;
-      count?: number;
-      wins?: number;
-      losses?: number;
-    }[] = [];
+    const days: any[] = [];
 
+    // Preenche com dias vazios antes do primeiro dia do mês
     for (let i = 0; i < firstDay; i++) days.push({ day: null });
+
+    // Adiciona todos os dias do mês
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const data = tradesByDate.get(key);
@@ -182,13 +179,45 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         losses: data?.losses,
       });
     }
-    return days;
+
+    // Preenche com dias vazios no final até completar semanas inteiras (múltiplo de 7)
+    while (days.length % 7 !== 0) {
+      days.push({ day: null });
+    }
+
+    // Agrupa as semanas e adiciona a 8ª célula (Total da Semana)
+    const result: any[] = [];
+    for (let i = 0; i < days.length; i += 7) {
+      const week = days.slice(i, i + 7);
+      let weekPnl = 0;
+      let weekCount = 0;
+      let hasData = false;
+
+      week.forEach((d) => {
+        if (d.totalPnl !== undefined) {
+          weekPnl += d.totalPnl;
+          weekCount += d.count || 0;
+          hasData = true;
+        }
+      });
+
+      result.push(...week);
+      result.push({
+        isWeeklySummary: true,
+        hasData,
+        totalPnl: weekPnl,
+        count: weekCount,
+      });
+    }
+
+    return result;
   }, [viewDate, tradesByDate]);
 
   const maxAbs = useMemo(() => {
     let max = 0;
     calendarData.forEach((d) => {
-      if (d.totalPnl) max = Math.max(max, Math.abs(d.totalPnl));
+      // Ignora a célula de resumo da semana no cálculo da intensidade de cor diária
+      if (!d.isWeeklySummary && d.totalPnl) max = Math.max(max, Math.abs(d.totalPnl));
     });
     return max;
   }, [calendarData]);
@@ -289,7 +318,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
   const monthStats = useMemo(() => {
     let totalPnl = 0, winDays = 0, lossDays = 0, tradeDays = 0;
     calendarData.forEach((d) => {
-      if (d.totalPnl === undefined) return;
+      if (d.isWeeklySummary || d.totalPnl === undefined) return;
       tradeDays++;
       totalPnl += d.totalPnl;
       if (d.totalPnl > 0) winDays++;
@@ -507,24 +536,25 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
 
       {/* ── Calendar grid ──────────────────────────────────────────────── */}
       <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%" }}>
-        <div style={{ minWidth: 420 }}>
+        {/* Aumentei a largura mínima para acomodar a 8ª coluna (Total) sem apertar */}
+        <div style={{ minWidth: 480 }}>
           {/* Weekday headers */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(8, minmax(0, 1fr))", // 8 Colunas
               gap: isMobile ? 4 : 6,
               marginBottom: 6,
             }}
           >
-            {daysShort.map((d) => (
+            {[...daysShort, "Total"].map((d) => (
               <div
                 key={d}
                 style={{
                   textAlign: "center",
                   fontSize: 10,
                   fontWeight: 700,
-                  color: T.weekHeader,
+                  color: d === "Total" ? "#93c5fd" : T.weekHeader,
                   letterSpacing: "0.5px",
                   textTransform: "uppercase",
                   padding: "4px 0",
@@ -539,13 +569,59 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(8, minmax(0, 1fr))", // 8 Colunas
               gap: isMobile ? 4 : 6,
             }}
           >
             {calendarData.map((item, idx) => {
+
+              // ── Célula de Total da Semana (Azul Escura) ──
+              if (item.isWeeklySummary) {
+                const displayPnl = item.hasData ? fmtShort(item.totalPnl) : "—";
+                const pnlColor = item.hasData && item.totalPnl > 0 ? "#4ade80" : item.hasData && item.totalPnl < 0 ? "#f87171" : "#9ca3af";
+
+                return (
+                  <div
+                    key={`summary-${idx}`}
+                    style={{
+                      minHeight: isMobile ? 54 : 62,
+                      borderRadius: 10,
+                      background: "rgba(30, 58, 138, 0.4)", // Azul Escuro / Slate-900 (Transparente)
+                      border: "1px solid rgba(59, 130, 246, 0.3)", // Borda azulada
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "6px 4px",
+                      position: "relative",
+                      backdropFilter: "blur(4px)",
+                      WebkitBackdropFilter: "blur(4px)",
+                    }}
+                  >
+                    <div style={{ fontSize: isMobile ? 10 : 11, fontWeight: 700, color: "#93c5fd", marginBottom: item.hasData ? 4 : 0, lineHeight: 1 }}>
+                      Soma
+                    </div>
+
+                    {item.hasData && (
+                      <>
+                        <div style={{ fontSize: isMobile ? 10 : 12, fontWeight: 800, color: pnlColor, lineHeight: 1.2, textAlign: "center", letterSpacing: "-0.2px" }}>
+                          {displayPnl}
+                        </div>
+                        {item.count > 0 && (
+                          <div style={{ marginTop: 4, fontSize: 9, color: "rgba(147, 197, 253, 0.7)", fontWeight: 600, letterSpacing: "0.2px" }}>
+                            {item.count} trade{item.count !== 1 ? "s" : ""}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              }
+
+              // ── Dias Vazios ──
               if (item.day === null) return <div key={`pad-${idx}`} />;
 
+              // ── Dias Normais com ou sem Dados ──
               const cellDateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(
                 item.day
               ).padStart(2, "0")}`;
@@ -709,41 +785,6 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         </div>
       </div>
 
-      {/* ── Legend ──────────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 16,
-          marginTop: 16,
-          paddingTop: 14,
-          borderTop: "1px solid rgba(255,255,255,0.05)",
-        }}
-      >
-        {[
-          { color: "rgba(34,197,94,0.55)", label: "Positivo" },
-          { color: "rgba(255,255,255,0.06)", label: "Sem trades" },
-          { color: "rgba(220,38,38,0.55)", label: "Negativo" },
-        ].map(({ color, label }) => (
-          <div
-            key={label}
-            style={{ display: "flex", alignItems: "center", gap: 6 }}
-          >
-            <div
-              style={{
-                width: 12,
-                height: 12,
-                borderRadius: 3,
-                background: color,
-                border: "1px solid rgba(255,255,255,0.08)",
-              }}
-            />
-            <span style={{ fontSize: 11, color: "#6b7280" }}>{label}</span>
-          </div>
-        ))}
-      </div>
-
       {/* ── Tooltip ─────────────────────────────────────────────────────── */}
       {tooltip &&
         createPortal(
@@ -769,10 +810,10 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               backdropFilter: "blur(14px)",
               WebkitBackdropFilter: "blur(14px)",
               border: `1px solid ${(tooltip.totalPnl || 0) > 0
-                  ? "rgba(34,197,94,0.35)"
-                  : (tooltip.totalPnl || 0) < 0
-                    ? "rgba(220,38,38,0.35)"
-                    : "rgba(255,255,255,0.10)"
+                ? "rgba(34,197,94,0.35)"
+                : (tooltip.totalPnl || 0) < 0
+                  ? "rgba(220,38,38,0.35)"
+                  : "rgba(255,255,255,0.10)"
                 }`,
               padding: "12px 16px",
               borderRadius: 12,
