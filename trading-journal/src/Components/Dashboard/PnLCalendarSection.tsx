@@ -122,8 +122,16 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
     return `rgba(220,38,38,${0.28 + 0.65 * Math.min(1, intensity)})`;
   };
 
+  const constrainTooltip = (x: number, y: number, w = 260, h = 160) => {
+    const pad = 12;
+    const maxX = window.innerWidth - w - pad;
+    const maxY = window.innerHeight - h - pad;
+    return { x: Math.max(pad, Math.min(x, maxX)), y: Math.max(pad, Math.min(y, maxY)) };
+  };
+
   const goToPrevMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
   const goToNextMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+  const goToToday = () => setViewDate(new Date());
 
   const isFirstMonth = availableMonths.length > 0 && viewDate.getFullYear() === availableMonths[0].year && viewDate.getMonth() === availableMonths[0].month;
   const isLastMonth = availableMonths.length > 0 && viewDate.getFullYear() === availableMonths[availableMonths.length - 1].year && viewDate.getMonth() === availableMonths[availableMonths.length - 1].month;
@@ -134,7 +142,12 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
   const viewMonth = viewDate.getMonth();
 
   useEffect(() => {
-    const handleClick = () => { if (window.innerWidth <= 768) setTooltip(null); };
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-tooltip-cell]') && !target.closest('[data-tooltip]')) {
+        setTooltip(null);
+      }
+    };
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
   }, []);
@@ -159,78 +172,104 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         📅 PnL Calendar
       </h2>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 6 }}>
         <button
           onClick={goToPrevMonth}
           disabled={isFirstMonth}
+          title="Mês anterior"
           style={{
-            background: "none",
+            background: isFirstMonth ? "transparent" : "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.1)",
             color: isFirstMonth ? "#4b5563" : "#e5e7eb",
             borderRadius: 8,
-            padding: "6px 12px",
+            padding: "8px 10px",
             cursor: isFirstMonth ? "default" : "pointer",
-            fontSize: 16,
+            fontSize: 14,
             lineHeight: 1,
+            transition: "background 0.15s",
           }}
         >
           ◀
         </button>
 
-        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", display: "flex" }}>
-          <select
-            value={viewMonth}
-            onChange={(e) => setViewDate(new Date(viewYear, Number(e.target.value), 1))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
+          <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", display: "flex", colorScheme: "dark" }}>
+            <select
+              value={viewMonth}
+              onChange={(e) => setViewDate(new Date(viewYear, Number(e.target.value), 1))}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#f3f4f6",
+                padding: "7px 10px",
+                fontSize: isMobile ? 12 : 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              {monthNames.map((name, i) => (
+                <option key={i} value={i} style={{ background: "#1a1f2e", color: "#f3f4f6" }}>{name}</option>
+              ))}
+            </select>
+
+            <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
+
+            <select
+              value={viewYear}
+              onChange={(e) => setViewDate(new Date(Number(e.target.value), viewMonth, 1))}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#f3f4f6",
+                padding: "7px 10px",
+                fontSize: isMobile ? 12 : 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              {yearOptions.map(y => (
+                <option key={y} value={y} style={{ background: "#1a1f2e", color: "#f3f4f6" }}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={goToToday}
+            title="Ir para o mês atual"
             style={{
-              background: "transparent",
-              border: "none",
-              color: "#f3f4f6",
-              padding: "6px 12px",
-              fontSize: isMobile ? 13 : 15,
-              fontWeight: 700,
+              background: "rgba(96,165,250,0.12)",
+              border: "1px solid rgba(96,165,250,0.25)",
+              color: "#93c5fd",
+              borderRadius: 8,
+              padding: "7px 10px",
               cursor: "pointer",
-              outline: "none",
+              fontSize: isMobile ? 11 : 12,
+              fontWeight: 600,
+              lineHeight: 1,
+              transition: "background 0.15s",
+              whiteSpace: "nowrap",
             }}
           >
-            {monthNames.map((name, i) => (
-              <option key={i} value={i}>{name}</option>
-            ))}
-          </select>
-
-          <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
-
-          <select
-            value={viewYear}
-            onChange={(e) => setViewDate(new Date(Number(e.target.value), viewMonth, 1))}
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "#f3f4f6",
-              padding: "6px 12px",
-              fontSize: isMobile ? 13 : 15,
-              fontWeight: 700,
-              cursor: "pointer",
-              outline: "none",
-            }}
-          >
-            {yearOptions.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+            ● Hoje
+          </button>
         </div>
 
         <button
           onClick={goToNextMonth}
           disabled={isLastMonth}
+          title="Próximo mês"
           style={{
-            background: "none",
+            background: isLastMonth ? "transparent" : "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.1)",
             color: isLastMonth ? "#4b5563" : "#e5e7eb",
             borderRadius: 8,
-            padding: "6px 12px",
+            padding: "8px 10px",
             cursor: isLastMonth ? "default" : "pointer",
-            fontSize: 16,
+            fontSize: 14,
             lineHeight: 1,
+            transition: "background 0.15s",
           }}
         >
           ▶
@@ -264,12 +303,14 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           return (
             <div
               key={item.day}
+              data-tooltip-cell
               onMouseEnter={(e) => {
                 if (!hasData) return;
                 const rect = e.currentTarget.getBoundingClientRect();
+                const pos = constrainTooltip(rect.left + rect.width / 2, rect.top - 10);
                 setTooltip({
-                  x: rect.left + rect.width / 2,
-                  y: rect.top - 10,
+                  x: pos.x,
+                  y: pos.y,
                   day: item.day,
                   totalPnl: item.totalPnl,
                   count: item.count,
@@ -278,11 +319,10 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                   color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
                 });
               }}
-              onMouseLeave={() => { if (window.innerWidth > 768) setTooltip(null); }}
               onClick={(e) => {
                 if (!hasData) return;
-                e.stopPropagation();
                 if (window.innerWidth <= 768) {
+                  e.stopPropagation();
                   setTooltip(prev =>
                     prev && prev.day === item.day
                       ? null
@@ -316,7 +356,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             >
               <div style={{
                 fontSize: isMobile ? 9 : 10,
-                color: isToday ? "#60a5fa" : "#6b7280",
+                color: isToday ? "#60a5fa" : "#d1d5db",
                 fontWeight: isToday ? 700 : 400,
                 position: "absolute",
                 top: 3,
@@ -345,6 +385,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
 
       {tooltip && (
         <div
+          data-tooltip
           style={{
             position: "fixed",
             top: window.innerWidth <= 768 ? "50%" : `${tooltip.y}px`,
@@ -356,10 +397,11 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             borderRadius: 10,
             color: "#f3f4f6",
             minWidth: window.innerWidth <= 768 ? "80%" : 220,
+            maxWidth: window.innerWidth <= 768 ? "90%" : 320,
             zIndex: 9999,
             boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
             fontSize: 13,
-            pointerEvents: "auto",
+            pointerEvents: "none",
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 8, color: tooltip.color, fontSize: 14 }}>

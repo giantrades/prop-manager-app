@@ -98,10 +98,13 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
     const maxY = window.innerHeight - h - pad;
     return { x: Math.max(pad, Math.min(x, maxX)), y: Math.max(pad, Math.min(y, maxY)) };
   };
-// Fecha tooltip no mobile ao clicar fora
+// Fecha tooltip ao clicar fora
 React.useEffect(() => {
-  const handleClickOutside = () => {
-    if (window.innerWidth <= 768) setTooltip(null);
+  const handleClickOutside = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (!target.closest('[data-tooltip-cell]') && !target.closest('[data-tooltip]')) {
+      setTooltip(null);
+    }
   };
   window.addEventListener("click", handleClickOutside);
   return () => window.removeEventListener("click", handleClickOutside);
@@ -185,18 +188,19 @@ React.useEffect(() => {
             {row.map((cell, hour) => (
               <div
                 key={hour}
+                data-tooltip-cell
                 onMouseEnter={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
+                  const pos = constrainTooltip(rect.left + rect.width / 2, rect.top - 10, 260, 160);
                   setTooltip({
-                    x: rect.left + rect.width / 2,
-                    y: rect.top - 10,
+                    x: pos.x,
+                    y: pos.y,
                     day,
                     hour,
                     ...cell,
                     color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
                   });
                 }}
-                onMouseLeave={() => setTooltip(null)}
                 style={{
                   aspectRatio: "1",
                   borderRadius: 6,
@@ -257,16 +261,17 @@ React.useEffect(() => {
               return (
                 <div
                   key={day}
-onClick={(e) => {
+                  data-tooltip-cell
+                  onClick={(e) => {
   e.stopPropagation();
-  if (window.innerWidth > 768) return; // desktop usa hover, ignora click
+  if (window.innerWidth > 768) return;
 
   setTooltip((prev) =>
     prev && prev.day === day && prev.hour === hour
-      ? null // se clicar na mesma célula, fecha
+      ? null
       : {
-          x: window.innerWidth / 2, // centro da tela
-          y: window.innerHeight / 2, // meio do viewport visível
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
           day,
           hour,
           ...cell,
@@ -296,15 +301,16 @@ onClick={(e) => {
       {/* Tooltip */}
 {tooltip && (
   <div
+    data-tooltip
     style={{
       position: "fixed",
       top:
         window.innerWidth <= 768
-          ? "50%" // mobile: centralizada vertical
-          : `${tooltip.y}px`, // desktop: onde o mouse passou
+          ? "50%"
+          : `${tooltip.y}px`,
       left:
         window.innerWidth <= 768
-          ? "50%" // mobile: centralizada horizontal
+          ? "50%"
           : `${tooltip.x}px`,
       transform:
         window.innerWidth <= 768
@@ -316,10 +322,11 @@ onClick={(e) => {
       borderRadius: 10,
       color: "#f3f4f6",
       minWidth: window.innerWidth <= 768 ? "80%" : 260,
+      maxWidth: window.innerWidth <= 768 ? "90%" : 320,
       zIndex: 9999,
       boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
       fontSize: 13,
-      pointerEvents: "auto",
+      pointerEvents: "none",
     }}
   >
     <div style={{ fontWeight: 800, marginBottom: 8, color: tooltip.color }}>
