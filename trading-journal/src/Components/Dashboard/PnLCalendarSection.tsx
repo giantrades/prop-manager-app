@@ -177,19 +177,19 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           ◀
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", display: "flex" }}>
           <select
             value={viewMonth}
             onChange={(e) => setViewDate(new Date(viewYear, Number(e.target.value), 1))}
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "transparent",
+              border: "none",
               color: "#f3f4f6",
-              borderRadius: 8,
-              padding: "6px 10px",
-              fontSize: isMobile ? 12 : 14,
-              fontWeight: 600,
+              padding: "6px 12px",
+              fontSize: isMobile ? 13 : 15,
+              fontWeight: 700,
               cursor: "pointer",
+              outline: "none",
             }}
           >
             {monthNames.map((name, i) => (
@@ -197,18 +197,20 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             ))}
           </select>
 
+          <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
+
           <select
             value={viewYear}
             onChange={(e) => setViewDate(new Date(Number(e.target.value), viewMonth, 1))}
             style={{
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "transparent",
+              border: "none",
               color: "#f3f4f6",
-              borderRadius: 8,
-              padding: "6px 10px",
-              fontSize: isMobile ? 12 : 14,
-              fontWeight: 600,
+              padding: "6px 12px",
+              fontSize: isMobile ? 13 : 15,
+              fontWeight: 700,
               cursor: "pointer",
+              outline: "none",
             }}
           >
             {yearOptions.map(y => (
@@ -361,7 +363,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 8, color: tooltip.color, fontSize: 14 }}>
-            {`${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(tooltip.day).padStart(2, "0")}`}
+            {`${tooltip.day} de ${monthNames[viewMonth]} de ${viewYear}`}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
             <div style={{ color: "#cbd5e1" }}>PnL:</div>
