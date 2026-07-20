@@ -73,13 +73,13 @@ function useFmtCurrency() {
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
   // Glass card
-  cardBg: "rgba(255,255,255,0.03)",
-  cardBorder: "rgba(255,255,255,0.07)",
+  cardBg: "rgba(15, 23, 42, 0.5)",
+  cardBorder: "rgba(30, 41, 59, 0.5)",
   cardBlur: "blur(16px)",
 
   // Cell base (empty)
-  cellEmptyBg: "rgba(255,255,255,0.02)",
-  cellEmptyBorder: "rgba(255,255,255,0.04)",
+  cellEmptyBg: "rgba(15, 23, 42, 0.3)",
+  cellEmptyBorder: "rgba(30, 41, 59, 0.2)",
 
   // Cell positive
   cellPosBg: (intensity: number) =>
@@ -100,11 +100,11 @@ const T = {
 
   // Day number
   dayNumActive: "#ffffff",
-  dayNumEmpty: "#374151",
+  dayNumEmpty: "#475569",
   dayNumToday: "#93c5fd",
 
   // Weekday header
-  weekHeader: "#6b7280",
+  weekHeader: "#94a3b8",
 };
 
 const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
@@ -187,6 +187,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
 
     // Agrupa as semanas e adiciona a 8ª célula (Total da Semana)
     const result: any[] = [];
+    let weekNumber = 0;
     for (let i = 0; i < days.length; i += 7) {
       const week = days.slice(i, i + 7);
       let weekPnl = 0;
@@ -201,9 +202,11 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         }
       });
 
+      weekNumber++;
       result.push(...week);
       result.push({
         isWeeklySummary: true,
+        weekNumber,
         hasData,
         totalPnl: weekPnl,
         count: weekCount,
@@ -251,10 +254,10 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
       };
     // breakeven
     return {
-      bg: "rgba(255,255,255,0.04)",
-      border: "rgba(255,255,255,0.10)",
+      bg: "rgba(15, 23, 42, 0.4)",
+      border: "rgba(30, 41, 59, 0.4)",
       textColor: T.dayNumActive,
-      amountColor: "#9ca3af",
+      amountColor: "#94a3b8",
       barColor: "transparent",
     };
   };
@@ -390,13 +393,13 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               display: "inline-flex",
               alignItems: "center",
               gap: 8,
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "rgba(15, 23, 42, 0.4)",
+              border: "1px solid rgba(30, 41, 59, 0.5)",
               borderRadius: 20,
               padding: "3px 10px",
             }}
           >
-            <span style={{ fontSize: 11, color: "#6b7280" }}>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>
               {monthNames[viewMonth].substring(0, 3)} {viewYear}
             </span>
             <span
@@ -409,7 +412,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               {monthStats.totalPnl === 0 ? "—" : fmtShort(monthStats.totalPnl)}
             </span>
             {monthStats.tradeDays > 0 && (
-              <span style={{ fontSize: 11, color: "#6b7280" }}>
+              <span style={{ fontSize: 11, color: "#94a3b8" }}>
                 {monthStats.winDays}W / {monthStats.lossDays}L
               </span>
             )}
@@ -422,9 +425,9 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             onClick={goToPrevMonth}
             disabled={isFirstMonth}
             style={{
-              background: isFirstMonth ? "transparent" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${isFirstMonth ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.10)"}`,
-              color: isFirstMonth ? "#2d3748" : "#9ca3af",
+              background: isFirstMonth ? "transparent" : "rgba(15, 23, 42, 0.4)",
+              border: `1px solid ${isFirstMonth ? "rgba(30, 41, 59, 0.2)" : "rgba(30, 41, 59, 0.4)"}`,
+              color: isFirstMonth ? "#4b5563" : "#94a3b8",
               borderRadius: 8,
               padding: "7px 10px",
               cursor: isFirstMonth ? "default" : "pointer",
@@ -438,8 +441,8 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           {/* Month / Year selectors */}
           <div
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(15, 23, 42, 0.4)",
+              border: "1px solid rgba(30, 41, 59, 0.4)",
               borderRadius: 10,
               display: "flex",
               alignItems: "center",
@@ -467,14 +470,14 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                     key={i}
                     value={i}
                     disabled={!hasTrade}
-                    style={{ background: "#0c1119", color: hasTrade ? "#f3f4f6" : "#374151" }}
+                    style={{ background: "#0c1119", color: hasTrade ? "#f3f4f6" : "#4b5563" }}
                   >
                     {isMobile ? name.substring(0, 3) : name}
                   </option>
                 );
               })}
             </select>
-            <span style={{ color: "rgba(255,255,255,0.12)", fontSize: 13 }}>·</span>
+            <span style={{ color: "rgba(30, 41, 59, 0.6)", fontSize: 13 }}>·</span>
             <select
               value={viewYear}
               onChange={(e) => setViewDate(new Date(Number(e.target.value), viewMonth, 1))}
@@ -501,9 +504,9 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             onClick={goToNextMonth}
             disabled={isLastMonth}
             style={{
-              background: isLastMonth ? "transparent" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${isLastMonth ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.10)"}`,
-              color: isLastMonth ? "#2d3748" : "#9ca3af",
+              background: isLastMonth ? "transparent" : "rgba(15, 23, 42, 0.4)",
+              border: `1px solid ${isLastMonth ? "rgba(30, 41, 59, 0.2)" : "rgba(30, 41, 59, 0.4)"}`,
+              color: isLastMonth ? "#4b5563" : "#94a3b8",
               borderRadius: 8,
               padding: "7px 10px",
               cursor: isLastMonth ? "default" : "pointer",
@@ -578,7 +581,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               // ── Célula de Total da Semana (Azul Escura) ──
               if (item.isWeeklySummary) {
                 const displayPnl = item.hasData ? fmtShort(item.totalPnl) : "—";
-                const pnlColor = item.hasData && item.totalPnl > 0 ? "#4ade80" : item.hasData && item.totalPnl < 0 ? "#f87171" : "#9ca3af";
+                const pnlColor = item.hasData && item.totalPnl > 0 ? "#4ade80" : item.hasData && item.totalPnl < 0 ? "#f87171" : "#94a3b8";
 
                 return (
                   <div
@@ -599,7 +602,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                     }}
                   >
                     <div style={{ fontSize: isMobile ? 10 : 11, fontWeight: 700, color: "#93c5fd", marginBottom: item.hasData ? 4 : 0, lineHeight: 1 }}>
-                      Soma
+                      Week {item.weekNumber}
                     </div>
 
                     {item.hasData && (
@@ -736,7 +739,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                                 ? "rgba(74,222,128,0.6)"
                                 : (item.totalPnl || 0) < 0
                                   ? "rgba(248,113,113,0.6)"
-                                  : "rgba(156,163,175,0.6)",
+                                  : "rgba(148,163,184,0.6)",
                             fontWeight: 600,
                             letterSpacing: "0.2px",
                           }}
@@ -806,14 +809,14 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                   : tooltip.above
                     ? "translate(-50%, -110%)"
                     : "translate(-50%, 10px)",
-              background: "rgba(8,12,20,0.92)",
+              background: "rgba(8,12,20,0.95)",
               backdropFilter: "blur(14px)",
               WebkitBackdropFilter: "blur(14px)",
               border: `1px solid ${(tooltip.totalPnl || 0) > 0
                 ? "rgba(34,197,94,0.35)"
                 : (tooltip.totalPnl || 0) < 0
                   ? "rgba(220,38,38,0.35)"
-                  : "rgba(255,255,255,0.10)"
+                  : "rgba(30, 41, 59, 0.5)"
                 }`,
               padding: "12px 16px",
               borderRadius: 12,
@@ -832,7 +835,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                     ? T.cellPosText
                     : (tooltip.totalPnl || 0) < 0
                       ? T.cellNegText
-                      : "#9ca3af",
+                      : "#94a3b8",
                 marginBottom: 10,
                 letterSpacing: "0.1px",
               }}
@@ -848,7 +851,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 marginBottom: 8,
               }}
             >
-              <span style={{ fontSize: 12, color: "#6b7280" }}>PnL</span>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>PnL</span>
               <span
                 style={{
                   fontSize: 16,
@@ -872,16 +875,16 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                   display: "flex",
                   justifyContent: "space-between",
                   paddingTop: 8,
-                  borderTop: "1px solid rgba(255,255,255,0.06)",
+                  borderTop: "1px solid rgba(30, 41, 59, 0.4)",
                 }}
               >
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>
                   <strong style={{ color: "#e5e7eb" }}>{tooltip.count}</strong>{" "}
                   trade{tooltip.count !== 1 ? "s" : ""}
                 </div>
                 <div style={{ fontSize: 12 }}>
                   <span style={{ color: "#4ade80" }}>{tooltip.wins}W</span>
-                  <span style={{ color: "#4b5563", margin: "0 4px" }}>/</span>
+                  <span style={{ color: "#475569", margin: "0 4px" }}>/</span>
                   <span style={{ color: "#f87171" }}>{tooltip.losses}L</span>
                 </div>
               </div>
