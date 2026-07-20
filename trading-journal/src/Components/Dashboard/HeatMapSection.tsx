@@ -3,7 +3,16 @@ import { createPortal } from "react-dom";
 import { useCurrency } from "@apps/state";
 
 const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
-const isMobile = window.innerWidth < 768;
+
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return isMobile;
+};
 
 const daysFull = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -41,6 +50,7 @@ function parseTradeDate(t: any): Date | null {
 }
 
 const HeatmapSection = ({ trades }: { trades: any[] }) => {
+  const isMobile = useIsMobile();
   const fmtCurrency = useFmtCurrencyFallback();
   const [tooltip, setTooltip] = useState<any | null>(null);
 
@@ -143,8 +153,9 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
           display: "flex",
           gap: 8,
           overflowX: "auto",
-          paddingBottom: 8,
+          paddingBottom: 12,
           WebkitOverflowScrolling: "touch",
+          maxWidth: "100%",
         }}
       >
         <div
@@ -159,6 +170,8 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
             left: 0,
             backgroundColor: isMobile ? "#171c29" : "transparent",
             zIndex: 2,
+            flexShrink: 0,
+            minWidth: 35,
           }}
         >
           {daysShort.map((d) => (
@@ -166,7 +179,7 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
           ))}
         </div>
 
-        <div style={{ flex: 1, minWidth: isMobile ? 700 : 600 }}>
+        <div style={{ flex: 1, minWidth: 600 }}>
           <div
             style={{
               display: "grid",

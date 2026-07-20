@@ -2,7 +2,16 @@ import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useCurrency } from "@apps/state";
 
-const isMobile = window.innerWidth < 768;
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return isMobile;
+};
+
 const daysShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 const monthNames = [
@@ -49,6 +58,7 @@ function useFmtCurrency() {
 }
 
 const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
+  const isMobile = useIsMobile();
   const { fmt, fmtShort, currency, rate } = useFmtCurrency();
   const [tooltip, setTooltip] = useState<any | null>(null);
   const [viewDate, setViewDate] = useState(() => new Date());
@@ -250,12 +260,13 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         </button>
       </div>
 
-      {/* Correção: Uso de minmax(0, 1fr) no grid template para forçar os itens a respeitarem o container */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 8, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
-        {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}
-      </div>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 8, maxWidth: "100%" }}>
+        <div style={{ minWidth: isMobile ? 500 : "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 8, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
+            {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}
+          </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 4 }}>
         {calendarData.map((item, idx) => {
           if (item.day === null) return <div key={`pad-${idx}`} />;
 
@@ -318,6 +329,8 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
           );
         })}
       </div>
+      </div>
+    </div>
 
       {tooltip && createPortal(
         <div
