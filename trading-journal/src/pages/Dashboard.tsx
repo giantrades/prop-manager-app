@@ -1984,8 +1984,11 @@ export default function Dashboard() {
         <CategoryCard data={cat} fmt={fmt} />
       </div>
 
-      {/* SUMMARY SECTION - REDESIGNED & POSITIONED BELOW FIRST CHARTS ROW */}
-      <div className="summary-section" style={{ marginTop: 24, marginBottom: 24 }}>
+      {/* PnL Calendar + Summary Cards */}
+      <div className="grid two-cols" style={{ gridTemplateColumns: "1fr 400px" }}>
+        <PnLCalendarSection trades={filteredTrades} />
+        <div>
+          <div style={{ margin: 0 }}>
         {/* Primários (Total P&L e Win Rate) */}
         <div style={{
           display: 'grid',
@@ -2146,9 +2149,10 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+        </div>
+      </div>
 
-      <div className="grid two-cols">
-        <PnLCalendarSection trades={filteredTrades} />
+      <div>
         <HeatMapSection trades={filteredTrades} />
       </div>
 

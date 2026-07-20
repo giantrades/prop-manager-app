@@ -260,7 +260,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         </button>
       </div>
 
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 8, maxWidth: "100%", width: "100%" }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 8, width: "100%" }}>
         <div style={{ minWidth: 500 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 8, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
             {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}

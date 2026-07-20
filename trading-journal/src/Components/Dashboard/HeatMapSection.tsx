@@ -150,37 +150,41 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
 
       <div
         style={{
-          display: "flex",
-          gap: 8,
           overflowX: "auto",
-          paddingBottom: 12,
           WebkitOverflowScrolling: "touch",
-          maxWidth: "100%",
+          paddingBottom: 12,
           width: "100%",
         }}
       >
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-around",
-            paddingRight: 8,
-            fontSize: 11,
-            color: "#9ca3af",
-            position: isMobile ? "sticky" : "static",
-            left: 0,
-            backgroundColor: isMobile ? "#171c29" : "transparent",
-            zIndex: 2,
-            flexShrink: 0,
-            minWidth: 35,
+            gap: 8,
+            minWidth: 640,
           }}
         >
-          {daysShort.map((d) => (
-            <div key={d} style={{ height: isMobile ? 28 : 24, display: "flex", alignItems: "center" }}>{d}</div>
-          ))}
-        </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-around",
+              paddingRight: 8,
+              fontSize: 11,
+              color: "#9ca3af",
+              position: isMobile ? "sticky" : "static",
+              left: 0,
+              backgroundColor: isMobile ? "#171c29" : "transparent",
+              zIndex: 2,
+              flexShrink: 0,
+              minWidth: 35,
+            }}
+          >
+            {daysShort.map((d) => (
+              <div key={d} style={{ height: isMobile ? 28 : 24, display: "flex", alignItems: "center" }}>{d}</div>
+            ))}
+          </div>
 
-        <div style={{ flex: 1, minWidth: 600 }}>
+          <div style={{ flex: 1, minWidth: 600 }}>
           <div
             style={{
               display: "grid",
@@ -252,6 +256,7 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
             ))}
           </div>
         </div>
+      </div>
       </div>
 
       {tooltip && createPortal(
