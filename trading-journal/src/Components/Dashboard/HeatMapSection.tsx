@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useCurrency } from "@apps/state"; // se não existir, pode remover
 
 const safeNumber = (n: any) => (typeof n === "number" && !isNaN(n) ? n : Number(n) || 0);
@@ -92,11 +93,11 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
     return `rgba(220,38,38,${0.28 + 0.65 * Math.min(1, Math.abs(val))})`;
   };
 
-  const constrainTooltip = (x: number, y: number, w = 260, h = 140) => {
+  const constrainTooltip = (x: number, y: number, w = 260, h = 160) => {
     const pad = 12;
-    const maxX = window.innerWidth - w - pad;
-    const maxY = window.innerHeight - h - pad;
-    return { x: Math.max(pad, Math.min(x, maxX)), y: Math.max(pad, Math.min(y, maxY)) };
+    const cx = Math.max(pad + w / 2, Math.min(x, window.innerWidth - pad - w / 2));
+    const cy = Math.max(pad + h * 1.1, Math.min(y, window.innerHeight - pad + h * 0.1));
+    return { x: cx, y: cy };
   };
 // Fecha tooltip ao clicar fora
 React.useEffect(() => {
@@ -191,16 +192,23 @@ React.useEffect(() => {
                 data-tooltip-cell
                 onMouseEnter={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const pos = constrainTooltip(rect.left + rect.width / 2, rect.top - 10, 260, 160);
+                  const cellCenterX = rect.left + rect.width / 2;
+                  const aboveSpace = rect.top - 10 - 12 - 160 * 1.1;
+                  const belowSpace = window.innerHeight - rect.bottom - 12 - 160 * 0.1;
+                  const showAbove = aboveSpace >= 0 || aboveSpace > belowSpace;
+                  const y = showAbove ? rect.top - 10 : rect.bottom + 10;
+                  const pos = constrainTooltip(cellCenterX, y, 260, 160);
                   setTooltip({
                     x: pos.x,
                     y: pos.y,
+                    above: showAbove,
                     day,
                     hour,
                     ...cell,
                     color: cell.sum > 0 ? "#22c55e" : cell.sum < 0 ? "#ef4444" : "#9ca3af",
                   });
                 }}
+                onMouseLeave={() => setTooltip(null)}
                 style={{
                   aspectRatio: "1",
                   borderRadius: 6,
@@ -272,6 +280,7 @@ React.useEffect(() => {
       : {
           x: window.innerWidth / 2,
           y: window.innerHeight / 2,
+          above: true,
           day,
           hour,
           ...cell,
@@ -299,7 +308,7 @@ React.useEffect(() => {
 )}
 
       {/* Tooltip */}
-{tooltip && (
+{tooltip && createPortal(
   <div
     data-tooltip
     style={{
@@ -315,7 +324,9 @@ React.useEffect(() => {
       transform:
         window.innerWidth <= 768
           ? "translate(-50%, -50%)"
-          : "translate(-50%, -110%)",
+          : tooltip.above
+            ? "translate(-50%, -110%)"
+            : "translate(-50%, 10px)",
       background: "rgba(10,14,22,0.95)",
       border: `1px solid ${tooltip.color}`,
       padding: "12px 14px",
@@ -323,7 +334,7 @@ React.useEffect(() => {
       color: "#f3f4f6",
       minWidth: window.innerWidth <= 768 ? "80%" : 260,
       maxWidth: window.innerWidth <= 768 ? "90%" : 320,
-      zIndex: 9999,
+      zIndex: 99999,
       boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
       fontSize: 13,
       pointerEvents: "none",
@@ -361,7 +372,8 @@ React.useEffect(() => {
         <div style={{ color: "#6b7280" }}>Sem trades neste horário</div>
       )}
     </div>
-  </div>
+  </div>,
+  document.body
 )}
 
     </div>

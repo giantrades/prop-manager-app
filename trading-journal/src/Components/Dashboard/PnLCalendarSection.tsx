@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useCurrency } from "@apps/state";
 
 const isMobile = window.innerWidth < 768;
@@ -124,9 +125,9 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
 
   const constrainTooltip = (x: number, y: number, w = 260, h = 160) => {
     const pad = 12;
-    const maxX = window.innerWidth - w - pad;
-    const maxY = window.innerHeight - h - pad;
-    return { x: Math.max(pad, Math.min(x, maxX)), y: Math.max(pad, Math.min(y, maxY)) };
+    const cx = Math.max(pad + w / 2, Math.min(x, window.innerWidth - pad - w / 2));
+    const cy = Math.max(pad + h * 1.1, Math.min(y, window.innerHeight - pad + h * 0.1));
+    return { x: cx, y: cy };
   };
 
   const goToPrevMonth = () => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
@@ -160,8 +161,8 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
     <div
       className="card"
       style={{
-        background: "linear-gradient(180deg,#1a1f2e 0%,#151a27 100%)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: "linear-gradient(180deg,#10151f 0%,#0c1119 100%)",
+        border: "1px solid rgba(255,255,255,0.05)",
         borderRadius: 12,
         padding: 24,
         color: "#e5e7eb",
@@ -193,7 +194,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
-          <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, overflow: "hidden", display: "flex", colorScheme: "dark" }}>
+          <div style={{ background: "rgba(15,23,42,0.6)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 999, overflow: "hidden", display: "flex", colorScheme: "dark", padding: "2px 6px" }}>
             <select
               value={viewMonth}
               onChange={(e) => setViewDate(new Date(viewYear, Number(e.target.value), 1))}
@@ -201,7 +202,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 background: "transparent",
                 border: "none",
                 color: "#f3f4f6",
-                padding: "7px 10px",
+                padding: "5px 8px",
                 fontSize: isMobile ? 12 : 14,
                 fontWeight: 700,
                 cursor: "pointer",
@@ -209,11 +210,11 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               }}
             >
               {monthNames.map((name, i) => (
-                <option key={i} value={i} style={{ background: "#1a1f2e", color: "#f3f4f6" }}>{name}</option>
+                <option key={i} value={i} style={{ background: "#10151f", color: "#f3f4f6" }}>{name}</option>
               ))}
             </select>
 
-            <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
+            <div style={{ width: 1, background: "rgba(255,255,255,0.12)" }} />
 
             <select
               value={viewYear}
@@ -222,7 +223,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 background: "transparent",
                 border: "none",
                 color: "#f3f4f6",
-                padding: "7px 10px",
+                padding: "5px 8px",
                 fontSize: isMobile ? 12 : 14,
                 fontWeight: 700,
                 cursor: "pointer",
@@ -230,7 +231,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               }}
             >
               {yearOptions.map(y => (
-                <option key={y} value={y} style={{ background: "#1a1f2e", color: "#f3f4f6" }}>{y}</option>
+                <option key={y} value={y} style={{ background: "#10151f", color: "#f3f4f6" }}>{y}</option>
               ))}
             </select>
           </div>
@@ -307,10 +308,16 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               onMouseEnter={(e) => {
                 if (!hasData) return;
                 const rect = e.currentTarget.getBoundingClientRect();
-                const pos = constrainTooltip(rect.left + rect.width / 2, rect.top - 10);
+                const cellCenterX = rect.left + rect.width / 2;
+                const aboveSpace = rect.top - 10 - 12 - 160 * 1.1;
+                const belowSpace = window.innerHeight - rect.bottom - 12 - 160 * 0.1;
+                const showAbove = aboveSpace >= 0 || aboveSpace > belowSpace;
+                const y = showAbove ? rect.top - 10 : rect.bottom + 10;
+                const pos = constrainTooltip(cellCenterX, y, 260, 160);
                 setTooltip({
                   x: pos.x,
                   y: pos.y,
+                  above: showAbove,
                   day: item.day,
                   totalPnl: item.totalPnl,
                   count: item.count,
@@ -319,31 +326,35 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                   color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
                 });
               }}
+              onMouseLeave={() => { if (window.innerWidth > 768) setTooltip(null); }}
               onClick={(e) => {
-                if (!hasData) return;
-                if (window.innerWidth <= 768) {
-                  e.stopPropagation();
-                  setTooltip(prev =>
-                    prev && prev.day === item.day
-                      ? null
-                      : {
-                          x: window.innerWidth / 2,
-                          y: window.innerHeight / 2,
-                          day: item.day,
-                          totalPnl: item.totalPnl,
-                          count: item.count,
-                          wins: item.wins,
-                          losses: item.losses,
-                          color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
-                        }
-                  );
-                }
+                if (!hasData || window.innerWidth > 768) return;
+                e.stopPropagation();
+                setTooltip(prev =>
+                  prev && prev.day === item.day
+                    ? null
+                    : {
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        above: true,
+                        day: item.day,
+                        totalPnl: item.totalPnl,
+                        count: item.count,
+                        wins: item.wins,
+                        losses: item.losses,
+                        color: (item.totalPnl || 0) > 0 ? "#22c55e" : (item.totalPnl || 0) < 0 ? "#ef4444" : "#9ca3af",
+                      }
+                );
               }}
               style={{
                 aspectRatio: "1",
                 borderRadius: 8,
-                background: hasData ? getColor(item.totalPnl) : "rgba(31,41,55,0.12)",
-                border: isToday ? "1px solid rgba(96,165,250,0.5)" : "1px solid rgba(255,255,255,0.02)",
+                background: hasData ? getColor(item.totalPnl) : "rgba(15,23,42,0.4)",
+                border: isToday
+                  ? "1px solid #60a5fa"
+                  : hasData
+                    ? "1px solid rgba(255,255,255,0.08)"
+                    : "1px solid rgba(255,255,255,0.02)",
                 cursor: hasData ? "pointer" : "default",
                 display: "flex",
                 flexDirection: "column",
@@ -352,28 +363,45 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 padding: 2,
                 position: "relative",
                 minHeight: isMobile ? 40 : 56,
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                boxShadow: hasData ? "inset 0 0 10px rgba(0,0,0,0.15)" : "none",
+              }}
+              onMouseOver={(e) => {
+                if (hasData) {
+                  e.currentTarget.style.transform = "scale(1.05)";
+                  e.currentTarget.style.zIndex = "10";
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+                }
+              }}
+              onMouseOut={(e) => {
+                if (hasData) {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.zIndex = "1";
+                  e.currentTarget.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.15)";
+                }
               }}
             >
               <div style={{
-                fontSize: isMobile ? 9 : 10,
-                color: isToday ? "#60a5fa" : "#d1d5db",
-                fontWeight: isToday ? 700 : 400,
+                fontSize: isMobile ? 9 : 11,
+                color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"),
+                fontWeight: isToday || hasData ? 600 : 400,
                 position: "absolute",
-                top: 3,
-                left: 5,
+                top: 4,
+                left: 6,
                 lineHeight: 1,
               }}>
                 {item.day}
               </div>
               {hasData && (
                 <div style={{
-                  fontSize: isMobile ? 7 : 9,
-                  fontWeight: 700,
+                  fontSize: isMobile ? 8 : 10,
+                  fontWeight: 800,
                   color: (item.totalPnl || 0) > 0 ? "#4ade80" : (item.totalPnl || 0) < 0 ? "#f87171" : "#9ca3af",
-                  marginTop: isMobile ? 2 : 4,
+                  marginTop: isMobile ? 4 : 8,
                   lineHeight: 1.2,
                   textAlign: "center",
                   wordBreak: "break-all",
+                  textShadow: "0px 1px 3px rgba(0,0,0,0.5)",
                 }}>
                   {fmtShort(item.totalPnl || 0)}
                 </div>
@@ -383,14 +411,18 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         })}
       </div>
 
-      {tooltip && (
+      {tooltip && createPortal(
         <div
           data-tooltip
           style={{
             position: "fixed",
             top: window.innerWidth <= 768 ? "50%" : `${tooltip.y}px`,
             left: window.innerWidth <= 768 ? "50%" : `${tooltip.x}px`,
-            transform: window.innerWidth <= 768 ? "translate(-50%, -50%)" : "translate(-50%, -110%)",
+            transform: window.innerWidth <= 768
+              ? "translate(-50%, -50%)"
+              : tooltip.above
+                ? "translate(-50%, -110%)"
+                : "translate(-50%, 10px)",
             background: "rgba(10,14,22,0.95)",
             border: `1px solid ${tooltip.color}`,
             padding: "12px 14px",
@@ -398,7 +430,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
             color: "#f3f4f6",
             minWidth: window.innerWidth <= 768 ? "80%" : 220,
             maxWidth: window.innerWidth <= 768 ? "90%" : 320,
-            zIndex: 9999,
+            zIndex: 99999,
             boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
             fontSize: 13,
             pointerEvents: "none",
@@ -419,7 +451,8 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               <div style={{ marginTop: 4 }}>({tooltip.wins}W / {tooltip.losses}L)</div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
