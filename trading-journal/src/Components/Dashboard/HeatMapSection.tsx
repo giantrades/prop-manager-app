@@ -156,6 +156,7 @@ const HeatmapSection = ({ trades }: { trades: any[] }) => {
           paddingBottom: 12,
           WebkitOverflowScrolling: "touch",
           maxWidth: "100%",
+          width: "100%",
         }}
       >
         <div

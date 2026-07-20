@@ -2147,7 +2147,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid two-cols" style={{ gridTemplateColumns: "minmax(360px, 440px) 1fr" }}>
+      <div className="grid two-cols">
         <PnLCalendarSection trades={filteredTrades} />
         <HeatMapSection trades={filteredTrades} />
       </div>
