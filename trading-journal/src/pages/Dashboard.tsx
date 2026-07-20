@@ -5,6 +5,7 @@ import { useCurrency } from "@apps/state";
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
 import AccountPicker from '@apps/ui/AccountPicker';
 import HeatMapSection from "../Components/Dashboard/HeatMapSection";
+import PnLCalendarSection from "../Components/Dashboard/PnLCalendarSection";
 
 import DurationAnalysis from "../Components/Dashboard/DurationAnalysis";
 import DrawdownSection from "../Components/Dashboard/DrawdownSection";
@@ -2151,7 +2152,8 @@ export default function Dashboard() {
         <TimeframeBar data={tf} fmt={fmt} />
       </div>
 
-      <div>
+      <div className="grid two-cols">
+        <PnLCalendarSection trades={filteredTrades} />
         <HeatMapSection trades={filteredTrades} />
       </div>
 
