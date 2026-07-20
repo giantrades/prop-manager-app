@@ -251,11 +251,11 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
       </div>
 
       {/* Correção: Uso de minmax(0, 1fr) no grid template para forçar os itens a respeitarem o container */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 2 : 4, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 8, marginBottom: 8, fontSize: isMobile ? 10 : 12, color: "#9ca3af", textAlign: "center" }}>
         {daysShort.map(d => <div key={d} style={{ padding: "4px 0", fontWeight: 600 }}>{d}</div>)}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 2 : 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 4 : 4 }}>
         {calendarData.map((item, idx) => {
           if (item.day === null) return <div key={`pad-${idx}`} />;
 
