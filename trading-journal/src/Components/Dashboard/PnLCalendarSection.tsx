@@ -320,11 +320,22 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
               <div style={{ fontSize: isMobile ? 12 : 17, color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"), fontWeight: 700, lineHeight: 1 }}>
                 {item.day}
               </div>
-              {hasData && (
+              {hasData && (<>
                 <div style={{ fontSize: isMobile ? 11 : 15, fontWeight: 800, color: "#fff", marginTop: isMobile ? 8 : 6, lineHeight: 1.2, textAlign: "center", textShadow: "0 1px 3px rgba(0,0,0,0.35)" }}>
                   {fmtShort(item.totalPnl || 0)}
                 </div>
-              )}
+                {(item.totalPnl || 0) !== 0 && (
+                  <div style={{ display: "flex", justifyContent: "center", marginTop: 3 }}>
+                    <div style={{
+                      width: `${Math.max(20, 100 * Math.min(1, Math.abs(item.totalPnl || 0) / (maxAbs || 1)))}%`,
+                      height: isMobile ? 3 : 4,
+                      borderRadius: 2,
+                      background: (item.totalPnl || 0) > 0 ? "#22c55e" : "#dc2626",
+                      opacity: 0.3 + 0.7 * Math.min(1, Math.abs(item.totalPnl || 0) / (maxAbs || 1)),
+                    }} />
+                  </div>
+                )}
+              </>)}
             </div>
           );
         })}
