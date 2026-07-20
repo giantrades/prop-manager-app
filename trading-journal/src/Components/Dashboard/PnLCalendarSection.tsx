@@ -153,9 +153,14 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
     return () => window.removeEventListener("click", handleClick);
   }, []);
 
-  const minYear = availableMonths.length > 0 ? availableMonths[0].year : today.getFullYear() - 5;
-  const maxYear = availableMonths.length > 0 ? availableMonths[availableMonths.length - 1].year : today.getFullYear();
-  const yearOptions = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
+  const availableMonthsSet = useMemo(() => new Set(availableMonths.map(m => `${m.year}-${m.month}`)), [availableMonths]);
+  const availableYears = useMemo(() => [...new Set(availableMonths.map(m => m.year))].sort(), [availableMonths]);
+  const fallbackYears = useMemo(() => {
+    if (availableYears.length > 0) return [];
+    const y = today.getFullYear();
+    return Array.from({ length: 6 }, (_, i) => y - 5 + i);
+  }, [availableYears]);
+  const yearList = availableYears.length > 0 ? availableYears : fallbackYears;
 
   return (
     <div
@@ -167,6 +172,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
         padding: 24,
         color: "#e5e7eb",
         position: "relative",
+        overflow: "hidden",
       }}
     >
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: "#f3f4f6" }}>
@@ -209,9 +215,12 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 outline: "none",
               }}
             >
-              {monthNames.map((name, i) => (
-                <option key={i} value={i} style={{ background: "#10151f", color: "#f3f4f6" }}>{name}</option>
-              ))}
+              {monthNames.map((name, i) => {
+                const hasTrade = availableMonthsSet.has(`${viewYear}-${i}`);
+                return (
+                  <option key={i} value={i} disabled={!hasTrade} style={{ background: "#10151f", color: hasTrade ? "#f3f4f6" : "#4b5563" }}>{name}</option>
+                );
+              })}
             </select>
 
             <div style={{ width: 1, background: "rgba(255,255,255,0.12)" }} />
@@ -230,7 +239,7 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 outline: "none",
               }}
             >
-              {yearOptions.map(y => (
+              {yearList.map(y => (
                 <option key={y} value={y} style={{ background: "#10151f", color: "#f3f4f6" }}>{y}</option>
               ))}
             </select>
@@ -363,19 +372,21 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 padding: 2,
                 position: "relative",
                 minHeight: isMobile ? 40 : 56,
-                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                transition: "box-shadow 0.2s ease",
                 boxShadow: hasData ? "inset 0 0 10px rgba(0,0,0,0.15)" : "none",
               }}
               onMouseOver={(e) => {
                 if (hasData) {
-                  e.currentTarget.style.transform = "scale(1.05)";
+                  e.currentTarget.style.outline = "2px solid rgba(255,255,255,0.15)";
+                  e.currentTarget.style.outlineOffset = "1px";
                   e.currentTarget.style.zIndex = "10";
                   e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
                 }
               }}
               onMouseOut={(e) => {
                 if (hasData) {
-                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.outline = "";
+                  e.currentTarget.style.outlineOffset = "";
                   e.currentTarget.style.zIndex = "1";
                   e.currentTarget.style.boxShadow = "inset 0 0 10px rgba(0,0,0,0.15)";
                 }
