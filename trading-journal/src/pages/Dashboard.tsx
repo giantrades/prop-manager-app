@@ -1985,7 +1985,7 @@ export default function Dashboard() {
       </div>
 
       {/* PnL Calendar + Summary Cards */}
-      <div className="grid two-cols" style={{ gridTemplateColumns: "1fr 400px" }}>
+      <div className="grid two-cols" style={{ gridTemplateColumns: "1fr 520px" }}>
         <PnLCalendarSection trades={filteredTrades} />
         <div>
           <div style={{ margin: 0 }}>

@@ -312,16 +312,16 @@ const PnLCalendarSection = ({ trades }: { trades: any[] }) => {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "flex-start",
-                padding: "4px 2px",
+                justifyContent: isMobile ? "flex-start" : "center",
+                padding: isMobile ? "4px 2px" : "6px 4px",
                 position: "relative",
               }}
             >
-              <div style={{ fontSize: isMobile ? 10 : 11, color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"), fontWeight: isToday || hasData ? 600 : 400, lineHeight: 1 }}>
+              <div style={{ fontSize: isMobile ? 11 : 14, color: isToday ? "#60a5fa" : (hasData ? "#f3f4f6" : "#4b5563"), fontWeight: isToday || hasData ? 600 : 400, lineHeight: 1 }}>
                 {item.day}
               </div>
               {hasData && (
-                <div style={{ fontSize: isMobile ? 9 : 10, fontWeight: 800, color: (item.totalPnl || 0) > 0 ? "#4ade80" : (item.totalPnl || 0) < 0 ? "#f87171" : "#9ca3af", marginTop: isMobile ? 10 : 12, lineHeight: 1.2, textAlign: "center", wordBreak: "break-all" }}>
+                <div style={{ fontSize: isMobile ? 10 : 13, fontWeight: 800, color: (item.totalPnl || 0) > 0 ? "#4ade80" : (item.totalPnl || 0) < 0 ? "#f87171" : "#9ca3af", marginTop: isMobile ? 8 : 6, lineHeight: 1.2, textAlign: "center" }}>
                   {fmtShort(item.totalPnl || 0)}
                 </div>
               )}
