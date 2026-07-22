@@ -1078,6 +1078,7 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
     openTime: pos.openTime,
     netPnl: pos.netPnl,
     grossPnl: pos.grossPnl,
+    swaps: pos.swaps,
     exitDataProvided: exitData,
     accountId: resolvedAccountId,
   });
@@ -1117,6 +1118,7 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
       result_net: netPnl,
       result_gross: grossPnl,
       fee: exitData.fee ?? pos.fee ?? 0,
+      swaps: exitData.swaps ?? pos.swaps ?? 0,
       source: pos.platformId || 'quantower',
       platformTradeId,
       platformName: pos.platformName || 'Quantower',

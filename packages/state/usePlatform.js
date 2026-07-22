@@ -240,6 +240,7 @@ export function usePlatform() {
             result_net:     rt.netPnl,
             result_gross:   rt.grossPnl,
             fee:            rt.fee,
+            swaps:          rt.swaps,
             source:         data.platformId,
             platformTradeId: rt.platformTradeId,
             isLive: false,
@@ -258,6 +259,7 @@ export function usePlatform() {
             netPnl: data.position.netPnl,
             grossPnl: data.position.grossPnl,
             fee: data.position.fee,
+            swaps: data.position.swaps,
           }, internalAccountId);
         }
 

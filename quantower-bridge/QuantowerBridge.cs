@@ -538,7 +538,7 @@ namespace QuantowerBridge
                 double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
                 double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
                 double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
-                if (netPnl == 0 && grossPnl != 0) netPnl = grossPnl;
+                if (netPnl == 0 && grossPnl != 0) netPnl = grossPnl + totalFee; // Add swap/taxes here if Quantower API supports them
 
                 double entryPrice = entries.Count > 0
                     ? (double)entries.Sum(t => (double)t.Price * (double)t.Quantity)
@@ -594,7 +594,8 @@ namespace QuantowerBridge
                 }
 
                 double fillGross = trade.GrossPnl?.Value ?? 0;
-                double fillNet = trade.NetPnl?.Value ?? fillGross;
+                double fillFee = trade.Fee?.Value ?? 0;
+                double fillNet = trade.NetPnl?.Value ?? (fillGross + fillFee);
                 bool isExitFill = fillNet != 0 || fillGross != 0;
 
                 trades.Add(new
@@ -609,7 +610,7 @@ namespace QuantowerBridge
                     exitDateTime = isExitFill ? trade.DateTime.ToString("O") : null,
                     grossPnl = fillGross,
                     netPnl = fillNet,
-                    fee = trade.Fee?.Value ?? 0,
+                    fee = fillFee,
                     positionId = "",
                     accountId = accId,
                     accountName = accName,
@@ -659,7 +660,9 @@ namespace QuantowerBridge
                 }
 
                 double grossPnl = pos.GrossPnL?.Value ?? 0;
-                double netPnl = pos.NetPnL?.Value ?? grossPnl;
+                double fee = pos.Fee?.Value ?? 0;
+                double swaps = pos.Swaps?.Value ?? 0;
+                double netPnl = pos.NetPnL?.Value ?? (grossPnl + fee + swaps);
 
                 positions.Add(new
                 {
@@ -672,7 +675,8 @@ namespace QuantowerBridge
                     openTime = pos.OpenTime.ToString("O"),
                     grossPnl = grossPnl,
                     netPnl = netPnl,
-                    fee = pos.Fee?.Value ?? 0,
+                    fee = fee,
+                    swaps = swaps,
                     accountId,
                     accountName,
                     connectionId = pos.ConnectionId ?? "",
