@@ -485,8 +485,13 @@ class PlatformManager {
       // Procura por platformTradeId correspondente
       const match = trades.find(t => {
         const rawTradeId = (t.platformTradeId || '').replace(/^qt_/, '');
-        return rawTradeId === rawPosId && t.netPnl !== 0 && t.exitPrice !== 0;
+        const isMatch = rawTradeId === rawPosId && t.netPnl !== 0 && t.exitPrice !== 0;
+        if (rawTradeId === rawPosId) {
+          console.log('[fetchClosedTrade] Found candidate trade:', { t, rawTradeId, rawPosId, isMatch });
+        }
+        return isMatch;
       });
+      console.log('[fetchClosedTrade] Result match:', match);
       return match || null;
     } catch (err) {
       console.warn('[PlatformManager] _fetchClosedTrade failed:', err);
