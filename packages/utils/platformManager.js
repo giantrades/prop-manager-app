@@ -44,7 +44,7 @@ export const PLATFORM_EVENTS = {
 
 // ── Default configuration ──────────────────────────────
 const DEFAULT_CONFIG = {
-  syncIntervalMs: 3600000,      // 1h consistency sync for trades
+  syncIntervalMs: 120000,       // 2min consistency sync for trades (reduced from 1h)
   positionPollMs: 1500,         // 1.5s for live positions
   statusCheckMs: 10000,         // 10s for connection status checks
   maxRetries: 3,
@@ -469,6 +469,31 @@ class PlatformManager {
     }
   }
 
+  async _fetchClosedTrade(platformId, pos) {
+    // Aguarda 3s para o broker registrar o fill
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const adapter = this.adapters.get(platformId);
+      if (!adapter) return null;
+      // Busca trades desde início do dia (UTC) - fallback para pegar trades do dia
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const from = today.toISOString();
+      const trades = await adapter.getTrades(from, undefined);
+      // Extrai o raw positionId para matching
+      const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
+      // Procura por platformTradeId correspondente
+      const match = trades.find(t => {
+        const rawTradeId = (t.platformTradeId || '').replace(/^qt_/, '');
+        return rawTradeId === rawPosId && t.netPnl !== 0 && t.exitPrice !== 0;
+      });
+      return match || null;
+    } catch (err) {
+      console.warn('[PlatformManager] _fetchClosedTrade failed:', err);
+      return null;
+    }
+  }
+
   /** @private Poll positions for all adapters — detects opens and closes */
   async _pollAllPositions() {
     // Position poll lock - prevent multiple tabs polling positions simultaneously
@@ -509,9 +534,15 @@ class PlatformManager {
           // Detect closed positions
           for (const pos of previousPositions) {
             if (!currIds.has(pos.platformPositionId)) {
-              this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
-                platformId: id,
-                position: pos,
+              // Tentar buscar trade real antes de emitir POSITION_CLOSED com snapshot
+              this._fetchClosedTrade(id, pos).then(realTrade => {
+                this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
+                  platformId: id,
+                  position: realTrade
+                    ? { ...pos, currentPrice: realTrade.exitPrice, netPnl: realTrade.netPnl, grossPnl: realTrade.grossPnl }
+                    : pos,
+                  realTrade: realTrade || null,
+                });
               });
             }
           }

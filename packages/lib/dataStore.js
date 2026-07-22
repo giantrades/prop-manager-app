@@ -1001,6 +1001,12 @@ export function upsertTradeFromPlatform(normalizedTrade) {
     t => t.platformTradeId && t.platformTradeId === normalizedTrade.platformTradeId
   );
 
+  console.log(`[upsertTrade] ${existing !== -1 ? 'UPDATE' : 'NEW'} trade`, {
+    platformTradeId: normalizedTrade.platformTradeId,
+    result_net: normalizedTrade.result_net,
+    exit_price: normalizedTrade.exit_price,
+  });
+
   let trade, isNew;
 
   if (existing !== -1) {
@@ -1063,6 +1069,18 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
   if (posIdx === -1) return null;
 
   const pos = data.livePositions[posIdx];
+
+  console.log('[closeLivePosition] snapshot data:', {
+    platformPositionId,
+    openPrice: pos.openPrice,
+    entryPrice: pos.entryPrice,
+    currentPrice: pos.currentPrice,
+    openTime: pos.openTime,
+    netPnl: pos.netPnl,
+    grossPnl: pos.grossPnl,
+    exitDataProvided: exitData,
+    accountId: resolvedAccountId,
+  });
 
   // Build platformTradeId in the same format as the bridge: "qt_<raw_id>"
   const rawId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');

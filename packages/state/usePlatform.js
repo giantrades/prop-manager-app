@@ -226,16 +226,40 @@ export function usePlatform() {
 
       // Only create trade if account is mapped (in the app with a firm)
       if (internalAccountId) {
-        // Pass the already-resolved internalAccountId so closeLivePosition()
-        // doesn't fall back to getAccountMapping(pos.platformId) where
-        // pos.platformId might be undefined (position from raw poll data).
-        closeLivePosition(data.position.platformPositionId, {
-          exitPrice: data.position.currentPrice,
-          exitTime: new Date().toISOString(),
-          netPnl: data.position.netPnl,
-          grossPnl: data.position.grossPnl,
-          fee: data.position.fee,
-        }, internalAccountId);
+        if (data.realTrade) {
+          const rt = data.realTrade;
+          upsertTradeFromPlatform({
+            entry_datetime: rt.entryDateTime,
+            exit_datetime:  rt.exitDateTime,
+            asset:          rt.symbol,
+            accountId:      internalAccountId,
+            direction:      rt.side === 'Short' ? 'Short' : 'Long',
+            volume:         rt.quantity,
+            entry_price:    rt.entryPrice,
+            exit_price:     rt.exitPrice,
+            result_net:     rt.netPnl,
+            result_gross:   rt.grossPnl,
+            fee:            rt.fee,
+            source:         data.platformId,
+            platformTradeId: rt.platformTradeId,
+            isLive: false,
+          });
+
+          // Remove from live positions (closeLivePosition does this inside, but we need to do it here manually for realTrade)
+          updateLivePositions(getLivePositions().filter(p => p.platformPositionId !== data.position.platformPositionId));
+          setLivePositions(prev => prev.filter(p => p.platformPositionId !== data.position.platformPositionId));
+        } else {
+          // Pass the already-resolved internalAccountId so closeLivePosition()
+          // doesn't fall back to getAccountMapping(pos.platformId) where
+          // pos.platformId might be undefined (position from raw poll data).
+          closeLivePosition(data.position.platformPositionId, {
+            exitPrice: data.position.currentPrice,
+            exitTime: new Date().toISOString(),
+            netPnl: data.position.netPnl,
+            grossPnl: data.position.grossPnl,
+            fee: data.position.fee,
+          }, internalAccountId);
+        }
 
         recalcAccountFunding(internalAccountId);
 

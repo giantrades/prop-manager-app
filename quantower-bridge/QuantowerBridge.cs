@@ -538,6 +538,7 @@ namespace QuantowerBridge
                 double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
                 double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
                 double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
+                if (netPnl == 0 && grossPnl != 0) netPnl = grossPnl;
 
                 double entryPrice = entries.Count > 0
                     ? (double)entries.Sum(t => (double)t.Price * (double)t.Quantity)
@@ -592,6 +593,10 @@ namespace QuantowerBridge
                     FileLog($"[TRADES] Error getting account for ungrouped {trade.Id}: {ex.Message}");
                 }
 
+                double fillGross = trade.GrossPnl?.Value ?? 0;
+                double fillNet = trade.NetPnl?.Value ?? fillGross;
+                bool isExitFill = fillNet != 0 || fillGross != 0;
+
                 trades.Add(new
                 {
                     id = trade.Id,
@@ -599,11 +604,11 @@ namespace QuantowerBridge
                     side = trade.Side.ToString(),
                     quantity = (double)trade.Quantity,
                     entryPrice = (double)trade.Price,
-                    exitPrice = (double)0,
+                    exitPrice = isExitFill ? (double)trade.Price : (double)0,
                     entryDateTime = trade.DateTime.ToString("O"),
-                    exitDateTime = null as string,
-                    grossPnl = trade.GrossPnl?.Value ?? 0,
-                    netPnl = trade.NetPnl?.Value ?? 0,
+                    exitDateTime = isExitFill ? trade.DateTime.ToString("O") : null,
+                    grossPnl = fillGross,
+                    netPnl = fillNet,
                     fee = trade.Fee?.Value ?? 0,
                     positionId = "",
                     accountId = accId,
@@ -653,6 +658,9 @@ namespace QuantowerBridge
                     FileLog($"[POSITIONS] Error for {pos.Id}: {ex.Message}");
                 }
 
+                double grossPnl = pos.GrossPnL?.Value ?? 0;
+                double netPnl = pos.NetPnL?.Value ?? grossPnl;
+
                 positions.Add(new
                 {
                     id = pos.Id,
@@ -662,8 +670,8 @@ namespace QuantowerBridge
                     openPrice = pos.OpenPrice,
                     currentPrice = pos.CurrentPrice,
                     openTime = pos.OpenTime.ToString("O"),
-                    grossPnl = pos.GrossPnL?.Value ?? 0,
-                    netPnl = pos.NetPnL?.Value ?? 0,
+                    grossPnl = grossPnl,
+                    netPnl = netPnl,
                     fee = pos.Fee?.Value ?? 0,
                     accountId,
                     accountName,
