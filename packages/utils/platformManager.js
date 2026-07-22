@@ -482,16 +482,13 @@ class PlatformManager {
       const trades = await adapter.getTrades(from, undefined);
       // Extrai o raw positionId para matching
       const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
-      // Procura por platformTradeId correspondente
       const match = trades.find(t => {
         const rawTradeId = (t.platformTradeId || '').replace(/^qt_/, '');
-        const isMatch = rawTradeId === rawPosId && t.netPnl !== 0 && t.exitPrice !== 0;
-        if (rawTradeId === rawPosId) {
-          console.log('[fetchClosedTrade] Found candidate trade:', { t, rawTradeId, rawPosId, isMatch });
-        }
-        return isMatch;
+        const isIdMatch = rawTradeId === rawPosId || rawTradeId.endsWith(`_${rawPosId}`) || rawPosId.endsWith(`_${rawTradeId}`);
+        const isAccountMatch = !t.accountId || !pos.platformAccountId || t.accountId === pos.platformAccountId;
+        const hasExitData = t.exitPrice !== 0 || t.netPnl !== 0 || t.grossPnl !== 0;
+        return isIdMatch && isAccountMatch && hasExitData;
       });
-      console.log('[fetchClosedTrade] Result match:', match);
       return match || null;
     } catch (err) {
       console.warn('[PlatformManager] _fetchClosedTrade failed:', err);

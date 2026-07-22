@@ -496,13 +496,13 @@ namespace QuantowerBridge
 
             var grouped = tradeList
                 .Where(t => !string.IsNullOrEmpty(t.PositionId))
-                .GroupBy(t => t.PositionId);
+                .GroupBy(t => new { PositionId = t.PositionId, AccountId = t.Account?.Id ?? "" });
 
             var trades = new List<object>();
 
             foreach (var group in grouped)
             {
-                var fillList = group.ToList();
+                var fillList = group.OrderBy(t => t.DateTime).ToList();
 
                 bool isLong = fillList.First().Side == Side.Buy;
                 var entries = fillList.Where(t => t.Side == (isLong ? Side.Buy : Side.Sell)).ToList();
@@ -511,31 +511,30 @@ namespace QuantowerBridge
                 // Posição ainda aberta → aparece em /positions
                 if (entries.Count == 0 || exits.Count == 0)
                 {
-                    FileLog($"[TRADES] Skip open position {group.Key}: entries={entries.Count}, exits={exits.Count}");
+                    FileLog($"[TRADES] Skip open position {group.Key.PositionId} ({group.Key.AccountId}): entries={entries.Count}, exits={exits.Count}");
                     continue;
                 }
 
-                Trade firstTrade = group.First();
+                Trade firstTrade = fillList.First();
                 string connName = "";
-                string accountId = "";
-                string accountName = "";
+                string accountId = group.Key.AccountId;
+                string accountName = firstTrade.Account?.Name ?? "";
 
                 try
                 {
                     var conn = Core.Instance.Connections.Connected
                         .FirstOrDefault(c => c.Id == firstTrade.ConnectionId);
                     connName = conn?.Name ?? "";
-                    accountId = firstTrade.Account?.Id ?? "";
-                    accountName = firstTrade.Account?.Name ?? "";
-                    FileLog($"[TRADES] Group {group.Key}: accountId={accountId}, entries={entries.Count}, exits={exits.Count}");
+                    if (string.IsNullOrEmpty(accountId)) accountId = firstTrade.Account?.Id ?? "";
+                    FileLog($"[TRADES] Group {group.Key.PositionId}: accountId={accountId}, entries={entries.Count}, exits={exits.Count}");
                 }
                 catch (Exception ex)
                 {
-                    FileLog($"[TRADES] Error getting account for group {group.Key}: {ex.Message}");
+                    FileLog($"[TRADES] Error getting account for group {group.Key.PositionId}: {ex.Message}");
                 }
 
                 double totalQty = (double)entries.Sum(t => (double)t.Quantity);
-                double totalFee = (double)group.Sum(t => t.Fee?.Value ?? 0);
+                double totalFee = (double)fillList.Sum(t => t.Fee?.Value ?? 0);
                 double grossPnl = (double)exits.Sum(t => t.GrossPnl?.Value ?? 0);
                 double netPnl = (double)exits.Sum(t => t.NetPnl?.Value ?? 0);
                 if (netPnl == 0 && grossPnl != 0) netPnl = grossPnl + totalFee; // Add swap/taxes here if Quantower API supports them
@@ -549,12 +548,12 @@ namespace QuantowerBridge
                       / (double)exits.Sum(t => (double)t.Quantity)
                     : 0;
 
-                DateTime entryTime = entries.Count > 0 ? entries.Min(t => t.DateTime) : group.Min(t => t.DateTime);
+                DateTime entryTime = entries.Count > 0 ? entries.Min(t => t.DateTime) : fillList.Min(t => t.DateTime);
                 DateTime exitTime = exits.Count > 0 ? exits.Max(t => t.DateTime) : entryTime;
 
                 trades.Add(new
                 {
-                    id = group.Key,
+                    id = group.Key.PositionId,
                     symbol = firstTrade.Symbol?.Name ?? "",
                     side = isLong ? "Long" : "Short",
                     quantity = totalQty,
@@ -565,7 +564,7 @@ namespace QuantowerBridge
                     grossPnl = Math.Round(grossPnl, 2),
                     netPnl = Math.Round(netPnl, 2),
                     fee = Math.Round(totalFee, 2),
-                    positionId = group.Key,
+                    positionId = group.Key.PositionId,
                     accountId,
                     accountName,
                     connectionId = firstTrade.ConnectionId ?? "",
