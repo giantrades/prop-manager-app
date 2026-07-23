@@ -183,21 +183,54 @@ class PlatformManager {
     if (!adapter) throw new Error(`Unknown platform: ${platformId}`);
 
     const from = this._lastSyncTime.get(platformId);
-    const fromParam = from || new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+    let fromParam;
+    if (!from) {
+      // Primeira sync: janela ampla para trazer histórico
+      fromParam = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+    } else {
+      const lastSync = new Date(from);
+
+      // Piso mínimo: 3 dias de buffer de segurança (fills atrasados/corrigidos pela corretora)
+      const MIN_BUFFER_MS = 3 * 24 * 3600 * 1000;
+      const bufferedFrom = new Date(lastSync.getTime() - MIN_BUFFER_MS);
+
+      // [CORRIGIDO v3] a janela NUNCA pode ser menor que a idade da posição aberta
+      // mais antiga que este cliente conhece — senão a reconstrução no bridge
+      // vai processar o fill de fechamento sem nunca ter visto o(s) fill(s) de entrada.
+      const oldestOpenPositionTime = this._getOldestOpenPositionEntryTime(platformId); // helper abaixo
+
+      // Cap de segurança: nunca busca mais que 45 dias, mesmo que uma posição
+      // pareça estar aberta há mais tempo que isso (evita requests absurdamente grandes
+      // em caso de dado inconsistente/posição "fantasma" no client).
+      const SAFETY_CAP_MS = 45 * 24 * 3600 * 1000;
+      const safetyFloor = new Date(Date.now() - SAFETY_CAP_MS);
+
+      let effectiveFrom = bufferedFrom;
+      if (oldestOpenPositionTime && oldestOpenPositionTime < effectiveFrom) {
+        effectiveFrom = oldestOpenPositionTime;
+      }
+      if (effectiveFrom < safetyFloor) {
+        console.warn(`[sync] posição aberta há mais de 45 dias detectada — limitando janela ao cap de segurança. Considere investigar.`);
+        effectiveFrom = safetyFloor;
+      }
+
+      fromParam = effectiveFrom.toISOString();
+    }
+
     const [accounts, trades, positions] = await Promise.all([
       adapter.getAccounts(),
       adapter.getTrades(fromParam, undefined),
       adapter.getPositions(),
     ]);
 
-    // Safety net: skip entry fills (open positions with fake exit) BEFORE ledger
+    // Safety net: skip entry fills (open positions with fake exit) BEFORE creating ledger entries
     const newTrades = [];
     for (const trade of trades) {
       if (trade.platformTradeId) {
         const entry = await getTradeLedgerEntry(trade.platformTradeId);
         if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
       }
-      // Skip trades that look like open-position fills: PnL=0 + no real exit
+      // Safety net: skip entry fills (open positions with fake exit)
       const isEntryFill = trade.netPnl === 0 && (
         !trade.exitDateTime
         || trade.exitDateTime === trade.entryDateTime
@@ -384,8 +417,7 @@ class PlatformManager {
     }
   }
 
-  /** @private Sync trades for all adapters */
-  async _syncAllTrades() {
+async _syncAllTrades() {
     const lockKey = 'platform:syncLock';
     const now = Date.now();
     const lockTimeout = 5000;
@@ -406,12 +438,43 @@ class PlatformManager {
         if (!this._wasOnline.get(id)) continue;
 
         try {
-          const from = this._lastSyncTime.get(id);
-          const fromParam = from || new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
-          const [accounts, trades] = await Promise.all([
-            adapter.getAccounts(),
-            adapter.getTrades(fromParam),
-          ]);
+const from = this._lastSyncTime.get(id);
+        let fromParam;
+        if (!from) {
+          // Primeira sync: janela ampla para trazer histórico
+          fromParam = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+        } else {
+          const lastSync = new Date(from);
+
+          // Piso mínimo: 3 dias de buffer de segurança (fills atrasados/corrigidos pela corretora)
+          const MIN_BUFFER_MS = 3 * 24 * 3600 * 1000;
+          const bufferedFrom = new Date(lastSync.getTime() - MIN_BUFFER_MS);
+
+          // [CORRIGIDO v3] a janela NUNCA pode ser menor que a idade da posição aberta
+          // mais antiga que este cliente conhece — senão a bridge não acha o fill de entrada.
+          const oldestOpenPositionTime = this._getOldestOpenPositionEntryTime(id); // helper abaixo
+
+          // Cap de segurança: nunca busca mais que 45 dias, mesmo que uma posição
+          // pareça estar aberta há mais tempo que isso (evita requests absurdamente grandes
+          // em caso de dado inconsistente/posição "fantasma" no client).
+          const SAFETY_CAP_MS = 45 * 24 * 3600 * 1000;
+          const safetyFloor = new Date(Date.now() - SAFETY_CAP_MS);
+
+          let effectiveFrom = bufferedFrom;
+          if (oldestOpenPositionTime && oldestOpenPositionTime < effectiveFrom) {
+            effectiveFrom = oldestOpenPositionTime;
+          }
+          if (effectiveFrom < safetyFloor) {
+            console.warn(`[sync] posição aberta há mais de 45 dias detectada — limitando janela ao cap de segurança. Considere investigar.`);
+            effectiveFrom = safetyFloor;
+          }
+
+          fromParam = effectiveFrom.toISOString();
+        }
+        const [accounts, trades] = await Promise.all([
+          adapter.getAccounts(),
+          adapter.getTrades(fromParam),
+        ]);
 
           const newTrades = [];
           for (const trade of trades) {
@@ -421,19 +484,18 @@ class PlatformManager {
               // A stale 'imported' entry from a fake open-position trade should NOT
               // block the real trade from coming through on the next sync.
               if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
+              // Safety net: skip entry fills (PnL = 0, no real exit data)
+              const isEntryFill = trade.netPnl === 0 && (
+                !trade.exitDateTime
+                || trade.exitDateTime === trade.entryDateTime
+                || !trade.exitPrice
+              );
+              if (isEntryFill) continue;
+              newTrades.push(trade);
             }
-            // Safety net: skip entry fills (PnL = 0, no real exit data)
-            const isEntryFill = trade.netPnl === 0 && (
-              !trade.exitDateTime
-              || trade.exitDateTime === trade.entryDateTime
-              || !trade.exitPrice
-            );
-            if (isEntryFill) continue;
-            newTrades.push(trade);
-          }
 
-          if (newTrades.length > 0) {
-            for (const trade of newTrades) {
+            if (newTrades.length > 0) {
+              for (const trade of newTrades) {
               if (trade.platformTradeId) {
                 await setTradeLedgerEntry(trade.platformTradeId, {
                   status: 'imported',
@@ -489,11 +551,37 @@ class PlatformManager {
         const hasExitData = t.exitPrice !== 0 || t.netPnl !== 0 || t.grossPnl !== 0;
         return isIdMatch && isAccountMatch && hasExitData;
       });
+      if (match) {
+        console.log(`[_fetchClosedTrade] Matched: pos=${rawPosId} trade=${match.platformTradeId} netPnl=${match.netPnl}`);
+      } else {
+        console.warn(`[_fetchClosedTrade] No match for pos=${rawPosId}`);
+      }
       return match || null;
     } catch (err) {
-      console.warn('[PlatformManager] _fetchClosedTrade failed:', err);
+      console.warn(`[_fetchClosedTrade] failed:`, err);
       return null;
     }
+  }
+
+  // [NOVO v3] Helper: menor entryTime entre as posições atualmente abertas conhecidas
+  // localmente para essa plataforma/conta. Usado para garantir que a janela de
+  // sync incremental nunca corte o fill de entrada de uma posição que ainda está aberta.
+  _getOldestOpenPositionEntryTime(platformId) {
+    const openPositions = this._getOpenPositionsFor(platformId); // já deve existir/ser adaptado ao store atual
+    if (!openPositions || openPositions.length === 0) return null;
+
+    const times = openPositions
+      .map(p => p.entryDateTime ? new Date(p.entryDateTime) : null)
+      .filter(Boolean);
+
+    if (times.length === 0) return null;
+    return new Date(Math.min(...times.map(t => t.getTime())));
+  }
+
+  // Helper para obter posições abertas conhecidas localmente para uma plataforma
+  _getOpenPositionsFor(platformId) {
+    const positions = this._lastPositions.get(platformId) || [];
+    return positions.filter(p => p.isLive !== false); // assume que posições com isLive=false estão fechadas
   }
 
   /** @private Poll positions for all adapters — detects opens and closes */

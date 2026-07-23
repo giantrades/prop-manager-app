@@ -885,10 +885,6 @@ public class TradeDto
     public decimal NetPnL { get; set; }
     public decimal Fee { get; set; }
     public decimal Swaps { get; set; }
-    public string Direction { get; set; }
-    public decimal AvgEntryPrice { get; set; }
-    public decimal AvgExitPrice { get; set; }
-    public double Duration { get; set; }
     public string PositionId { get; set; }
     public string AccountId { get; set; }
     public string AccountName { get; set; }
@@ -912,10 +908,6 @@ public class TradeDto
     public string LastTradeId { get; set; }
     public decimal CalculatedGrossPnL { get; set; }
     public decimal Swaps { get; set; }
-    public string Direction { get; set; }
-    public decimal AvgEntryPrice { get; set; }
-    public decimal AvgExitPrice { get; set; }
-    public double Duration { get; set; }
 }
 
 static class TradeDtoBuilder
@@ -1020,6 +1012,7 @@ static class TradeDtoBuilder
         return BitConverter.ToString(hash).Replace("-", "").ToLower();
     }
 }
+
 
 
 
