@@ -534,8 +534,7 @@ const from = this._lastSyncTime.get(id);
       // Extrai o raw positionId para matching
       const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
       const match = trades.find(t => {
-        const rawTradeId = (t.platformTradeId || '').replace(/^qt_/, '');
-        const isIdMatch = rawTradeId === rawPosId || rawTradeId.endsWith(`_${rawPosId}`) || rawPosId.endsWith(`_${rawTradeId}`);
+        const isIdMatch = t.positionId === rawPosId;
         const isAccountMatch = !t.accountId || !pos.platformAccountId || t.accountId === pos.platformAccountId;
         const hasExitData = t.exitPrice !== 0 || t.netPnl !== 0 || t.grossPnl !== 0;
         return isIdMatch && isAccountMatch && hasExitData;
