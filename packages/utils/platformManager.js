@@ -438,7 +438,7 @@ async _syncAllTrades() {
         if (!this._wasOnline.get(id)) continue;
 
         try {
-var from = this._lastSyncTime.get(id);
+const from = this._lastSyncTime.get(id);
         let fromParam;
         if (!from) {
           fromParam = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
