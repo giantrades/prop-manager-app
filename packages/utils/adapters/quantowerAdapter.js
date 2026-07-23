@@ -172,7 +172,7 @@ export class QuantowerAdapter extends BaseAdapter {
     const data = await this._fetch('/trades', params);
     this._markSynced();
     return (data.trades || []).map(t => ({
-      platformTradeId: `qt_${t.id}`,
+      platformTradeId: t.platformTradeId || `qt_${t.id}`,
       symbol: t.symbol || '',
       side: t.side || '',
       quantity: t.quantity ?? 0,

@@ -147,10 +147,11 @@ class PlatformManager {
       this.config.positionPollMs
     );
 
-    // Immediate first checks
-    this._checkAllStatuses();
-    this._syncAllTrades();
-    this._pollAllPositions();
+    // Immediate first checks (await status so _syncAllTrades sees _wasOnline)
+    this._checkAllStatuses().then(() => {
+      this._syncAllTrades();
+      this._pollAllPositions();
+    });
   }
 
   /** Stop all auto-sync */
@@ -527,10 +528,8 @@ const from = this._lastSyncTime.get(id);
     try {
       const adapter = this.adapters.get(platformId);
       if (!adapter) return null;
-      // Busca trades desde início do dia (UTC) - fallback para pegar trades do dia
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      const from = today.toISOString();
+      // Busca trades dos últimos 7 dias - fallback para pegar trades que fecharam
+      const from = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
       const trades = await adapter.getTrades(from, undefined);
       // Extrai o raw positionId para matching
       const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
