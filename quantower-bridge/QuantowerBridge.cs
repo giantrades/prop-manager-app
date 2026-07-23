@@ -1,11 +1,28 @@
 // ============================================================
 // QuantowerBridge — Local HTTP Bridge for Web Integration
 // ============================================================
+// This C# strategy runs inside Quantower and exposes a local
+// HTTP server so your webapp can auto-sync trading data.
+//
+// INSTALL:
+//   1. Compile this file into a DLL (Quantower Algo / Visual Studio)
+//   2. Copy the DLL to Quantower's Strategies folder
+//   3. Start the strategy from Strategies Manager
+//   4. Your webapp connects to http://localhost:8787 (or external via Tailscale)
+//
+// ENDPOINTS:
+//   GET /status     → connection status + version
+//   GET /accounts   → all accounts from all connections
+//   GET /trades     → trade history (optional ?from=&to=)
+//   GET /positions  → open positions with live P&L
+//   GET /orders     → pending orders
+// ============================================================
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
@@ -19,10 +36,10 @@ namespace QuantowerBridge
 {
     public class QuantowerBridge : Strategy
     {
-        public QuantowerBridge()
+        public QuantowerBridge() : base()
         {
-            Name = "QuantowerBridge";
-            Description = "Bridge de integração via HTTP API";
+            this.Name = "QuantowerBridge";
+            this.Description = "Bridge de integração via HTTP API";
         }
 
         // ── Configuration ──────────────────────────────────
@@ -36,7 +53,7 @@ namespace QuantowerBridge
         private CancellationTokenSource _cts;
         private Thread _serverThread;
 
-        private static readonly string[] EndpointsList = ["/status", "/accounts", "/trades", "/positions", "/orders", "/health"];
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -46,6 +63,11 @@ namespace QuantowerBridge
         };
 
         // ── Lifecycle ──────────────────────────────────────
+        protected override void OnCreated()
+        {
+            base.OnCreated();
+        }
+
         protected override void OnRun()
         {
             try
@@ -97,6 +119,7 @@ namespace QuantowerBridge
                 };
                 _serverThread.Start();
 
+                // Block OnRun until server stops (prevents strategy from auto-stopping)
                 _serverThread.Join();
             }
             catch (Exception ex)
@@ -119,6 +142,7 @@ namespace QuantowerBridge
             }
             catch (HttpListenerException ex) when (ex.ErrorCode == 5 || ex.ErrorCode == 183)
             {
+                // Access denied (5) or already exists (183) - try next prefix
                 Log($"⚠️ Cannot bind {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
                 return false;
             }
@@ -169,8 +193,9 @@ namespace QuantowerBridge
             catch { }
         }
 
+        // ── File Logging (survives even if Quantower log fails) ──
         private static string _logPath;
-        private static readonly Lock _logLock = new();
+        private static readonly object _logLock = new();
         private static string LogPath
         {
             get
@@ -188,8 +213,7 @@ namespace QuantowerBridge
                 return _logPath;
             }
         }
-
-        public static void FileLog(string message)
+        private static void FileLog(string message)
         {
             try
             {
@@ -199,6 +223,7 @@ namespace QuantowerBridge
             catch { }
         }
 
+        // ── HTTP Server Loop ───────────────────────────────
         private void ServerLoop()
         {
             while (!_cts.IsCancellationRequested)
@@ -246,7 +271,9 @@ namespace QuantowerBridge
 
             try
             {
+                // ALWAYS set CORS headers first - before any other logic
                 SetCorsHeaders(response);
+
                 response.ContentType = "application/json; charset=utf-8";
 
                 if (request.HttpMethod == "OPTIONS")
@@ -258,13 +285,15 @@ namespace QuantowerBridge
 
                 string path = request.Url?.AbsolutePath?.ToLower().TrimEnd('/') ?? "";
 
+                // Normalize path - handle cases where funnel might add prefix
                 if (path.StartsWith("/status")) path = "/status";
                 else if (path.StartsWith("/accounts")) path = "/accounts";
                 else if (path.StartsWith("/trades")) path = "/trades";
-                else if (path == "/positions" || path == "/positions/close") { }
+                else if (path == "/positions" || path == "/positions/close") { /* keep as-is */ }
                 else if (path.StartsWith("/positions")) path = "/positions";
                 else if (path.StartsWith("/orders")) path = "/orders";
 
+                // Silently ignore common scanner/bot paths (no log, no 404)
                 if (path == "/auth" || path == "/robots.txt" || path == "/.env" ||
                     path == "/favicon.ico" || path == "/wp-admin" || path == "/xmlrpc.php" ||
                     path == "/administrator" || path == "/.git/config" || path == "/aws.yml")
@@ -385,10 +414,12 @@ namespace QuantowerBridge
             public string Id { get; set; }
         }
 
+        // ── JSON Builders (using System.Text.Json) ───────────
+
         private static string BuildStatusJson(int port)
         {
             var connections = Core.Instance.Connections.Connected
-                .Select(c => new { c.Id, c.Name })
+                .Select(c => new { id = c.Id, name = c.Name })
                 .ToArray();
 
             var tradesCount = Core.Instance.GetTrades(new TradesHistoryRequestParameters()).Count;
@@ -412,7 +443,7 @@ namespace QuantowerBridge
 
         private static string BuildAccountsJson()
         {
-            List<object> accounts = [];
+            var accounts = new List<object>();
 
             foreach (Account acc in Core.Instance.Accounts)
             {
@@ -427,11 +458,11 @@ namespace QuantowerBridge
 
                 accounts.Add(new
                 {
-                    acc.Id,
-                    acc.Name,
-                    acc.Balance,
+                    id = acc.Id,
+                    name = acc.Name,
+                    balance = acc.Balance,
                     currency = acc.AccountCurrency?.Name ?? "USD",
-                    acc.ConnectionId,
+                    connectionId = acc.ConnectionId,
                     connectionName = connName
                 });
             }
@@ -446,11 +477,83 @@ namespace QuantowerBridge
             return JsonSerializer.Serialize(result, JsonOptions);
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // INTERNAL DTOs & RECONSTRUCTOR
+        // ═══════════════════════════════════════════════════════════════
+
+        private class FillData
+        {
+            public decimal Qty, Price;
+            public DateTime Time;
+            public decimal Fee, Swap, GrossPnL;
+            public bool IsExit;
+            public int Sequence;
+            public string OrderId, TradeId;
+            
+            // Constructor for entry fills (no fee/swap/grosspnl)
+            public FillData(decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId)
+            {
+                Qty = qty;
+                Price = price;
+                Time = time;
+                Fee = 0;
+                Swap = 0;
+                GrossPnL = 0;
+                IsExit = false;
+                Sequence = sequence;
+                OrderId = orderId;
+                TradeId = tradeId;
+            }
+            
+            // Constructor for exit fills
+            public FillData(decimal qty, decimal price, DateTime time, decimal fee, decimal grossPnL, string orderId, string tradeId)
+            {
+                Qty = qty;
+                Price = price;
+                Time = time;
+                Fee = fee;
+                Swap = 0;
+                GrossPnL = grossPnL;
+                IsExit = true;
+                Sequence = 1;
+                OrderId = orderId;
+                TradeId = tradeId;
+            }
+        }
+
+        private class PositionState
+        {
+            public string Symbol, AccountId, AccountName, PositionId, ConnectionId, ConnectionName;
+            public string Direction = "";
+            public DateTime OpenTime;
+            public DateTime? ExitTime;
+            public DateTime TradingDay;
+            public decimal NetQty = 0;
+
+            public List<FillData> Entries = new(), Exits = new();
+
+            // AllFills guarda a sequência cronológica completa (entries + exits
+            // intercalados na ordem real de execução). Existe especificamente para
+            // alimentar os futuros widgets de MAE (Maximum Adverse Excursion) e
+            // MFE (Maximum Favorable Excursion) na Dashboard, que precisam do
+            // histórico de fills de cada trade. Não é redundante para esse propósito:
+            // Entries e Exits sozinhos perdem a ordem de intercalação entre os dois grupos.
+            public List<FillData> AllFills = new();
+
+            public int FillSequence = 0;
+            public bool HasEntries => Entries.Count > 0;
+            public string FirstOrderId, LastOrderId, FirstTradeId, LastTradeId;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TRADE RECONSTRUCTOR — v3.1 (reversão automática + SHA1 ID + AllFills para MAE/MFE)
+        // ═══════════════════════════════════════════════════════════════
+
         private static List<TradeDto> ReconstructTrades(
             List<(Trade Fill, DateTime TradingDay)> fills,
             Dictionary<string, Connection> connections)
         {
-            List<TradeDto> trades = [];
+            var trades = new List<TradeDto>();
             var current = new PositionState();
             int fillSequence = 0;
 
@@ -463,7 +566,7 @@ namespace QuantowerBridge
                     FileLog($"[RECON] WARNING: PositionId changed mid-trade: was={current.PositionId} now={fill.PositionId} Symbol={fill.Symbol?.Name}");
                 }
 
-                var (nextState, closedTrades) = ApplyFill(current, fill, tradingDay, connections, fillSequence);
+                var (nextState, closedTrades) = ApplyFill(current, fill, tradingDay, 1);
 
                 foreach (var closed in closedTrades)
                 {
@@ -482,104 +585,100 @@ namespace QuantowerBridge
             return trades;
         }
 
-        private static (PositionState, List<TradeDto>) ApplyFill(
-            PositionState current,
-            Trade fill,
-            DateTime tradingDay,
-            Dictionary<string, Connection> connections,
-            int sequence)
+// ═══════════════════════════════════════════════════════════════
+// ApplyFill — v3.1 (reversão automática + SHA1 ID + AllFills para MAE/MFE)
+// ═══════════════════════════════════════════════════════════════
+
+private static (PositionState, List<TradeDto>) ApplyFill(
+    PositionState current,
+    Trade fill,
+    DateTime tradingDay,
+    int sequence)
+{
+    var isBuy = fill.Side == Side.Buy;
+    var qty = (decimal)fill.Quantity;
+    var price = (decimal)fill.Price;
+
+    if (current.NetQty == 0)
+    {
+        var fresh = StartNewPosition(fill, tradingDay);
+        fresh = AddEntryFill(fresh, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+        fresh.NetQty = isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
+        return (fresh, new List<TradeDto>());
+    }
+
+    var oldNetQty = current.NetQty;
+    bool positionIsLong = oldNetQty > 0;
+    bool fillReducesPosition = positionIsLong ? !isBuy : isBuy;
+
+    current.LastOrderId = fill.OrderId;
+    current.LastTradeId = fill.Id;
+
+    if (!fillReducesPosition)
+    {
+        var scaled = AddEntryFill(current, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+        scaled.NetQty += isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
+        return (scaled, new List<TradeDto>());
+    }
+
+    var closeQty = Math.Min(Math.Abs(oldNetQty), (decimal)fill.Quantity);
+    var remainingQty = (decimal)fill.Quantity - closeQty;
+
+    var fee = NormalizeFee(fill.Fee?.Value);
+    var grossPnL = (decimal)(fill.GrossPnl?.Value ?? 0);
+
+var exitFill = new FillData(
+    (decimal)closeQty,
+    (decimal)fill.Price,
+    fill.DateTime,
+    NormalizeFee(fill.Fee?.Value),
+    (decimal)(fill.GrossPnl?.Value ?? 0),
+    fill.OrderId,
+    fill.Id
+);
+    current.Exits.Add(exitFill);
+    current.AllFills.Add(exitFill);
+    current.ExitTime = fill.DateTime;
+    current.NetQty = current.NetQty > 0 ? oldNetQty - closeQty : oldNetQty + closeQty;
+
+    if (current.NetQty == 0)
+    {
+        if (current.HasEntries)
         {
-            List<TradeDto> closedTrades = [];
-            var isBuy = fill.Side == Side.Buy;
-            var qty = (decimal)fill.Quantity;
-            var price = (decimal)fill.Price;
-            var time = fill.DateTime;
-
-            if (current.NetQty == 0)
-            {
-                var fresh = StartNewPosition(fill, tradingDay, connections);
-                fresh = AddEntryFill(fresh, qty, price, time, sequence, fill.OrderId, fill.Id);
-                fresh.NetQty = isBuy ? qty : -qty;
-                return (fresh, closedTrades);
-            }
-
-            var oldNetQty = current.NetQty;
-            bool positionIsLong = oldNetQty > 0;
-            bool fillReducesPosition = positionIsLong ? !isBuy : isBuy;
-
-            current.LastOrderId = fill.OrderId;
-            current.LastTradeId = fill.Id;
-
-            if (!fillReducesPosition)
-            {
-                var scaled = AddEntryFill(current, qty, price, time, sequence, fill.OrderId, fill.Id);
-                scaled.NetQty += isBuy ? qty : -qty;
-                return (scaled, closedTrades);
-            }
-
-            var closeQty = Math.Min(Math.Abs(oldNetQty), qty);
-            var remainingQty = qty - closeQty;
-
-            var fee = TradeDtoBuilder.NormalizeFee((decimal?)fill.Fee?.Value);
-            var swap = 0m;
-            var grossPnL = 0m;
-
-            var exitFill = new FillData
-            {
-                Qty = closeQty,
-                Price = price,
-                Time = time,
-                Fee = fee,
-                Swap = swap,
-                GrossPnL = grossPnL,
-                IsExit = true,
-                Sequence = sequence,
-                OrderId = fill.OrderId,
-                TradeId = fill.Id
-            };
-            current.Exits.Add(exitFill);
-            current.AllFills.Add(exitFill);
-            current.ExitTime = time;
-            current.NetQty = positionIsLong ? oldNetQty - closeQty : oldNetQty + closeQty;
-            current.FillSequence = sequence;
-
-            if (current.NetQty == 0)
-            {
-                if (current.HasEntries)
-                {
-                    closedTrades.Add(TradeDtoBuilder.BuildTradeDto(current));
-                }
-
-                if (remainingQty > 0)
-                {
-                    var reversed = StartNewPosition(fill, tradingDay, connections);
-                    reversed.Direction = isBuy ? "LONG" : "SHORT";
-                    reversed = AddEntryFill(reversed, remainingQty, price, time, sequence, fill.OrderId, fill.Id);
-                    reversed.NetQty = isBuy ? remainingQty : -remainingQty;
-
-                    FileLog($"[RECON] REVERSÃO: Symbol={fill.Symbol?.Name} Closed={current.Direction} New={reversed.Direction} RemainingQty={remainingQty}");
-                    return (reversed, closedTrades);
-                }
-
-                return (new PositionState(), closedTrades);
-            }
-
-            return (current, closedTrades);
+            return (new PositionState(), new List<TradeDto> { TradeDtoBuilder.BuildTradeDto(current) });
         }
 
-        private static PositionState StartNewPosition(Trade fill, DateTime tradingDay, Dictionary<string, Connection> connections)
+        if (remainingQty > 0)
+        {
+            var reversed = StartNewPosition(fill, tradingDay);
+            reversed.Direction = fill.Side == Side.Buy ? "SHORT" : "LONG";
+            reversed = AddEntryFill(reversed, remainingQty, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+            reversed.NetQty = fill.Side == Side.Buy ? remainingQty : -remainingQty;
+
+            FileLog($"[RECON] REVERSÃO: Symbol={fill.Symbol?.Name} Closed={current.Direction} New={reversed.Direction} RemainingQty={remainingQty}");
+            return (reversed, new List<TradeDto> { TradeDtoBuilder.BuildTradeDto(current) });
+        }
+
+        return (new PositionState(), new List<TradeDto>());
+    }
+
+    return (current, new List<TradeDto>());
+}
+
+        private static PositionState StartNewPosition(Trade fill, DateTime tradingDay)
         {
             var isBuy = fill.Side == Side.Buy;
             return new PositionState
             {
-                Direction = isBuy ? "LONG" : "SHORT",
+                Symbol = fill.Symbol?.Name ?? "",
+                Direction = fill.Side == Side.Buy ? "LONG" : "SHORT",
                 OpenTime = fill.DateTime,
+                TradingDay = tradingDay,
                 AccountId = fill.Account?.Id ?? "",
                 AccountName = fill.Account?.Name ?? "",
                 PositionId = fill.PositionId,
                 ConnectionId = fill.ConnectionId ?? "",
-                ConnectionName = connections.GetValueOrDefault(fill.ConnectionId)?.Name ?? "",
-                TradingDay = tradingDay,
+                ConnectionName = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == fill.ConnectionId)?.Name ?? "",
                 FirstOrderId = fill.OrderId,
                 LastOrderId = fill.OrderId,
                 FirstTradeId = fill.Id,
@@ -587,21 +686,10 @@ namespace QuantowerBridge
             };
         }
 
-        private static PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId)
+        // [CORRIGIDO v3] assinatura sem `fee` — entradas nunca carregam fee
+        static PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId)
         {
-            var entry = new FillData
-            {
-                Qty = qty,
-                Price = price,
-                Time = time,
-                Fee = 0,
-                Swap = 0,
-                GrossPnL = 0,
-                IsExit = false,
-                Sequence = sequence,
-                OrderId = orderId,
-                TradeId = tradeId
-            };
+            var entry = new FillData(qty, price, time, sequence, orderId, tradeId);
             state.Entries.Add(entry);
             state.AllFills.Add(entry);
             state.FillSequence = sequence;
@@ -609,6 +697,10 @@ namespace QuantowerBridge
             state.LastTradeId = tradeId;
             return state;
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // BUILD TRADES JSON (ENTRY POINT)
+        // ═══════════════════════════════════════════════════════════════
 
         private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
         {
@@ -631,10 +723,12 @@ namespace QuantowerBridge
                 .ThenBy(t => t.Id)
                 .ToList();
 
-            var fillsWithDay = allFills.Select(f => (
-                Fill: f,
-                TradingDay: TradeDtoBuilder.GetTradingDay(f)
-            )).ToList();
+            // Calcula TradingDay 1x por fill + Agrupa por AccountId + Symbol
+            var fillsWithDay = allFills.Select(f => new
+            {
+                Fill = f,
+                TradingDay = GetTradingDay(f, f.ConnectionId)
+            }).ToList();
 
             var groups = fillsWithDay
                 .GroupBy(x => new
@@ -643,8 +737,7 @@ namespace QuantowerBridge
                     Symbol = x.Fill.Symbol?.Name ?? ""
                 });
 
-            List<TradeDto> allTrades = [];
-            var connections = Core.Instance.Connections.Connected.ToDictionary(c => c.Id);
+            var allTrades = new List<TradeDto>();
 
             foreach (var group in groups)
             {
@@ -653,7 +746,7 @@ namespace QuantowerBridge
                                                 .ThenBy(x => x.Fill.Id)
                                                 .ToList();
 
-                var trades = ReconstructTrades(fillsWithDayInGroup, connections);
+                var trades = ReconstructTrades(fillsWithDayInGroup, Core.Instance.Connections.Connected.ToDictionary(c => c.Id));
                 allTrades.AddRange(trades);
             }
 
@@ -671,7 +764,6 @@ namespace QuantowerBridge
                 grossPnl = t.GrossPnL,
                 netPnl = t.NetPnL,
                 fee = t.Fee,
-                swaps = t.Swaps,
                 positionId = t.PositionId,
                 accountId = t.AccountId,
                 accountName = t.AccountName,
@@ -693,7 +785,8 @@ namespace QuantowerBridge
                 lastOrderId = t.LastOrderId,
                 firstTradeId = t.FirstTradeId,
                 lastTradeId = t.LastTradeId,
-                calculatedGrossPnL = t.CalculatedGrossPnL
+                calculatedGrossPnL = t.CalculatedGrossPnL,
+                swaps = t.Swaps
             }).ToList();
 
             return JsonSerializer.Serialize(new
@@ -706,7 +799,7 @@ namespace QuantowerBridge
 
         private static string BuildPositionsJson()
         {
-            List<object> positions = [];
+            var positions = new List<object>();
 
             foreach (Position pos in Core.Instance.Positions)
             {
@@ -729,11 +822,7 @@ namespace QuantowerBridge
                         accountId = pos.Account.Id ?? "";
                         accountName = pos.Account.Name ?? "";
                     }
-                    
-                    if (pos.OpenPrice == 0 || pos.OpenTime == DateTime.MinValue)
-                    {
-                        FileLog($"[POSITIONS] WARNING: OpenPrice={pos.OpenPrice} OpenTime={pos.OpenTime} for {pos.Id}");
-                    }
+                    FileLog($"[POSITIONS] {pos.Id}: accountId={accountId}, accountName={accountName}, symbol={symbol}, side={side}");
                 }
                 catch (Exception ex)
                 {
@@ -754,10 +843,10 @@ namespace QuantowerBridge
                     openPrice = pos.OpenPrice,
                     currentPrice = pos.CurrentPrice,
                     openTime = pos.OpenTime.ToString("O"),
-                    grossPnl,
-                    netPnl,
-                    fee,
-                    swaps,
+                    grossPnl = grossPnl,
+                    netPnl = netPnl,
+                    fee = fee,
+                    swaps = swaps,
                     accountId,
                     accountName,
                     connectionId = pos.ConnectionId ?? "",
@@ -778,7 +867,7 @@ namespace QuantowerBridge
 
         private static string BuildOrdersJson()
         {
-            List<object> orders = [];
+            var orders = new List<object>();
 
             foreach (Order order in Core.Instance.Orders)
             {
@@ -801,7 +890,10 @@ namespace QuantowerBridge
                     id = order.Id,
                     symbol,
                     side,
-                    status = order.State.ToString()
+                    quantity = order.TotalQuantity,
+                    price = order.Price,
+                    connectionId = order.ConnectionId ?? "",
+                    connectionName = connName
                 });
             }
 
@@ -814,172 +906,173 @@ namespace QuantowerBridge
 
             return JsonSerializer.Serialize(result, JsonOptions);
         }
-    }
 
-    // ════════════════════════════════════════════════════════════════
-    // DTOs & HELPERS 
-    // ════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════
+        // TRADE DTO & BUILDER
+        // ════════════════════════════════════════════════════════════════
 
-    public class FillData
-    {
-        public decimal Qty, Price;
-        public DateTime Time;
-        public decimal Fee, Swap, GrossPnL;
-        public bool IsExit;
-        public int Sequence;
-        public string OrderId, TradeId;
-    }
+// ════════════════════════════════════════════════════════════════
+// TRADE DTO & BUILDER
+// ════════════════════════════════════════════════════════════════
 
-    public class PositionState
-    {
-        public string Symbol, AccountId, AccountName, PositionId, ConnectionId, ConnectionName;
-        public string Direction = "";
-        public DateTime OpenTime;
-        public DateTime? ExitTime;
-        public DateTime TradingDay;
-        public decimal NetQty = 0;
+public class TradeDto
+{
+    public string Id { get; set; }
+    public string Symbol { get; set; }
+    public string Side { get; set; }
+    public decimal Quantity { get; set; }
+    public decimal EntryPrice { get; set; }
+    public decimal ExitPrice { get; set; }
+    public string EntryDateTime { get; set; }
+    public string ExitDateTime { get; set; }
+    public string TradingDay { get; set; }
+    public decimal GrossPnL { get; set; }
+    public decimal CalculatedGrossPnL { get; set; }
+    public decimal NetPnL { get; set; }
+    public decimal Fee { get; set; }
+    public decimal Swaps { get; set; }
+    public string PositionId { get; set; }
+    public string AccountId { get; set; }
+    public string AccountName { get; set; }
+    public string ConnectionId { get; set; }
+    public string ConnectionName { get; set; }
+    public string PlatformTradeId { get; set; }
+    public int EntryCount { get; set; }
+    public int ExitCount { get; set; }
+    public int ScaleInCount { get; set; }
+    public int PartialExitCount { get; set; }
+    public int FillSequence { get; set; }
+    public decimal AverageEntry { get; set; }
+    public decimal AverageExit { get; set; }
+    public decimal Risk { get; set; }
+    public decimal Reward { get; set; }
+    public double HoldingSeconds { get; set; }
+    public int MaxScaleIn { get; set; }
+    public string FirstOrderId { get; set; }
+    public string LastOrderId { get; set; }
+    public string FirstTradeId { get; set; }
+    public string LastTradeId { get; set; }
+    // Additional properties for builder
+    public string Direction { get; set; }
+    public decimal AvgEntryPrice { get; set; }
+    public decimal AvgExitPrice { get; set; }
+    public double Duration { get; set; }
+}
 
-        public List<FillData> Entries = [];
-        public List<FillData> Exits = [];
-        public List<FillData> AllFills = [];
-
-        public int FillSequence = 0;
-        public bool HasEntries => Entries.Count > 0;
-        public string FirstOrderId, LastOrderId, FirstTradeId, LastTradeId;
-    }
-
-    public class TradeDto
-    {
-        public string Id { get; set; }
-        public string Symbol { get; set; }
-        public string Side { get; set; }
-        public decimal Quantity { get; set; }
-        public decimal EntryPrice { get; set; }
-        public decimal ExitPrice { get; set; }
-        public string EntryDateTime { get; set; }
-        public string ExitDateTime { get; set; }
-        public string TradingDay { get; set; }
-        public decimal GrossPnL { get; set; }
-        public decimal NetPnL { get; set; }
-        public decimal Fee { get; set; }
-        public decimal Swaps { get; set; }
-        public string Direction { get; set; }
-        public decimal AvgEntryPrice { get; set; }
-        public decimal AvgExitPrice { get; set; }
-        public double Duration { get; set; }
-        public string PositionId { get; set; }
-        public string AccountId { get; set; }
-        public string AccountName { get; set; }
-        public string ConnectionId { get; set; }
-        public string ConnectionName { get; set; }
-        public string PlatformTradeId { get; set; }
-        public int EntryCount { get; set; }
-        public int ExitCount { get; set; }
-        public int ScaleInCount { get; set; }
-        public int PartialExitCount { get; set; }
-        public int FillSequence { get; set; }
-        public decimal AverageEntry { get; set; }
-        public decimal AverageExit { get; set; }
-        public decimal Risk { get; set; }
-        public decimal Reward { get; set; }
-        public double HoldingSeconds { get; set; }
-        public int MaxScaleIn { get; set; }
-        public string FirstOrderId { get; set; }
-        public string LastOrderId { get; set; }
-        public string FirstTradeId { get; set; }
-        public string LastTradeId { get; set; }
-        public decimal CalculatedGrossPnL { get; set; }
-    }
-
-    public static class TradeDtoBuilder
-    {
-        public static TradeDto BuildTradeDto(PositionState closedState)
+        static class TradeDtoBuilder
         {
-            var entries = closedState.Entries;
-            var exits = closedState.Exits;
-
-            var entryQty = entries.Sum(e => e.Qty);
-            var exitQty = exits.Sum(e => e.Qty);
-            var entryNotional = entries.Sum(e => e.Price * e.Qty);
-            var exitNotional = exits.Sum(e => e.Price * e.Qty);
-
-            var avgEntry = entryQty > 0 ? entryNotional / entryQty : 0;
-            var avgExit = exitQty > 0 ? exitNotional / exitQty : 0;
-
-            var grossPnL = exits.Sum(e => e.GrossPnL);
-            var totalFees = exits.Sum(e => Math.Abs(e.Fee));
-            var totalSwaps = exits.Sum(e => e.Swap);
-            var netPnL = grossPnL - totalFees - totalSwaps;
-
-            var directionSign = closedState.Direction == "LONG" ? 1 : -1;
-            var calculatedGrossPnL = (avgExit - avgEntry) * entryQty * directionSign;
-
-            var idInput = $"{closedState.AccountId}|{closedState.Symbol}|{closedState.OpenTime:O}|{closedState.ExitTime:O}|{closedState.FirstOrderId}";
-            var platformTradeId = "qt_" + ComputeSHA1(idInput);
-
-            var holdingSeconds = closedState.ExitTime.HasValue
-                ? (closedState.ExitTime.Value - closedState.OpenTime).TotalSeconds
-                : 0;
-
-            return new TradeDto
+            public static TradeDto BuildTradeDto(PositionState closedState)
             {
-                Id = closedState.PositionId,
-                Symbol = closedState.Symbol,
-                Side = closedState.Direction,
-                Quantity = entryQty,
-                EntryPrice = Math.Round(avgEntry, 6),
-                ExitPrice = Math.Round(avgExit, 6),
-                EntryDateTime = closedState.OpenTime.ToString("O"),
-                ExitDateTime = closedState.ExitTime?.ToString("O"),
-                TradingDay = closedState.TradingDay.ToString("yyyy-MM-dd"),
-                GrossPnL = Math.Round(grossPnL, 2),
-                CalculatedGrossPnL = Math.Round(calculatedGrossPnL, 2),
-                NetPnL = Math.Round(netPnL, 2),
-                Fee = Math.Round(totalFees, 2),
-                Swaps = Math.Round(totalSwaps, 2),
-                Direction = closedState.Direction,
-                AvgEntryPrice = Math.Round(avgEntry, 6),
-                AvgExitPrice = Math.Round(avgExit, 6),
-                Duration = holdingSeconds,
-                PositionId = closedState.PositionId,
-                AccountId = closedState.AccountId,
-                AccountName = closedState.AccountName,
-                ConnectionId = closedState.ConnectionId,
-                ConnectionName = closedState.ConnectionName,
-                PlatformTradeId = platformTradeId,
-                EntryCount = entries.Count,
-                ExitCount = exits.Count,
-                ScaleInCount = Math.Max(0, entries.Count - 1),
-                PartialExitCount = Math.Max(0, exits.Count - 1),
-                FillSequence = closedState.FillSequence,
-                AverageEntry = Math.Round(avgEntry, 6),
-                AverageExit = Math.Round(avgExit, 6),
-                Risk = 0,
-                Reward = 0,
-                HoldingSeconds = holdingSeconds,
-                MaxScaleIn = Math.Max(0, entries.Count - 1),
-                FirstOrderId = closedState.FirstOrderId,
-                LastOrderId = closedState.LastOrderId,
-                FirstTradeId = closedState.FirstTradeId,
-                LastTradeId = closedState.LastTradeId
-            };
+                var entries = closedState.Entries;
+                var exits = closedState.Exits;
+
+                var entryQty = entries.Sum(e => e.Qty);
+                var exitQty = exits.Sum(e => e.Qty);
+                var entryNotional = entries.Sum(e => e.Price * e.Qty);
+                var exitNotional = exits.Sum(e => e.Price * e.Qty);
+
+                var avgEntry = entryQty > 0 ? entryNotional / entryQty : 0;
+                var avgExit = exits.Count > 0 ? exits.Sum(e => e.Price * e.Qty) / exits.Sum(e => e.Qty) : 0;
+
+                var grossPnL = closedState.Exits.Sum(e => e.GrossPnL);
+                var totalFees = exits.Sum(e => Math.Abs(e.Fee));
+                var totalSwaps = exits.Sum(e => e.Swap);
+                var netPnL = grossPnL - totalFees - totalSwaps;
+
+                var directionSign = closedState.Direction == "LONG" ? 1 : -1;
+                var calculatedGrossPnL = (avgExit - avgEntry) * closedState.Entries.Sum(e => e.Qty) * directionSign;
+
+                var idInput = $"{closedState.AccountId}|{closedState.Symbol}|{closedState.OpenTime:O}|{closedState.ExitTime:O}|{closedState.FirstOrderId}";
+                var platformTradeId = "qt_" + ComputeSHA1(idInput);
+
+                var holdingSeconds = closedState.ExitTime.HasValue
+                    ? (closedState.ExitTime.Value - closedState.OpenTime).TotalSeconds
+                    : 0;
+
+                return new TradeDto
+                {
+                    Id = closedState.PositionId,
+                    Symbol = closedState.Symbol,
+                    Side = closedState.Direction,
+                    Quantity = closedState.Entries.Sum(e => e.Qty),
+                    EntryPrice = Math.Round(avgEntry, 6),
+                    ExitPrice = Math.Round(avgExit, 6),
+                    EntryDateTime = closedState.OpenTime.ToString("O"),
+                    ExitDateTime = closedState.ExitTime?.ToString("O"),
+                    TradingDay = closedState.TradingDay.ToString("yyyy-MM-dd"),
+                    GrossPnL = Math.Round(grossPnL, 2),
+                    CalculatedGrossPnL = Math.Round(calculatedGrossPnL, 2),
+                    NetPnL = Math.Round(netPnL, 2),
+                    Fee = Math.Round(totalFees, 2),
+                    Swaps = Math.Round(totalSwaps, 2),
+                    PositionId = closedState.PositionId,
+                    AccountId = closedState.AccountId,
+                    AccountName = closedState.AccountName,
+                    ConnectionId = closedState.ConnectionId,
+                    ConnectionName = closedState.ConnectionName,
+                    PlatformTradeId = platformTradeId,
+                    EntryCount = closedState.Entries.Count,
+                    ExitCount = closedState.Exits.Count,
+                    ScaleInCount = Math.Max(0, closedState.Entries.Count - 1),
+                    PartialExitCount = Math.Max(0, closedState.Exits.Count - 1),
+                    FillSequence = closedState.FillSequence,
+                    AverageEntry = Math.Round(avgEntry, 6),
+                    AverageExit = Math.Round(avgExit, 6),
+                    Risk = 0,
+                    Reward = 0,
+                    HoldingSeconds = holdingSeconds,
+                    MaxScaleIn = Math.Max(0, closedState.Entries.Count - 1),
+                    FirstOrderId = closedState.FirstOrderId,
+                    LastOrderId = closedState.LastOrderId,
+                    FirstTradeId = closedState.FirstTradeId,
+                    LastTradeId = closedState.LastTradeId,
+                    Direction = closedState.Direction,
+                    AvgEntryPrice = Math.Round(avgEntry, 6),
+                    AvgExitPrice = Math.Round(avgExit, 6),
+                    Duration = holdingSeconds
+                };
+            }
         }
 
-        public static DateTime GetTradingDay(Trade fill)
+        // ═══════════════════════════════════════════════════════════════
+        // HELPERS
+        // ═══════════════════════════════════════════════════════════════
+
+        private static DateTime GetTradingDay(Trade fill, string connectionId)
         {
-            return fill.DateTime.Date;
+            var conn = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == connectionId);
+            // Connection may not have TradingHours in some Quantower versions - fallback to UTC date
+            var sessionStart = TimeSpan.Zero;
+            try
+            {
+                var tradingHours = conn?.GetType().GetProperty("TradingHours")?.GetValue(conn);
+                if (tradingHours != null)
+                {
+                    var sessionStartProp = tradingHours.GetType().GetProperty("SessionStart");
+                    if (sessionStartProp != null)
+                    {
+                        sessionStart = (TimeSpan)sessionStartProp.GetValue(tradingHours);
+                    }
+                }
+            }
+            catch { }
+
+            return fill.DateTime.TimeOfDay < sessionStart
+                ? fill.DateTime.Date.AddDays(-1)
+                : fill.DateTime.Date;
         }
 
-        public static decimal NormalizeFee(decimal? raw)
+        private static decimal NormalizeFee(decimal? raw)
         {
             var value = raw ?? 0m;
             return value > 0 ? -value : value;
         }
 
-        public static string ComputeSHA1(string input)
+        private static string ComputeSHA1(string input)
         {
-            byte[] hash = SHA1.HashData(Encoding.UTF8.GetBytes(input));
-            return Convert.ToHexStringLower(hash);
+            using var sha1 = SHA1.Create();
+            var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
+            return BitConverter.ToString(hash).Replace("-", "").ToLower();
         }
     }
 }

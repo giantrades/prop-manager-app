@@ -1,5 +1,5 @@
-// ============================================================
-// QuantowerBridge — Local HTTP Bridge for Web Integration
+﻿// ============================================================
+// QuantowerBridge â€” Local HTTP Bridge for Web Integration
 // ============================================================
 // This C# strategy runs inside Quantower and exposes a local
 // HTTP server so your webapp can auto-sync trading data.
@@ -11,11 +11,11 @@
 //   4. Your webapp connects to http://localhost:8787 (or external via Tailscale)
 //
 // ENDPOINTS:
-//   GET /status     → connection status + version
-//   GET /accounts   → all accounts from all connections
-//   GET /trades     → trade history (optional ?from=&to=)
-//   GET /positions  → open positions with live P&L
-//   GET /orders     → pending orders
+//   GET /status     â†’ connection status + version
+//   GET /accounts   â†’ all accounts from all connections
+//   GET /trades     â†’ trade history (optional ?from=&to=)
+//   GET /positions  â†’ open positions with live P&L
+//   GET /orders     â†’ pending orders
 // ============================================================
 
 using System;
@@ -39,10 +39,10 @@ namespace QuantowerBridge
         public QuantowerBridge() : base()
         {
             this.Name = "QuantowerBridge";
-            this.Description = "Bridge de integração via HTTP API";
+            this.Description = "Bridge de integraÃ§Ã£o via HTTP API";
         }
 
-        // ── Configuration ──────────────────────────────────
+        // â”€â”€ Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         [InputParameter("HTTP Port", 10)]
         public int Port = 8787;
 
@@ -62,7 +62,7 @@ namespace QuantowerBridge
             NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
-        // ── Lifecycle ──────────────────────────────────────
+        // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         protected override void OnCreated()
         {
             base.OnCreated();
@@ -93,7 +93,7 @@ namespace QuantowerBridge
 
                     if (!started)
                     {
-                        Log($"⚠️ External access failed, falling back to localhost only", StrategyLoggingLevel.Trading);
+                        Log($"âš ï¸ External access failed, falling back to localhost only", StrategyLoggingLevel.Trading);
                         started = TryStartListener($"http://localhost:{Port}/");
                     }
                 }
@@ -104,11 +104,11 @@ namespace QuantowerBridge
 
                 if (!started)
                 {
-                    Log($"❌ Failed to start HTTP listener on any prefix", StrategyLoggingLevel.Error);
+                    Log($"âŒ Failed to start HTTP listener on any prefix", StrategyLoggingLevel.Error);
                     return;
                 }
 
-                string msg = $"✅ QuantowerBridge started on port {Port} (External: {AllowExternal})";
+                string msg = $"âœ… QuantowerBridge started on port {Port} (External: {AllowExternal})";
                 Log(msg, StrategyLoggingLevel.Trading);
                 FileLog(msg);
 
@@ -124,7 +124,7 @@ namespace QuantowerBridge
             }
             catch (Exception ex)
             {
-                string em = $"❌ Failed to start bridge: {ex}";
+                string em = $"âŒ Failed to start bridge: {ex}";
                 Log(em, StrategyLoggingLevel.Error);
                 FileLog(em);
             }
@@ -137,18 +137,18 @@ namespace QuantowerBridge
                 _listener.Prefixes.Clear();
                 _listener.Prefixes.Add(prefix);
                 _listener.Start();
-                Log($"🌐 Listening on: {prefix}", StrategyLoggingLevel.Trading);
+                Log($"ðŸŒ Listening on: {prefix}", StrategyLoggingLevel.Trading);
                 return true;
             }
             catch (HttpListenerException ex) when (ex.ErrorCode == 5 || ex.ErrorCode == 183)
             {
                 // Access denied (5) or already exists (183) - try next prefix
-                Log($"⚠️ Cannot bind {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
+                Log($"âš ï¸ Cannot bind {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
                 return false;
             }
             catch (Exception ex)
             {
-                Log($"⚠️ Error starting {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
+                Log($"âš ï¸ Error starting {prefix}: {ex.Message}", StrategyLoggingLevel.Trading);
                 return false;
             }
         }
@@ -169,13 +169,13 @@ namespace QuantowerBridge
                 reserve?.WaitForExit(3000);
 
                 if (reserve?.ExitCode == 0)
-                    Log($"🔐 URL ACL reserved for port {port}", StrategyLoggingLevel.Trading);
+                    Log($"ðŸ” URL ACL reserved for port {port}", StrategyLoggingLevel.Trading);
                 else
-                    Log($"⚠️ Could not reserve URL ACL (run Quantower as Admin for external access)", StrategyLoggingLevel.Trading);
+                    Log($"âš ï¸ Could not reserve URL ACL (run Quantower as Admin for external access)", StrategyLoggingLevel.Trading);
             }
             catch (Exception ex)
             {
-                Log($"⚠️ URL ACL reservation failed: {ex.Message}", StrategyLoggingLevel.Trading);
+                Log($"âš ï¸ URL ACL reservation failed: {ex.Message}", StrategyLoggingLevel.Trading);
             }
         }
 
@@ -186,14 +186,14 @@ namespace QuantowerBridge
                 _cts?.Cancel();
                 _listener?.Stop();
                 _listener?.Close();
-                string m = "🛑 QuantowerBridge stopped";
+                string m = "ðŸ›‘ QuantowerBridge stopped";
                 Log(m, StrategyLoggingLevel.Trading);
                 FileLog(m);
             }
             catch { }
         }
 
-        // ── File Logging (survives even if Quantower log fails) ──
+        // â”€â”€ File Logging (survives even if Quantower log fails) â”€â”€
         private static string _logPath;
         private static readonly object _logLock = new();
         private static string LogPath
@@ -223,7 +223,7 @@ namespace QuantowerBridge
             catch { }
         }
 
-        // ── HTTP Server Loop ───────────────────────────────
+        // â”€â”€ HTTP Server Loop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         private void ServerLoop()
         {
             while (!_cts.IsCancellationRequested)
@@ -244,7 +244,7 @@ namespace QuantowerBridge
                 }
                 catch (HttpListenerException ex)
                 {
-                    FileLog($"ServerLoop HttpListenerException: {ex.Message} (code={ex.ErrorCode}) — restarting in 2s");
+                    FileLog($"ServerLoop HttpListenerException: {ex.Message} (code={ex.ErrorCode}) â€” restarting in 2s");
                 }
                 catch (ObjectDisposedException)
                 {
@@ -253,7 +253,7 @@ namespace QuantowerBridge
                 }
                 catch (Exception ex)
                 {
-                    string em = $"⚠️ ServerLoop error: {ex}";
+                    string em = $"âš ï¸ ServerLoop error: {ex}";
                     Log(em, StrategyLoggingLevel.Error);
                     FileLog(em);
                 }
@@ -329,7 +329,7 @@ namespace QuantowerBridge
                         json = JsonSerializer.Serialize(new { status = "ok", timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
                         break;
                     default:
-                        Log($"⚠️ 404 Not Found: {path}", StrategyLoggingLevel.Trading);
+                        Log($"âš ï¸ 404 Not Found: {path}", StrategyLoggingLevel.Trading);
                         response.StatusCode = 404;
                         json = JsonSerializer.Serialize(new { error = "Unknown endpoint", endpoints = EndpointsList }, JsonOptions);
                         break;
@@ -341,7 +341,7 @@ namespace QuantowerBridge
             }
             catch (Exception ex)
             {
-                string em = $"❌ Request handling error: {ex}";
+                string em = $"âŒ Request handling error: {ex}";
                 Log(em, StrategyLoggingLevel.Error);
                 FileLog(em);
                 try
@@ -414,7 +414,7 @@ namespace QuantowerBridge
             public string Id { get; set; }
         }
 
-        // ── JSON Builders (using System.Text.Json) ───────────
+        // â”€â”€ JSON Builders (using System.Text.Json) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static string BuildStatusJson(int port)
         {
@@ -477,9 +477,9 @@ namespace QuantowerBridge
             return JsonSerializer.Serialize(result, JsonOptions);
         }
 
-        // ═══════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
         // INTERNAL DTOs & RECONSTRUCTOR
-        // ═══════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         private class FillData
         {
@@ -502,12 +502,12 @@ namespace QuantowerBridge
 
             public List<FillData> Entries = new(), Exits = new();
 
-            // AllFills guarda a sequência cronológica completa (entries + exits
-            // intercalados na ordem real de execução). Existe especificamente para
+            // AllFills guarda a sequÃªncia cronolÃ³gica completa (entries + exits
+            // intercalados na ordem real de execuÃ§Ã£o). Existe especificamente para
             // alimentar os futuros widgets de MAE (Maximum Adverse Excursion) e
             // MFE (Maximum Favorable Excursion) na Dashboard, que precisam do
-            // histórico de fills de cada trade. Não é redundante para esse propósito:
-            // Entries e Exits sozinhos perdem a ordem de intercalação entre os dois grupos.
+            // histÃ³rico de fills de cada trade. NÃ£o Ã© redundante para esse propÃ³sito:
+            // Entries e Exits sozinhos perdem a ordem de intercalaÃ§Ã£o entre os dois grupos.
             public List<FillData> AllFills = new();
 
             public int FillSequence = 0;
@@ -515,167 +515,220 @@ namespace QuantowerBridge
             public string FirstOrderId, LastOrderId, FirstTradeId, LastTradeId;
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // TRADE RECONSTRUCTOR — v3.1 (reversão automática + SHA1 ID + AllFills para MAE/MFE)
-        // ═══════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // TRADE RECONSTRUCTOR â€” v3.1 (reversÃ£o automÃ¡tica + SHA1 ID + AllFills para MAE/MFE)
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-        private static List<TradeDto> ReconstructTrades(
-            List<(Trade Fill, DateTime TradingDay)> fills,
-            Dictionary<string, Connection> connections)
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// INTERNAL DTOs & RECONSTRUCTOR
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+private class FillData
+{
+    public decimal Qty, Price;
+    public DateTime Time;
+    public decimal Fee, Swap, GrossPnL;
+    public bool IsExit;
+    public int Sequence;
+    public string OrderId, TradeId;
+}
+
+private class PositionState
+{
+    public string Symbol, AccountId, AccountName, PositionId, ConnectionId, ConnectionName;
+    public string Direction = "";
+    public DateTime OpenTime;
+    public DateTime? ExitTime;
+    public DateTime TradingDay;
+    public decimal NetQty = 0;
+
+    public List<FillData> Entries = new(), Exits = new();
+
+    // AllFills guarda a sequÃªncia cronolÃ³gica completa (entries + exits
+    // intercalados na ordem real de execuÃ§Ã£o). Existe especificamente para
+    // alimentar os futuros widgets de MAE (Maximum Adverse Excursion) e
+    // MFE (Maximum Favorable Excursion) na Dashboard, que precisam do
+    // histÃ³rico de fills de cada trade. NÃ£o Ã© redundante para esse propÃ³sito:
+    // Entries e Exits sozinhos perdem a ordem de intercalaÃ§Ã£o entre os dois grupos.
+    public List<FillData> AllFills = new();
+
+    public int FillSequence = 0;
+    public bool HasEntries => Entries.Count > 0;
+    public string FirstOrderId, LastOrderId, FirstTradeId, LastTradeId;
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// TRADE RECONSTRUCTOR â€” v3.1 (reversÃ£o automÃ¡tica + SHA1 ID + AllFills para MAE/MFE)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+private static List<TradeDto> ReconstructTrades(
+    List<(Trade Fill, DateTime TradingDay)> fills,
+    Dictionary<string, Connection> connections)
+{
+    var trades = new List<TradeDto>();
+    var current = new PositionState();
+    int fillSequence = 0;
+
+    foreach (var (fill, tradingDay) in fills)
+    {
+        fillSequence++;
+
+        if (current.HasEntries && current.PositionId != fill.PositionId)
         {
-            var trades = new List<TradeDto>();
-            var current = new PositionState();
-            int fillSequence = 0;
-
-            foreach (var (fill, tradingDay) in fills)
-            {
-                fillSequence++;
-
-                if (current.HasEntries && current.PositionId != fill.PositionId)
-                {
-                    FileLog($"[RECON] WARNING: PositionId changed mid-trade: was={current.PositionId} now={fill.PositionId} Symbol={fill.Symbol?.Name}");
-                }
-
-                var (nextState, closedTrades) = ApplyFill(current, fill, tradingDay, Core.Instance.Connections.Connected.ToDictionary(c => c.Id), 1);
-
-                foreach (var closed in closedTrades)
-                {
-                    FileLog($"[RECON] Trade Closed: Symbol={closed.Symbol} Dir={closed.Direction} TradingDay={closed.TradingDay:yyyy-MM-dd} Entries={closed.EntryCount} Exits={closed.ExitCount} AvgEntry={closed.AvgEntryPrice:F2} AvgExit={closed.AvgExitPrice:F2} Gross={closed.GrossPnL:F2} CalcGross={closed.CalculatedGrossPnL:F2} Fee={closed.Fee:F2} Net={closed.NetPnL:F2} Dur={closed.Duration}");
-
-                    if (Math.Abs(closed.GrossPnL - closed.CalculatedGrossPnL) > 0.01m)
-                    {
-                        FileLog($"[AUDIT] WARNING: GrossPnL diverge do calculado. Symbol={closed.Symbol} Reported={closed.GrossPnL:F2} Calculated={closed.CalculatedGrossPnL:F2} Diff={(closed.GrossPnL - closed.CalculatedGrossPnL):F2}");
-                    }
-
-                    trades.Add(closed);
-                }
-
-                current = nextState;
-            }
-            return trades;
+            FileLog($"[RECON] WARNING: PositionId changed mid-trade: was={current.PositionId} now={fill.PositionId} Symbol={fill.Symbol?.Name}");
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // ApplyFill — v3.1 (reversão automática + SHA1 ID + AllFills para MAE/MFE)
-        // ═══════════════════════════════════════════════════════════════
+        var (nextState, closedTrades) = ApplyFill(current, fill, tradingDay, Core.Instance.Connections.Connected.ToDictionary(c => c.Id), 1);
 
-        private static (PositionState, List<TradeDto>) ApplyFill(
-            PositionState current,
-            Trade fill,
-            DateTime tradingDay,
-            Dictionary<string, Connection> connections,
-            int sequence)
+        foreach (var closed in closedTrades)
         {
-            var closedTrades = new List<TradeDto>();
-            var isBuy = fill.Side == Side.Buy;
-            var qty = (decimal)fill.Quantity;
-            var price = (decimal)fill.Price;
-            var time = fill.DateTime;
+            FileLog($"[RECON] Trade Closed: Symbol={closed.Symbol} Dir={closed.Direction} TradingDay={closed.TradingDay:yyyy-MM-dd} Entries={closed.EntryCount} Exits={closed.ExitCount} AvgEntry={closed.AvgEntryPrice:F2} AvgExit={closed.AvgExitPrice:F2} Gross={closed.GrossPnL:F2} CalcGross={closed.CalculatedGrossPnL:F2} Fee={closed.Fee:F2} Net={closed.NetPnL:F2} Dur={closed.Duration}");
 
-            if (current.NetQty == 0)
+            if (Math.Abs(closed.GrossPnL - closed.CalculatedGrossPnL) > 0.01m)
             {
-                var fresh = StartNewPosition(fill, Core.Instance.Connections.Connected.ToDictionary(c => c.Id));
-                fresh = AddEntryFill(fresh, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.TradeId);
-                fresh.NetQty = isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
-                return (fresh, new List<TradeDto>());
+                FileLog($"[AUDIT] WARNING: GrossPnL diverge do calculado. Symbol={closed.Symbol} Reported={closed.GrossPnL:F2} Calculated={closed.CalculatedGrossPnL:F2} Diff={(closed.GrossPnL - closed.CalculatedGrossPnL):F2}");
             }
 
-            var oldNetQty = current.NetQty;
-            bool positionIsLong = oldNetQty > 0;
-            bool fillReducesPosition = positionIsLong ? !isBuy : isBuy;
-
-            current.LastOrderId = fill.OrderId;
-            current.LastTradeId = fill.TradeId;
-
-            if (!fillReducesPosition)
-            {
-                var scaled = AddEntryFill(current, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.TradeId);
-                scaled.NetQty += isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
-                return (scaled, new List<TradeDto>());
-            }
-
-            var closeQty = Math.Min(Math.Abs(oldNetQty), (decimal)fill.Quantity);
-            var remainingQty = (decimal)fill.Quantity - closeQty;
-
-            var fee = NormalizeFee(fill.Fee?.Value);
-            var swap = (decimal)(fill.Swaps?.Value ?? 0);
-            var grossPnL = (decimal)(fill.GrossPnL?.Value ?? 0);
-
-            var exitFill = new FillData
-            {
-                Qty = (decimal)closeQty,
-                Price = (decimal)fill.Price,
-                Time = fill.DateTime,
-                Fee = NormalizeFee(fill.Fee?.Value),
-                Swap = (decimal)(fill.Swaps?.Value ?? 0),
-                GrossPnL = (decimal)(fill.GrossPnL?.Value ?? 0),
-                IsExit = true,
-                Sequence = 1,
-                OrderId = fill.OrderId,
-                TradeId = fill.TradeId
-            };
-            current.Exits.Add(exitFill);
-            current.AllFills.Add(exitFill);
-            current.ExitTime = fill.DateTime;
-            current.NetQty = positionIsLong ? oldNetQty - closeQty : oldNetQty + closeQty;
-
-            var closedTrades = new List<TradeDto>();
-
-            if (current.NetQty == 0)
-            {
-                if (current.HasEntries)
-                {
-                    return (new PositionState(), new List<TradeDto> { TradeDtoBuilder.BuildTradeDto(current) });
-                }
-
-                if (remainingQty > 0)
-                {
-                    var reversed = StartNewPosition(fill, Core.Instance.Connections.Connected.ToDictionary(c => c.Id));
-                    reversed.Direction = isBuy ? "SHORT" : "LONG";
-                    reversed = AddEntryFill(reversed, remainingQty, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.TradeId);
-                    reversed.NetQty = isBuy ? remainingQty : -remainingQty;
-
-                    FileLog($"[RECON] REVERSÃO: Symbol={fill.Symbol?.Name} Closed={current.Direction} New={reversed.Direction} RemainingQty={remainingQty}");
-                    return (reversed, new List<TradeDto>());
-                }
-
-                return (new PositionState(), new List<TradeDto>());
-            }
-
-            return (current, closedTrades);
+            trades.Add(closed);
         }
 
-        PositionState StartNewPosition(Trade fill, Dictionary<string, Connection> connections) {
-            var isBuy = fill.Side == Side.Buy;
-            return new PositionState {
-                Direction = isBuy ? "LONG" : "SHORT",
-                OpenTime = fill.DateTime,
-                AccountId = fill.Account?.Id ?? "",
-                AccountName = fill.Account?.Name ?? "",
-                PositionId = fill.PositionId,
-                ConnectionId = fill.ConnectionId ?? "",
-                ConnectionName = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == fill.ConnectionId)?.Name ?? "",
-                FirstOrderId = fill.OrderId,
-                LastOrderId = fill.OrderId,
-                FirstTradeId = fill.TradeId,
-                LastTradeId = fill.TradeId
-            };
+        current = nextState;
+    }
+    return trades;
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ApplyFill â€” v3.1 (reversÃ£o automÃ¡tica + SHA1 ID + AllFills para MAE/MFE)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+private static (PositionState, List<TradeDto>) ApplyFill(
+    PositionState current,
+    Trade fill,
+    DateTime tradingDay,
+    Dictionary<string, Connection> connections,
+    int sequence)
+{
+    var closedTrades = new List<TradeDto>();
+    var isBuy = fill.Side == Side.Buy;
+    var qty = (decimal)fill.Quantity;
+    var price = (decimal)fill.Price;
+    var time = fill.DateTime;
+
+    if (current.NetQty == 0)
+    {
+        var fresh = StartNewPosition(fill, Core.Instance.Connections.Connected.ToDictionary(c => c.Id));
+        fresh = AddEntryFill(fresh, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+        fresh.NetQty = isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
+        return (fresh, new List<TradeDto>());
+    }
+
+    var oldNetQty = current.NetQty;
+    bool positionIsLong = oldNetQty > 0;
+    bool fillReducesPosition = positionIsLong ? !isBuy : isBuy;
+
+    current.LastOrderId = fill.OrderId;
+    current.LastTradeId = fill.Id;
+
+    if (!fillReducesPosition)
+    {
+        var scaled = AddEntryFill(current, (decimal)fill.Quantity, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+        scaled.NetQty += isBuy ? (decimal)fill.Quantity : -(decimal)fill.Quantity;
+        return (scaled, new List<TradeDto>());
+    }
+
+    var closeQty = Math.Min(Math.Abs(oldNetQty), (decimal)fill.Quantity);
+    var remainingQty = (decimal)fill.Quantity - closeQty;
+
+    var fee = NormalizeFee(fill.Fee?.Value);
+    var swap = (decimal)(fill.Swaps?.Value ?? 0);
+    var grossPnL = (decimal)(fill.GrossPnl?.Value ?? 0);
+
+    var exitFill = new FillData
+    {
+        Qty = (decimal)closeQty,
+        Price = (decimal)fill.Price,
+        Time = fill.DateTime,
+        Fee = NormalizeFee(fill.Fee?.Value),
+        Swap = (decimal)(fill.Swaps?.Value ?? 0),
+        GrossPnL = (decimal)(fill.GrossPnl?.Value ?? 0),
+        IsExit = true,
+        Sequence = 1,
+        OrderId = fill.OrderId,
+        TradeId = fill.Id
+    };
+    current.Exits.Add(exitFill);
+    current.AllFills.Add(exitFill);
+    current.ExitTime = fill.DateTime;
+    current.NetQty = positionIsLong ? oldNetQty - closeQty : oldNetQty + closeQty;
+
+    var closedTrades = new List<TradeDto>();
+
+    if (current.NetQty == 0)
+    {
+        if (current.HasEntries)
+        {
+            return (new PositionState(), new List<TradeDto> { TradeDtoBuilder.BuildTradeDto(current) });
         }
 
-        // [CORRIGIDO v3] assinatura sem `fee` — entradas nunca carregam fee
-        PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId) {
-            var entry = new FillData {
-                Qty = qty, Price = price, Time = time,
-                Fee = 0, Swap = 0, GrossPnL = 0, IsExit = false,
-                Sequence = sequence, OrderId = orderId, TradeId = tradeId
-            };
-            state.Entries.Add(entry);
-            state.AllFills.Add(entry);
-            state.FillSequence = sequence;
-            state.LastOrderId = orderId;
-            state.LastTradeId = tradeId;
-            return state;
+        if (remainingQty > 0)
+        {
+            var reversed = StartNewPosition(fill, Core.Instance.Connections.Connected.ToDictionary(c => c.Id));
+            reversed.Direction = isBuy ? "SHORT" : "LONG";
+            reversed = AddEntryFill(reversed, remainingQty, (decimal)fill.Price, fill.DateTime, 1, fill.OrderId, fill.Id);
+            reversed.NetQty = isBuy ? remainingQty : -remainingQty;
+
+            FileLog($"[RECON] REVERSÃƒO: Symbol={fill.Symbol?.Name} Closed={current.Direction} New={reversed.Direction} RemainingQty={remainingQty}");
+            return (reversed, new List<TradeDto>());
         }
+
+        return (new PositionState(), new List<TradeDto>());
+    }
+
+    return (current, closedTrades);
+}
+
+private static PositionState StartNewPosition(Trade fill, Dictionary<string, Connection> connections)
+{
+    var isBuy = fill.Side == Side.Buy;
+    return new PositionState
+    {
+        Direction = isBuy ? "LONG" : "SHORT",
+        OpenTime = fill.DateTime,
+        AccountId = fill.Account?.Id ?? "",
+        AccountName = fill.Account?.Name ?? "",
+        PositionId = fill.PositionId,
+        ConnectionId = fill.ConnectionId ?? "",
+        ConnectionName = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == fill.ConnectionId)?.Name ?? "",
+        FirstOrderId = fill.OrderId,
+        LastOrderId = fill.OrderId,
+        FirstTradeId = fill.Id,
+        LastTradeId = fill.Id
+    };
+}
+
+// [CORRIGIDO v3] assinatura sem `fee` â€” entradas nunca carregam fee
+static PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId)
+{
+    var entry = new FillData
+    {
+        Qty = qty,
+        Price = price,
+        Time = time,
+        Fee = 0,
+        Swap = 0,
+        GrossPnL = 0,
+        IsExit = false,
+        Sequence = sequence,
+        OrderId = orderId,
+        TradeId = tradeId
+    };
+    state.Entries.Add(entry);
+    state.AllFills.Add(entry);
+    state.FillSequence = sequence;
+    state.LastOrderId = orderId;
+    state.LastTradeId = tradeId;
+    return state;
+}
 
 private static string BuildTradesJson(System.Collections.Specialized.NameValueCollection query)
         {
@@ -865,48 +918,55 @@ return JsonSerializer.Serialize(result, JsonOptions);
     }
 }
 
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // TRADE DTO & BUILDER
-// ════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 public class TradeDto
-{
-    public string Id { get; set; }
-    public string Symbol { get; set; }
-    public string Side { get; set; }
-    public decimal Quantity { get; set; }
-    public decimal EntryPrice { get; set; }
-    public decimal ExitPrice { get; set; }
-    public string EntryDateTime { get; set; }
-    public string ExitDateTime { get; set; }
-    public string TradingDay { get; set; }
-    public decimal GrossPnL { get; set; }
-    public decimal CalculatedGrossPnL { get; set; }
-    public decimal NetPnL { get; set; }
-    public decimal Fee { get; set; }
-    public decimal Swaps { get; set; }
-    public string PositionId { get; set; }
-    public string AccountId { get; set; }
-    public string AccountName { get; set; }
-    public string ConnectionId { get; set; }
-    public string ConnectionName { get; set; }
-    public string PlatformTradeId { get; set; }
-    public int EntryCount { get; set; }
-    public int ExitCount { get; set; }
-    public int ScaleInCount { get; set; }
-    public int PartialExitCount { get; set; }
-    public int FillSequence { get; set; }
-    public decimal AverageEntry { get; set; }
-    public decimal AverageExit { get; set; }
-    public decimal Risk { get; set; }
-    public decimal Reward { get; set; }
-    public double HoldingSeconds { get; set; }
-    public int MaxScaleIn { get; set; }
-    public string FirstOrderId { get; set; }
-    public string LastOrderId { get; set; }
-    public string FirstTradeId { get; set; }
-    public string LastTradeId { get; set; }
-}
+    {
+        public string Id { get; set; }
+        public string Symbol { get; set; }
+        public string Side { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal EntryPrice { get; set; }
+        public decimal ExitPrice { get; set; }
+        public string EntryDateTime { get; set; }
+        public string ExitDateTime { get; set; }
+        public string TradingDay { get; set; }
+        public decimal GrossPnL { get; set; }
+        public decimal CalculatedGrossPnL { get; set; }
+        public decimal NetPnL { get; set; }
+        public decimal Fee { get; set; }
+        public decimal Swaps { get; set; }
+        public string PositionId { get; set; }
+        public string AccountId { get; set; }
+        public string AccountName { get; set; }
+        public string ConnectionId { get; set; }
+        public string ConnectionName { get; set; }
+        public string PlatformTradeId { get; set; }
+        public int EntryCount { get; set; }
+        public int ExitCount { get; set; }
+        public int ScaleInCount { get; set; }
+        public int PartialExitCount { get; set; }
+        public int FillSequence { get; set; }
+        public decimal AverageEntry { get; set; }
+        public decimal AverageExit { get; set; }
+        public decimal Risk { get; set; }
+        public decimal Reward { get; set; }
+        public double HoldingSeconds { get; set; }
+        public int MaxScaleIn { get; set; }
+        public string FirstOrderId { get; set; }
+        public string LastOrderId { get; set; }
+        public string FirstTradeId { get; set; }
+        public string LastTradeId { get; set; }
+        public decimal CalculatedGrossPnL { get; set; }
+        public decimal Swaps { get; set; }
+        // Additional properties for builder
+        public string Direction { get; set; }
+        public decimal AvgEntryPrice { get; set; }
+        public decimal AvgExitPrice { get; set; }
+        public double Duration { get; set; }
+    }
 
 static class TradeDtoBuilder
 {
@@ -980,35 +1040,46 @@ static class TradeDtoBuilder
         };
     }
 
-    // ════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // HELPERS
-    // ═══════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-    private static DateTime GetTradingDay(Trade fill, string connectionId)
+private static DateTime GetTradingDay(Trade fill, string connectionId)
+{
+    var conn = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == connectionId);
+    // Connection may not have TradingHours in some Quantower versions - fallback to UTC date
+    var sessionStart = TimeSpan.Zero;
+    try
     {
-        var conn = Core.Instance.Connections.Connected.FirstOrDefault(c => c.Id == connectionId);
-        if (conn?.TradingHours != null)
+        var tradingHours = conn?.GetType().GetProperty("TradingHours")?.GetValue(conn);
+        if (tradingHours != null)
         {
-            var sessionStart = conn.TradingHours.SessionStart;
-            return fill.DateTime.TimeOfDay < sessionStart
-                ? fill.DateTime.Date.AddDays(-1)
-                : fill.DateTime.Date;
+            var sessionStartProp = tradingHours.GetType().GetProperty("SessionStart");
+            if (sessionStartProp != null)
+            {
+                sessionStart = (TimeSpan)sessionStartProp.GetValue(tradingHours);
+            }
         }
-        return fill.DateTime.Date;
     }
+    catch { }
 
-    private static decimal NormalizeFee(decimal? raw)
-    {
-        var value = raw ?? 0m;
-        return value > 0 ? -value : value;
-    }
+    return fill.DateTime.TimeOfDay < sessionStart
+        ? fill.DateTime.Date.AddDays(-1)
+        : fill.DateTime.Date;
+}
 
-    private static string SHA1(string input)
-    {
-        using var sha1 = SHA1.Create();
-        var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
-        return BitConverter.ToString(hash).Replace("-", "").ToLower();
-    }
+private static decimal NormalizeFee(decimal? raw)
+{
+    var value = raw ?? 0m;
+    return value > 0 ? -value : value;
+}
+
+private static string ComputeSHA1(string input)
+{
+    using var sha1 = SHA1.Create();
+    var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
+    return BitConverter.ToString(hash).Replace("-", "").ToLower();
+}
 }
 
 
