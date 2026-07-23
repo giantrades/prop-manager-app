@@ -438,25 +438,18 @@ async _syncAllTrades() {
         if (!this._wasOnline.get(id)) continue;
 
         try {
-const from = this._lastSyncTime.get(id);
+var from = this._lastSyncTime.get(id);
         let fromParam;
         if (!from) {
-          // Primeira sync: janela ampla para trazer histórico
           fromParam = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
         } else {
           const lastSync = new Date(from);
 
-          // Piso mínimo: 3 dias de buffer de segurança (fills atrasados/corrigidos pela corretora)
           const MIN_BUFFER_MS = 3 * 24 * 3600 * 1000;
           const bufferedFrom = new Date(lastSync.getTime() - MIN_BUFFER_MS);
 
-          // [CORRIGIDO v3] a janela NUNCA pode ser menor que a idade da posição aberta
-          // mais antiga que este cliente conhece — senão a bridge não acha o fill de entrada.
-          const oldestOpenPositionTime = this._getOldestOpenPositionEntryTime(id); // helper abaixo
+          const oldestOpenPositionTime = this._getOldestOpenPositionEntryTime(id);
 
-          // Cap de segurança: nunca busca mais que 45 dias, mesmo que uma posição
-          // pareça estar aberta há mais tempo que isso (evita requests absurdamente grandes
-          // em caso de dado inconsistente/posição "fantasma" no client).
           const SAFETY_CAP_MS = 45 * 24 * 3600 * 1000;
           const safetyFloor = new Date(Date.now() - SAFETY_CAP_MS);
 
@@ -476,47 +469,44 @@ const from = this._lastSyncTime.get(id);
           adapter.getTrades(fromParam),
         ]);
 
-          const newTrades = [];
-          for (const trade of trades) {
-            if (trade.platformTradeId) {
-              const entry = await getTradeLedgerEntry(trade.platformTradeId);
-              // Bug #3 fix: only skip if explicitly deleted/ignored.
-              // A stale 'imported' entry from a fake open-position trade should NOT
-              // block the real trade from coming through on the next sync.
-              if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
-              // Safety net: skip entry fills (PnL = 0, no real exit data)
-              const isEntryFill = trade.netPnl === 0 && (
-                !trade.exitDateTime
-                || trade.exitDateTime === trade.entryDateTime
-                || !trade.exitPrice
-              );
-              if (isEntryFill) continue;
-              newTrades.push(trade);
-            }
-
-            if (newTrades.length > 0) {
-              for (const trade of newTrades) {
-              if (trade.platformTradeId) {
-                await setTradeLedgerEntry(trade.platformTradeId, {
-                  status: 'imported',
-                  platformAccountId: trade.platformAccountId,
-                  internalAccountId: trade.internalAccountId || null,
-                  firstSeenAt: new Date().toISOString(),
-                  lastSeenAt: new Date().toISOString(),
-                });
-              }
-            }
-
-            this._emit(PLATFORM_EVENTS.SYNCED, {
-              platformId: id,
-              accounts,
-              newTrades,
-              totalTrades: trades.length,
-              timestamp: new Date().toISOString(),
-            });
+        const newTrades = [];
+        for (const trade of trades) {
+          if (trade.platformTradeId) {
+            const entry = await getTradeLedgerEntry(trade.platformTradeId);
+            if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
+            const isEntryFill = trade.netPnl === 0 && (
+              !trade.exitDateTime
+              || trade.exitDateTime === trade.entryDateTime
+              || !trade.exitPrice
+            );
+            if (isEntryFill) continue;
+            newTrades.push(trade);
           }
-          this._lastSyncTime.set(id, new Date().toISOString());
-        } catch (err) {
+        }
+
+        if (newTrades.length > 0) {
+          for (const trade of newTrades) {
+            if (trade.platformTradeId) {
+              await setTradeLedgerEntry(trade.platformTradeId, {
+                status: 'imported',
+                platformAccountId: trade.platformAccountId,
+                internalAccountId: trade.internalAccountId || null,
+                firstSeenAt: new Date().toISOString(),
+                lastSeenAt: new Date().toISOString(),
+              });
+            }
+          }
+
+          this._emit(PLATFORM_EVENTS.SYNCED, {
+            platformId: id,
+            accounts,
+            newTrades,
+            totalTrades: trades.length,
+            timestamp: new Date().toISOString(),
+          });
+        }
+        this._lastSyncTime.set(id, new Date().toISOString());
+      } catch (err) {
           this._emit(PLATFORM_EVENTS.ERROR, {
             platformId: id,
             error: err.message,
