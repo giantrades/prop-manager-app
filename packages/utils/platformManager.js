@@ -528,8 +528,10 @@ const from = this._lastSyncTime.get(id);
     try {
       const adapter = this.adapters.get(platformId);
       if (!adapter) return null;
-      // Busca trades dos últimos 7 dias - fallback para pegar trades que fecharam
-      const from = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      // Busca trades desde início do dia (UTC) - fallback para pegar trades do dia
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const from = today.toISOString();
       const trades = await adapter.getTrades(from, undefined);
       // Extrai o raw positionId para matching
       const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');

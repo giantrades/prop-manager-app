@@ -137,6 +137,7 @@ export function usePlatform() {
               platformTradeId: trade.platformTradeId,
               platformName: trade.platformName || data.platformId,
               connectionName: trade.connectionName || '',
+              positionId: trade.positionId || '',
               isLive: false,
             });
 
@@ -243,6 +244,7 @@ export function usePlatform() {
             swaps:          rt.swaps,
             source:         data.platformId,
             platformTradeId: rt.platformTradeId,
+            positionId:     rt.positionId || '',
             isLive: false,
           });
 
