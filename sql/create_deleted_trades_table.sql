@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS deleted_trades (
 
 ALTER TABLE deleted_trades ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own deleted trades" ON deleted_trades;
+DROP POLICY IF EXISTS "Users can insert own deleted trades" ON deleted_trades;
+DROP POLICY IF EXISTS "Users can upsert own deleted trades" ON deleted_trades;
+
 CREATE POLICY "Users can read own deleted trades"
   ON deleted_trades FOR SELECT
   USING (auth.uid() = user_id);
@@ -25,5 +29,4 @@ CREATE POLICY "Users can upsert own deleted trades"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Enable realtime so pulls get immediate updates
 ALTER PUBLICATION supabase_realtime ADD TABLE deleted_trades;
