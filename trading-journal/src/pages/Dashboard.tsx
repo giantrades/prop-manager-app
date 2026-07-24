@@ -48,7 +48,13 @@ function useIntegratedData() {
   const [accounts, setAccounts] = useState(() => (getAll().accounts || []).filter(a => a.hidden !== true));
 
   useEffect(() => {
-    const refresh = () => setAccounts((getAll().accounts || []).filter(a => a.hidden !== true));
+    const refresh = () => {
+      const next = (getAll().accounts || []).filter(a => a.hidden !== true);
+      setAccounts(prev => {
+        if (prev.length === next.length && prev.every((a, i) => a.id === next[i]?.id)) return prev;
+        return next;
+      });
+    };
     refresh();
     window.addEventListener('datastore:change', refresh);
     return () => window.removeEventListener('datastore:change', refresh);
@@ -1572,10 +1578,11 @@ export default function Dashboard() {
   const { livePositions, closePosition } = usePlatform();
   const strategies = journal?.strategies || [];
 
-  // Se não tem dados reais, usar mock
+  // Se não tem dados reais, usar mock (estabilizado para evitar regeneração a cada 1.5s)
+  const [mockTrades] = useState(() => genMockTrades(120));
   const trades = integratedData.hasRealData
     ? integratedData.trades
-    : genMockTrades(120);
+    : mockTrades;
 
   const accounts = integratedData.accounts;
   const availableCategories = integratedData.availableCategories.length > 0
