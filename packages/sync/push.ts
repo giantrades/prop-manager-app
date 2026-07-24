@@ -141,15 +141,6 @@ export async function pushChanges(localData: any, userId: string) {
     }
   }
 
-  // Push live positions so all devices see current positions
-  if (localData.livePositions?.length) {
-    const { error } = await supabase.from('live_positions').upsert(
-      prepare('live_positions', localData.livePositions, userId),
-      { onConflict: 'id' }
-    );
-    if (error) errors.push(`live_positions: ${error.message}`);
-  }
-
   if (errors.length > 0) {
     throw new Error(`Push failed: ${errors.join('; ')}`);
   }
