@@ -4,6 +4,11 @@ const FALLBACK_URLS = [
   'http://127.0.0.1:8787',
   'http://100.80.100.89:8787',
 ];
+// When page is HTTPS, skip HTTP-only fallback URLs to avoid Mixed Content blocking
+const isPageSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
+const FILTERED_FALLBACKS = isPageSecure
+  ? FALLBACK_URLS.filter(u => u.startsWith('https://'))
+  : FALLBACK_URLS;
 const FETCH_TIMEOUT_MS = 5000;
 const RETRY_DELAYS = [5000, 10000, 30000, 60000];
 
@@ -25,7 +30,7 @@ export class QuantowerAdapter extends BaseAdapter {
     const primary = new URL(endpoint, this.bridgeUrl).toString();
     const seen = new Set([primary]);
     const urls = [primary];
-    for (const base of FALLBACK_URLS) {
+    for (const base of FILTERED_FALLBACKS) {
       const u = new URL(endpoint, base).toString();
       if (!seen.has(u)) {
         seen.add(u);
