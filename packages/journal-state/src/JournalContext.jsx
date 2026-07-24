@@ -323,7 +323,7 @@ export default function JournalProvider({ children }) {
       await save({ ...all, trades: remainingTrades });
       // Marca no ledger para não ser re-importado pelo sync
       if (trade.platformTradeId) {
-        await markTradeDeleted(trade.platformTradeId);
+        await markTradeDeleted(trade.platformTradeId, trade.positionId);
       }
       window.dispatchEvent(new CustomEvent('datastore:change'));
       window.dispatchEvent(new CustomEvent('journal:change'));
@@ -336,6 +336,17 @@ export default function JournalProvider({ children }) {
       const { supabase } = await import('@apps/supabase/client');
       if (trade.id) {
         await supabase.from('trades').delete().eq('id', trade.id);
+      }
+      // Registra no deleted_trades para outros devices saberem
+      if (trade.platformTradeId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('deleted_trades').upsert({
+            user_id: user.id,
+            platform_trade_id: trade.platformTradeId,
+            position_id: trade.positionId || null,
+          }, { onConflict: 'platform_trade_id' });
+        }
       }
     } catch (e) {
       console.warn('⚠️ Falha ao deletar trade do Supabase:', e);

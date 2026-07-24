@@ -225,12 +225,17 @@ class PlatformManager {
     ]);
 
     // Safety net: skip entry fills (open positions with fake exit) BEFORE creating ledger entries
+    const allLedger = await getTradeLedger();
+    const deletedTradeIds = new Set(allLedger.filter(e => e.status === 'deleted').map(e => e.platformTradeId));
+    const deletedPositionIds = new Set(allLedger.filter(e => e.status === 'deleted' && e.positionId).map(e => e.positionId));
+    const ignoredTradeIds = new Set(allLedger.filter(e => e.status === 'ignored').map(e => e.platformTradeId));
+
     const newTrades = [];
     for (const trade of trades) {
       if (trade.platformTradeId) {
-        const entry = await getTradeLedgerEntry(trade.platformTradeId);
-        if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
+        if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId)) continue;
       }
+      if (trade.positionId && deletedPositionIds.has(trade.positionId)) continue;
       // Safety net: skip entry fills (open positions with fake exit)
       const isEntryFill = trade.netPnl === 0 && (
         !trade.exitDateTime
@@ -470,11 +475,17 @@ const from = this._lastSyncTime.get(id);
           adapter.getTrades(fromParam),
         ]);
 
+        const allLedger = await getTradeLedger();
+        const deletedTradeIds = new Set(allLedger.filter(e => e.status === 'deleted').map(e => e.platformTradeId));
+        const deletedPositionIds = new Set(allLedger.filter(e => e.status === 'deleted' && e.positionId).map(e => e.positionId));
+        const ignoredTradeIds = new Set(allLedger.filter(e => e.status === 'ignored').map(e => e.platformTradeId));
+
         const newTrades = [];
         for (const trade of trades) {
           if (trade.platformTradeId) {
-            const entry = await getTradeLedgerEntry(trade.platformTradeId);
-            if (entry && (entry.status === 'deleted' || entry.status === 'ignored')) continue;
+            if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId)) continue;
+          }
+          if (trade.positionId && deletedPositionIds.has(trade.positionId)) continue;
             const isEntryFill = trade.netPnl === 0 && (
               !trade.exitDateTime
               || trade.exitDateTime === trade.entryDateTime

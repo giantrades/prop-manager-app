@@ -1373,8 +1373,8 @@ export async function isTradeImported(platformTradeId) {
   return entry?.status === 'imported';
 }
 
-export async function markTradeDeleted(platformTradeId) {
-  await setTradeLedgerEntry(platformTradeId, { status: 'deleted', deletedAt: new Date().toISOString() });
+export async function markTradeDeleted(platformTradeId, positionId = '') {
+  await setTradeLedgerEntry(platformTradeId, { status: 'deleted', positionId, deletedAt: new Date().toISOString() });
 }
 
 export async function markTradeIgnored(platformTradeId) {

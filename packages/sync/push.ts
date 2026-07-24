@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client';
+import { getTradeLedger } from '@apps/lib/dataStore';
 
 const ALLOWED_COLUMNS: Record<string, string[]> = {
   firms: ['id', 'user_id', 'name', 'type', 'logo', 'color', 'created_at', 'date_created'],
@@ -118,6 +119,35 @@ export async function pushChanges(localData: any, userId: string) {
       });
       if (error) errors.push(`settings: ${error.message}`);
     }
+  }
+
+  // Push local deletions to Supabase so other devices see them
+  const ledger = await getTradeLedger();
+  const deletedEntries = ledger.filter((e: any) => e.status === 'deleted' && e.platformTradeId);
+  if (deletedEntries.length > 0) {
+    const { data: existing } = await supabase
+      .from('deleted_trades')
+      .select('platform_trade_id')
+      .eq('user_id', userId);
+    const onServer = new Set((existing || []).map((d: any) => d.platform_trade_id));
+    for (const entry of deletedEntries) {
+      if (onServer.has(entry.platformTradeId)) continue;
+      const { error } = await supabase.from('deleted_trades').upsert({
+        user_id: userId,
+        platform_trade_id: entry.platformTradeId,
+        position_id: entry.positionId || null,
+      }, { onConflict: 'platform_trade_id' });
+      if (error) errors.push(`deleted_trades: ${error.message}`);
+    }
+  }
+
+  // Push live positions so all devices see current positions
+  if (localData.livePositions?.length) {
+    const { error } = await supabase.from('live_positions').upsert(
+      prepare('live_positions', localData.livePositions, userId),
+      { onConflict: 'id' }
+    );
+    if (error) errors.push(`live_positions: ${error.message}`);
   }
 
   if (errors.length > 0) {
