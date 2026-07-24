@@ -486,14 +486,13 @@ const from = this._lastSyncTime.get(id);
             if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId)) continue;
           }
           if (trade.positionId && deletedPositionIds.has(trade.positionId)) continue;
-            const isEntryFill = trade.netPnl === 0 && (
+          const isEntryFill = trade.netPnl === 0 && (
               !trade.exitDateTime
               || trade.exitDateTime === trade.entryDateTime
               || !trade.exitPrice
             );
             if (isEntryFill) continue;
             newTrades.push(trade);
-          }
         }
 
         if (newTrades.length > 0) {
