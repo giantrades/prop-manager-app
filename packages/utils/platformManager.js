@@ -30,7 +30,7 @@ import {
   markTradeIgnored,
 } from '@apps/lib/dataStore.js';
 
-// ── Event names ────────────────────────────────────────
+// -- Event names ----------------------------------------------
 export const PLATFORM_EVENTS = {
   CONNECTED: 'platform:connected',
   DISCONNECTED: 'platform:disconnected',
@@ -42,7 +42,7 @@ export const PLATFORM_EVENTS = {
   ACCOUNTS_UPDATED: 'platform:accounts-updated',
 };
 
-// ── Default configuration ──────────────────────────────
+// -- Default configuration ------------------------------------
 const DEFAULT_CONFIG = {
   syncIntervalMs: 120000,       // 2min consistency sync for trades (reduced from 1h)
   positionPollMs: 1500,         // 1.5s for live positions
@@ -72,7 +72,7 @@ class PlatformManager {
     this._isRunning = false;
   }
 
-  // ── Adapter Registration ─────────────────────────────
+  // -- Adapter Registration -----------------------------------
 
   /**
    * Register a platform adapter.
@@ -122,7 +122,7 @@ class PlatformManager {
     return Array.from(this.adapters.values());
   }
 
-  // ── Auto-Sync Control ────────────────────────────────
+  // -- Auto-Sync Control --------------------------------------
 
   /** Start periodic auto-sync for all adapters */
   startAutoSync() {
@@ -172,7 +172,7 @@ class PlatformManager {
 
 
 
-  // ── Manual Sync ──────────────────────────────────────
+  // -- Manual Sync --------------------------------------------
 
   /**
    * Manually trigger a full sync for a specific platform.
@@ -293,7 +293,7 @@ class PlatformManager {
     return results;
   }
 
-  // ── Data Access ──────────────────────────────────────
+  // -- Data Access --------------------------------------------
 
   /**
    * Get aggregated status of all platforms.
@@ -333,7 +333,7 @@ class PlatformManager {
     return all;
   }
 
-  // ── Event System ─────────────────────────────────────
+  // -- Event System -------------------------------------------
 
   /**
    * Subscribe to a platform event.
@@ -367,7 +367,7 @@ class PlatformManager {
     } catch { }
   }
 
-  // ── Internal Sync Logic ──────────────────────────────
+  // -- Internal Sync Logic ------------------------------------
 
   /** @private Check connection status for all adapters */
   async _checkAllStatuses() {
@@ -654,7 +654,7 @@ const from = this._lastSyncTime.get(id);
     }
   }
 
-  // ── Cleanup ──────────────────────────────────────────
+  // -- Cleanup ------------------------------------------------
 
   /** Dispose of all resources */
   destroy() {
@@ -667,7 +667,7 @@ const from = this._lastSyncTime.get(id);
   }
 }
 
-// ── Singleton Factory ──────────────────────────────────
+// -- Singleton Factory --------------------------------------
 // Creates a pre-configured instance with Quantower adapter
 
 let _instance = null;
