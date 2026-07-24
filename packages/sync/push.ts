@@ -131,13 +131,22 @@ export async function pushChanges(localData: any, userId: string) {
       .eq('user_id', userId);
     const onServer = new Set((existing || []).map((d: any) => d.platform_trade_id));
     for (const entry of deletedEntries) {
-      if (onServer.has(entry.platformTradeId)) continue;
-      const { error } = await supabase.from('deleted_trades').upsert({
-        user_id: userId,
-        platform_trade_id: entry.platformTradeId,
-        position_id: entry.positionId || null,
-      }, { onConflict: 'platform_trade_id' });
-      if (error) errors.push(`deleted_trades: ${error.message}`);
+      // Garante que o registro existe no deleted_trades (para outros devices)
+      if (!onServer.has(entry.platformTradeId)) {
+        const { error } = await supabase.from('deleted_trades').upsert({
+          user_id: userId,
+          platform_trade_id: entry.platformTradeId,
+          position_id: entry.positionId || null,
+        }, { onConflict: 'platform_trade_id' });
+        if (error) errors.push(`deleted_trades: ${error.message}`);
+      }
+      // Também deleta da tabela trades por platform_trade_id (caso o delete por id tenha falhado)
+      const { error: delErr } = await supabase
+        .from('trades')
+        .delete()
+        .eq('user_id', userId)
+        .eq('platform_trade_id', entry.platformTradeId);
+      if (delErr && delErr.code !== 'PGRST116') errors.push(`delete ${entry.platformTradeId}: ${delErr.message}`);
     }
   }
 

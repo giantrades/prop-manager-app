@@ -43,10 +43,15 @@ export async function pullAllData(userId: string) {
     firms: toCamelCase(firms.data || []),
     accounts: toCamelCase(accounts.data || []),
     payouts: toCamelCase(payouts.data || []),
-    trades: toCamelCase((trades.data || []).filter(t =>
-      !deletedTradeIds.has(t.platform_trade_id) &&
-      !(t.position_id && deletedPositionIds.has(t.position_id))
-    )),
+    trades: toCamelCase((trades.data || []).filter(t => {
+      if (deletedTradeIds.has(t.platform_trade_id)) return false;
+      if (t.position_id && deletedPositionIds.has(t.position_id)) return false;
+      const isEntryFill =
+        Number(t.result_net || 0) === 0 &&
+        (!t.exit_datetime || t.exit_datetime === t.entry_datetime || !t.exit_price);
+      if (isEntryFill) return false;
+      return true;
+    })),
     livePositions: toCamelCase(livePositions.data || []),
     strategies: toCamelCase(strategies.data || []),
     settings: profile.data?.settings || {},
