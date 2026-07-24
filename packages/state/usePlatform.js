@@ -162,24 +162,7 @@ export function usePlatform() {
     }));
 
     unsubs.push(pm.on(PLATFORM_EVENTS.POSITION_UPDATED, (data) => {
-      let accountMapping = getAccountMapping(data.platformId);
-
-      // Auto-create accounts for any positions that don't have a mapping yet
-      for (const p of data.positions) {
-        if (!accountMapping[p.platformAccountId] && p.platformAccountId && p.accountName) {
-          const connFirmMap = getConnectionFirmMap();
-          const firmId = (p.connectionId && connFirmMap[p.connectionId]) || null;
-          upsertQuantowerAccount(
-            { platformAccountId: p.platformAccountId, name: p.accountName, balance: 0, currency: 'USD' },
-            firmId,
-            p.connectionId || '',
-            p.connectionName || ''
-          );
-        }
-      }
-
-      // Refresh account mapping and store data after any auto-creations
-      accountMapping = getAccountMapping(data.platformId);
+      const accountMapping = getAccountMapping(data.platformId);
       const storeData = getAll();
 
       const enriched = data.positions.map(p => {
