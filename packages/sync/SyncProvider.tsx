@@ -62,14 +62,20 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         });
       }
 
+      // When pull succeeded (remote arrays are defined), trust remote for deletions too.
+      // Previously "?.length" kept stale local data when remote returned empty []
+      // (e.g. user deleted all trades on Supabase → pull returns [] → local was preserved).
+      const mergeArr = (remote: any, local: any) =>
+        remote !== undefined ? (remote ?? []) : local;
+
       const merged = {
         ...local,
-        firms: remote.firms?.length ? fillMissing(remote.firms, local.firms) : local.firms,
-        accounts: remote.accounts?.length ? fillMissing(remote.accounts, local.accounts) : local.accounts,
-        payouts: remote.payouts?.length ? remote.payouts : local.payouts,
-        trades: remote.trades?.length ? remote.trades : local.trades,
+        firms: remote.firms !== undefined ? fillMissing(remote.firms ?? [], local.firms) : local.firms,
+        accounts: remote.accounts !== undefined ? fillMissing(remote.accounts ?? [], local.accounts) : local.accounts,
+        payouts: mergeArr(remote.payouts, local.payouts),
+        trades: mergeArr(remote.trades, local.trades),
         livePositions: local.livePositions,
-        strategies: remote.strategies?.length ? remote.strategies : local.strategies,
+        strategies: mergeArr(remote.strategies, local.strategies),
         settings: { ...local.settings, ...remote.settings },
       };
       
