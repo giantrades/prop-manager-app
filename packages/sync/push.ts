@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/client';
-import { getTradeLedger } from '@apps/lib/dataStore';
+import { getTradeLedger, getAll, save } from '@apps/lib/dataStore';
 
 const ALLOWED_COLUMNS: Record<string, string[]> = {
   firms: ['id', 'user_id', 'name', 'type', 'logo', 'color', 'created_at', 'date_created'],
@@ -77,6 +77,25 @@ export async function pushChanges(localData: any, userId: string) {
       { onConflict: 'id' }
     );
     if (error) errors.push(`accounts: ${error.message}`);
+  }
+
+  // Propagate account deletions to Supabase so they don't reappear on pull
+  const deletedAccountIds = (localData as any)._deletedAccountIds;
+  if (deletedAccountIds?.length) {
+    const { error: delErr } = await supabase
+      .from('accounts')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedAccountIds);
+    if (delErr) {
+      errors.push(`delete_accounts: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedAccountIds = (fresh._deletedAccountIds || []).filter(
+        (id: string) => !deletedAccountIds.includes(id)
+      );
+      save(fresh);
+    }
   }
 
   if (localData.payouts?.length) {
