@@ -90,14 +90,24 @@ export async function pushChanges(localData: any, userId: string) {
   const validAccountIds = new Set((localData.accounts || []).map(a => a.id));
 
   if (localData.trades?.length) {
-    const filtered = localData.trades.map((t: any) => ({
-      ...t,
-      accountId: validAccountIds.has(t.accountId) ? t.accountId : null,
-    }));
+    const filtered = localData.trades
+      .filter((t: any) => {
+        const isEntryFill =
+          Number(t.result_net || 0) === 0 &&
+          (!t.exit_datetime || String(t.exit_datetime).startsWith('0001') || t.exit_datetime === t.entry_datetime || !t.exit_price);
+        return !isEntryFill;
+      })
+      .map((t: any) => ({
+        ...t,
+        accountId: validAccountIds.has(t.accountId) ? t.accountId : null,
+      }));
     const { error } = await supabase.from('trades').upsert(
       prepare('trades', filtered, userId),
       { onConflict: 'id' }
     );
+    if (filtered.length < localData.trades.length) {
+      console.log(`[Push] Filtered out ${localData.trades.length - filtered.length} entry fills from push`);
+    }
     if (error) errors.push(`trades: ${error.message}`);
   }
 
