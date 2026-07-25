@@ -13,13 +13,15 @@ export function toCamelCase(obj: any): any {
 }
 
 export async function pullAllData(userId: string) {
-  const [firms, accounts, payouts, trades, livePositions, strategies, profile, deletedTrades] = await Promise.all([
+  const [firms, accounts, payouts, trades, livePositions, strategies, goals, tags, profile, deletedTrades] = await Promise.all([
     supabase.from('firms').select('*').eq('user_id', userId),
     supabase.from('accounts').select('*').eq('user_id', userId),
     supabase.from('payouts').select('*').eq('user_id', userId),
     supabase.from('trades').select('*').eq('user_id', userId),
     supabase.from('live_positions').select('*').eq('user_id', userId),
     supabase.from('strategies').select('*').eq('user_id', userId),
+    supabase.from('goals').select('*').eq('user_id', userId),
+    supabase.from('tags').select('*').eq('user_id', userId),
     supabase.from('profiles').select('settings').eq('id', userId).single(),
     supabase.from('deleted_trades').select('*').eq('user_id', userId),
   ]);
@@ -54,6 +56,8 @@ export async function pullAllData(userId: string) {
     })),
     livePositions: toCamelCase(livePositions.data || []),
     strategies: toCamelCase(strategies.data || []),
+    goals: toCamelCase(goals.data || []),
+    tags: toCamelCase(tags.data || []),
     settings: profile.data?.settings || {},
   };
 }

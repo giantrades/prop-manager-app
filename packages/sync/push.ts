@@ -20,6 +20,10 @@ const ALLOWED_COLUMNS: Record<string, string[]> = {
     'open_price', 'open_time', 'gross_pnl', 'net_pnl', 'fee',
     'connection_id', 'platform_account_id'],
   strategies: ['id', 'user_id', 'name', 'description', 'rules', 'created_at'],
+  goals: ['id', 'user_id', 'title', 'description', 'type', 'target_value', 'current_value',
+    'period', 'start_date', 'end_date', 'min_days', 'completed', 'created_at', 'updated_at',
+    'completed_at', 'archived'],
+  tags: ['id', 'user_id', 'name', 'color', 'created_at'],
 };
 
 function pick(obj: any, allowed: string[]): any {
@@ -172,6 +176,58 @@ export async function pushChanges(localData: any, userId: string) {
       { onConflict: 'id' }
     );
     if (error) errors.push(`strategies: ${error.message}`);
+  }
+
+  if (localData.goals?.length) {
+    const { error } = await supabase.from('goals').upsert(
+      prepare('goals', localData.goals, userId),
+      { onConflict: 'id' }
+    );
+    if (error) errors.push(`goals: ${error.message}`);
+  }
+
+  const deletedGoalIds = (localData as any)._deletedGoalIds;
+  if (deletedGoalIds?.length) {
+    const { error: delErr } = await supabase
+      .from('goals')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedGoalIds);
+    if (delErr) {
+      errors.push(`delete_goals: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedGoalIds = (fresh._deletedGoalIds || []).filter(
+        (id: string) => !deletedGoalIds.includes(id)
+      );
+      save(fresh);
+    }
+  }
+
+  if (localData.tags?.length) {
+    const { error } = await supabase.from('tags').upsert(
+      prepare('tags', localData.tags, userId),
+      { onConflict: 'id' }
+    );
+    if (error) errors.push(`tags: ${error.message}`);
+  }
+
+  const deletedTagIds = (localData as any)._deletedTagIds;
+  if (deletedTagIds?.length) {
+    const { error: delErr } = await supabase
+      .from('tags')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedTagIds);
+    if (delErr) {
+      errors.push(`delete_tags: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedTagIds = (fresh._deletedTagIds || []).filter(
+        (id: string) => !deletedTagIds.includes(id)
+      );
+      save(fresh);
+    }
   }
 
   if (localData.settings) {

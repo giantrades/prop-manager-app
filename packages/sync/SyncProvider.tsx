@@ -76,6 +76,8 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         trades: mergeArr(remote.trades, local.trades),
         livePositions: local.livePositions,
         strategies: mergeArr(remote.strategies, local.strategies),
+        goals: mergeArr(remote.goals, local.goals),
+        tags: mergeArr(remote.tags, local.tags),
         settings: { ...local.settings, ...remote.settings },
       };
       

@@ -967,6 +967,14 @@ export function getAllTags() {
   return data.tags || []
 }
 
+export function deleteTag(id) {
+  const data = load()
+  data.tags = (data.tags || []).filter(t => t.id !== id)
+  if (!data._deletedTagIds) data._deletedTagIds = [];
+  if (!data._deletedTagIds.includes(id)) data._deletedTagIds.push(id);
+  save(data)
+  window.dispatchEvent(new CustomEvent('datastore:change'))
+}
 
 /* --------------------
    PLATFORM INTEGRATION
@@ -1537,6 +1545,8 @@ export default {
   getFirms, createFirm, updateFirm, deleteFirm, getFirmStats,
   getTrades, createTrade, updateTrade, deleteTrade,
   getAllGoals, createGoal, updateGoal, deleteGoal, getGoalProgress, archiveGoal, calculateMetric, getAllTradesSafe,
+  // Tags
+  getAllTags, createTag, deleteTag,
   // Platform integration
   getPlatformSettings, setPlatformSettings,
   getTradeByPlatformId, upsertTradeFromPlatform,
