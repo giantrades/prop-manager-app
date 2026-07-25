@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { openDB } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 import { uploadOrUpdateJSON, downloadLatestJSON, isSignedIn } from '@apps/utils/googleDrive.js';
-import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
+import { getAll, save, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
 import { updateAccount as dsUpdateAccount } from '@apps/lib/dataStore.js';
 import { useDrive } from '@apps/state/DriveContext';
 
@@ -396,6 +396,13 @@ export default function JournalProvider({ children }) {
     const db = await getDB();
     await db.delete('strategies', id);
     setStrategies(prev => prev.filter(s => s.id !== id));
+    // Track for Supabase deletion propagation
+    try {
+      const data = getAll();
+      if (!data._deletedStrategyIds) data._deletedStrategyIds = [];
+      if (!data._deletedStrategyIds.includes(id)) data._deletedStrategyIds.push(id);
+      save(data);
+    } catch (e) {}
   }, []);
 
 

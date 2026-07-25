@@ -178,6 +178,24 @@ export async function pushChanges(localData: any, userId: string) {
     if (error) errors.push(`strategies: ${error.message}`);
   }
 
+  const deletedStrategyIds = (localData as any)._deletedStrategyIds;
+  if (deletedStrategyIds?.length) {
+    const { error: delErr } = await supabase
+      .from('strategies')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedStrategyIds);
+    if (delErr) {
+      errors.push(`delete_strategies: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedStrategyIds = (fresh._deletedStrategyIds || []).filter(
+        (id: string) => !deletedStrategyIds.includes(id)
+      );
+      save(fresh);
+    }
+  }
+
   if (localData.goals?.length) {
     const { error } = await supabase.from('goals').upsert(
       prepare('goals', localData.goals, userId),

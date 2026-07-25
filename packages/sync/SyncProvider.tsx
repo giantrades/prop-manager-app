@@ -2,7 +2,9 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import { useAuth } from '../auth';
 import { pullAllData, pushChanges, subscribeToChanges, subscribeToLivePositions } from './index';
 import { getAll, save } from '@apps/lib/dataStore';
+import { getFullBackupPayload } from '@apps/utils/backupPayload';
 import { supabase } from '../supabase/client';
+import { openDB } from 'idb';
 
 interface SyncContextType {
   pull: () => Promise<void>;
@@ -82,8 +84,22 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       };
       
       save(merged);
-      const pulledTotal = remote.firms.length + remote.accounts.length + remote.payouts.length + remote.trades.length + remote.strategies.length;
-      if (pulledTotal > 0) console.log(`✅ Sync: pulled ${remote.firms.length} firms, ${remote.accounts.length} accounts, ${remote.payouts.length} payouts, ${remote.trades.length} trades, ${remote.strategies.length} strategies (live positions from bridge: ${local.livePositions.length})`);
+
+      // Write strategies to journal-db so JournalContext sees the pulled data
+      if (merged.strategies?.length) {
+        try {
+          const db = await openDB('journal-db', 2);
+          const tx = db.transaction('strategies', 'readwrite');
+          await tx.store.clear();
+          for (const s of merged.strategies) await tx.store.put(s);
+          await tx.done;
+        } catch (e) {
+          console.warn('[Sync] Failed to write strategies to journal-db:', e);
+        }
+      }
+
+      const pulledTotal = remote.firms.length + remote.accounts.length + remote.payouts.length + remote.trades.length + remote.strategies.length + (remote.goals?.length || 0) + (remote.tags?.length || 0);
+      if (pulledTotal > 0) console.log(`✅ Sync: pulled ${remote.firms.length} firms, ${remote.accounts.length} accounts, ${remote.payouts.length} payouts, ${remote.trades.length} trades, ${remote.strategies.length} strategies, ${remote.goals?.length || 0} goals, ${remote.tags?.length || 0} tags`);
       window.dispatchEvent(new CustomEvent('sync:pulled', { detail: remote }));
       setLastSync(new Date());
     } catch (e) {
@@ -113,7 +129,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     isPushing.current = true;
     setSyncing(true);
     try {
-      const local = getAll();
+      const local = await getFullBackupPayload();
       await pushChanges(local, user.id);
       const totalRecords = (local.firms?.length || 0) + (local.accounts?.length || 0) + (local.payouts?.length || 0) + (local.trades?.length || 0);
       if (totalRecords > 0) console.log(`✅ Sync: pushed ${totalRecords} records`);
