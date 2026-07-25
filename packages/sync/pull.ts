@@ -48,7 +48,7 @@ export async function pullAllData(userId: string) {
       if (t.position_id && deletedPositionIds.has(t.position_id)) return false;
       const isEntryFill =
         Number(t.result_net || 0) === 0 &&
-        (!t.exit_datetime || t.exit_datetime === t.entry_datetime || !t.exit_price);
+        (!t.exit_datetime || t.exit_datetime.startsWith('0001') || t.exit_datetime === t.entry_datetime || !t.exit_price);
       if (isEntryFill) return false;
       return true;
     })),
