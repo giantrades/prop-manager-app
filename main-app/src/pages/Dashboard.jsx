@@ -258,7 +258,8 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
     const matchesCategory = catSet.has(a.type)
     const matchesTimeRange = new Date(a.dateCreated) >= start
     const matchesStatus = !accountStatusFilter || accountStatusFilter.length === 0 ||
-      accountStatusFilter.includes(a.status?.toLowerCase())
+      accountStatusFilter.includes(a.status?.toLowerCase()) ||
+      selectedAccountIds.includes(a.id)
     let matchesDateFilter = true
     if (dateFilter?.start || dateFilter?.end) {
       const startDate = dateFilter.start ? new Date(dateFilter.start) : new Date('1970-01-01')
