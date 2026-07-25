@@ -17,7 +17,6 @@ import {
   getPlatformSettings,
   setPlatformSettings,
   upsertTradeFromPlatform,
-  upsertQuantowerAccount,
   updateAccount,
   updateLivePositions,
   closeLivePosition,
@@ -85,15 +84,7 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // 1) FIRST: Persist accounts from sync into dataStore (creates mapping)
-      const platformAccounts = data.accounts || [];
-      if (platformAccounts.length > 0) {
-        for (const acc of platformAccounts) {
-          upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
-        }
-      }
-
-      // 2) THEN: Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
+      // Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
       if (rawTrades.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
