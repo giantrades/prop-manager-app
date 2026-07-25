@@ -71,6 +71,24 @@ export async function pushChanges(localData: any, userId: string) {
     if (error) errors.push(`firms: ${error.message}`);
   }
 
+  const deletedFirmIds = (localData as any)._deletedFirmIds;
+  if (deletedFirmIds?.length) {
+    const { error: delErr } = await supabase
+      .from('firms')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedFirmIds);
+    if (delErr) {
+      errors.push(`delete_firms: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedFirmIds = (fresh._deletedFirmIds || []).filter(
+        (id: string) => !deletedFirmIds.includes(id)
+      );
+      save(fresh);
+    }
+  }
+
   if (localData.accounts?.length) {
     const { error } = await supabase.from('accounts').upsert(
       prepare('accounts', localData.accounts, userId),
@@ -104,6 +122,24 @@ export async function pushChanges(localData: any, userId: string) {
       { onConflict: 'id' }
     );
     if (error) errors.push(`payouts: ${error.message}`);
+  }
+
+  const deletedPayoutIds = (localData as any)._deletedPayoutIds;
+  if (deletedPayoutIds?.length) {
+    const { error: delErr } = await supabase
+      .from('payouts')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedPayoutIds);
+    if (delErr) {
+      errors.push(`delete_payouts: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedPayoutIds = (fresh._deletedPayoutIds || []).filter(
+        (id: string) => !deletedPayoutIds.includes(id)
+      );
+      save(fresh);
+    }
   }
 
   const validAccountIds = new Set((localData.accounts || []).map(a => a.id));

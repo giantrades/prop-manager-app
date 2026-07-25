@@ -366,6 +366,9 @@ export function setPayoutAttachment(payoutId, accountId, attachment) {
 export function deletePayout(id){
   const data = load()
   data.payouts = data.payouts.filter(p=>p.id!==id)
+  // Track for Supabase deletion propagation
+  if (!data._deletedPayoutIds) data._deletedPayoutIds = [];
+  if (!data._deletedPayoutIds.includes(id)) data._deletedPayoutIds.push(id);
   save(data)
 }
 
@@ -411,6 +414,9 @@ export function deleteFirm(id){
   const data = load()
   data.firms = data.firms.filter(x=>x.id!==id)
   data.accounts = data.accounts.map(a => a.firmId === id ? ({ ...a, firmId: null }) : a)
+  // Track for Supabase deletion propagation
+  if (!data._deletedFirmIds) data._deletedFirmIds = [];
+  if (!data._deletedFirmIds.includes(id)) data._deletedFirmIds.push(id);
   save(data)
   return true
 }
@@ -863,6 +869,9 @@ export function deleteGoal(id) {
   const mainIndex = (data.goals || []).findIndex(g => g.id === id)
   if (mainIndex !== -1) {
     data.goals.splice(mainIndex, 1)
+    // Track for Supabase deletion propagation
+    if (!data._deletedGoalIds) data._deletedGoalIds = [];
+    if (!data._deletedGoalIds.includes(id)) data._deletedGoalIds.push(id);
     save(data)
     return
   }
@@ -878,6 +887,9 @@ export function deleteGoal(id) {
   })
 
   if (removed) {
+    // Track for Supabase deletion propagation (subgoal)
+    if (!data._deletedGoalIds) data._deletedGoalIds = [];
+    if (!data._deletedGoalIds.includes(id)) data._deletedGoalIds.push(id);
     save(data)
   } else {
     // se nada foi removido, mantemos o comportamento antigo (não crashar)
