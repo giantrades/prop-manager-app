@@ -997,12 +997,15 @@ export function getTradeByPlatformId(platformTradeId) {
  */
 export function upsertTradeFromPlatform(normalizedTrade) {
   const data = load();
-  const existing = (data.trades || []).findIndex(
-    t => t.platformTradeId && t.platformTradeId === normalizedTrade.platformTradeId
-  );
+  const existing = (data.trades || []).findIndex(t => {
+    if (normalizedTrade.platformTradeId && t.platformTradeId && t.platformTradeId === normalizedTrade.platformTradeId) return true;
+    if (normalizedTrade.positionId && t.positionId && t.positionId === normalizedTrade.positionId) return true;
+    return false;
+  });
 
   console.log(`[upsertTrade] ${existing !== -1 ? 'UPDATE' : 'NEW'} trade`, {
     platformTradeId: normalizedTrade.platformTradeId,
+    positionId: normalizedTrade.positionId,
     result_net: normalizedTrade.result_net,
     exit_price: normalizedTrade.exit_price,
   });

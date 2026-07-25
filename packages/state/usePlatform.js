@@ -28,6 +28,7 @@ import {
   recalcAccountFunding,
   getAll,
   cleanCorruptedLedgerEntries,
+  deduplicateTradesByPosition,
 } from '@apps/lib/dataStore';
 
 export function usePlatform() {
@@ -94,9 +95,8 @@ export function usePlatform() {
           const internalAccountId = accountMapping[trade.platformAccountId];
           if (internalAccountId == null) return false;
           // Safety net: skip entry fills (PnL = 0, no real exit data)
-          const isEntryFill = trade.netPnl === 0 && (
+          const isEntryFill = Number(trade.netPnl) === 0 && (
             !trade.exitDateTime
-            || trade.exitDateTime === trade.entryDateTime
             || !trade.exitPrice
           );
           if (isEntryFill) return false;
@@ -137,6 +137,9 @@ export function usePlatform() {
               recalcAccountFunding(internalAccountId);
             }
           });
+
+          // Clean up any duplicates that may have been created
+          deduplicateTradesByPosition();
 
           // Dispatch global event for UI refresh
           window.dispatchEvent(new CustomEvent('datastore:change', {
@@ -240,6 +243,8 @@ export function usePlatform() {
         }
 
         recalcAccountFunding(internalAccountId);
+
+        deduplicateTradesByPosition();
 
         window.dispatchEvent(new CustomEvent('datastore:change', {
           detail: { source: 'position-closed', platformId: data.platformId }
