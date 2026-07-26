@@ -6,6 +6,17 @@ import { getFullBackupPayload } from '@apps/utils/backupPayload';
 import { supabase } from '../supabase/client';
 import { openDB } from 'idb';
 
+function _toSnakeCase(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(_toSnakeCase);
+  const out: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+    out[snakeKey] = _toSnakeCase(value);
+  }
+  return out;
+}
+
 interface SyncContextType {
   pull: () => Promise<void>;
   push: () => Promise<void>;
@@ -187,7 +198,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       save(merged);
       deduplicateTradesByPosition();
 
-      // Write to IndexedDB so journal-ui picks them up
+      // Write to IndexedDB so journal-ui picks them up (convert to snake_case)
       try {
         const db = await openDB('journal-db', 2);
         const stores = ['trades', 'accounts', 'strategies'] as const;
@@ -196,7 +207,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
           if (items?.length) {
             const tx = db.transaction(storeName, 'readwrite');
             await tx.store.clear();
-            for (const item of items) await tx.store.put(item);
+            for (const item of items) await tx.store.put(_toSnakeCase(item));
             await tx.done;
           }
         }
