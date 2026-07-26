@@ -227,7 +227,8 @@ export function deleteAccount(id){
   data.payouts = data.payouts.map(p => {
     const isInAccountIds = Array.isArray(p.accountIds) && p.accountIds.includes(id)
     const isInSplit      = p.splitByAccount && p.splitByAccount[id]
-    if (!isInAccountIds && !isInSplit) return p
+    const isInAccountId  = p.accountId === id
+    if (!isInAccountIds && !isInSplit && !isInAccountId) return p
 
     // Build the archived snapshot entry
     const firmForArchive = data.firms?.find(f => f.id === accountToDelete?.firmId);
@@ -255,6 +256,7 @@ export function deleteAccount(id){
 
     return {
       ...p,
+      accountId:         undefined, // clear singular fallback
       accountIds:        (p.accountIds || []).filter(aid => aid !== id),
       splitByAccount:    updatedSplit,
       // _archivedAccounts is a list of snapshot objects for all deleted accounts

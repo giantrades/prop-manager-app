@@ -23,6 +23,32 @@ export default function Payouts() {
     setFirms(getFirms() || [])
   }, [])
 
+  // Repair missing firmName/firmLogo in existing _archivedAccounts
+  useEffect(() => {
+    const data = getAll();
+    const allFirms = data.firms || [];
+    let needsRepair = false;
+    (data.payouts || []).forEach(p => {
+      if (p._archivedAccounts?.length) {
+        p._archivedAccounts.forEach(arc => {
+          if ((!arc.firmName || arc.firmName === 'Unknown Firm') && arc.firmId) {
+            const firm = allFirms.find(f => f.id === arc.firmId);
+            if (firm?.name) {
+              arc.firmName = firm.name;
+              arc.firmLogo = firm.logo || null;
+              needsRepair = true;
+            }
+          }
+        });
+      }
+    });
+    if (needsRepair) {
+      store.save(data);
+      setPayouts(data.payouts);
+      setFirms(allFirms);
+    }
+  }, []);
+
   useEffect(() => {
     const idToOpen = localStorage.getItem('openPayoutId');
     if (idToOpen && payouts.length > 0) {
