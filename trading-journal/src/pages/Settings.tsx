@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
+import { useSync } from "@apps/sync";
 import { getFullBackupPayload, applyFullBackupPayload } from "@apps/utils/backupPayload.js";
 import { openDB } from 'idb';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
@@ -27,6 +28,7 @@ export default function Settings() {
     protonSupported, protonLogged, protonLogin, protonLogout,
     backupToProton, loadProtonBackup,
   } = useDrive();
+  const { forceResync, syncing } = useSync();
   const [autoSync, setAutoSync] = useState(false);
   const [recalcLoading, setRecalcLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
@@ -232,6 +234,23 @@ export default function Settings() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* -------- FORCE RESYNC -------- */}
+      <div className="card">
+        <h3>🔄 Forçar Sincronização</h3>
+        <p className="muted">
+          Substitui todos os dados locais pelos dados mais recentes do servidor
+          (firms, contas, trades, payouts, goals, tags, strategies). Use se os
+          dados do celular estiverem desatualizados em relação ao computador.
+        </p>
+        <button
+          className={`btn ${syncing ? "ghost" : ""}`}
+          onClick={forceResync}
+          disabled={syncing}
+        >
+          {syncing ? "⏳ Sincronizando..." : "🔄 Forçar Resync"}
+        </button>
       </div>
 
       {/* -------- RECALCULAR FUNDINGS -------- */}

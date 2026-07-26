@@ -9,6 +9,7 @@ import { openDB } from 'idb';
 interface SyncContextType {
   pull: () => Promise<void>;
   push: () => Promise<void>;
+  forceResync: () => Promise<void>;
   syncing: boolean;
   lastSync: Date | null;
 }
@@ -163,6 +164,51 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [user]);
 
+  const forceResync = useCallback(async () => {
+    if (!user) return;
+    if (isPulling.current) return;
+    isPulling.current = true;
+    setSyncing(true);
+    try {
+      const remote = await pullAllData(user.id);
+      const local = getAll();
+      const merged = {
+        ...local,
+        firms: remote.firms !== undefined ? remote.firms : local.firms,
+        accounts: remote.accounts !== undefined ? remote.accounts : local.accounts,
+        payouts: remote.payouts !== undefined ? remote.payouts : local.payouts,
+        trades: remote.trades !== undefined ? remote.trades : local.trades,
+        livePositions: local.livePositions,
+        strategies: remote.strategies !== undefined ? remote.strategies : local.strategies,
+        goals: remote.goals !== undefined ? remote.goals : local.goals,
+        tags: remote.tags !== undefined ? remote.tags : local.tags,
+        settings: { ...local.settings, ...remote.settings },
+      };
+      save(merged);
+      deduplicateTradesByPosition();
+
+      if (merged.strategies?.length) {
+        try {
+          const db = await openDB('journal-db', 2);
+          const tx = db.transaction('strategies', 'readwrite');
+          await tx.store.clear();
+          for (const s of merged.strategies) await tx.store.put(s);
+          await tx.done;
+        } catch (e) {
+          console.warn('[Sync] Failed to write strategies to journal-db:', e);
+        }
+      }
+
+      console.log(`✅ Sync: force resync complete`);
+      setLastSync(new Date());
+    } catch (e) {
+      console.error('Force resync failed:', e);
+    } finally {
+      isPulling.current = false;
+      setSyncing(false);
+    }
+  }, [user]);
+
   // Start/stop realtime subscriptions based on visibility
   const startRealtime = useCallback(() => {
     if (!user) return;
@@ -264,7 +310,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
   }, [push]);
 
   return (
-    <SyncContext.Provider value={{ pull, push, syncing, lastSync }}>
+    <SyncContext.Provider value={{ pull, push, forceResync, syncing, lastSync }}>
       {children}
     </SyncContext.Provider>
   );

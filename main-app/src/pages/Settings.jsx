@@ -5,6 +5,7 @@ import { useDrive } from "@apps/state/DriveContext";
 import { useData } from "@apps/state/DashboardDataContext";
 import { getFullBackupPayload } from '@apps/utils/backupPayload.js';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
+import { useSync } from "@apps/sync";
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
@@ -15,6 +16,7 @@ export default function Settings() {
     protonSupported, protonLogged, protonLogin, protonLogout,
     backupToProton, loadProtonBackup,
   } = useDrive();
+  const { forceResync, syncing } = useSync();
 
   const { applyRemoteData } = useData();
 
@@ -156,6 +158,23 @@ export default function Settings() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* -------- FORCE RESYNC -------- */}
+      <div className="card">
+        <h3>🔄 Forçar Sincronização</h3>
+        <p className="muted">
+          Substitui todos os dados locais pelos dados mais recentes do servidor
+          (firms, contas, trades, payouts, goals, tags, strategies). Use se os
+          dados do celular estiverem desatualizados em relação ao computador.
+        </p>
+        <button
+          className={`btn ${syncing ? "ghost" : ""}`}
+          onClick={forceResync}
+          disabled={syncing}
+        >
+          {syncing ? "⏳ Sincronizando..." : "🔄 Forçar Resync"}
+        </button>
       </div>
     </div>
   );
