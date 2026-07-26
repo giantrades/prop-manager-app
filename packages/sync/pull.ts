@@ -48,9 +48,12 @@ export async function pullAllData(userId: string) {
     trades: toCamelCase((trades.data || []).filter(t => {
       if (deletedTradeIds.has(t.platform_trade_id)) return false;
       if (t.position_id && deletedPositionIds.has(t.position_id)) return false;
-      const isEntryFill =
-        Number(t.result_net || 0) === 0 &&
-        (!t.exit_datetime || t.exit_datetime.startsWith('0001') || t.exit_datetime === t.entry_datetime || !t.exit_price);
+      const pnl = Number(t.result_net ?? t.resultNet ?? 0);
+      const exitDt = t.exit_datetime || t.exitDatetime;
+      const entryDt = t.entry_datetime || t.entryDatetime;
+      const exitPr = t.exit_price ?? t.exitPrice;
+      const isEntryFill = pnl === 0 &&
+        (!exitDt || String(exitDt).startsWith('0001') || exitDt === entryDt || !exitPr);
       if (isEntryFill) return false;
       return true;
     })),

@@ -1540,7 +1540,10 @@ export function deduplicateTradesByPosition() {
     if (positionTrades.length === 1) {
       deduped.push(positionTrades[0]);
     } else {
-      const exitTrade = positionTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
+      const exitTrade = positionTrades.find(t => {
+        const pnl = Number(t.result_net ?? t.resultNet ?? t.netPnl ?? 0);
+        return pnl !== 0;
+      });
       if (exitTrade) {
         deduped.push(exitTrade);
       } else {
@@ -1562,7 +1565,10 @@ export function deduplicateTradesByPosition() {
     if (fpTrades.length === 1) {
       deduped.push(fpTrades[0]);
     } else {
-      const exitTrade = fpTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
+      const exitTrade = fpTrades.find(t => {
+        const pnl = Number(t.result_net ?? t.resultNet ?? t.netPnl ?? 0);
+        return pnl !== 0;
+      });
       if (exitTrade) {
         deduped.push(exitTrade);
       } else {
