@@ -314,6 +314,15 @@ export default function Accounts() {
 
   const [editedAccounts, setEditedAccounts] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const getFieldValue = (acc, field) =>
     editedAccounts[acc.id]?.[field] ?? acc[field];
@@ -445,6 +454,102 @@ export default function Accounts() {
     );
   }
 
+  const sColors = { Live: "green", Funded: "blue", Challenge: "yellow", Standby: "gray", Demo: "orange" };
+  const tColors = { Forex: "lavander", Cripto: "orange", Futures: "pink", Personal: "purple" };
+
+  function MobileAccountCard({ acc }) {
+    const [expanded, setExpanded] = useState(false);
+    const stats = getAccountStats(acc.id) || { roi: 0, totalPayouts: 0 };
+    const roiPct = (stats.roi * 100).toFixed(2);
+    const roiClass = stats.roi >= 0 ? "value-green" : "value-red";
+
+    return (
+      <div className={`account-card${expanded ? ' expanded' : ''}`}>
+        <div className="account-card-header" onClick={() => setExpanded(v => !v)}>
+          <div className="account-card-name">{acc.name || 'Unnamed'}</div>
+          <div className="account-card-meta">
+            <span className={`pill ${sColors[acc.status] || 'gray'}`}>{acc.status}</span>
+            <span className="account-card-funding">{fmt(getFieldValue(acc, "currentFunding") || 0)}</span>
+          </div>
+          <div className="account-card-arrow">▼</div>
+        </div>
+        <div className="account-card-body">
+          <div className="account-card-body-inner">
+            <div className="account-card-fields">
+              <div className="account-card-field">
+                <span className="account-card-field-label">Date Created</span>
+                <div className="account-card-field-value">
+                  <InlineInput acc={acc} field="dateCreated" type="date" />
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Category</span>
+                <div className="account-card-field-value">
+                  <CustomDropdown
+                    value={getFieldValue(acc, "type")}
+                    onChange={(v) => editField(acc.id, "type", v)}
+                    options={types.map(t => ({ label: t, value: t }))}
+                    pillColors={tColors}
+                  />
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Firm</span>
+                <div className="account-card-field-value">
+                  <CustomDropdown
+                    value={getFieldValue(acc, "firmId") || ""}
+                    onChange={(v) => editField(acc.id, "firmId", v || null)}
+                    options={[
+                      { label: "None", value: "" },
+                      ...firms.filter(f => f.type === getFieldValue(acc, "type")).map(f => ({
+                        label: f.name, value: f.id, logo: f.logo, color: f.color
+                      }))
+                    ]}
+                    showLogos={true}
+                    pillColors={{ "None": "gray" }}
+                  />
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">ROI</span>
+                <div className={`account-card-field-value ${roiClass}`}>{roiPct}%</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Split</span>
+                <div className="account-card-field-value">
+                  <InlineInput acc={acc} field="profitSplit" type="number" />
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Payouts</span>
+                <div className="account-card-field-value">{fmt(stats.totalPayouts)}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Initial</span>
+                <div className="account-card-field-value">
+                  <InlineFunding acc={acc} field="initialFunding" />
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Current</span>
+                <div className="account-card-field-value">
+                  <InlineFunding acc={acc} field="currentFunding" />
+                </div>
+              </div>
+              <div className="account-card-field full-width">
+                <span className="account-card-field-label">Actions</span>
+                <div className="account-card-actions">
+                  <button className="btn ghost" onClick={() => setSelected(acc.id)} style={{ padding: "4px 10px", fontSize: 13 }}>✏️ Edit</button>
+                  <button className="btn ghost" onClick={(e) => handleDelete(e, acc.id)} style={{ padding: "4px 10px", fontSize: 13, color: "#e74c3c" }}>🗑 Delete</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="accounts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* CARDS DE RESUMO PREMIUM */}
@@ -561,117 +666,128 @@ export default function Accounts() {
           )}
         </div>
 
-        {/* TABLE */}
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th onClick={() => handleSort("dateCreated")}>Date Created {getSortIndicator("dateCreated")}</th>
-                <th onClick={() => handleSort("name")}>Account {getSortIndicator("name")}</th>
-                <th onClick={() => handleSort("type")}>Category {getSortIndicator("type")}</th>
-                <th onClick={() => handleSort("firmId")}>Firm {getSortIndicator("firmId")}</th>
-                <th onClick={() => handleSort("status")}>Status {getSortIndicator("status")}</th>
-                <th onClick={() => handleSort("roi")}>ROI {getSortIndicator("roi")}</th>
-                <th onClick={() => handleSort("profitSplit")}>Split {getSortIndicator("profitSplit")}</th>
-                <th onClick={() => handleSort("totalPayouts")}>Payouts {getSortIndicator("totalPayouts")}</th>
-                <th onClick={() => handleSort("initialFunding")}>Initial {getSortIndicator("initialFunding")}</th>
-                <th onClick={() => handleSort("currentFunding")}>Current {getSortIndicator("currentFunding")}</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+        {isMobile ? (
+          <div className="accounts-cards">
+            {sortedAccounts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No accounts found.</div>
+            )}
+            {sortedAccounts.map((a) => {
+              const acc = { ...a, ...(editedAccounts[a.id] || {}) };
+              return <MobileAccountCard key={acc.id} acc={acc} />;
+            })}
+          </div>
+        ) : (
+          <div className="card" style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th onClick={() => handleSort("dateCreated")}>Date Created {getSortIndicator("dateCreated")}</th>
+                  <th onClick={() => handleSort("name")}>Account {getSortIndicator("name")}</th>
+                  <th onClick={() => handleSort("type")}>Category {getSortIndicator("type")}</th>
+                  <th onClick={() => handleSort("firmId")}>Firm {getSortIndicator("firmId")}</th>
+                  <th onClick={() => handleSort("status")}>Status {getSortIndicator("status")}</th>
+                  <th onClick={() => handleSort("roi")}>ROI {getSortIndicator("roi")}</th>
+                  <th onClick={() => handleSort("profitSplit")}>Split {getSortIndicator("profitSplit")}</th>
+                  <th onClick={() => handleSort("totalPayouts")}>Payouts {getSortIndicator("totalPayouts")}</th>
+                  <th onClick={() => handleSort("initialFunding")}>Initial {getSortIndicator("initialFunding")}</th>
+                  <th onClick={() => handleSort("currentFunding")}>Current {getSortIndicator("currentFunding")}</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
 
-            <tbody>
-              {sortedAccounts.map((a) => {
-                const acc = { ...a, ...(editedAccounts[a.id] || {}) };
-                const s = getAccountStats(acc.id) || { roi: 0, totalPayouts: 0 };
-                const roiPct = (s.roi * 100).toFixed(2);
-                const roiClass = s.roi >= 0 ? "value-green" : "value-red";
+              <tbody>
+                {sortedAccounts.map((a) => {
+                  const acc = { ...a, ...(editedAccounts[a.id] || {}) };
+                  const s = getAccountStats(acc.id) || { roi: 0, totalPayouts: 0 };
+                  const roiPct = (s.roi * 100).toFixed(2);
+                  const roiClass = s.roi >= 0 ? "value-green" : "value-red";
 
-                return (
-                  <tr key={acc.id}>
-                    <td data-label="Date Created">
-                      <InlineInput acc={acc} field="dateCreated" type="date" />
-                    </td>
+                  return (
+                    <tr key={acc.id}>
+                      <td data-label="Date Created">
+                        <InlineInput acc={acc} field="dateCreated" type="date" />
+                      </td>
 
-                    <td data-label="Account">
-                      <InlineInput acc={acc} field="name" />
-                    </td>
+                      <td data-label="Account">
+                        <InlineInput acc={acc} field="name" />
+                      </td>
 
-                    <td data-label="Category" className="center">
-                      <CustomDropdown
-                        value={getFieldValue(acc, "type")}
-                        onChange={(v) => editField(acc.id, "type", v)}
-                        options={types.map(t => ({ label: t, value: t }))}
-                        pillColors={{
-                          Forex: "lavander",
-                          Cripto: "orange",
-                          Futures: "pink",
-                          Personal: "purple"
-                        }}
-                      />
-                    </td>
+                      <td data-label="Category" className="center">
+                        <CustomDropdown
+                          value={getFieldValue(acc, "type")}
+                          onChange={(v) => editField(acc.id, "type", v)}
+                          options={types.map(t => ({ label: t, value: t }))}
+                          pillColors={{
+                            Forex: "lavander",
+                            Cripto: "orange",
+                            Futures: "pink",
+                            Personal: "purple"
+                          }}
+                        />
+                      </td>
 
-                    <td data-label="Firm" className="center">
-                      <CustomDropdown
-                        value={getFieldValue(acc, "firmId") || ""}
-                        onChange={(v) => editField(acc.id, "firmId", v || null)}
-                        options={[
-                          { label: "None", value: "" },
-                          ...firms.filter(f => f.type === acc.type).map(f => ({
-                            label: f.name,
-                            value: f.id,
-                            logo: f.logo,
-                            color: f.color
-                          }))
-                        ]}
-                        showLogos={true}
-                        pillColors={{ "None": "gray" }}
-                      />
-                    </td>
+                      <td data-label="Firm" className="center">
+                        <CustomDropdown
+                          value={getFieldValue(acc, "firmId") || ""}
+                          onChange={(v) => editField(acc.id, "firmId", v || null)}
+                          options={[
+                            { label: "None", value: "" },
+                            ...firms.filter(f => f.type === acc.type).map(f => ({
+                              label: f.name,
+                              value: f.id,
+                              logo: f.logo,
+                              color: f.color
+                            }))
+                          ]}
+                          showLogos={true}
+                          pillColors={{ "None": "gray" }}
+                        />
+                      </td>
 
-                    <td data-label="Status" className="center">
-                      <CustomDropdown
-                        value={getFieldValue(acc, "status")}
-                        onChange={(v) => editField(acc.id, "status", v)}
-                        options={statuses.map(s => ({ label: s, value: s }))}
-                        pillColors={{
-                          Live: "green",
-                          Funded: "blue",
-                          Challenge: "yellow",
-                          Standby: "gray",
-                          Demo: "orange"
-                        }}
-                      />
-                    </td>
+                      <td data-label="Status" className="center">
+                        <CustomDropdown
+                          value={getFieldValue(acc, "status")}
+                          onChange={(v) => editField(acc.id, "status", v)}
+                          options={statuses.map(s => ({ label: s, value: s }))}
+                          pillColors={{
+                            Live: "green",
+                            Funded: "blue",
+                            Challenge: "yellow",
+                            Standby: "gray",
+                            Demo: "orange"
+                          }}
+                        />
+                      </td>
 
-                    <td data-label="ROI" className={"center " + roiClass}>{roiPct}%</td>
+                      <td data-label="ROI" className={"center " + roiClass}>{roiPct}%</td>
 
-                    <td data-label="Split" className="center">
-                      <InlineInput acc={acc} field="profitSplit" type="number" />
-                    </td>
+                      <td data-label="Split" className="center">
+                        <InlineInput acc={acc} field="profitSplit" type="number" />
+                      </td>
 
-                    <td data-label="Payouts" className="center">{fmt(s.totalPayouts)}</td>
+                      <td data-label="Payouts" className="center">{fmt(s.totalPayouts)}</td>
 
-                    <td data-label="Initial" className="center">
-                      <InlineFunding acc={acc} field="initialFunding" />
-                    </td>
+                      <td data-label="Initial" className="center">
+                        <InlineFunding acc={acc} field="initialFunding" />
+                      </td>
 
-                    <td data-label="Current" className="center">
-                      <InlineFunding acc={acc} field="currentFunding" />
-                    </td>
+                      <td data-label="Current" className="center">
+                        <InlineFunding acc={acc} field="currentFunding" />
+                      </td>
 
-                    <td data-label="Actions" className="center">
-                      <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                        <button className="btn ghost" onClick={() => setSelected(acc.id)} title="Edit account" style={{ padding: "4px 8px", fontSize: 14 }}>✏️</button>
-                        <button className="btn ghost" onClick={(e) => handleDelete(e, acc.id)} title="Delete account" style={{ padding: "4px 8px", fontSize: 14, color: "#e74c3c" }}>X</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <td data-label="Actions" className="center">
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                          <button className="btn ghost" onClick={() => setSelected(acc.id)} title="Edit account" style={{ padding: "4px 8px", fontSize: 14 }}>✏️</button>
+                          <button className="btn ghost" onClick={(e) => handleDelete(e, acc.id)} title="Delete account" style={{ padding: "4px 8px", fontSize: 14, color: "#e74c3c" }}>X</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

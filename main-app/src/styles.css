@@ -1419,7 +1419,6 @@ select.select option {
   
   /* Tabelas com scroll horizontal */
   .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { min-width: 800px; }
   
   /* Cards empilhados */
   .grid { grid-template-columns: 1fr !important; }

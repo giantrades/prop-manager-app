@@ -2462,6 +2462,144 @@ select.payouts-input {
   }
 }
 
+/* === Mobile Account Cards - layout expansível === */
+.accounts-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.account-card.expanded {
+  border-color: rgba(124, 92, 255, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.account-card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  gap: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.account-card-header:active {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.account-card-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.account-card-funding {
+  font-size: 13px;
+  font-weight: 700;
+  color: #34d399;
+  white-space: nowrap;
+}
+
+.account-card-arrow {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  transition: transform 0.3s;
+}
+
+.account-card.expanded .account-card-arrow {
+  transform: rotate(180deg);
+}
+
+.account-card-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+
+.account-card.expanded .account-card-body {
+  max-height: 800px;
+}
+
+.account-card-body-inner {
+  padding: 0 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.account-card-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  padding-top: 12px;
+}
+
+.account-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-card-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.account-card-field-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted, #a1a7b3);
+}
+
+.account-card-field-value {
+  font-size: 13px;
+  color: #fff;
+  line-height: 1.4;
+}
+
+.account-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Ajustes para dropdowns dentro dos cards */
+.account-card-field .custom-dropdown-menu {
+  z-index: 100001 !important;
+}
+
+.account-card-field .pill {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
 /* ======== PAYOUTS PAGE RESPONSIVE TABLE ======== */
 .payouts-page table {
   width: 100%;
