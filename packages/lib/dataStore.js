@@ -217,11 +217,9 @@ export function deleteAccount(id){
   data.accounts = data.accounts.filter(a => a.id !== id)
 
   // Track for Supabase deletion propagation
-  if (accountToDelete?.platformAccountId) {
-    if (!data._deletedAccountIds) data._deletedAccountIds = [];
-    if (!data._deletedAccountIds.includes(id)) {
-      data._deletedAccountIds.push(id);
-    }
+  if (!data._deletedAccountIds) data._deletedAccountIds = [];
+  if (!data._deletedAccountIds.includes(id)) {
+    data._deletedAccountIds.push(id);
   }
 
   // Instead of silently dropping the accountId from payouts, preserve a snapshot
