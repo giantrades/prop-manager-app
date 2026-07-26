@@ -2366,11 +2366,30 @@ select.payouts-input {
 }
 
 @media (max-width: 768px) {
+  .accounts-page {
+    gap: 8px !important;
+  }
+
+  .accounts-page .accounts-summary {
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .accounts-page .accounts-summary .hover-card {
+    padding: 14px 16px !important;
+  }
+
   .accounts-page .toolbar {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 8px !important;
+    gap: 5px !important;
     margin-bottom: 0 !important;
+  }
+
+  /* Corrige flex-basis que vira altura em column layout */
+  .accounts-page .toolbar > * {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
   }
 
   .accounts-page table {

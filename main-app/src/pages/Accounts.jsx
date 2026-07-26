@@ -561,7 +561,7 @@ export default function Accounts() {
   return (
     <div className="accounts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* CARDS DE RESUMO PREMIUM */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div className="accounts-summary" style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
         {/* Card 1: Total Accounts */}
         <div style={{ flex: 1, minWidth: 260, background: 'rgba(255, 255, 255, 0.02)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: 16, padding: '20px 24px', position: 'relative', overflow: 'hidden' }} className="hover-card">
           <div style={{ position: 'absolute', top: -40, right: -40, width: 120, height: 120, background: 'radial-gradient(circle, rgba(124,92,255,0.15) 0%, transparent 70%)', borderRadius: '50%' }} />
