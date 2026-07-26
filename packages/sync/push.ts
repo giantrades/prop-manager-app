@@ -151,9 +151,12 @@ export async function pushChanges(localData: any, userId: string) {
   if (localData.trades?.length) {
     const filtered = localData.trades
       .filter((t: any) => {
-        const isEntryFill =
-          Number(t.result_net || 0) === 0 &&
-          (!t.exit_datetime || String(t.exit_datetime).startsWith('0001') || t.exit_datetime === t.entry_datetime || !t.exit_price);
+        const netPnl = Number(t.result_net ?? t.resultNet ?? 0);
+        const exitDt = t.exit_datetime || t.exitDatetime;
+        const entryDt = t.entry_datetime || t.entryDatetime;
+        const exitPr = t.exit_price ?? t.exitPrice;
+        const isEntryFill = netPnl === 0 &&
+          (!exitDt || String(exitDt).startsWith('0001') || exitDt === entryDt || !exitPr);
         return !isEntryFill;
       })
       .map((t: any) => ({

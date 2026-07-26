@@ -1037,12 +1037,27 @@ export function upsertTradeFromPlatform(normalizedTrade) {
     return false;
   });
 
-  console.log(`[upsertTrade] ${existing !== -1 ? 'UPDATE' : 'NEW'} trade`, {
-    platformTradeId: normalizedTrade.platformTradeId,
-    positionId: normalizedTrade.positionId,
-    result_net: normalizedTrade.result_net,
-    exit_price: normalizedTrade.exit_price,
-  });
+  if (existing === -1) {
+    console.log(`[upsertTrade] NEW trade`, {
+      platformTradeId: normalizedTrade.platformTradeId,
+      positionId: normalizedTrade.positionId,
+      result_net: normalizedTrade.result_net,
+      exit_price: normalizedTrade.exit_price,
+        existingTrades: (data.trades || []).map(t => ({
+        id: t.id,
+        platformTradeId: t.platformTradeId,
+        positionId: t.positionId,
+        result_net: t.result_net,
+        resultNet: t.resultNet,
+        fp: _tradeFingerprint(t),
+      })),
+    });
+  } else {
+    console.log(`[upsertTrade] UPDATE trade`, {
+      platformTradeId: normalizedTrade.platformTradeId,
+      positionId: normalizedTrade.positionId,
+    });
+  }
 
   let trade, isNew;
 
@@ -1354,13 +1369,16 @@ export async function cleanCorruptedLedgerEntries() {
 
   for (const t of trades) {
     const isFromPlatform = t.source && platformSources.has(t.source);
-    const hasZeroPnl = (Number(t.result_net) || 0) === 0;
+    const netPnl = Number(t.result_net ?? t.resultNet ?? 0);
+    const hasZeroPnl = netPnl === 0;
     const hasPlatformId = !!t.platformTradeId;
-    // Additional heuristic: no exit price or exit_datetime matches entry_datetime
-    const isFakeExit = !t.exit_price
-      || t.exit_price === 0
-      || !t.exit_datetime
-      || t.exit_datetime === t.entry_datetime;
+    const exitDt = t.exit_datetime || t.exitDatetime;
+    const entryDt = t.entry_datetime || t.entryDatetime;
+    const exitPr = t.exit_price ?? t.exitPrice;
+    const isFakeExit = !exitPr
+      || exitPr === 0
+      || !exitDt
+      || exitDt === entryDt;
 
     if (isFromPlatform && hasZeroPnl && hasPlatformId && isFakeExit) {
       corruptedTradeIds.add(t.id);
