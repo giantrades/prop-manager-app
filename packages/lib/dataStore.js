@@ -230,11 +230,13 @@ export function deleteAccount(id){
     if (!isInAccountIds && !isInSplit) return p
 
     // Build the archived snapshot entry
+    const firmForArchive = data.firms?.find(f => f.id === accountToDelete?.firmId);
     const archivedEntry = {
       id,
       name:        accountToDelete?.name        || 'Conta Deletada',
       type:        accountToDelete?.type        || 'Futures',
       firmId:      accountToDelete?.firmId      || null,
+      firmName:    firmForArchive?.name         || 'Unknown Firm',
       profitSplit: accountToDelete?.profitSplit ?? 1,
     }
 

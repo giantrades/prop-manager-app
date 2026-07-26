@@ -221,7 +221,26 @@ export default function Payouts() {
           <h4 style={{ margin: '0 0 16px 0', fontSize: 14, fontWeight: 500, color: '#94a3b8' }}>Líquido por Categoria</h4>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {['Futures', 'Forex', 'Cripto', 'Personal'].map((cat) => {
-              const totalCat = processedData.filter((p) => p.type === cat).reduce((sum, p) => sum + (Number(p.amountReceived) || 0), 0);
+              const totalCat = processedData.reduce((sum, p) => {
+                const splitBy = p.splitByAccount;
+                const keys = splitBy ? Object.keys(splitBy) : [];
+                let contributed = false;
+                if (keys.length > 0) {
+                  keys.forEach(key => {
+                    const accId = key.startsWith('__archived_') ? key.slice('__archived_'.length) : key;
+                    let t = p.type;
+                    const la = accounts.find(a => a.id === accId);
+                    if (la) t = la.type;
+                    else if (p._archivedAccounts) {
+                      const arc = p._archivedAccounts.find(a => a.id === accId);
+                      if (arc) t = arc.type;
+                    }
+                    if (t === cat) { sum += Number(splitBy[key].net || 0); contributed = true; }
+                  });
+                }
+                if (!contributed && p.type === cat) sum += Number(p.amountReceived || 0);
+                return sum;
+              }, 0);
               if (totalCat === 0) return null;
               let color = '#94a3b8';
               let bg = 'rgba(255,255,255,0.05)';
@@ -329,10 +348,11 @@ export default function Payouts() {
           </thead>
           <tbody>
             {currentPageData.map((p) => {
-              let accName = 'Desconhecida';
-              let accType = p.type || '';
+              let accName = p._archivedAccounts?.[0]?.name || 'Desconhecida';
+              let accType = p._archivedAccounts?.[0]?.type || p.type || '';
               let isArchived = false;
               let firmObj = null;
+              let firmName = 'Unknown Firm';
               let typeColor = 'gray';
 
               const firstId = p.accountId || (p.accountIds && p.accountIds[0]);
@@ -343,18 +363,21 @@ export default function Payouts() {
                   accName = liveAcc.name;
                   accType = liveAcc.type;
                   firmObj = firms.find(f => f.id === liveAcc.firmId);
-                } else if (p._archivedAccounts && p._archivedAccounts.length > 0) {
+                  firmName = firmObj?.name || 'Unknown Firm';
+                } else if (p._archivedAccounts?.length > 0) {
                   const arc = p._archivedAccounts.find(a => a.id === firstId) || p._archivedAccounts[0];
                   accName = arc.name;
                   accType = arc.type;
                   firmObj = firms.find(f => f.id === arc.firmId);
+                  firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
                   isArchived = true;
                 }
-              } else if (p._archivedAccounts && p._archivedAccounts.length > 0) {
+              } else if (p._archivedAccounts?.length > 0) {
                 const arc = p._archivedAccounts[0];
                 accName = arc.name;
                 accType = arc.type;
                 firmObj = firms.find(f => f.id === arc.firmId);
+                firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
                 isArchived = true;
               }
 
@@ -365,7 +388,7 @@ export default function Payouts() {
 
               return (
                 <tr key={p.id} style={{ borderLeft: `3px solid var(--${typeColor})`, background: isArchived ? 'rgba(255,255,255,0.01)' : 'transparent', transition: 'background 0.2s' }}>
-                  <td data-label="Data">{p.dateCreated}</td>
+                  <td data-label="Data">{new Date(p.dateCreated).toLocaleDateString('pt-BR')}</td>
 
                   <td data-label="Conta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -380,7 +403,7 @@ export default function Payouts() {
                           {isArchived && <span title="Conta Deletada/Arquivada" style={{ fontSize: 12, opacity: 0.8 }}>👻</span>}
                         </div>
                         <div style={{ fontSize: 12, color: '#64748b' }}>
-                          {firmObj ? firmObj.name : 'Unknown Firm'}
+                          {firmName}
                         </div>
                       </div>
                     </div>
