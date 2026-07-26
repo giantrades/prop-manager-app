@@ -17,6 +17,7 @@ export default function Settings() {
     backupToProton, loadProtonBackup,
   } = useDrive();
   const { forceResync, syncing } = useSync();
+  const [syncStatus, setSyncStatus] = useState(null);
 
   const { applyRemoteData } = useData();
 
@@ -170,12 +171,41 @@ export default function Settings() {
         </p>
         <button
           className={`btn ${syncing ? "ghost" : ""}`}
-          onClick={forceResync}
+          onClick={async () => {
+            setSyncStatus("syncing");
+            try {
+              await forceResync();
+              setSyncStatus("success");
+            } catch {
+              setSyncStatus("error");
+            }
+            setTimeout(() => setSyncStatus(null), 3000);
+          }}
           disabled={syncing}
         >
           {syncing ? "⏳ Sincronizando..." : "🔄 Forçar Resync"}
         </button>
       </div>
+
+      {syncStatus && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, pointerEvents: 'none', paddingTop: 20,
+        }}>
+          <div style={{
+            background: syncStatus === 'syncing' ? '#1a2232' : syncStatus === 'success' ? '#162b1a' : '#2b1616',
+            border: `1px solid ${syncStatus === 'syncing' ? '#2a3246' : syncStatus === 'success' ? '#2a6b3a' : '#6b2a2a'}`,
+            borderRadius: 12, padding: '14px 24px',
+            color: 'white', fontWeight: 700, fontSize: 15,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          }}>
+            {syncStatus === 'syncing' && '⏳ Sincronizando dados com o servidor...'}
+            {syncStatus === 'success' && '✅ Sincronização concluída!'}
+            {syncStatus === 'error' && '❌ Erro na sincronização'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
