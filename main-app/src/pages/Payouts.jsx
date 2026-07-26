@@ -353,6 +353,7 @@ export default function Payouts() {
               let isArchived = false;
               let firmObj = null;
               let firmName = 'Unknown Firm';
+              let firmLogoUrl = null;
               let typeColor = 'gray';
 
               const firstId = p.accountId || (p.accountIds && p.accountIds[0]);
@@ -364,12 +365,14 @@ export default function Payouts() {
                   accType = liveAcc.type;
                   firmObj = firms.find(f => f.id === liveAcc.firmId);
                   firmName = firmObj?.name || 'Unknown Firm';
+                  firmLogoUrl = firmObj?.logo || null;
                 } else if (p._archivedAccounts?.length > 0) {
                   const arc = p._archivedAccounts.find(a => a.id === firstId) || p._archivedAccounts[0];
                   accName = arc.name;
                   accType = arc.type;
                   firmObj = firms.find(f => f.id === arc.firmId);
                   firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
+                  firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
                   isArchived = true;
                 }
               } else if (p._archivedAccounts?.length > 0) {
@@ -378,6 +381,7 @@ export default function Payouts() {
                 accType = arc.type;
                 firmObj = firms.find(f => f.id === arc.firmId);
                 firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
+                firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
                 isArchived = true;
               }
 
@@ -392,8 +396,8 @@ export default function Payouts() {
 
                   <td data-label="Conta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {firmObj && firmObj.logo ? (
-                        <img src={firmObj.logo} alt={firmObj.name} style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, background: 'rgba(255,255,255,0.05)', padding: 2 }} />
+                      {firmLogoUrl ? (
+                        <img src={firmLogoUrl} alt={firmName} style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, background: 'rgba(255,255,255,0.05)', padding: 2 }} />
                       ) : (
                         <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>🏢</div>
                       )}

@@ -237,6 +237,7 @@ export function deleteAccount(id){
       type:        accountToDelete?.type        || 'Futures',
       firmId:      accountToDelete?.firmId      || null,
       firmName:    firmForArchive?.name         || 'Unknown Firm',
+      firmLogo:    firmForArchive?.logo         || null,
       profitSplit: accountToDelete?.profitSplit ?? 1,
     }
 
