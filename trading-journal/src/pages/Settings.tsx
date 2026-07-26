@@ -1,25 +1,10 @@
 // src/pages/Settings.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useCurrency } from "@apps/state";
 import { useDrive } from "@apps/state/DriveContext";
 import { useSync } from "@apps/sync";
 import { getFullBackupPayload, applyFullBackupPayload } from "@apps/utils/backupPayload.js";
-import { openDB } from 'idb';
 import PlatformConnectionSettings from '@apps/ui/PlatformConnectionSettings';
-
-async function getDB() {
-  return openDB('journal-db', 2, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains('trades')) {
-        db.createObjectStore('trades', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('accounts')) {
-        db.createObjectStore('accounts', { keyPath: 'id' });
-      }
-    },
-  });
-}
-
 
 export default function Settings() {
   const { rate, setRate } = useCurrency();
@@ -30,7 +15,6 @@ export default function Settings() {
   } = useDrive();
   const { forceResync, syncing } = useSync();
   const [autoSync, setAutoSync] = useState(false);
-  const [recalcLoading, setRecalcLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
 
   // ☁️ Auto backup a cada 30s — Google + Proton, sempre com o snapshot completo
@@ -87,48 +71,6 @@ export default function Settings() {
       setRestoreLoading(false);
     }
   };
-
-  // ⚙️ Função para recalcular fundings das contas
-  const handleRecalcFunding = useCallback(async () => {
-    try {
-      setRecalcLoading(true);
-      const db = await getDB();
-      const allTrades = await db.getAll("trades");
-
-      const ds = await import('@apps/lib/dataStore.js');
-      const { getAll, updateAccount } = ds;
-      const all = await getAll();
-      const accounts = all.accounts || [];
-
-      // 🔹 Zera fundings primeiro
-      for (const acc of accounts) {
-        await updateAccount(acc.id, { ...acc, currentFunding: 0 });
-      }
-
-      // 🔹 Aplica todos os trades uma única vez
-      for (const trade of allTrades) {
-        for (const accEntry of trade.accounts || []) {
-          const acc = accounts.find(a => a.id === accEntry.accountId);
-          if (!acc) continue;
-
-          const pnlImpact = (trade.result_net || 0) * (accEntry.weight ?? 1);
-          acc.currentFunding = (acc.currentFunding || 0) + pnlImpact;
-        }
-      }
-
-      // 🔹 Salva fundings finais
-      for (const acc of accounts) {
-        await updateAccount(acc.id, acc);
-      }
-
-      alert("✅ Fundings recalculados com sucesso!");
-    } catch (err) {
-      console.error("Erro ao recalcular fundings:", err);
-      alert("❌ Erro ao recalcular fundings: " + err.message);
-    } finally {
-      setRecalcLoading(false);
-    }
-  }, []);
 
 
   return (
@@ -253,20 +195,6 @@ export default function Settings() {
         </button>
       </div>
 
-      {/* -------- RECALCULAR FUNDINGS -------- */}
-      <div className="card">
-        <h3>🔄 Recalcular Fundings das Contas</h3>
-        <p className="muted">
-          Se os saldos das contas estiverem incorretos, clique abaixo para recalcular com base em todos os trades salvos.
-        </p>
-        <button
-          className={`btn ${recalcLoading ? "ghost" : ""}`}
-          onClick={handleRecalcFunding}
-          disabled={recalcLoading}
-        >
-          {recalcLoading ? "Recalculando..." : "Recalcular Fundings"}
-        </button>
-      </div>
     </div>
   );
 }
