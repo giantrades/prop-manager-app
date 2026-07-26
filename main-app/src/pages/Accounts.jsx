@@ -475,10 +475,10 @@ export default function Accounts() {
             <img src={firm.logo} alt={firm.name} style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, borderRadius: 4 }} />
           )}
           <div className="account-card-name">{acc.name || 'Unnamed'}</div>
+          <span className={`pill ${sColors[acc.status] || 'gray'}`}>{acc.status}</span>
           <div className="account-card-meta">
-            <span className={`pill ${sColors[acc.status] || 'gray'}`}>{acc.status}</span>
             <span className="account-card-funding">{fmt(getFieldValue(acc, "currentFunding") || 0)}</span>
-            <span className="account-card-payouts">{fmt(stats.totalPayouts)} total payouts</span>
+            <span className="account-card-payouts">+{fmt(stats.totalPayouts)}</span>
           </div>
           <div className="account-card-arrow">▼</div>
         </div>
