@@ -51,6 +51,7 @@ export function usePlatform() {
       if (tradesRemoved > 0 || ledgerRemoved > 0) {
         console.log(`[usePlatform] Auto-cleaned ${tradesRemoved} corrupted trade(s) + ${ledgerRemoved} ledger entry(ies) on startup`);
       }
+      deduplicateTradesByPosition();
     }).catch(err => {
       console.warn('[usePlatform] Auto-clean failed (non-fatal):', err);
     });

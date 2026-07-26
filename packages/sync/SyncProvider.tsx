@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../auth';
 import { pullAllData, pushChanges, subscribeToChanges, subscribeToLivePositions } from './index';
-import { getAll, save } from '@apps/lib/dataStore';
+import { getAll, save, deduplicateTradesByPosition } from '@apps/lib/dataStore';
 import { getFullBackupPayload } from '@apps/utils/backupPayload';
 import { supabase } from '../supabase/client';
 import { openDB } from 'idb';
@@ -70,12 +70,30 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       const mergeArr = (remote: any, local: any) =>
         remote !== undefined ? (remote ?? []) : local;
 
+      // Merge trades: start with remote (authoritative), then preserve local trades
+      // that don't exist in remote yet (pending push). This prevents data loss when
+      // a platform-synced trade hasn't been pushed to Supabase before the next pull.
+      function mergeTrades(remote: any[], local: any[]): any[] {
+        if (!remote) return local;
+        const remoteById = new Map(remote.map((t: any) => [t.id, t]));
+        const remoteByPlatformId = new Map(
+          remote.filter((t: any) => t.platformTradeId).map((t: any) => [t.platformTradeId, t])
+        );
+        const result = [...remote];
+        for (const lt of local) {
+          if (remoteById.has(lt.id)) continue;
+          if (lt.platformTradeId && remoteByPlatformId.has(lt.platformTradeId)) continue;
+          result.push(lt);
+        }
+        return result;
+      }
+
       const merged = {
         ...local,
         firms: remote.firms !== undefined ? fillMissing(remote.firms ?? [], local.firms) : local.firms,
         accounts: remote.accounts !== undefined ? fillMissing(remote.accounts ?? [], local.accounts) : local.accounts,
         payouts: mergeArr(remote.payouts, local.payouts),
-        trades: mergeArr(remote.trades, local.trades),
+        trades: remote.trades !== undefined ? mergeTrades(remote.trades, local.trades) : local.trades,
         livePositions: local.livePositions,
         strategies: mergeArr(remote.strategies, local.strategies),
         goals: mergeArr(remote.goals, local.goals),
@@ -84,6 +102,9 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       };
       
       save(merged);
+
+      // Clean up any cross-device duplicates that may have accumulated in Supabase
+      deduplicateTradesByPosition();
 
       // Write strategies to journal-db so JournalContext sees the pulled data
       if (merged.strategies?.length) {

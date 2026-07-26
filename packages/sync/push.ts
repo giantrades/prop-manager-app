@@ -160,6 +160,18 @@ export async function pushChanges(localData: any, userId: string) {
         ...t,
         accountId: validAccountIds.has(t.accountId) ? t.accountId : null,
       }));
+
+    // Clean up stale Supabase rows with same platformTradeId but different id
+    // (prevents orphan accumulation from cross-device UUID conflicts)
+    for (const t of filtered) {
+      if (t.platformTradeId) {
+        await supabase.from('trades').delete()
+          .eq('user_id', userId)
+          .eq('platform_trade_id', t.platformTradeId)
+          .neq('id', t.id);
+      }
+    }
+
     const { error } = await supabase.from('trades').upsert(
       prepare('trades', filtered, userId),
       { onConflict: 'id' }
