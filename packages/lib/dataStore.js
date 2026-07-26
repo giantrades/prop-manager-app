@@ -1023,11 +1023,17 @@ export function getTradeByPlatformId(platformTradeId) {
  * @param {Object} normalizedTrade - Trade with platformTradeId set
  * @returns {{ trade: Object, isNew: boolean }}
  */
+function _tradeFingerprint(t) {
+  return `${t.symbol || ''}|${t.entry_datetime || ''}|${t.exit_datetime || ''}|${t.entry_price || ''}|${t.exit_price || ''}|${t.quantity || ''}|${t.direction || ''}`;
+}
+
 export function upsertTradeFromPlatform(normalizedTrade) {
   const data = load();
+  const normalizedFp = _tradeFingerprint(normalizedTrade);
   const existing = (data.trades || []).findIndex(t => {
     if (normalizedTrade.platformTradeId && t.platformTradeId && t.platformTradeId === normalizedTrade.platformTradeId) return true;
     if (normalizedTrade.positionId && t.positionId && t.positionId === normalizedTrade.positionId) return true;
+    if (normalizedFp !== '|||||||' && _tradeFingerprint(t) === normalizedFp) return true;
     return false;
   });
 
@@ -1529,7 +1535,7 @@ export function deduplicateTradesByPosition() {
   // Round 2: group remaining by data fingerprint (catches duplicates without platform IDs)
   const fpGroups = new Map();
   for (const trade of remaining) {
-    const fp = `${trade.symbol || ''}|${trade.entry_datetime || ''}|${trade.exit_datetime || ''}|${trade.entry_price || ''}|${trade.exit_price || ''}|${trade.quantity || ''}`;
+    const fp = _tradeFingerprint(trade);
     if (!fpGroups.has(fp)) fpGroups.set(fp, []);
     fpGroups.get(fp).push(trade);
   }
