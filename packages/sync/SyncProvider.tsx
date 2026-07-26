@@ -187,18 +187,25 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       save(merged);
       deduplicateTradesByPosition();
 
-      if (merged.strategies?.length) {
-        try {
-          const db = await openDB('journal-db', 2);
-          const tx = db.transaction('strategies', 'readwrite');
-          await tx.store.clear();
-          for (const s of merged.strategies) await tx.store.put(s);
-          await tx.done;
-        } catch (e) {
-          console.warn('[Sync] Failed to write strategies to journal-db:', e);
+      // Write to IndexedDB so journal-ui picks them up
+      try {
+        const db = await openDB('journal-db', 2);
+        const stores = ['trades', 'accounts', 'strategies'] as const;
+        for (const storeName of stores) {
+          const items = merged[storeName];
+          if (items?.length) {
+            const tx = db.transaction(storeName, 'readwrite');
+            await tx.store.clear();
+            for (const item of items) await tx.store.put(item);
+            await tx.done;
+          }
         }
+      } catch (e) {
+        console.warn('[Sync] Failed to write to journal-db:', e);
       }
 
+      // Signal UI to refresh
+      window.dispatchEvent(new Event('datastore:change'));
       console.log(`✅ Sync: force resync complete`);
       setLastSync(new Date());
     } catch (e) {
