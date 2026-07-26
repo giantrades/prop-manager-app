@@ -462,10 +462,18 @@ export default function Accounts() {
     const stats = getAccountStats(acc.id) || { roi: 0, totalPayouts: 0 };
     const roiPct = (stats.roi * 100).toFixed(2);
     const roiClass = stats.roi >= 0 ? "value-green" : "value-red";
+    const firm = findFirm(acc.firmId);
+    const firmColor = firm?.color || '#7c5cff';
 
     return (
-      <div className={`account-card${expanded ? ' expanded' : ''}`}>
+      <div
+        className={`account-card${expanded ? ' expanded' : ''}`}
+        style={{ borderColor: expanded ? `${firmColor}66` : `${firmColor}33` }}
+      >
         <div className="account-card-header" onClick={() => setExpanded(v => !v)}>
+          {firm?.logo && (
+            <img src={firm.logo} alt={firm.name} style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, borderRadius: 4 }} />
+          )}
           <div className="account-card-name">{acc.name || 'Unnamed'}</div>
           <div className="account-card-meta">
             <span className={`pill ${sColors[acc.status] || 'gray'}`}>{acc.status}</span>
@@ -667,6 +675,8 @@ export default function Accounts() {
         </div>
 
         {isMobile ? (
+          <>
+          <div className="accounts-cards-divider" />
           <div className="accounts-cards">
             {sortedAccounts.length === 0 && (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>No accounts found.</div>
@@ -676,6 +686,7 @@ export default function Accounts() {
               return <MobileAccountCard key={acc.id} acc={acc} />;
             })}
           </div>
+          </>
         ) : (
           <div className="card" style={{ overflowX: 'auto' }}>
             <table>

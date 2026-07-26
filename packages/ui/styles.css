@@ -2369,6 +2369,8 @@ select.payouts-input {
   .accounts-page .toolbar {
     flex-direction: column !important;
     align-items: stretch !important;
+    gap: 8px !important;
+    margin-bottom: 0 !important;
   }
 
   .accounts-page table {
@@ -2598,6 +2600,13 @@ select.payouts-input {
 .account-card-field .pill {
   font-size: 11px;
   padding: 2px 8px;
+}
+
+/* Divider entre toolbar e cards no mobile */
+.accounts-cards-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  margin: 2px 0 10px;
 }
 
 /* ======== PAYOUTS PAGE RESPONSIVE TABLE ======== */
