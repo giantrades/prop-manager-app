@@ -161,19 +161,37 @@ export async function pushChanges(localData: any, userId: string) {
         accountId: validAccountIds.has(t.accountId) ? t.accountId : null,
       }));
 
-    // Clean up stale Supabase rows with same platformTradeId but different id
-    // (prevents orphan accumulation from cross-device UUID conflicts)
+    // Dedup by positionId/platformTradeId: keep only 1 per platform trade
+    const seen = new Map();
     for (const t of filtered) {
-      if (t.platformTradeId) {
-        await supabase.from('trades').delete()
-          .eq('user_id', userId)
-          .eq('platform_trade_id', t.platformTradeId)
-          .neq('id', t.id);
+      const key = t.positionId || t.platformTradeId || t.id;
+      if (!seen.has(key) || new Date(t.exit_datetime || t.entry_datetime) > new Date(seen.get(key).exit_datetime || seen.get(key).entry_datetime)) {
+        seen.set(key, t);
+      }
+    }
+    const deduped = [...seen.values()];
+
+    if (filtered.length < localData.trades.length || deduped.length < filtered.length) {
+      const entryFillCount = localData.trades.length - filtered.length;
+      const dedupCount = filtered.length - deduped.length;
+      console.log(`[Push] Entry fills: ${entryFillCount}, Deduped: ${dedupCount}, Pushing: ${deduped.length} trades`);
+    }
+
+    // Clean up stale Supabase rows with same platformTradeId that are NOT being pushed
+    const dedupedIds = new Set(deduped.map((t: any) => t.id));
+    const platformIds = [...new Set(deduped.filter((t: any) => t.platformTradeId).map((t: any) => t.platformTradeId))];
+    for (const ptId of platformIds) {
+      const { data: stale } = await supabase.from('trades').select('id').eq('user_id', userId).eq('platform_trade_id', ptId);
+      if (stale) {
+        const toDelete = stale.filter((r: any) => !dedupedIds.has(r.id)).map((r: any) => r.id);
+        if (toDelete.length) {
+          await supabase.from('trades').delete().in('id', toDelete);
+        }
       }
     }
 
     const { error } = await supabase.from('trades').upsert(
-      prepare('trades', filtered, userId),
+      prepare('trades', deduped, userId),
       { onConflict: 'id' }
     );
     if (filtered.length < localData.trades.length) {

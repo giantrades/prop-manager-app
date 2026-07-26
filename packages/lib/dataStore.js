@@ -1495,44 +1495,66 @@ export function resolveFirmForAccount(account, firms) {
 export function deduplicateTradesByPosition() {
   const data = load();
   const trades = data.trades || [];
-  
-  // Group trades by positionId
-  const tradesByPosition = new Map();
+
+  // Round 1: group by positionId/platformTradeId
+  const remaining = [];
+  const deduped = [];
+  let removedCount = 0;
+
+  const groups = new Map();
   for (const trade of trades) {
-    const key = trade.positionId || trade.platformTradeId || trade.id;
-    if (!tradesByPosition.has(key)) {
-      tradesByPosition.set(key, []);
+    const key = trade.positionId || trade.platformTradeId;
+    if (key) {
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(trade);
+    } else {
+      remaining.push(trade);
     }
-    tradesByPosition.get(key).push(trade);
   }
 
-  // For each position, keep the trade with actual PnL (the exit trade)
-  const deduplicatedTrades = [];
-  let removedCount = 0;
-  
-  for (const [positionId, positionTrades] of tradesByPosition) {
+  for (const [, positionTrades] of groups) {
     if (positionTrades.length === 1) {
-      deduplicatedTrades.push(positionTrades[0]);
+      deduped.push(positionTrades[0]);
     } else {
-      // Keep the trade with non-zero PnL (the exit trade)
       const exitTrade = positionTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
       if (exitTrade) {
-        deduplicatedTrades.push(exitTrade);
+        deduped.push(exitTrade);
       } else {
-        // All zero PnL, keep the last one (most recent)
-        deduplicatedTrades.push(positionTrades[positionTrades.length - 1]);
+        deduped.push(positionTrades[positionTrades.length - 1]);
       }
       removedCount += positionTrades.length - 1;
     }
   }
 
+  // Round 2: group remaining by data fingerprint (catches duplicates without platform IDs)
+  const fpGroups = new Map();
+  for (const trade of remaining) {
+    const fp = `${trade.symbol || ''}|${trade.entry_datetime || ''}|${trade.exit_datetime || ''}|${trade.entry_price || ''}|${trade.exit_price || ''}|${trade.quantity || ''}`;
+    if (!fpGroups.has(fp)) fpGroups.set(fp, []);
+    fpGroups.get(fp).push(trade);
+  }
+
+  for (const [, fpTrades] of fpGroups) {
+    if (fpTrades.length === 1) {
+      deduped.push(fpTrades[0]);
+    } else {
+      const exitTrade = fpTrades.find(t => (t.netPnl !== 0 || t.grossPnl !== 0));
+      if (exitTrade) {
+        deduped.push(exitTrade);
+      } else {
+        deduped.push(fpTrades[fpTrades.length - 1]);
+      }
+      removedCount += fpTrades.length - 1;
+    }
+  }
+
   if (removedCount > 0) {
-    data.trades = deduplicatedTrades;
+    data.trades = deduped;
     save(data);
     console.log(`[deduplicateTradesByPosition] Removed ${removedCount} duplicate trades`);
   }
-  
-  return { removedCount, totalRemaining: deduplicatedTrades.length };
+
+  return { removedCount, totalRemaining: deduped.length };
 }
 
 /* --------------------
