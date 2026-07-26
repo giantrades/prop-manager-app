@@ -2530,16 +2530,26 @@ select.payouts-input {
 
 .account-card-meta {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
   flex-shrink: 0;
 }
 
 .account-card-funding {
   font-size: 13px;
   font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.account-card-payouts {
+  font-size: 10px;
+  font-weight: 600;
   color: #34d399;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .account-card-arrow {

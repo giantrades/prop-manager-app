@@ -478,6 +478,7 @@ export default function Accounts() {
           <div className="account-card-meta">
             <span className={`pill ${sColors[acc.status] || 'gray'}`}>{acc.status}</span>
             <span className="account-card-funding">{fmt(getFieldValue(acc, "currentFunding") || 0)}</span>
+            <span className="account-card-payouts">{fmt(stats.totalPayouts)} total payouts</span>
           </div>
           <div className="account-card-arrow">▼</div>
         </div>
