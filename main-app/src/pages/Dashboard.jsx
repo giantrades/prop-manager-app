@@ -62,7 +62,7 @@ const catPillClass = (type) =>
     type === 'Futures' ? 'pink' : type === 'Personal' ? 'purple' : 'gray'
 
 const CAT_HEX = {
-  Forex: '#8b5cf6', Cripto: '#f97316', Futures: '#ff4fa3', Personal: '#a855f7',
+  Forex: '#7c5cff', Cripto: '#f59e0b', Futures: '#3b82f6', Personal: '#10b981',
 }
 
 /* =========================================================
@@ -81,7 +81,7 @@ function FiltersBar({
   } = useFilters()
 
   const catColors = {
-    'Forex': '#8b5cf6', 'Cripto': '#f97316', 'Futures': '#ff4fa3', 'Personal': '#a855f7'
+    'Forex': '#7c5cff', 'Cripto': '#f59e0b', 'Futures': '#3b82f6', 'Personal': '#10b981'
   }
 
   const chipStyle = (item, active) => {
@@ -791,17 +791,23 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null
     const dp = payload[0].payload
-    const color = getCatColor(dp.name)                         // ← usa getCatColor
+    const color = getCatColor(dp.name)
     const valueFormatted = currency === 'USD'
       ? `$${dp.value.toLocaleString()}` : `R$${dp.value.toLocaleString()}`
     const pct = ((dp.value / total) * 100).toFixed(1)
     return (
       <div style={{
-        background: '#0f1218', border: `1px solid ${color}`,
-        color: '#e7eaf0', padding: 10, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        background: 'rgba(15,18,24,0.95)', backdropFilter: 'blur(8px)',
+        border: `1px solid ${color}44`, borderRadius: 10, padding: '10px 14px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
       }}>
-        <p style={{ fontWeight: 700, margin: '0 0 4px' }}>{dp.name}</p>
-        <p style={{ color, margin: 0, fontWeight: 600 }}>{`${valueFormatted} (${pct}%)`}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 13 }}>{dp.name}</span>
+        </div>
+        <div style={{ color, fontWeight: 700, fontSize: 15, marginLeft: 16 }}>
+          {valueFormatted} <span style={{ color: '#64748b', fontWeight: 500, fontSize: 12 }}>({pct}%)</span>
+        </div>
       </div>
     )
   }
@@ -833,20 +839,20 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
                 <Cell key={`cell-${i}`} fill={getCatColor(entry.name)} />
               ))}
             </Pie>
+            {total > 0 && (
+              <>
+                <text x="50%" y="47%" textAnchor="middle" fill="#e2e8f0" fontSize={14} fontWeight={700}>
+                  {fmtTotal(total)}
+                </text>
+                <text x="50%" y="54%" textAnchor="middle" fill="#64748b" fontSize={9}>
+                  total
+                </text>
+              </>
+            )}
             <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
             <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
-        {total > 0 && (
-          <div style={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            textAlign: 'center', pointerEvents: 'none',
-          }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.2 }}>{fmtTotal(total)}</div>
-            <div style={{ fontSize: 9, color: '#64748b', marginTop: 1 }}>total</div>
-          </div>
-        )}
       </div>
 
       <div style={{ ...SEP, marginTop: 4 }}>
