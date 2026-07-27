@@ -400,6 +400,13 @@ export default function Payouts() {
                   firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
                   firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
                   isArchived = true;
+                } else {
+                  // fallback: payout tem firmId/tipo próprios
+                  accType = p.type || accType;
+                  firmObj = firms.find(f => f.id === p.firmId);
+                  firmName = firmObj?.name || 'Unknown Firm';
+                  firmLogoUrl = firmObj?.logo || null;
+                  isArchived = true;
                 }
               } else if (p._archivedAccounts?.length > 0) {
                 const arc = p._archivedAccounts[0];
@@ -408,6 +415,13 @@ export default function Payouts() {
                 firmObj = firms.find(f => f.id === arc.firmId);
                 firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
                 firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
+                isArchived = true;
+              } else {
+                // fallback: payout tem firmId/tipo próprios
+                accType = p.type || accType;
+                firmObj = firms.find(f => f.id === p.firmId);
+                firmName = firmObj?.name || 'Unknown Firm';
+                firmLogoUrl = firmObj?.logo || null;
                 isArchived = true;
               }
 
@@ -603,7 +617,7 @@ function ExportCSV({ rows }) {
 function PayoutForm({ onClose, edit, accounts, onSave }) {
   const [state, setState] = useState(
     edit
-      ? { ...edit }
+      ? { ...edit, dateCreated: (edit.dateCreated || '').slice(0, 10), approvedDate: (edit.approvedDate || '').slice(0, 10) || null }
       : {
         dateCreated: new Date().toISOString().slice(0, 10),
         type: 'Todas',
@@ -611,6 +625,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
         status: 'Pending',
         amountSolicited: 0,
         accountIds: [],
+        firmId: null,
         approvedDate: null
       }
   )
@@ -841,7 +856,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                 value={currentAccId || ''}
                 onChange={(e) => {
                   const selected = accounts.find(a => a.id === e.target.value);
-                  setState({ ...state, accountIds: [e.target.value], type: selected?.type || 'Todas' });
+                  setState({ ...state, accountIds: [e.target.value], type: selected?.type || 'Todas', firmId: selected?.firmId || null });
                 }}
                 style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
@@ -850,6 +865,20 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.type}) - {a.status}
                   </option>
+                ))}
+              </select>
+            </div>
+            <div className="payouts-field" style={{ marginTop: 12 }}>
+              <label>Firm (herdada da conta ou manual)</label>
+              <select
+                className="select"
+                value={state.firmId || ''}
+                onChange={(e) => setState({ ...state, firmId: e.target.value || null })}
+                style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
+              >
+                <option value="">— Nenhuma —</option>
+                {(store.getAll().firms || []).filter(f => state.type === 'Todas' || f.type === state.type).map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
               </select>
             </div>
