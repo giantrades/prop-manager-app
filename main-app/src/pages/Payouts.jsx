@@ -878,7 +878,7 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
                 style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
                 <option value="">— Nenhuma —</option>
-                {firms.filter(f => state.type === 'Todas' || f.type === state.type).map(f => (
+                {firms.map(f => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
               </select>
