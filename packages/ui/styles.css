@@ -2764,7 +2764,7 @@ select.payouts-input {
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 10px;
   padding: 10px 14px;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.15);
   display: flex;
   flex-wrap: wrap;

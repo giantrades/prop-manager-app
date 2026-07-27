@@ -874,6 +874,7 @@ a {
     height: auto !important;
     position: relative !important;
     top: 0 !important;
+    margin-bottom: 8px !important;
   }
 
   .filters-toggle {
@@ -945,6 +946,10 @@ a {
     flex: 1 1 auto !important;
     justify-content: center !important;
     min-width: 44px !important;
+  }
+
+  .dashboard-page {
+    gap: 12px !important;
   }
 }
 
