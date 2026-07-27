@@ -9,7 +9,7 @@ const ALLOWED_COLUMNS: Record<string, string[]> = {
     'created_at', 'currency', 'date_created'],
   payouts: ['id', 'user_id', 'account_id', 'account_ids', 'accounts', 'amount_solicited',
     'amount_received', 'fee', 'method', 'status', 'date_created', 'approved_date',
-    'split_by_account', 'attachments', '_archived_accounts'],
+    'split_by_account', 'attachments', '_archived_accounts', 'firm_id'],
   trades: ['id', 'user_id', 'account_id', 'entry_datetime', 'exit_datetime', 'asset',
     'direction', 'volume', 'entry_price', 'exit_price', 'result_net', 'result_gross',
     'fee', 'risk', 'notes', 'source', 'platform_trade_id', 'platform_name',

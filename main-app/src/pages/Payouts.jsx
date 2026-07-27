@@ -874,7 +874,10 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
               <select
                 className="select"
                 value={state.firmId || ''}
-                onChange={(e) => setState({ ...state, firmId: e.target.value || null })}
+                onChange={(e) => {
+                  const selectedFirm = firms.find(f => f.id === e.target.value);
+                  setState({ ...state, firmId: e.target.value || null, type: selectedFirm?.type || state.type });
+                }}
                 style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
                 <option value="">— Nenhuma —</option>
