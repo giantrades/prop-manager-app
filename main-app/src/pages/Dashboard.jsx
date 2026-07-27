@@ -274,6 +274,7 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
 
   const accById = Object.fromEntries(filteredAccounts.map(a => [a.id, a]))
   const accByName = Object.fromEntries(filteredAccounts.map(a => [a.name, a]))
+  const firmById = Object.fromEntries(firms.map(f => [f.id, f]))
 
   const payoutBelongs = (p) => {
     const d = new Date(p.dateCreated || p.date)
@@ -295,6 +296,8 @@ function useFiltered(accountStatusFilter = ['live', 'funded'], dateFilter = {}, 
       const hasMatchingArchivedAcc = p._archivedAccounts.some(arc => catSet.has(arc.type))
       if (hasMatchingArchivedAcc) return true
     }
+    // Payouts linked directly to a firm (no account): include if the firm's type matches
+    if (p.firmId && firmById[p.firmId] && catSet.has(firmById[p.firmId].type)) return true
     return false
   }
 
@@ -392,7 +395,7 @@ function SummaryCards({ accountStatusFilter = [], dateFilter = {}, selectedAccou
    4) Patrimônio & Financiamento  —  GLASS UPGRADE
    ========================================================= */
 function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
-  const { accounts, payouts, allAccounts } = useFiltered(accountStatusFilter, dateFilter)
+  const { accounts, payouts, allAccounts, firms } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
   const { categories: selected, timeRange } = useFilters()
   const [activeTab, setActiveTab] = React.useState('payouts')
@@ -422,8 +425,9 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
   const ALL_CATS = React.useMemo(() => {
     const fromAccounts = allAccounts.map(a => a.type).filter(Boolean)
     const fromArchived = payouts.flatMap(p => (p._archivedAccounts || []).map(arc => arc.type).filter(Boolean))
-    return Array.from(new Set([...fromAccounts, ...fromArchived]))
-  }, [allAccounts, payouts])
+    const fromFirms = firms.filter(f => f.type).map(f => f.type)
+    return Array.from(new Set([...fromAccounts, ...fromArchived, ...fromFirms]))
+  }, [allAccounts, payouts, firms])
   const showTotalOnly = selected.length === 0 || selected.length === ALL_CATS.length
   const activeCats = showTotalOnly ? ALL_CATS : selected
 
@@ -471,6 +475,14 @@ function PatrimonioLine({ accountStatusFilter = ['live', 'funded'], dateFilter =
         for (const arc of p._archivedAccounts) {
           if (!activeCats.includes(arc.type)) continue
           bucket[arc.type] = (bucket[arc.type] || 0) + (+p.amountReceived || 0)
+          contributed = true
+        }
+      }
+      // Fall back to firm type for firm-only payouts (no account linked)
+      if (!contributed && p.firmId) {
+        const firm = firms.find(f => f.id === p.firmId)
+        if (firm?.type && activeCats.includes(firm.type)) {
+          bucket[firm.type] = (bucket[firm.type] || 0) + (+p.amountReceived || 0)
           contributed = true
         }
       }
