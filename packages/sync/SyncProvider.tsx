@@ -173,12 +173,14 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       isPulling.current = false;
       setSyncing(false);
       // Push any pending local deletions that were blocked during pull
-      const data = getAll();
-      if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
-        push();
-      }
+      setTimeout(() => {
+        const data = getAll();
+        if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
+          window.dispatchEvent(new Event('datastore:change'));
+        }
+      }, 0);
     }
-  }, [user, push]);
+  }, [user]);
 
   const forceResync = useCallback(async () => {
     if (!user) return;
@@ -229,12 +231,14 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       isPulling.current = false;
       setSyncing(false);
-      const data = getAll();
-      if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
-        push();
-      }
+      setTimeout(() => {
+        const data = getAll();
+        if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
+          window.dispatchEvent(new Event('datastore:change'));
+        }
+      }, 0);
     }
-  }, [user, push]);
+  }, [user]);
 
   // Start/stop realtime subscriptions based on visibility
   const startRealtime = useCallback(() => {
