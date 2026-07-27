@@ -652,19 +652,47 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
   }, [accounts, currency, rate, getFirm])
 
   const CustomTreemapContent = (props) => {
-    const { x, y, width, height, name = '', value, fill } = props
+    const { x, y, width, height, name = '', value, fill, firmName, status } = props
     if (width <= 0 || height <= 0) return null
-    const showLabel = width > 50 && height > 24
+    const showContent = width > 70 && height > 45
+    const showMinimal = width > 40 && height > 24
+    const gradId = `treemap-glow-${x}-${y}`.replace(/[.\s]/g, '_')
     return (
       <g>
-        <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} opacity={0.85}
+        <rect x={x} y={y} width={width} height={height} fill="rgba(255,255,255,0.025)" rx={10} ry={10}
           stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
-        {showLabel && (
+        <rect x={x + 2.5} y={y + 5} width={3} height={height - 10} fill={fill} rx={1.5} ry={1.5} opacity={0.7} />
+        <defs>
+          <radialGradient id={gradId} cx="15%" cy="15%" r="70%">
+            <stop offset="0%" stopColor={fill} stopOpacity={0.12} />
+            <stop offset="100%" stopColor={fill} stopOpacity={0} />
+          </radialGradient>
+        </defs>
+        <rect x={x} y={y} width={width} height={height} fill={`url(#${gradId})`} rx={10} ry={10} />
+        {showContent && (
           <>
-            <text x={x + 8} y={y + 14} fill="#f1f5f9" fontSize={11} fontWeight={600}>
-              {name.length > 14 ? name.slice(0, 13) + '…' : name}
+            <text x={x + 15} y={y + 20} fill="#f1f5f9" fontSize={12} fontWeight={700}>
+              {name.length > 18 ? name.slice(0, 17) + '…' : name}
             </text>
-            <text x={x + 8} y={y + 28} fill="rgba(255,255,255,0.6)" fontSize={9}>
+            <text x={x + 15} y={y + 37} fill={fill} fontSize={16} fontWeight={800}>
+              {fmtShort(value)}
+            </text>
+            {height > 65 && (
+              <>
+                <text x={x + 15} y={y + height - 11} fill="rgba(255,255,255,0.3)" fontSize={9}>
+                  {firmName}
+                </text>
+                <text x={x + width - 12} y={y + height - 11} fill="rgba(255,255,255,0.2)" fontSize={8} textAnchor="end">
+                  {status}
+                </text>
+              </>
+            )}
+          </>
+        )}
+        {!showContent && showMinimal && (
+          <>
+            <rect x={x + 4} y={y + 4} width={3} height={height - 8} fill={fill} rx={1.5} ry={1.5} opacity={0.7} />
+            <text x={x + 12} y={y + height / 2 + 4} fill={fill} fontSize={12} fontWeight={700}>
               {fmtShort(value)}
             </text>
           </>
@@ -677,13 +705,18 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
     if (!active || !payload?.length) return null
     const d = payload[0].payload
     return (
-      <div style={{ background: '#0f1218', border: `1px solid ${d.fill}`, borderRadius: 8, padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
-        <div style={{ fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{d.name}</div>
-        <div style={{ color: d.fill, fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{fmt(d.value)}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+      <div style={{ background: 'rgba(15,18,24,0.95)', backdropFilter: 'blur(8px)', border: `1px solid ${d.fill}44`, borderRadius: 10, padding: '12px 16px', boxShadow: `0 8px 24px rgba(0,0,0,0.4)` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: d.fill, flexShrink: 0 }} />
+          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 13 }}>{d.name}</div>
+        </div>
+        <div style={{ color: d.fill, fontWeight: 800, fontSize: 18, marginBottom: 6, letterSpacing: '-0.3px' }}>{fmt(d.value)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#94a3b8' }}>
           <span>{d.firmName}</span>
-          <span>·</span>
-          <span>{d.status}</span>
+          <span style={{ opacity: 0.3 }}>·</span>
+          <span style={{ textTransform: 'capitalize' }}>{d.status}</span>
+          <span style={{ opacity: 0.3 }}>·</span>
+          <span>{d.type}</span>
         </div>
       </div>
     )
@@ -721,15 +754,15 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
         </ResponsiveContainer>
       </div>
 
-      <div style={{ ...SEP, paddingTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+      <div style={{ ...SEP, paddingTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
         {Array.from(new Set(data.map(d => d.firmName))).map((firm) => {
           const color = data.find(d => d.firmName === firm)?.fill || '#6b7280'
           const total = data.filter(d => d.firmName === firm).reduce((s, d) => s + d.size, 0)
           return (
-            <div key={firm} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '3px 10px' }}>
-              <div style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>{firm}</span>
-              <span style={{ fontSize: 10, color: '#64748b' }}>{fmtShort(total)}</span>
+            <div key={firm} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '5px 12px' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: '#cbd5e1', fontWeight: 500 }}>{firm}</span>
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{fmtShort(total)}</span>
             </div>
           )
         })}
