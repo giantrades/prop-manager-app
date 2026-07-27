@@ -4,7 +4,7 @@ import { useCurrency } from '@apps/state'
 import { useFilters } from '@apps/state'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid,
+  BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid, Sector,
   AreaChart, Area, Treemap
 } from 'recharts'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
@@ -62,7 +62,7 @@ const catPillClass = (type) =>
     type === 'Futures' ? 'pink' : type === 'Personal' ? 'purple' : 'gray'
 
 const CAT_HEX = {
-  Forex: '#7c5cff', Cripto: '#f59e0b', Futures: '#3b82f6', Personal: '#10b981',
+  Forex: '#8b5cf6', Cripto: '#f97316', Futures: '#ff4fa3', Personal: '#a855f7',
 }
 
 /* =========================================================
@@ -81,7 +81,7 @@ function FiltersBar({
   } = useFilters()
 
   const catColors = {
-    'Forex': '#7c5cff', 'Cripto': '#f59e0b', 'Futures': '#3b82f6', 'Personal': '#10b981'
+    'Forex': '#8b5cf6', 'Cripto': '#f97316', 'Futures': '#ff4fa3', 'Personal': '#a855f7'
   }
 
   const chipStyle = (item, active) => {
@@ -774,8 +774,8 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
 function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { accounts } = useFiltered(accountStatusFilter, dateFilter)
   const { currency, rate } = useCurrency()
+  const [activeIndex, setActiveIndex] = useState(null)
 
-  // ← remove useState(categoryColors) e o useEffect inteiro
   const getCatColor = (name) => CAT_HEX[name] || '#6b7280'
 
   const byCat = useMemo(() => {
@@ -787,6 +787,26 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
 
   const data = useMemo(() => Object.entries(byCat).map(([name, value]) => ({ name, value })), [byCat])
   const total = data.reduce((sum, item) => sum + item.value, 0)
+
+  const renderActiveShape = (props) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props
+    return (
+      <g>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 8}
+          startAngle={startAngle} endAngle={endAngle} fill={fill}
+          stroke={`${fill}66`} strokeWidth={3}
+          style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.5))' }}
+        />
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius - 2} outerRadius={outerRadius + 10}
+          startAngle={startAngle} endAngle={endAngle} fill="none"
+          stroke={`${fill}33`} strokeWidth={2}
+        />
+      </g>
+    )
+  }
+
+  const onPieEnter = (_, index) => setActiveIndex(index)
+  const onPieLeave = () => setActiveIndex(null)
 
   const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null
@@ -834,9 +854,19 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
       <div style={{ height: 240, position: 'relative' }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" outerRadius={95} innerRadius={55}>
+            <Pie data={data} dataKey="value" nameKey="name"
+              outerRadius={95} innerRadius={55}
+              activeIndex={activeIndex}
+              activeShape={renderActiveShape}
+              onMouseEnter={onPieEnter}
+              onMouseLeave={onPieLeave}
+            >
               {data.map((entry, i) => (
-                <Cell key={`cell-${i}`} fill={getCatColor(entry.name)} />
+                <Cell key={`cell-${i}`} fill={getCatColor(entry.name)}
+                  stroke={`${getCatColor(entry.name)}22`} strokeWidth={1}
+                  opacity={activeIndex !== null && activeIndex !== i ? 0.5 : 0.9}
+                  style={{ transition: 'opacity 0.2s ease' }}
+                />
               ))}
             </Pie>
             {total > 0 && (
@@ -857,7 +887,7 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
 
       <div style={{ ...SEP, marginTop: 4 }}>
         {data.map((row) => {
-          const color = getCatColor(row.name)                  // ← usa getCatColor
+          const color = getCatColor(row.name)
           const valueFormatted = currency === 'USD'
             ? `$${row.value.toLocaleString()}` : `R$${row.value.toLocaleString()}`
           const pct = ((row.value / total) * 100).toFixed(1)
