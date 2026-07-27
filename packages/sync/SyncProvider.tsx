@@ -170,10 +170,15 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {
       console.error('Push failed:', e);
     } finally {
-      isPushing.current = false;
+      isPulling.current = false;
       setSyncing(false);
+      // Push any pending local deletions that were blocked during pull
+      const data = getAll();
+      if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
+        push();
+      }
     }
-  }, [user]);
+  }, [user, push]);
 
   const forceResync = useCallback(async () => {
     if (!user) return;
@@ -224,8 +229,12 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       isPulling.current = false;
       setSyncing(false);
+      const data = getAll();
+      if (data._deletedAccountIds?.length || data._deletedFirmIds?.length || data._deletedPayoutIds?.length) {
+        push();
+      }
     }
-  }, [user]);
+  }, [user, push]);
 
   // Start/stop realtime subscriptions based on visibility
   const startRealtime = useCallback(() => {
