@@ -72,6 +72,16 @@ export default function Payouts() {
     return () => window.removeEventListener('storage', sync)
   }, [])
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   const { currency, rate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState('')
@@ -194,6 +204,157 @@ export default function Payouts() {
     sortField === field ? <span>{sortDirection === 'asc' ? ' ↑' : ' ↓'}</span> : null
 
   useEffect(() => setCurrentPage(1), [filter])
+
+  function MobilePayoutCard({ p }) {
+    const [expanded, setExpanded] = useState(false);
+
+    let accName = p._archivedAccounts?.[0]?.name || 'Desconhecida';
+    let accType = p._archivedAccounts?.[0]?.type || p.type || '';
+    let isArchived = false;
+    let firmObj = null;
+    let firmName = 'Unknown Firm';
+    let firmLogoUrl = null;
+    let typeColor = 'gray';
+
+    const firstId = p.accountId || (p.accountIds && p.accountIds[0]);
+
+    if (firstId) {
+      const liveAcc = accounts.find(a => a.id === firstId);
+      if (liveAcc) {
+        accName = liveAcc.name;
+        accType = liveAcc.type;
+        firmObj = firms.find(f => f.id === liveAcc.firmId);
+        firmName = firmObj?.name || 'Unknown Firm';
+        firmLogoUrl = firmObj?.logo || null;
+      } else if (p._archivedAccounts?.length > 0) {
+        const arc = p._archivedAccounts.find(a => a.id === firstId) || p._archivedAccounts[0];
+        accName = arc.name;
+        accType = arc.type;
+        firmObj = firms.find(f => f.id === arc.firmId);
+        firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
+        firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
+        isArchived = true;
+      } else {
+        accType = p.type || accType;
+        firmObj = firms.find(f => f.id === p.firmId);
+        firmName = firmObj?.name || 'Unknown Firm';
+        firmLogoUrl = firmObj?.logo || null;
+        isArchived = true;
+      }
+    } else if (p._archivedAccounts?.length > 0) {
+      const arc = p._archivedAccounts[0];
+      accName = arc.name;
+      accType = arc.type;
+      firmObj = firms.find(f => f.id === arc.firmId);
+      firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
+      firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
+      isArchived = true;
+    } else {
+      accType = p.type || accType;
+      firmObj = firms.find(f => f.id === p.firmId);
+      firmName = firmObj?.name || 'Unknown Firm';
+      firmLogoUrl = firmObj?.logo || null;
+      isArchived = true;
+    }
+
+    if (accType === 'Forex') typeColor = 'lavander';
+    else if (accType === 'Cripto') typeColor = 'orange';
+    else if (accType === 'Futures') typeColor = 'pink';
+    else if (accType === 'Personal') typeColor = 'purple';
+
+    const statusColor = p.status === 'Completed' ? 'greenpayout' : p.status === 'Pending' ? 'yellowpayout' : 'gray';
+
+    return (
+      <div
+        className={`account-card${expanded ? ' expanded' : ''}`}
+        style={{ borderColor: expanded ? 'rgba(124,92,255,0.3)' : 'rgba(255,255,255,0.06)' }}
+      >
+        <div className="account-card-header" onClick={() => setExpanded(v => !v)}>
+          {firmLogoUrl ? (
+            <img src={firmLogoUrl} alt={firmName} style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0, borderRadius: 4, background: 'rgba(255,255,255,0.05)', padding: 2 }} />
+          ) : (
+            <div style={{ width: 20, height: 20, borderRadius: 4, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, flexShrink: 0 }}>🏢</div>
+          )}
+          <div className="account-card-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {accName}
+            {isArchived && <span title="Conta Deletada/Arquivada" style={{ fontSize: 11, opacity: 0.6 }}>👻</span>}
+          </div>
+          <div className="account-card-meta">
+            <span className="account-card-funding" style={{ fontSize: 12, color: '#22c55e' }}>+{fmt(p.amountReceived || 0)}</span>
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>{new Date(p.dateCreated).toLocaleDateString('pt-BR')}</span>
+          </div>
+          <div className="account-card-arrow">▼</div>
+        </div>
+        <div className="account-card-body">
+          <div className="account-card-body-inner">
+            <div className="account-card-fields">
+              <div className="account-card-field">
+                <span className="account-card-field-label">Tipo</span>
+                <div className="account-card-field-value">
+                  <span className={`pill ${typeColor}`} style={{ fontSize: 11, padding: '2px 8px' }}>{accType}</span>
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Status</span>
+                <div className="account-card-field-value">
+                  <span className={`pill ${statusColor}`} style={{ fontSize: 11, padding: '2px 8px' }}>{p.status}</span>
+                </div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Método</span>
+                <div className="account-card-field-value" style={{ fontSize: 12 }}>{p.method || '—'}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Firm</span>
+                <div className="account-card-field-value" style={{ fontSize: 12, color: '#94a3b8' }}>{firmName}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Gross</span>
+                <div className="account-card-field-value" style={{ fontSize: 13, fontWeight: 600 }}>{fmt(p.amountSolicited)}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Fee</span>
+                <div className="account-card-field-value" style={{ fontSize: 13, fontWeight: 600, color: '#ef4444' }}>- {fmt(p.fee)}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Net</span>
+                <div className="account-card-field-value" style={{ fontSize: 14, fontWeight: 700, color: '#22c55e' }}>+ {fmt(p.amountReceived)}</div>
+              </div>
+              <div className="account-card-field">
+                <span className="account-card-field-label">Data</span>
+                <div className="account-card-field-value" style={{ fontSize: 12 }}>{new Date(p.dateCreated).toLocaleDateString('pt-BR')}</div>
+              </div>
+              <div className="account-card-field full-width">
+                <span className="account-card-field-label">Ações</span>
+                <div className="account-card-actions">
+                  <button className="btn ghost" onClick={(e) => { e.stopPropagation(); setShowForm({ edit: p }); }} style={{ padding: '4px 10px', fontSize: 13 }}>✏️ Edit</button>
+                  <button className="btn ghost" onClick={(e) => {
+                    e.stopPropagation();
+                    const data = getAll()
+                    const payout = data.payouts.find(pp => pp.id === p.id)
+                    if (payout?.accountIds?.length) {
+                      const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
+                      payout.accountIds.forEach(accId => {
+                        const acc = data.accounts.find(a => a.id === accId)
+                        if (acc) {
+                          const revertedFunding = (acc.currentFunding || 0) + netPerAccount
+                          updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+                        }
+                      })
+                    }
+                    deletePayout(p.id)
+                    const fresh = getAll()
+                    setPayouts(fresh.payouts)
+                    setAccounts(fresh.accounts)
+                  }} style={{ padding: '4px 10px', fontSize: 13, color: '#e74c3c' }}>🗑 Delete</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="payouts-page" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -340,60 +501,89 @@ export default function Payouts() {
         </div>
       )}
 
-      {/* Tabela com scroll horizontal */}
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <table>
-          <thead>
-            <tr>
-              <th style={{ cursor: 'pointer' }} onClick={() => handleSort('dateCreated')}>
-                Data<SortIndicator field="dateCreated" />
-              </th>
-              <th style={{ cursor: 'pointer' }} onClick={() => handleSort('accountIds')}>
-                Conta / Firm<SortIndicator field="accountIds" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('type')}>
-                Tipo<SortIndicator field="type" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('status')}>
-                Status<SortIndicator field="status" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('method')}>
-                Método<SortIndicator field="method" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('amountSolicited')}>
-                Gross<SortIndicator field="amountSolicited" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('fee')}>
-                Fee<SortIndicator field="fee" />
-              </th>
-              <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('amountReceived')}>
-                Net<SortIndicator field="amountReceived" />
-              </th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentPageData.map((p) => {
-              let accName = p._archivedAccounts?.[0]?.name || 'Desconhecida';
-              let accType = p._archivedAccounts?.[0]?.type || p.type || '';
-              let isArchived = false;
-              let firmObj = null;
-              let firmName = 'Unknown Firm';
-              let firmLogoUrl = null;
-              let typeColor = 'gray';
+      {isMobile ? (
+        <>
+          <div className="accounts-cards-divider" />
+          <div className="accounts-cards">
+            {currentPageData.length === 0 && (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                {filter ? 'Nenhum resultado encontrado.' : 'Nenhum payout encontrado.'}
+              </div>
+            )}
+            {currentPageData.map((p) => (
+              <MobilePayoutCard key={p.id} p={p} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('dateCreated')}>
+                  Data<SortIndicator field="dateCreated" />
+                </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('accountIds')}>
+                  Conta / Firm<SortIndicator field="accountIds" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('type')}>
+                  Tipo<SortIndicator field="type" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('status')}>
+                  Status<SortIndicator field="status" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('method')}>
+                  Método<SortIndicator field="method" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('amountSolicited')}>
+                  Gross<SortIndicator field="amountSolicited" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('fee')}>
+                  Fee<SortIndicator field="fee" />
+                </th>
+                <th className="center" style={{ cursor: 'pointer' }} onClick={() => handleSort('amountReceived')}>
+                  Net<SortIndicator field="amountReceived" />
+                </th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentPageData.map((p) => {
+                let accName = p._archivedAccounts?.[0]?.name || 'Desconhecida';
+                let accType = p._archivedAccounts?.[0]?.type || p.type || '';
+                let isArchived = false;
+                let firmObj = null;
+                let firmName = 'Unknown Firm';
+                let firmLogoUrl = null;
+                let typeColor = 'gray';
 
-              const firstId = p.accountId || (p.accountIds && p.accountIds[0]);
+                const firstId = p.accountId || (p.accountIds && p.accountIds[0]);
 
-              if (firstId) {
-                const liveAcc = accounts.find(a => a.id === firstId);
-                if (liveAcc) {
-                  accName = liveAcc.name;
-                  accType = liveAcc.type;
-                  firmObj = firms.find(f => f.id === liveAcc.firmId);
-                  firmName = firmObj?.name || 'Unknown Firm';
-                  firmLogoUrl = firmObj?.logo || null;
+                if (firstId) {
+                  const liveAcc = accounts.find(a => a.id === firstId);
+                  if (liveAcc) {
+                    accName = liveAcc.name;
+                    accType = liveAcc.type;
+                    firmObj = firms.find(f => f.id === liveAcc.firmId);
+                    firmName = firmObj?.name || 'Unknown Firm';
+                    firmLogoUrl = firmObj?.logo || null;
+                  } else if (p._archivedAccounts?.length > 0) {
+                    const arc = p._archivedAccounts.find(a => a.id === firstId) || p._archivedAccounts[0];
+                    accName = arc.name;
+                    accType = arc.type;
+                    firmObj = firms.find(f => f.id === arc.firmId);
+                    firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
+                    firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
+                    isArchived = true;
+                  } else {
+                    accType = p.type || accType;
+                    firmObj = firms.find(f => f.id === p.firmId);
+                    firmName = firmObj?.name || 'Unknown Firm';
+                    firmLogoUrl = firmObj?.logo || null;
+                    isArchived = true;
+                  }
                 } else if (p._archivedAccounts?.length > 0) {
-                  const arc = p._archivedAccounts.find(a => a.id === firstId) || p._archivedAccounts[0];
+                  const arc = p._archivedAccounts[0];
                   accName = arc.name;
                   accType = arc.type;
                   firmObj = firms.find(f => f.id === arc.firmId);
@@ -401,118 +591,102 @@ export default function Payouts() {
                   firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
                   isArchived = true;
                 } else {
-                  // fallback: payout tem firmId/tipo próprios
                   accType = p.type || accType;
                   firmObj = firms.find(f => f.id === p.firmId);
                   firmName = firmObj?.name || 'Unknown Firm';
                   firmLogoUrl = firmObj?.logo || null;
                   isArchived = true;
                 }
-              } else if (p._archivedAccounts?.length > 0) {
-                const arc = p._archivedAccounts[0];
-                accName = arc.name;
-                accType = arc.type;
-                firmObj = firms.find(f => f.id === arc.firmId);
-                firmName = firmObj?.name || arc.firmName || 'Unknown Firm';
-                firmLogoUrl = firmObj?.logo || arc.firmLogo || null;
-                isArchived = true;
-              } else {
-                // fallback: payout tem firmId/tipo próprios
-                accType = p.type || accType;
-                firmObj = firms.find(f => f.id === p.firmId);
-                firmName = firmObj?.name || 'Unknown Firm';
-                firmLogoUrl = firmObj?.logo || null;
-                isArchived = true;
-              }
 
-              if (accType === 'Forex') typeColor = 'lavander';
-              else if (accType === 'Cripto') typeColor = 'orange';
-              else if (accType === 'Futures') typeColor = 'pink';
-              else if (accType === 'Personal') typeColor = 'purple';
+                if (accType === 'Forex') typeColor = 'lavander';
+                else if (accType === 'Cripto') typeColor = 'orange';
+                else if (accType === 'Futures') typeColor = 'pink';
+                else if (accType === 'Personal') typeColor = 'purple';
 
-              return (
-                <tr key={p.id} style={{ borderLeft: `3px solid var(--${typeColor})`, background: isArchived ? 'rgba(255,255,255,0.01)' : 'transparent', transition: 'background 0.2s' }}>
-                  <td data-label="Data">{new Date(p.dateCreated).toLocaleDateString('pt-BR')}</td>
+                return (
+                  <tr key={p.id} style={{ borderLeft: `3px solid var(--${typeColor})`, background: isArchived ? 'rgba(255,255,255,0.01)' : 'transparent', transition: 'background 0.2s' }}>
+                    <td data-label="Data">{new Date(p.dateCreated).toLocaleDateString('pt-BR')}</td>
 
-                  <td data-label="Conta">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {firmLogoUrl ? (
-                        <img src={firmLogoUrl} alt={firmName} style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, background: 'rgba(255,255,255,0.05)', padding: 2 }} />
-                      ) : (
-                        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>🏢</div>
-                      )}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <div style={{ fontWeight: 600, color: isArchived ? '#9ca3af' : '#f8fafc', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-                          {accName}
-                          {isArchived && <span title="Conta Deletada/Arquivada" style={{ fontSize: 12, opacity: 0.8 }}>👻</span>}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>
-                          {firmName}
+                    <td data-label="Conta">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {firmLogoUrl ? (
+                          <img src={firmLogoUrl} alt={firmName} style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, background: 'rgba(255,255,255,0.05)', padding: 2 }} />
+                        ) : (
+                          <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>🏢</div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <div style={{ fontWeight: 600, color: isArchived ? '#9ca3af' : '#f8fafc', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+                            {accName}
+                            {isArchived && <span title="Conta Deletada/Arquivada" style={{ fontSize: 12, opacity: 0.8 }}>👻</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>
+                            {firmName}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td data-label="Tipo" className="center"><span className={`pill ${typeColor}`}>{accType}</span></td>
-                  <td data-label="Status" className="center">
-                    <span
-                      className={
-                        'pill ' +
-                        (p.status === 'Completed'
-                          ? 'greenpayout'
-                          : p.status === 'Pending'
-                            ? 'yellowpayout'
-                            : 'gray')
-                      }
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td data-label="Método" className="center">{p.method}</td>
-                  <td data-label="Gross" className="center" style={{ fontWeight: 600 }}>{fmt(p.amountSolicited)}</td>
-                  <td data-label="Fee" className="center" style={{ color: '#ef4444' }}>- {fmt(p.fee)}</td>
-                  <td data-label="Net" className="center" style={{ color: '#22c55e', fontWeight: 700 }}>+ {fmt(p.amountReceived)}</td>
-                  <td className="right" data-label="Ações">
-                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                      <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
-                        Edit
-                      </button>
-                      <button
-                        className="btn secondary"
-                        onClick={() => {
-                          const data = getAll()
-                          const payout = data.payouts.find(pp => pp.id === p.id)
-                          if (payout?.accountIds?.length) {
-                            const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
-                            payout.accountIds.forEach(accId => {
-                              const acc = data.accounts.find(a => a.id === accId)
-                              if (acc) {
-                                const revertedFunding = (acc.currentFunding || 0) + netPerAccount
-                                updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
-                              }
-                            })
-                          }
-                          deletePayout(p.id)
-                          const fresh = getAll()
-                          setPayouts(fresh.payouts)
-                          setAccounts(fresh.accounts)
-                        }}
+                    </td>
+                    <td data-label="Tipo" className="center"><span className={`pill ${typeColor}`}>{accType}</span></td>
+                    <td data-label="Status" className="center">
+                      <span
+                        className={
+                          'pill ' +
+                          (p.status === 'Completed'
+                            ? 'greenpayout'
+                            : p.status === 'Pending'
+                              ? 'yellowpayout'
+                              : 'gray')
+                        }
                       >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                        {p.status}
+                      </span>
+                    </td>
+                    <td data-label="Método" className="center">{p.method}</td>
+                    <td data-label="Gross" className="center" style={{ fontWeight: 600 }}>{fmt(p.amountSolicited)}</td>
+                    <td data-label="Fee" className="center" style={{ color: '#ef4444' }}>- {fmt(p.fee)}</td>
+                    <td data-label="Net" className="center" style={{ color: '#22c55e', fontWeight: 700 }}>+ {fmt(p.amountReceived)}</td>
+                    <td className="right" data-label="Ações">
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button className="btn ghost" onClick={() => setShowForm({ edit: p })}>
+                          Edit
+                        </button>
+                        <button
+                          className="btn secondary"
+                          onClick={() => {
+                            const data = getAll()
+                            const payout = data.payouts.find(pp => pp.id === p.id)
+                            if (payout?.accountIds?.length) {
+                              const netPerAccount = (payout.amountSolicited || 0) / payout.accountIds.length
+                              payout.accountIds.forEach(accId => {
+                                const acc = data.accounts.find(a => a.id === accId)
+                                if (acc) {
+                                  const revertedFunding = (acc.currentFunding || 0) + netPerAccount
+                                  updateAccount(acc.id, { ...acc, currentFunding: revertedFunding })
+                                }
+                              })
+                            }
+                            deletePayout(p.id)
+                            const fresh = getAll()
+                            setPayouts(fresh.payouts)
+                            setAccounts(fresh.accounts)
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
 
-        {currentPageData.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-            {filter ? 'Nenhum resultado encontrado.' : 'Nenhum payout encontrado.'}
-          </div>
-        )}
-      </div>
+          {currentPageData.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              {filter ? 'Nenhum resultado encontrado.' : 'Nenhum payout encontrado.'}
+            </div>
+          )}
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>

@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState } from 'react'
 import {getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout,  updatePayout,deletePayout,getFirms,createFirm,updateFirm,deleteFirm,getFirmStats} from '@apps/lib/dataStore';
 
 const FiltersContext = createContext(null)
-const defaultTime = '30'
+const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+const defaultTime = isMobile ? 'all' : '30'
 
 export function FiltersProvider({children}){
   const [categories, setCategories] = useState([]) // [] = todas
