@@ -5,7 +5,7 @@ import { useFilters } from '@apps/state'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend, CartesianGrid,
-  AreaChart, Area
+  AreaChart, Area, Treemap
 } from 'recharts'
 import { getAll, createAccount, updateAccount, deleteAccount, getAccountStats, createPayout, updatePayout, deletePayout, getFirms, createFirm, updateFirm, deleteFirm, getFirmStats } from '@apps/lib/dataStore';
 import { getAllGoals } from '@apps/lib/dataStore';
@@ -628,26 +628,68 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0)
   }
 
-  const { groups, maxVal } = React.useMemo(() => {
-    const byFirm = {}
-    for (const a of accounts) {
-      const fid = a.firmId || 'unassigned'
-      if (!byFirm[fid]) byFirm[fid] = { firmId: fid, accounts: [], total: 0 }
-      const val = currency === 'USD' ? a.currentFunding : a.currentFunding * rate
-      byFirm[fid].accounts.push({ id: a.id, name: a.name, value: val, type: a.type, status: a.status })
-      byFirm[fid].total += val
-    }
-    const groups = Object.values(byFirm)
-      .sort((a, b) => b.total - a.total)
-      .map(g => {
-        g.accounts.sort((a, b) => b.value - a.value)
-        return g
-      })
-    const maxVal = groups.length > 0 ? groups[0].total : 0
-    return { groups, maxVal }
-  }, [accounts, currency, rate])
+  const fmtShort = (v) => {
+    const abs = Math.abs(v)
+    if (abs >= 1e6) return `${currency === 'USD' ? '$' : 'R$'}${(abs / 1e6).toFixed(1)}M`
+    if (abs >= 1e3) return `${currency === 'USD' ? '$' : 'R$'}${(abs / 1e3).toFixed(0)}k`
+    return fmt(v)
+  }
 
-  if (groups.length === 0) {
+  const data = React.useMemo(() => {
+    return accounts
+      .map((a) => {
+        const firm = getFirm(a.firmId)
+        return {
+          name: a.name,
+          size: currency === 'USD' ? a.currentFunding : a.currentFunding * rate,
+          fill: firm?.color || '#6b7280',
+          firmName: firm?.name || 'Unassigned',
+          status: a.status,
+          type: a.type,
+        }
+      })
+      .sort((a, b) => b.size - a.size)
+  }, [accounts, currency, rate, getFirm])
+
+  const CustomTreemapContent = (props) => {
+    const { x, y, width, height, name, value, fill } = props
+    if (width <= 0 || height <= 0) return null
+    const showLabel = width > 50 && height > 24
+    return (
+      <g>
+        <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} opacity={0.85}
+          stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+        {showLabel && (
+          <>
+            <text x={x + 8} y={y + 14} fill="#f1f5f9" fontSize={11} fontWeight={600}>
+              {name.length > 14 ? name.slice(0, 13) + '…' : name}
+            </text>
+            <text x={x + 8} y={y + 28} fill="rgba(255,255,255,0.6)" fontSize={9}>
+              {fmtShort(value)}
+            </text>
+          </>
+        )}
+      </g>
+    )
+  }
+
+  const CustomTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null
+    const d = payload[0].payload
+    return (
+      <div style={{ background: '#0f1218', border: `1px solid ${d.fill}`, borderRadius: 8, padding: '10px 14px', boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{d.name}</div>
+        <div style={{ color: d.fill, fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{fmt(d.value)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+          <span>{d.firmName}</span>
+          <span>·</span>
+          <span>{d.status}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (data.length === 0) {
     return (
       <div style={glass()}>
         <GlowOrb color="rgba(59,130,246,0.1)" />
@@ -664,57 +706,30 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
       <GlowOrb color="rgba(59,130,246,0.1)" />
       <ChartHeader title="📦 Funding by Account" />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {groups.map((g) => {
-          const firm = getFirm(g.firmId)
-          const firmColor = firm?.color || '#6b7280'
-          const groupPct = maxVal > 0 ? (g.total / maxVal) * 100 : 0
-          return (
-            <div key={g.firmId}>
-              {/* Firm header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '0 4px' }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: firmColor, flexShrink: 0 }} />
-                {firm?.logo ? (
-                  <img src={firm.logo} alt={firm.name} style={{ height: 14, width: 'auto', objectFit: 'contain' }} />
-                ) : (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>
-                    {g.firmId === 'unassigned' ? 'Unassigned' : firm?.name || 'Unknown Firm'}
-                  </span>
-                )}
-                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(groupPct, 2)}%`, height: '100%', background: firmColor, borderRadius: 2, opacity: 0.5 }} />
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>{fmt(g.total)}</span>
-              </div>
+      <div style={{ height: 280 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <Treemap
+            data={data}
+            dataKey="size"
+            ratio={4 / 3}
+            stroke="rgba(255,255,255,0.04)"
+            fill="#6b7280"
+            content={<CustomTreemapContent />}
+          >
+            <Tooltip content={<CustomTooltip />} />
+          </Treemap>
+        </ResponsiveContainer>
+      </div>
 
-              {/* Account rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingLeft: 14 }}>
-                {g.accounts.map((acc) => {
-                  const accPct = g.total > 0 ? (acc.value / g.total) * 100 : 0
-                  return (
-                    <div key={acc.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '5px 8px', borderRadius: 6,
-                      transition: 'background 0.15s', fontSize: 12,
-                    }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
-                      <span style={{ color: '#cbd5e1', fontWeight: 500, flex: '0 0 auto', minWidth: 80 }}>{acc.name}</span>
-                      <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{
-                          width: `${Math.max(accPct, 2)}%`, height: '100%',
-                          background: firmColor, borderRadius: 3,
-                          transition: 'width 0.4s ease',
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 60, justifyContent: 'flex-end' }}>
-                        <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{fmt(acc.value)}</span>
-                        <span className={`pill ${catPillClass(acc.type)}`} style={{ fontSize: 9, padding: '1px 6px' }}>{acc.type}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+      <div style={{ ...SEP, paddingTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
+        {Array.from(new Set(data.map(d => d.firmName))).map((firm) => {
+          const color = data.find(d => d.firmName === firm)?.fill || '#6b7280'
+          const total = data.filter(d => d.firmName === firm).reduce((s, d) => s + d.size, 0)
+          return (
+            <div key={firm} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '3px 10px' }}>
+              <div style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 500 }}>{firm}</span>
+              <span style={{ fontSize: 10, color: '#64748b' }}>{fmtShort(total)}</span>
             </div>
           )
         })}
@@ -758,9 +773,16 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
     )
   }
 
+  const fmtAbbr = (v) => {
+    const abs = Math.abs(v)
+    if (abs >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+    if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}k`
+    return v.toFixed(0)
+  }
+
   const fmtTotal = (v) => {
-    if (currency === 'USD') return `$${v.toLocaleString()}`
-    return `R$${v.toLocaleString()}`
+    if (currency === 'USD') return `$${fmtAbbr(v)}`
+    return `R$${fmtAbbr(v)}`
   }
 
   return (
@@ -788,8 +810,8 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
             transform: 'translate(-50%, -50%)',
             textAlign: 'center', pointerEvents: 'none',
           }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2 }}>{fmtTotal(total)}</div>
-            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>total</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#e2e8f0', lineHeight: 1.2 }}>{fmtTotal(total)}</div>
+            <div style={{ fontSize: 9, color: '#64748b', marginTop: 1 }}>total</div>
           </div>
         )}
       </div>
@@ -865,6 +887,20 @@ function GoalsDistributionChart() {
     return (
       <div style={{ background: '#0f1218', border: `1px solid ${color}40`, borderRadius: 8, padding: '8px 12px', boxShadow: `0 4px 16px rgba(0,0,0,0.3)` }}>
         <p style={{ margin: 0, fontWeight: 600, color }}>{name}: <span style={{ color: '#f1f5f9' }}>{value}</span></p>
+      </div>
+    )
+  }
+
+  if (stats.total === 0 && stats.arquivado === 0) {
+    return (
+      <div style={glass()}>
+        <GlowOrb color="rgba(139,92,246,0.1)" />
+        <ChartHeader title="🎯 Goals by Status" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', gap: 8 }}>
+          <div style={{ fontSize: 32, opacity: 0.3 }}>🎯</div>
+          <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center' }}>No goals yet</div>
+          <div style={{ color: '#475569', fontSize: 11, textAlign: 'center' }}>Create goals to track your progress</div>
+        </div>
       </div>
     )
   }
