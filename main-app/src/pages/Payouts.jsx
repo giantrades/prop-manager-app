@@ -541,6 +541,7 @@ export default function Payouts() {
           onClose={() => setShowForm(false)}
           edit={showForm.edit}
           accounts={accounts}
+          firms={firms}
           onSave={(payload) => {
             const isEdit = !!showForm.edit
             const payoutId = showForm.edit?.id
@@ -614,7 +615,7 @@ function ExportCSV({ rows }) {
 // ---------------------------
 // Formulário de criação/edição
 // ---------------------------
-function PayoutForm({ onClose, edit, accounts, onSave }) {
+function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
   const [state, setState] = useState(
     edit
       ? { ...edit, dateCreated: (edit.dateCreated || '').slice(0, 10), approvedDate: (edit.approvedDate || '').slice(0, 10) || null }
@@ -877,7 +878,7 @@ function PayoutForm({ onClose, edit, accounts, onSave }) {
                 style={{ width: '100%', fontSize: 15, padding: '10px 14px' }}
               >
                 <option value="">— Nenhuma —</option>
-                {(store.getAll().firms || []).filter(f => state.type === 'Todas' || f.type === state.type).map(f => (
+                {firms.filter(f => state.type === 'Todas' || f.type === state.type).map(f => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
               </select>
