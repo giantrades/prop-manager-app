@@ -671,8 +671,10 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
 
   const currentAccId = state.accountIds && state.accountIds[0];
   const currentAcc = accounts.find(a => a.id === currentAccId);
-  const currentFirm = currentAcc ? store.getAll().firms?.find(f => f.id === currentAcc.firmId) : null;
-  const currentType = currentAcc ? currentAcc.type : 'gray';
+  const currentFirm = currentAcc
+    ? store.getAll().firms?.find(f => f.id === currentAcc.firmId)
+    : (state.firmId ? firms.find(f => f.id === state.firmId) : null);
+  const currentType = currentAcc?.type || currentFirm?.type || state.type || 'gray';
 
   let headerColor = 'rgba(255,255,255,0.05)';
   if (currentType === 'Forex') headerColor = 'rgba(124, 92, 255, 0.15)';
@@ -680,9 +682,10 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
   else if (currentType === 'Futures') headerColor = 'rgba(236, 72, 153, 0.15)';
   else if (currentType === 'Personal') headerColor = 'rgba(168, 85, 247, 0.15)';
 
+  const profitSplit = currentAcc?.profitSplit ?? (currentFirm ? 0.8 : 1);
   const totals = {
-    net: state.amountSolicited * (currentAcc?.profitSplit || 1),
-    fee: state.amountSolicited - (state.amountSolicited * (currentAcc?.profitSplit || 1))
+    net: state.amountSolicited * profitSplit,
+    fee: state.amountSolicited - (state.amountSolicited * profitSplit)
   };
 
   const addMethod = () => {
@@ -1017,10 +1020,9 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
             </div>
           </div>
 
-          {currentAcc && (
-            <div className="payouts-preview" style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, marginTop: 24, border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="payouts-preview" style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, marginTop: 24, border: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="payouts-preview-header" style={{ marginBottom: 16 }}>
-                <div className="payouts-preview-title" style={{ fontSize: 16, fontWeight: 600 }}>💡 Valores (100% para a conta {currentAcc.name})</div>
+                <div className="payouts-preview-title" style={{ fontSize: 16, fontWeight: 600 }}>💡 Valores {currentAcc ? `(100% para a conta ${currentAcc.name})` : currentFirm ? `(baseado na firm ${currentFirm.name})` : ''}</div>
               </div>
 
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -1051,8 +1053,7 @@ function PayoutForm({ onClose, edit, accounts, firms, onSave }) {
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
         <div className="payouts-modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
           <button className="btn ghost" onClick={onClose}>

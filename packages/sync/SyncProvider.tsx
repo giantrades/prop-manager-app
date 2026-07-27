@@ -104,7 +104,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         ...local,
         firms: remote.firms !== undefined ? fillMissing(remote.firms ?? [], local.firms) : local.firms,
         accounts: remote.accounts !== undefined ? fillMissing(remote.accounts ?? [], local.accounts) : local.accounts,
-        payouts: mergeArr(remote.payouts, local.payouts),
+        payouts: remote.payouts !== undefined ? fillMissing(remote.payouts ?? [], local.payouts) : local.payouts,
         trades: remote.trades !== undefined ? mergeTrades(remote.trades, local.trades) : local.trades,
         livePositions: local.livePositions,
         strategies: mergeArr(remote.strategies, local.strategies),
