@@ -652,7 +652,7 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
   }, [accounts, currency, rate, getFirm])
 
   const CustomTreemapContent = (props) => {
-    const { x, y, width, height, name, value, fill } = props
+    const { x, y, width, height, name = '', value, fill } = props
     if (width <= 0 || height <= 0) return null
     const showLabel = width > 50 && height > 24
     return (
