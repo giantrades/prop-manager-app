@@ -1756,6 +1756,17 @@ export default function Dashboard() {
   const [showDrawdown, setShowDrawdown] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState<boolean>(false);
 
+  const activeFilterCount = useMemo(() => {
+    let c = 0
+    if (categoryFilter.length > 0) c += categoryFilter.length
+    if (timeframeFilter) c++
+    if (strategyFilter) c++
+    if (rangeFilter !== "all") c++
+    if (dateFilter.start || dateFilter.end) c++
+    if (selectedAccountIds.length > 0) c++
+    return c
+  }, [categoryFilter, timeframeFilter, strategyFilter, rangeFilter, dateFilter, selectedAccountIds])
+
   return (
     <div className="journal-dashboard-page">
       {/* Status de integração */}
@@ -1784,8 +1795,21 @@ export default function Dashboard() {
       {/* FILTERS SECTION */}
       <div className="filters">
         <div className="filters-toggle">
-          <button onClick={() => setFiltersOpen((v: boolean) => !v)}>
-            {filtersOpen ? "Ocultar Filtros ▲" : "Mostrar Filtros ▼"}
+          <button className="filters-toggle-btn" onClick={() => setFiltersOpen((v: boolean) => !v)}>
+            <span className="filters-toggle-left">
+              <svg className="filter-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>Filtros</span>
+            </span>
+            <span className="filters-toggle-right">
+              {activeFilterCount > 0 && (
+                <span className="filters-badge">{activeFilterCount}</span>
+              )}
+              <svg className={`chevron ${filtersOpen ? 'open' : ''}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </button>
         </div>
 
