@@ -1034,7 +1034,7 @@ function RecentPayouts({ accountStatusFilter = ['live', 'funded'], dateFilter = 
 /* =========================================================
    9) Shared horizontal ranking list for firms
    ========================================================= */
-function FirmRankingList({ title, icon, glowColor, data, fmt }) {
+function FirmRankingList({ title, icon, glowColor, data = [], fmt }) {
   const [showAll, setShowAll] = useState(false)
   const maxVal = data.length > 0 ? data[0].value : 0
 
