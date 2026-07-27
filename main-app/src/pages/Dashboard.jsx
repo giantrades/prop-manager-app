@@ -619,64 +619,105 @@ function FundingPerAccount({ accountStatusFilter = ['live', 'funded'], dateFilte
 
   React.useEffect(() => { const data = getAll(); setFirms(data.firms || []) }, [])
 
-  const getFirmColor = React.useCallback((firmId) => {
-    const f = firms.find((x) => x.id === firmId); return f?.color || '#6b7280'
+  const getFirm = React.useCallback((firmId) => {
+    return firms.find((x) => x.id === firmId) || null
   }, [firms])
 
-  const data = accounts.map((a) => ({
-    name: a.name, value: currency === 'USD' ? a.currentFunding : a.currentFunding * rate, firmId: a.firmId || null,
-  }))
-
-  const formatValue = (value) => {
-    if (Math.abs(value) >= 1000) return `${currency === 'USD' ? '$' : ''}${(value / 1000).toFixed(0)}k`
-    return `${currency === 'USD' ? '$' : ''}${value.toFixed(0)}`
+  const fmt = (v) => {
+    if (currency === 'USD') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0)
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0)
   }
 
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload || !payload.length) return null
-    const d = payload[0].payload
+  const { groups, maxVal } = React.useMemo(() => {
+    const byFirm = {}
+    for (const a of accounts) {
+      const fid = a.firmId || 'unassigned'
+      if (!byFirm[fid]) byFirm[fid] = { firmId: fid, accounts: [], total: 0 }
+      const val = currency === 'USD' ? a.currentFunding : a.currentFunding * rate
+      byFirm[fid].accounts.push({ id: a.id, name: a.name, value: val, type: a.type, status: a.status })
+      byFirm[fid].total += val
+    }
+    const groups = Object.values(byFirm)
+      .sort((a, b) => b.total - a.total)
+      .map(g => {
+        g.accounts.sort((a, b) => b.value - a.value)
+        return g
+      })
+    const maxVal = groups.length > 0 ? groups[0].total : 0
+    return { groups, maxVal }
+  }, [accounts, currency, rate])
+
+  if (groups.length === 0) {
     return (
-      <div style={{ background: '#0f1218', border: `2px solid ${getFirmColor(d.firmId)}`, borderRadius: 8, padding: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', color: '#fff' }}>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
-        <div style={{ color: getFirmColor(d.firmId), fontWeight: 700, fontSize: 16 }}>{formatValue(payload[0].value)}</div>
+      <div style={glass()}>
+        <GlowOrb color="rgba(59,130,246,0.1)" />
+        <ChartHeader title="📦 Funding by Account" />
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#475569', fontSize: 13 }}>
+          No accounts match current filters
+        </div>
       </div>
     )
   }
-
-  const CustomBar = (props) => {
-    const { payload, ...rest } = props
-    if (!payload) return null
-    return <rect {...rest} fill={getFirmColor(payload.firmId)} rx={4} ry={4} />
-  }
-
-  const getBarSize = () => { const c = data.length; if (c <= 3) return 80; if (c <= 5) return 60; if (c <= 10) return 40; if (c <= 20) return 25; return 15 }
 
   return (
     <div style={glass()}>
       <GlowOrb color="rgba(59,130,246,0.1)" />
       <ChartHeader title="📦 Funding by Account" />
 
-      <div style={{ height: 240 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 20 }} maxBarSize={getBarSize()}>
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.3} horizontal vertical={false} />
-            <XAxis dataKey="name" hide type="category" />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={formatValue} />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" shape={<CustomBar />} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {groups.map((g) => {
+          const firm = getFirm(g.firmId)
+          const firmColor = firm?.color || '#6b7280'
+          const groupPct = maxVal > 0 ? (g.total / maxVal) * 100 : 0
+          return (
+            <div key={g.firmId}>
+              {/* Firm header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '0 4px' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: firmColor, flexShrink: 0 }} />
+                {firm?.logo ? (
+                  <img src={firm.logo} alt={firm.name} style={{ height: 14, width: 'auto', objectFit: 'contain' }} />
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>
+                    {g.firmId === 'unassigned' ? 'Unassigned' : firm?.name || 'Unknown Firm'}
+                  </span>
+                )}
+                <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.max(groupPct, 2)}%`, height: '100%', background: firmColor, borderRadius: 2, opacity: 0.5 }} />
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>{fmt(g.total)}</span>
+              </div>
 
-      {/* Legend */}
-      <div style={{ ...SEP, paddingTop: 14, marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-        {data.map((acc, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '3px 10px' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: getFirmColor(acc.firmId), flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 500 }}>{acc.name}</span>
-            <span style={{ fontSize: 11, color: '#64748b' }}>{formatValue(acc.value)}</span>
-          </div>
-        ))}
+              {/* Account rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingLeft: 14 }}>
+                {g.accounts.map((acc) => {
+                  const accPct = g.total > 0 ? (acc.value / g.total) * 100 : 0
+                  return (
+                    <div key={acc.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '5px 8px', borderRadius: 6,
+                      transition: 'background 0.15s', fontSize: 12,
+                    }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}>
+                      <span style={{ color: '#cbd5e1', fontWeight: 500, flex: '0 0 auto', minWidth: 80 }}>{acc.name}</span>
+                      <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${Math.max(accPct, 2)}%`, height: '100%',
+                          background: firmColor, borderRadius: 3,
+                          transition: 'width 0.4s ease',
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 60, justifyContent: 'flex-end' }}>
+                        <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{fmt(acc.value)}</span>
+                        <span className={`pill ${catPillClass(acc.type)}`} style={{ fontSize: 9, padding: '1px 6px' }}>{acc.type}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -717,23 +758,40 @@ function FundingPerCategory({ accountStatusFilter = ['live', 'funded'], dateFilt
     )
   }
 
+  const fmtTotal = (v) => {
+    if (currency === 'USD') return `$${v.toLocaleString()}`
+    return `R$${v.toLocaleString()}`
+  }
+
   return (
     <div style={glass()}>
       <GlowOrb color="rgba(124,92,255,0.1)" />
-      <ChartHeader title="🧭 Funding by Category" />
+      <ChartHeader title="🧭 Funding by Category" action={
+        total > 0 ? <span style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>Total {fmtTotal(total)}</span> : null
+      } />
 
-      <div style={{ height: 240 }}>
+      <div style={{ height: 240, position: 'relative' }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" outerRadius={95} innerRadius={45}>
+            <Pie data={data} dataKey="value" nameKey="name" outerRadius={95} innerRadius={55}>
               {data.map((entry, i) => (
-                <Cell key={`cell-${i}`} fill={getCatColor(entry.name)} />   // ← cores corretas
+                <Cell key={`cell-${i}`} fill={getCatColor(entry.name)} />
               ))}
             </Pie>
             <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
             <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
+        {total > 0 && (
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            textAlign: 'center', pointerEvents: 'none',
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2 }}>{fmtTotal(total)}</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>total</div>
+          </div>
+        )}
       </div>
 
       <div style={{ ...SEP, marginTop: 4 }}>
@@ -814,12 +872,17 @@ function GoalsDistributionChart() {
   return (
     <div style={glass()}>
       <GlowOrb color="rgba(139,92,246,0.1)" />
-      <ChartHeader title="🎯 Goals by Status" />
+      <ChartHeader title="🎯 Goals by Status" action={
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>
+          {stats.total} goal{stats.total !== 1 ? 's' : ''}
+          {stats.concluido > 0 && ` · ${((stats.concluido / (stats.total || 1)) * 100).toFixed(0)}% done`}
+        </span>
+      } />
 
       <div style={{ height: 240 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={95} innerRadius={45} stroke="none">
+            <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={95} innerRadius={55} stroke="none">
               {chartData.map((entry, i) => <Cell key={i} fill={colors[i]} />)}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
@@ -829,15 +892,21 @@ function GoalsDistributionChart() {
       </div>
 
       <div style={{ ...SEP, marginTop: 4 }}>
-        {chartData.map((row, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i] }} />
-              <span style={{ fontSize: 13, color: '#cbd5e1' }}>{row.name}</span>
+        {chartData.filter(r => r.value > 0).map((row, i) => {
+          const pct = ((row.value / (stats.total || 1)) * 100).toFixed(1)
+          return (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: colors[i] }} />
+                <span style={{ fontSize: 13, color: '#cbd5e1' }}>{row.name}</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: colors[i] }}>{row.value}</span>
+                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 6 }}>({pct}%)</span>
+              </div>
             </div>
-            <span style={{ fontSize: 15, fontWeight: 700, color: colors[i] }}>{row.value}</span>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -927,7 +996,109 @@ function RecentPayouts({ accountStatusFilter = ['live', 'funded'], dateFilter = 
 }
 
 /* =========================================================
-   9) Funding per Firm  —  GLASS UPGRADE
+   9) Shared horizontal ranking list for firms
+   ========================================================= */
+function FirmRankingList({ title, icon, glowColor, data, fmt }) {
+  const [showAll, setShowAll] = useState(false)
+  const maxVal = data.length > 0 ? data[0].value : 0
+
+  if (data.length === 0) {
+    return (
+      <div style={glass()}>
+        <GlowOrb color={glowColor} />
+        <ChartHeader title={`${icon} ${title}`} />
+        <div style={{ textAlign: 'center', padding: '40px 0', color: '#475569', fontSize: 13 }}>
+          No data available
+        </div>
+      </div>
+    )
+  }
+
+  const displayData = showAll ? data : data.slice(0, 8)
+
+  return (
+    <div style={glass()}>
+      <GlowOrb color={glowColor} />
+      <ChartHeader title={`${icon} ${title}`} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {displayData.map((d, i) => {
+          const pct = maxVal > 0 ? (d.value / maxVal) * 100 : 0
+          return (
+            <div key={d.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', borderRadius: 10,
+              background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+              transition: 'background 0.15s',
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+              {/* Rank */}
+              <span style={{
+                width: 22, height: 22, borderRadius: 6,
+                background: d.value > 0 ? `${d.color}22` : 'transparent',
+                border: d.value > 0 ? `1px solid ${d.color}44` : '1px solid rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700,
+                color: d.value > 0 ? d.color : '#475569',
+                flexShrink: 0,
+              }}>{i + 1}</span>
+
+              {/* Logo / Name */}
+              <div style={{ width: 80, flexShrink: 0 }}>
+                {d.logo ? (
+                  <img src={d.logo} alt={d.name} style={{ height: 16, width: 'auto', objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0' }}>{d.name}</span>
+                )}
+              </div>
+
+              {/* Bar */}
+              <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{
+                  width: `${Math.max(pct, d.value > 0 ? 4 : 0)}%`, height: '100%',
+                  background: d.value > 0 ? d.color : 'transparent',
+                  borderRadius: 4, transition: 'width 0.6s ease',
+                }} />
+              </div>
+
+              {/* Value */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap' }}>{fmt(d.value)}</span>
+                {d.hasArchived && (
+                  <span style={{ fontSize: 9, color: '#94a3b8', background: 'rgba(148,163,184,0.12)', borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap' }}>
+                    archived
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {data.length > 8 && (
+        <div style={{ ...SEP, paddingTop: 12, textAlign: 'center' }}>
+          <button
+            onClick={() => setShowAll(!showAll)}
+            style={{
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
+              color: '#94a3b8', padding: '6px 16px', borderRadius: 8,
+              fontSize: 12, cursor: 'pointer', fontWeight: 600,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
+          >
+            {showAll ? '▲ Show less' : `▼ Show all (${data.length})`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* =========================================================
+   10) Funding per Firm  —  RANKING LIST
    ========================================================= */
 function FundingPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {}
@@ -936,83 +1107,24 @@ function FundingPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
   React.useEffect(() => { const data = getAll(); setFirms(data.firms || []) }, [])
 
-  const getFirmColor = React.useCallback((firmId) => { const f = firms.find((x) => x.id === firmId); return f?.color || '#6b7280' }, [firms])
-
   const fmt = (v) => {
     if (currency === 'USD') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
   }
 
   const data = React.useMemo(() => {
-    return firms.map((f) => {
+    const mapped = firms.map((f) => {
       const totalRaw = accounts.filter((a) => a.firmId === f.id).reduce((s, a) => s + (a.currentFunding || 0), 0)
-      return { id: f.id, name: f.name, type: f.type || '', logo: f.logo, color: f.color, value: currency === 'USD' ? totalRaw : totalRaw * rate }
+      return { id: f.id, name: f.name, type: f.type || '', logo: f.logo, color: f.color || '#6b7280', value: currency === 'USD' ? totalRaw : totalRaw * rate }
     })
+    return mapped.sort((a, b) => b.value - a.value)
   }, [firms, accounts, currency, rate])
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null
-    const d = payload[0].payload
-    return (
-      <div style={{ background: '#0f1218', border: `2px solid ${getFirmColor(d.id)}`, borderRadius: 8, padding: 12, boxShadow: '0 6px 18px rgba(0,0,0,0.4)', color: '#fff', minWidth: 160 }}>
-        {d.logo && <img src={d.logo} alt={d.name} style={{ width: 80, height: 24, objectFit: 'contain', display: 'block', marginBottom: 8 }} />}
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
-        <div style={{ color: getFirmColor(d.id), fontWeight: 700 }}>{fmt(d.value)}</div>
-      </div>
-    )
-  }
-
-  const CustomBar = (props) => {
-    const { payload, x, y, width, height } = props
-    if (!payload || width <= 0 || height <= 0) return null
-    return <rect x={x} y={y} width={width} height={height} rx={6} ry={6} fill={getFirmColor(payload.id)} />
-  }
-
-  const getBarSize = () => { const c = data.length; if (c <= 3) return 80; if (c <= 5) return 60; if (c <= 10) return 40; if (c <= 20) return 25; return 15 }
-
-  return (
-    <div style={glass()}>
-      <GlowOrb color="rgba(245,158,11,0.08)" />
-      <ChartHeader title="💰 Funding by Firm" />
-
-      <div style={{ height: 280 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            layout="vertical"
-            data={data} 
-            margin={{ top: 12, right: 16, left: 12, bottom: 20 }} 
-            maxBarSize={getBarSize()}
-          >
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis 
-              dataKey="name" 
-              type="category" 
-              tick={{ fill: '#94a3b8', fontSize: 11 }} 
-              width={120}
-              tickMargin={8}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" shape={<CustomBar />} radius={[6, 0, 0, 6]} fill="#f59e0b" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{ ...SEP, paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {data.map((d) => (
-          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '4px 10px' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: getFirmColor(d.id), flexShrink: 0 }} />
-            {d.logo ? <img src={d.logo} alt={d.name} style={{ width: 40, height: 14, objectFit: 'contain' }} /> : <span style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 600 }}>{d.name}</span>}
-            <span style={{ fontSize: 11, color: '#64748b' }}>{fmt(d.value)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+  return <FirmRankingList title="Funding by Firm" icon="💰" glowColor="rgba(245,158,11,0.08)" data={data} fmt={fmt} />
 }
 
 /* =========================================================
-   10) Payouts per Firm  —  GLASS UPGRADE
+   11) Payouts per Firm  —  RANKING LIST
    ========================================================= */
 function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { payouts = [], accounts = [] } = useFiltered(accountStatusFilter, dateFilter) || {}
@@ -1021,8 +1133,6 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
   React.useEffect(() => { const data = getAll(); setFirms(data.firms || []) }, [])
 
-  const getFirmColor = React.useCallback((firmId) => { const f = firms.find((x) => x.id === firmId); return f?.color || '#6b7280' }, [firms])
-
   const fmt = (v) => {
     if (currency === 'USD') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
@@ -1030,7 +1140,7 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
 
   const data = React.useMemo(() => {
     const totals = {}
-    const archivedFlags = {} // track which firms have archived-account payouts
+    const archivedFlags = {}
     payouts.forEach((p) => {
       const amountRaw = p.amountReceived ?? p.amount ?? 0
       const amount = currency === 'USD' ? amountRaw : amountRaw * rate
@@ -1045,141 +1155,121 @@ function PayoutsPerFirmChart({ accountStatusFilter = ['live', 'funded'], dateFil
       } else if (p.accountName) {
         const acc = accounts.find((a) => a.name === p.accountName); if (acc?.firmId) { totals[acc.firmId] = (totals[acc.firmId] || 0) + amount; resolved = true }
       }
-      // Fall back to archived account snapshots for deleted accounts
       if (!resolved && p._archivedAccounts?.length) {
         p._archivedAccounts.forEach((arc) => { if (arc.firmId) { totals[arc.firmId] = (totals[arc.firmId] || 0) + amount; archivedFlags[arc.firmId] = true } })
       }
-      // Also flag firms that had some live + some archived account in same payout
       if (p._archivedAccounts?.length) {
         p._archivedAccounts.forEach((arc) => { if (arc.firmId) archivedFlags[arc.firmId] = true })
       }
     })
-    return firms.map((f) => ({ id: f.id, name: f.name, logo: f.logo, type: f.type, color: f.color, value: totals[f.id] || 0, hasArchived: !!archivedFlags[f.id] }))
+    const mapped = firms.map((f) => ({ id: f.id, name: f.name, logo: f.logo, type: f.type, color: f.color || '#6b7280', value: totals[f.id] || 0, hasArchived: !!archivedFlags[f.id] }))
+    return mapped.sort((a, b) => b.value - a.value)
   }, [payouts, accounts, firms, currency, rate])
 
-  const CustomTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null
-    const d = payload[0].payload
-    return (
-      <div style={{ background: '#0f1218', border: `2px solid ${getFirmColor(d.id)}`, borderRadius: 8, padding: 12, boxShadow: '0 6px 18px rgba(0,0,0,0.4)', color: '#fff', minWidth: 160 }}>
-        {d.logo && <img src={d.logo} alt={d.name} style={{ width: 80, height: 24, objectFit: 'contain', display: 'block', marginBottom: 8 }} />}
-        <div style={{ fontWeight: 700, marginBottom: 2 }}>{d.name}</div>
-        <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 6 }}>({d.type})</div>
-        <div style={{ color: getFirmColor(d.id), fontWeight: 700 }}>{fmt(d.value)}</div>
-        {d.hasArchived && (
-          <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.08)', fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-            👻 inclui contas excluídas
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const CustomBar = (props) => {
-    const { x, y, width, height, payload } = props
-    if (width <= 0 || height <= 0) return null
-    return <rect x={x} y={y} width={width} height={height} rx={6} ry={6} fill={getFirmColor(payload?.id)} />
-  }
-
-  const getBarSize = () => { const c = data.length; if (c <= 3) return 80; if (c <= 5) return 60; if (c <= 10) return 40; if (c <= 20) return 25; return 15 }
-
-  return (
-    <div style={glass()}>
-      <GlowOrb color="rgba(16,185,129,0.08)" />
-      <ChartHeader title="🧾 Payouts by Firm" />
-
-      <div style={{ height: 280 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            layout="vertical"
-            data={data} 
-            margin={{ top: 12, right: 16, left: 12, bottom: 20 }} 
-            maxBarSize={getBarSize()}
-          >
-            <CartesianGrid strokeDasharray="2 4" stroke="#374151" opacity={0.25} horizontal vertical={false} />
-            <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-            <YAxis 
-              dataKey="name" 
-              type="category" 
-              tick={{ fill: '#94a3b8', fontSize: 11 }} 
-              width={120}
-              tickMargin={8}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="value" shape={<CustomBar />} radius={[6, 0, 0, 6]} fill="#10b981" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{ ...SEP, paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {data.map((d) => (
-          <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 20, padding: '4px 10px' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: getFirmColor(d.id), flexShrink: 0 }} />
-            {d.logo ? <img src={d.logo} alt={d.name} style={{ width: 40, height: 14, objectFit: 'contain' }} /> : <span style={{ fontSize: 11, color: '#e2e8f0', fontWeight: 600 }}>{d.name}</span>}
-            <span style={{ fontSize: 11, color: '#64748b' }}>{fmt(d.value)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+  return <FirmRankingList title="Payouts by Firm" icon="🧾" glowColor="rgba(16,185,129,0.08)" data={data} fmt={fmt} />
 }
 
 /* =========================================================
-   11) Accounts Overview  —  GLASS UPGRADE
+   11) Accounts Overview  —  RICH CARDS
    ========================================================= */
 function AccountsOverview({ accountStatusFilter = ['live', 'funded'], dateFilter = {} }) {
   const { accounts } = useFiltered(accountStatusFilter, dateFilter)
   const [firms, setFirms] = React.useState([])
+  const [showAll, setShowAll] = useState(false)
+  const { currency, rate } = useCurrency()
 
   React.useEffect(() => { const data = getAll(); setFirms(data.firms || []) }, [])
 
-  const recentAccounts = accounts.sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated)).slice(0, 5)
   const getFirm = (firmId) => firms.find((f) => f.id === firmId) || null
+
+  const fmt = (v) => {
+    if (currency === 'USD') return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v || 0)
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v * rate || 0)
+  }
+
+  const sorted = [...accounts].sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
+  const display = showAll ? sorted : sorted.slice(0, 5)
 
   return (
     <div style={glass()}>
       <GlowOrb color="rgba(124,92,255,0.08)" />
-      <ChartHeader title="🗂️ Accounts Overview" />
+      <ChartHeader title="🗂️ Accounts Overview" action={
+        sorted.length > 5 ? (
+          <button onClick={() => setShowAll(!showAll)}
+            style={{
+              background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
+              color: '#94a3b8', padding: '3px 10px', borderRadius: 6,
+              fontSize: 11, cursor: 'pointer', fontWeight: 600,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = '#e2e8f0' }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#94a3b8' }}
+          >
+            {showAll ? '▲ Less' : `▼ ${sorted.length} accounts`}
+          </button>
+        ) : null
+      } />
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {['Account', 'Category', 'Firm', 'Status', 'Funding'].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 11, fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recentAccounts.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No accounts match current filters</td></tr>
-            ) : recentAccounts.map((a) => {
-              const firm = getFirm(a.firmId)
-              return (
-                <tr key={a.id}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>{a.name}</td>
-                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span className={`pill ${catPillClass(a.type)}`}>{a.type}</span>
-                  </td>
-                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    {firm ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {firm.logo && <img src={firm.logo} alt={firm.name} style={{ width: 22, height: 14, objectFit: 'contain', opacity: 0.9 }} />}
-                        <span style={{ fontSize: 12, color: '#cbd5e1' }}>{firm.name}</span>
-                      </div>
-                    ) : <span style={{ color: '#374151' }}>—</span>}
-                  </td>
-                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span className={`pill ${a.status === 'Live' ? 'green' : a.status === 'Funded' ? 'blue' : a.status === 'Challenge' ? 'yellow' : 'gray'}`}>{a.status}</span>
-                  </td>
-                  <td style={{ padding: '10px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>${a.currentFunding.toLocaleString()}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {display.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No accounts match current filters</div>
+        ) : display.map((a) => {
+          const firm = getFirm(a.firmId)
+          const firmColor = firm?.color || '#6b7280'
+          const statusColor = a.status === 'Live' ? '#22c55e' : a.status === 'Funded' ? '#3b82f6' : a.status === 'Challenge' ? '#e1b12c' : '#5b6270'
+          const statusBg = a.status === 'Live' ? 'rgba(34,197,94,0.1)' : a.status === 'Funded' ? 'rgba(59,130,246,0.1)' : a.status === 'Challenge' ? 'rgba(225,177,44,0.1)' : 'rgba(91,98,112,0.1)'
+          return (
+            <div key={a.id} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 12px', borderRadius: 10,
+              background: `linear-gradient(135deg, ${firmColor}08 0%, transparent 100%)`,
+              border: '1px solid rgba(255,255,255,0.04)',
+              transition: 'all 0.15s',
+            }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${firmColor}44`; e.currentTarget.style.background = `linear-gradient(135deg, ${firmColor}12 0%, rgba(255,255,255,0.02) 100%)` }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.background = `linear-gradient(135deg, ${firmColor}08 0%, transparent 100%)` }}>
+              {/* Firm avatar/icon */}
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: `${firmColor}18`,
+                border: `1px solid ${firmColor}44`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, overflow: 'hidden',
+              }}>
+                {firm?.logo ? (
+                  <img src={firm.logo} alt={firm.name} style={{ width: 20, height: 16, objectFit: 'contain' }} />
+                ) : (
+                  <span style={{ fontSize: 14 }}>🏦</span>
+                )}
+              </div>
+
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{a.name}</span>
+                  <span className={`pill ${catPillClass(a.type)}`} style={{ fontSize: 9, padding: '1px 7px' }}>{a.type}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 10,
+                    color: statusColor, background: statusBg,
+                  }}>{a.status}</span>
+                </div>
+                {firm && (
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {firm.name}
+                  </div>
+                )}
+              </div>
+
+              {/* Funding */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{fmt(a.currentFunding)}</div>
+                <div style={{ fontSize: 10, color: '#475569' }}>
+                  {new Date(a.dateCreated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -1213,7 +1303,7 @@ export default function Dashboard() {
   const props = { accountStatusFilter, dateFilter }
 
   return (
-    <div className="dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, overflowX: 'hidden' }}>
       {/* Overlays invisíveis para capturar cliques fora e fechar dropdowns */}
       {statusDropdownOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 30 }} onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(false) }} />
