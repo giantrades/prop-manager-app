@@ -211,6 +211,7 @@ export default function Accounts() {
 
   useEffect(() => {
     const data = getAll()
+    console.log('[Accounts] getAll statuses:', data?.accounts?.map((a: any) => ({ id: a.id, name: a.name, status: a.status })));
     setAccounts((data.accounts || []).filter(a => a.hidden !== true))
     setFirms(data.firms || [])
   }, [])
@@ -935,7 +936,10 @@ function AccountDetail({ id, update, getStats, firms = [], onClose }) {
       profitSplit: Number(local.profitSplit) || 0,
     };
 
-    updateAccount(id, payload);
+    console.log('[save] payload.status:', payload.status);
+    const result = updateAccount(id, payload);
+    console.log('[save] updateAccount result:', result?.status);
+    console.log('[save] localStorage depois:', JSON.parse(localStorage.getItem('propmanager-data-v1') || '{}')?.accounts?.find((a: any) => a.id === id)?.status);
     window.dispatchEvent(new Event("storage"));
     if (onClose) onClose();
   };

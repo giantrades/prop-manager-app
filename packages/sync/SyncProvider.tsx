@@ -106,11 +106,18 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         return result;
       }
 
-      const merged = {
-        ...local,
-        firms: remote.firms !== undefined ? fillMissing(remote.firms ?? [], local.firms) : local.firms,
-        accounts: remote.accounts !== undefined ? fillMissing(remote.accounts ?? [], local.accounts) : local.accounts,
-        payouts: remote.payouts !== undefined ? fillMissing(remote.payouts ?? [], local.payouts) : local.payouts,
+        const mergedAccounts = remote.accounts !== undefined ? fillMissing(remote.accounts ?? [], local.accounts) : local.accounts;
+        if (local.accounts?.length) {
+          const localStatuses = local.accounts.map((a: any) => `${a.name}:${a.status}`);
+          const mergedStatuses = mergedAccounts.map((a: any) => `${a.name}:${a.status}`);
+          console.log('[pull] accounts status BEFORE merge:', localStatuses);
+          console.log('[pull] accounts status AFTER merge:', mergedStatuses);
+        }
+        const merged = {
+          ...local,
+          firms: remote.firms !== undefined ? fillMissing(remote.firms ?? [], local.firms) : local.firms,
+          accounts: mergedAccounts,
+          payouts: remote.payouts !== undefined ? fillMissing(remote.payouts ?? [], local.payouts) : local.payouts,
         trades: remote.trades !== undefined ? mergeTrades(remote.trades, local.trades) : local.trades,
         livePositions: local.livePositions,
         strategies: mergeArr(remote.strategies, local.strategies),

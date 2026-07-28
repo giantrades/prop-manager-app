@@ -94,11 +94,18 @@ export async function pushChanges(localData: any, userId: string) {
   }
 
   if (localData.accounts?.length) {
+    const statusChanges = localData.accounts.filter((a: any) => a.status).map((a: any) => `${a.name}:${a.status}`);
+    console.log('[push] accounts status:', statusChanges);
     const { error } = await supabase.from('accounts').upsert(
       prepare('accounts', localData.accounts, userId),
       { onConflict: 'id' }
     );
-    if (error) errors.push(`accounts: ${error.message}`);
+    if (error) {
+      console.error('[push] accounts ERROR:', error.message);
+      errors.push(`accounts: ${error.message}`);
+    } else {
+      console.log('[push] accounts OK');
+    }
   }
 
   // Propagate account deletions to Supabase so they don't reappear on pull
