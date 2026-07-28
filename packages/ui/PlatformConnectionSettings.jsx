@@ -547,6 +547,10 @@ export default function PlatformConnectionSettings() {
         try { accounts = await adapter.getAccounts(); } catch (_) {}
       }
       setBridgeStatus({ ...status, bridgeAccounts: accounts });
+      if (status.online) {
+        setPlatformSettings('quantower', { enabled: true });
+        setConfig(c => ({ ...c, enabled: true }));
+      }
     } catch (err) {
       setBridgeStatus({ online: false, error: err.message });
     } finally {
@@ -555,8 +559,8 @@ export default function PlatformConnectionSettings() {
   }, []);
 
   const handleBridgeUrl = (url) => {
-    setConfig(c => ({ ...c, bridgeUrl: url }));
-    setPlatformSettings('quantower', { bridgeUrl: url });
+    setConfig(c => ({ ...c, bridgeUrl: url, enabled: true }));
+    setPlatformSettings('quantower', { bridgeUrl: url, enabled: true });
     const pm = getPlatformManager();
     const adapter = pm.getAdapter('quantower');
     if (adapter?.setBridgeUrl) adapter.setBridgeUrl(url);

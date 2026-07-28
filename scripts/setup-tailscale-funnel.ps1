@@ -21,38 +21,28 @@ if ($Help) {
     exit 0
 }
 
-# Admin check
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    Write-Host "[!] Este script precisa ser executado COMO ADMINISTRADOR." -ForegroundColor Red
-    Write-Host "    Clique com botao direito > 'Executar como PowerShell (Admin)'" -ForegroundColor Yellow
+    Write-Host "[!] Execute como ADMINISTRADOR." -ForegroundColor Red
     exit 1
 }
 
-# Remove mode
 if ($Remove) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     Write-Host "[-] Tarefa '$taskName' removida." -ForegroundColor Yellow
     exit 0
 }
 
-# Check Tailscale
 if (-not (Test-Path $tailscaleExe)) {
     Write-Host "[!] Tailscale nao encontrado em: $tailscaleExe" -ForegroundColor Red
-    Write-Host "    Instale de: https://tailscale.com/download" -ForegroundColor Yellow
     exit 1
 }
 
-# Remove existing task if present
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existing) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
-# ── The PowerShell command that the task will execute ──
-# - Waits for tailscaled to be ready
-# - Applies funnel on port 8787
-# - Logs to temp file for debugging
 $actionScript = @"
 `$logFile = '$logFile'
 `$tailscale = '$tailscaleExe'
@@ -60,7 +50,6 @@ $actionScript = @"
 
 Add-Content -Path `$logFile -Value "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Funnel keepalive starting..." -Force
 
-# Wait for tailscaled service to be ready (up to 60s)
 for (`$i = 0; `$i -lt 60; `$i++) {
     try {
         `$status = & `$tailscale status --peers=false 2>&1
@@ -72,7 +61,6 @@ for (`$i = 0; `$i -lt 60; `$i++) {
     Start-Sleep 1
 }
 
-# Apply funnel (--bg = background, persiste com o serviço tailscaled)
 try {
     & `$tailscale funnel --bg `$port
     Add-Content -Path `$logFile -Value "[`$(Get-Date -Format 'HH:mm:ss')] Funnel --bg applied on port `$port"
