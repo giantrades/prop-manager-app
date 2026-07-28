@@ -1302,6 +1302,7 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   }
   data.settings.platforms.quantower.accountMapping[platformAccountId] = internalAccountId;
   data.settings.platforms.quantower.enabled = true;
+  data.settings.platforms.quantower.autoSync = true;
 
   save(data);
   return { internalAccountId, isNew: existingIdx === -1 };

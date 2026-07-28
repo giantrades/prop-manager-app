@@ -516,13 +516,11 @@ export default function PlatformConnectionSettings() {
 
       const skipped = connAccounts.length - toSync.length;
 
-      // Optionally backfill trades
-      if (backfillEnabled) {
-        // TODO: trigger full backfill sync for these accounts
-        console.log('[SyncAccounts] Backfill enabled for', toSync.length, 'accounts');
-      }
+      // Sync trades for mapped accounts
+      const syncResult = await pm.syncPlatform('quantower');
+      console.log(`[SyncAccounts] ${connectionName}: ${created} criadas, ${updated} atualizadas, ${skipped} puladas (ocultas) — Sync: ${syncResult.trades.length} trades, ${syncResult.accounts.length} contas, ${syncResult.positions.length} posições`);
 
-      alert(`✅ Sincronizado: ${created} criadas, ${updated} atualizadas${skipped > 0 ? `, ${skipped} puladas (ocultas)` : ''}`);
+      alert(`✅ Sincronizado: ${created} criadas, ${updated} atualizadas${skipped > 0 ? `, ${skipped} puladas (ocultas)` : ''} · ${syncResult.trades.length} trades`);
       refresh();
     } catch (err) {
       alert('❌ Erro ao sincronizar: ' + err.message);
@@ -530,6 +528,22 @@ export default function PlatformConnectionSettings() {
       setSyncingConnId(null);
     }
   }, [connFirmMap, backfillEnabled]);
+
+  /* --- Sync Platform (accounts + trades) for a connection --- */
+  const handleSyncConnection = useCallback(async (connectionId, connectionName) => {
+    setSyncingConnId(connectionId);
+    try {
+      const pm = getPlatformManager();
+      const result = await pm.syncPlatform('quantower');
+      console.log(`[SyncConnection] ${connectionName}: ${result.trades.length} trades, ${result.accounts.length} contas, ${result.positions.length} posições`);
+      alert(`✅ Sincronizado: ${result.trades.length} trades importados, ${result.accounts.length} contas`);
+      refresh();
+    } catch (err) {
+      alert('❌ Erro ao sincronizar: ' + err.message);
+    } finally {
+      setSyncingConnId(null);
+    }
+  }, []);
 
   /* --- Bridge Test --- */
   const handleTest = useCallback(async () => {
@@ -541,15 +555,20 @@ export default function PlatformConnectionSettings() {
       if (!adapter) throw new Error('Quantower adapter not registered');
 
       const status = await adapter.getStatus();
-      // Try to also fetch accounts to populate connection health
       let accounts = [];
       if (status.online) {
         try { accounts = await adapter.getAccounts(); } catch (_) {}
       }
       setBridgeStatus({ ...status, bridgeAccounts: accounts });
       if (status.online) {
-        setPlatformSettings('quantower', { enabled: true });
+        setPlatformSettings('quantower', { enabled: true, autoSync: true });
         setConfig(c => ({ ...c, enabled: true }));
+        pm.startAutoSync();
+        pm.syncPlatform('quantower').then(result => {
+          console.log(`[Bridge Sync] Concluído: ${result.trades.length} trades, ${result.accounts.length} contas, ${result.positions.length} posições`);
+        }).catch(err => {
+          console.warn('[Bridge Sync] Erro inicial:', err);
+        });
       }
     } catch (err) {
       setBridgeStatus({ online: false, error: err.message });
@@ -560,7 +579,7 @@ export default function PlatformConnectionSettings() {
 
   const handleBridgeUrl = (url) => {
     setConfig(c => ({ ...c, bridgeUrl: url, enabled: true }));
-    setPlatformSettings('quantower', { bridgeUrl: url, enabled: true });
+    setPlatformSettings('quantower', { bridgeUrl: url, enabled: true, autoSync: true });
     const pm = getPlatformManager();
     const adapter = pm.getAdapter('quantower');
     if (adapter?.setBridgeUrl) adapter.setBridgeUrl(url);
