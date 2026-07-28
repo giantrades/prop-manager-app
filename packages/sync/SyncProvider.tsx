@@ -110,7 +110,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         strategies: mergeArr(remote.strategies, local.strategies),
         goals: mergeArr(remote.goals, local.goals),
         tags: mergeArr(remote.tags, local.tags),
-        settings: { ...local.settings, ...remote.settings },
+        settings: { ...remote.settings, ...local.settings },
       };
       
       save(merged);
@@ -200,7 +200,7 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         strategies: remote.strategies !== undefined ? remote.strategies : local.strategies,
         goals: remote.goals !== undefined ? remote.goals : local.goals,
         tags: remote.tags !== undefined ? remote.tags : local.tags,
-        settings: { ...local.settings, ...remote.settings },
+        settings: { ...remote.settings, ...local.settings },
       };
       save(merged);
       deduplicateTradesByPosition();
