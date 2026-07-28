@@ -63,7 +63,8 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       function fillMissing<T extends Record<string, any>>(remoteItems: T[], localItems: T[]): T[] {
         if (!remoteItems?.length) return localItems;
         if (!localItems?.length) return remoteItems;
-        return remoteItems.map(r => {
+        const remoteById = new Map(remoteItems.map(r => [r.id, r]));
+        const result = remoteItems.map(r => {
           const l = localItems.find(x => x.id === r.id);
           if (!l) return r;
           const out = { ...r };
@@ -74,6 +75,11 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
           }
           return out;
         });
+        // Preserve local-only items that haven't been pushed yet
+        for (const l of localItems) {
+          if (!remoteById.has(l.id)) result.push(l);
+        }
+        return result;
       }
 
       // When pull succeeded (remote arrays are defined), trust remote for deletions too.
