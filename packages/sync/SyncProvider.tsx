@@ -63,21 +63,21 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       function fillMissing<T extends Record<string, any>>(remoteItems: T[], localItems: T[]): T[] {
         if (!remoteItems?.length) return localItems;
         if (!localItems?.length) return remoteItems;
-        const remoteById = new Map(remoteItems.map(r => [r.id, r]));
-        const result = remoteItems.map(r => {
-          const l = localItems.find(x => x.id === r.id);
-          if (!l) return r;
-          const out = { ...r };
-          for (const key of Object.keys(l)) {
-            if (!(key in r) || r[key] === null || r[key] === undefined) {
-              (out as any)[key] = l[key];
+        const localById = new Map(localItems.map(l => [l.id, l]));
+        // Local fields take priority, remote fills in gaps
+        const result = localItems.map(l => ({ ...l }));
+        for (const r of remoteItems) {
+          const existing = localById.get(r.id);
+          if (!existing) {
+            result.push(r);
+          } else {
+            const idx = result.findIndex(x => x.id === r.id);
+            for (const key of Object.keys(r)) {
+              if (!(key in result[idx]) || result[idx][key] === null || result[idx][key] === undefined) {
+                (result[idx] as any)[key] = r[key];
+              }
             }
           }
-          return out;
-        });
-        // Preserve local-only items that haven't been pushed yet
-        for (const l of localItems) {
-          if (!remoteById.has(l.id)) result.push(l);
         }
         return result;
       }
