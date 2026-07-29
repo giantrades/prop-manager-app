@@ -1084,6 +1084,17 @@ export function upsertTradeFromPlatform(normalizedTrade) {
   }
 
   save(data);
+
+  // Mark as imported in trade ledger (fire-and-forget) — ledger is written only
+  // AFTER the trade is actually saved, never before (fixes trades getting stuck
+  // as 'imported' when syncPlatform emits SYNCED before the handler imports them).
+  if (normalizedTrade.platformTradeId) {
+    setTradeLedgerEntry(normalizedTrade.platformTradeId, {
+      status: 'imported',
+      lastSeenAt: new Date().toISOString(),
+    }).catch(() => {});
+  }
+
   return { trade, isNew };
 }
 

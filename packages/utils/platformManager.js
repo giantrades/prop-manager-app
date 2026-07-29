@@ -25,6 +25,7 @@ import {
   getTradeLedger,
   getTradeLedgerEntry,
   setTradeLedgerEntry,
+  getTradeByPlatformId,
   isTradeImported,
   markTradeDeleted,
   markTradeIgnored,
@@ -229,12 +230,15 @@ class PlatformManager {
     const deletedTradeIds = new Set(allLedger.filter(e => e.status === 'deleted').map(e => e.platformTradeId));
     const deletedPositionIds = new Set(allLedger.filter(e => e.status === 'deleted' && e.positionId).map(e => e.positionId));
     const ignoredTradeIds = new Set(allLedger.filter(e => e.status === 'ignored').map(e => e.platformTradeId));
-    const importedTradeIds = new Set(allLedger.filter(e => e.status === 'imported').map(e => e.platformTradeId));
 
     const newTrades = [];
     for (const trade of trades) {
       if (trade.platformTradeId) {
-        if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId) || importedTradeIds.has(trade.platformTradeId)) continue;
+        if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId)) continue;
+        // Check data store instead of ledger 'imported' — avoids trades getting stuck
+        // as 'imported' when the SYNCED handler skips them (unmapped account, etc.)
+        const existing = getTradeByPlatformId(trade.platformTradeId);
+        if (existing) continue;
       }
       if (trade.positionId && deletedPositionIds.has(trade.positionId)) continue;
       // Safety net: skip entry fills (PnL = 0, no real exit data)
@@ -249,19 +253,8 @@ class PlatformManager {
       newTrades.push(trade);
     }
 
-    // Only write to ledger for real (non-fake) trades
-    for (const trade of newTrades) {
-      if (trade.platformTradeId) {
-        const existingEntry = await getTradeLedgerEntry(trade.platformTradeId);
-        await setTradeLedgerEntry(trade.platformTradeId, {
-          status: 'imported',
-          platformAccountId: trade.platformAccountId,
-          internalAccountId: trade.internalAccountId || null,
-          firstSeenAt: existingEntry?.firstSeenAt || new Date().toISOString(),
-          lastSeenAt: new Date().toISOString(),
-        });
-      }
-    }
+    // Note: ledger 'imported' write moved to dataStore.js upsertTradeFromPlatform
+    // so it only fires AFTER a trade is actually saved.
 
     this._lastSyncTime.set(platformId, new Date().toISOString());
 
@@ -479,12 +472,14 @@ const from = this._lastSyncTime.get(id);
         const deletedTradeIds = new Set(allLedger.filter(e => e.status === 'deleted').map(e => e.platformTradeId));
         const deletedPositionIds = new Set(allLedger.filter(e => e.status === 'deleted' && e.positionId).map(e => e.positionId));
         const ignoredTradeIds = new Set(allLedger.filter(e => e.status === 'ignored').map(e => e.platformTradeId));
-        const importedTradeIds = new Set(allLedger.filter(e => e.status === 'imported').map(e => e.platformTradeId));
 
         const newTrades = [];
         for (const trade of trades) {
           if (trade.platformTradeId) {
-            if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId) || importedTradeIds.has(trade.platformTradeId)) continue;
+            if (deletedTradeIds.has(trade.platformTradeId) || ignoredTradeIds.has(trade.platformTradeId)) continue;
+            // Check data store instead of ledger 'imported'
+            const existing = getTradeByPlatformId(trade.platformTradeId);
+            if (existing) continue;
           }
           if (trade.positionId && deletedPositionIds.has(trade.positionId)) continue;
           const isEntryFill = Number(trade.netPnl) === 0 && (
@@ -496,18 +491,6 @@ const from = this._lastSyncTime.get(id);
         }
 
         if (newTrades.length > 0) {
-          for (const trade of newTrades) {
-            if (trade.platformTradeId) {
-              await setTradeLedgerEntry(trade.platformTradeId, {
-                status: 'imported',
-                platformAccountId: trade.platformAccountId,
-                internalAccountId: trade.internalAccountId || null,
-                firstSeenAt: new Date().toISOString(),
-                lastSeenAt: new Date().toISOString(),
-              });
-            }
-          }
-
           this._emit(PLATFORM_EVENTS.SYNCED, {
             platformId: id,
             accounts,
