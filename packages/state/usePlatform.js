@@ -90,8 +90,6 @@ export function usePlatform() {
       // Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
 
-      console.log(`[SYNCED] accounts=${data.accounts?.length || 0}, rawTrades=${rawTrades.length}, accountMapping keys=${Object.keys(getAccountMapping(data.platformId)).join(',')}`);
-
       // Auto-create/map accounts from bridge data if not yet mapped.
       // First tries to find existing internal account by (platformName, connectionId, name)
       // to handle the case where Quantower regenerated account IDs (old mapping stale).
@@ -122,6 +120,19 @@ export function usePlatform() {
       // Creates a minimal account entry so trades aren't silently lost.
       if (rawTrades.length > 0) {
         const mapping = getAccountMapping(data.platformId);
+
+        // Extract connectionName from trades for each platformAccountId
+        // so upsertQuantowerAccount can match by connectionName if the ID is new.
+        const tradeAccountMeta = {};
+        for (const t of rawTrades) {
+          if (t.platformAccountId && !tradeAccountMeta[t.platformAccountId]) {
+            tradeAccountMeta[t.platformAccountId] = {
+              connectionId: t.connectionId || '',
+              connectionName: t.connectionName || '',
+            };
+          }
+        }
+
         const tradeAcctIds = [...new Set(rawTrades.map(t => t.platformAccountId).filter(Boolean))];
         for (const pid of tradeAcctIds) {
           if (mapping[pid]) continue;
@@ -132,8 +143,14 @@ export function usePlatform() {
             dsSetAccountMapping(data.platformId, pid, existing.id);
             console.log(`[SYNCED] mapped trade-only account: ${pid} → ${existing.id}`);
           } else {
-            const result = upsertQuantowerAccount({ platformAccountId: pid, name: pid, connectionId: '', connectionName: '' }, null, '', '');
-            console.log(`[SYNCED] created trade-only account: platformAccountId=${pid}, isNew=${result?.isNew}`);
+            const meta = tradeAccountMeta[pid] || {};
+            const result = upsertQuantowerAccount(
+              { platformAccountId: pid, name: pid, connectionId: meta.connectionId, connectionName: meta.connectionName },
+              null,
+              meta.connectionId,
+              meta.connectionName
+            );
+            console.log(`[SYNCED] created trade-only account: platformAccountId=${pid}, connectionName=${meta.connectionName || '(none)'}, isNew=${result?.isNew}`);
           }
         }
       }
@@ -199,10 +216,7 @@ export function usePlatform() {
           }));
         }
         
-        // Log filtered trades for debugging
-        console.log(`[SYNCED] rawTrades=${rawTrades.length}, toImport=${tradesToImport.length}, accountMapping keys=${Object.keys(accountMapping).join(',')}`);
-        rawTrades.forEach(t => console.log(`[SYNCED] trade: platformTradeId=${t.platformTradeId}, platformAccountId=${t.platformAccountId}, gross=${t.grossPnl}, fee=${t.fee}, netPnl=${t.netPnl}`));
-        tradesToImport.forEach(t => console.log(`[SYNCED] importing: platformTradeId=${t.platformTradeId}, accountId=${accountMapping[t.platformAccountId]}, gross=${t.grossPnl}, fee=${t.fee}, net=${(t.grossPnl ?? 0) - Math.abs(t.fee ?? 0)}`));
+        console.log(`[SYNCED] rawTrades=${rawTrades.length}, toImport=${tradesToImport.length}, accountMapping keys=${Object.keys(accountMapping).length}`);
       }
     }));
 
@@ -281,17 +295,44 @@ export function usePlatform() {
           updateLivePositions(getLivePositions().filter(p => p.platformPositionId !== data.position.platformPositionId));
           setLivePositions(prev => prev.filter(p => p.platformPositionId !== data.position.platformPositionId));
         } else {
-          // Pass the already-resolved internalAccountId so closeLivePosition()
-          // doesn't fall back to getAccountMapping(pos.platformId) where
-          // pos.platformId might be undefined (position from raw poll data).
-          closeLivePosition(data.position.platformPositionId, {
-            exitPrice: data.position.currentPrice,
-            exitTime: new Date().toISOString(),
-            netPnl: data.position.netPnl,
-            grossPnl: data.position.grossPnl,
-            fee: data.position.fee,
-            swaps: data.position.swaps,
-          }, internalAccountId);
+          // data.realTrade is null (bridge didn't have the fill yet within 3s).
+          // Construct the trade directly from the position snapshot to avoid a
+          // race condition: POSITION_UPDATED (emitted synchronously before this)
+          // already removed the position from data.livePositions, so
+          // closeLivePosition() would fail to find it and silently drop the trade.
+          const pos = data.position;
+          const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
+          const platformTradeId = rawPosId ? `qt_${rawPosId}` : pos.platformPositionId;
+          const grossPnl = pos.grossPnl ?? 0;
+          const feeVal = pos.fee ?? 0;
+          const swapsVal = pos.swaps ?? 0;
+
+          upsertTradeFromPlatform({
+            entry_datetime: pos.openTime || pos.entryTime || new Date().toISOString(),
+            exit_datetime:  new Date().toISOString(),
+            asset:          pos.symbol || '',
+            accountId:      internalAccountId,
+            direction:      pos.side === 'Short' ? 'Short' : 'Long',
+            volume:         pos.quantity || 0,
+            entry_price:    pos.openPrice ?? pos.entryPrice ?? 0,
+            exit_price:     pos.currentPrice || 0,
+            result_net:     grossPnl - Math.abs(feeVal) - Math.abs(swapsVal),
+            result_gross:   grossPnl,
+            fee:            feeVal,
+            swaps:          swapsVal,
+            source:         data.platformId,
+            platformTradeId,
+            positionId:     rawPosId,
+            platformName:   pos.platformName || data.platformId,
+            connectionName: pos.connectionName || '',
+            isLive:         false,
+          });
+          console.log(`[POSITION_CLOSED] position-snapshot: platformTradeId=${platformTradeId}, gross=${grossPnl}, fee=${feeVal}, swaps=${swapsVal}, net=${grossPnl - Math.abs(feeVal) - Math.abs(swapsVal)}`);
+
+          // Defensive cleanup: position was already removed by POSITION_UPDATED,
+          // but ensure it's gone (no-op if already removed).
+          updateLivePositions(getLivePositions().filter(p => p.platformPositionId !== pos.platformPositionId));
+          setLivePositions(prev => prev.filter(p => p.platformPositionId !== data.position.platformPositionId));
         }
 
         recalcAccountFunding(internalAccountId);

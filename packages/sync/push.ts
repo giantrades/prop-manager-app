@@ -300,6 +300,25 @@ export async function pushChanges(localData: any, userId: string) {
     }
   }
 
+  // Propagate trade deletions by internal ID (for trades deleted in the app)
+  const deletedTradeIds = (localData as any)._deletedTradeIds;
+  if (deletedTradeIds?.length) {
+    const { error: delErr } = await supabase
+      .from('trades')
+      .delete()
+      .eq('user_id', userId)
+      .in('id', deletedTradeIds);
+    if (delErr) {
+      errors.push(`delete_trades: ${delErr.message}`);
+    } else {
+      const fresh = getAll();
+      fresh._deletedTradeIds = (fresh._deletedTradeIds || []).filter(
+        (id: string) => !deletedTradeIds.includes(id)
+      );
+      save(fresh);
+    }
+  }
+
   // Push local deletions to Supabase so other devices see them
   const ledger = await getTradeLedger();
   const deletedEntries = ledger.filter((e: any) => e.status === 'deleted' && e.platformTradeId);

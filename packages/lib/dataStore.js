@@ -518,6 +518,17 @@ export function updateTrade(id, patch) {
 
 export function deleteTrade(id) {
   const data = load();
+  // Capture platformTradeId/positionId BEFORE removing, so push can
+  // propagate the deletion to Supabase (deleted_trades table + remove from trades).
+  const trade = data.trades.find(t => t.id === id);
+  if (trade) {
+    if (trade.platformTradeId) {
+      markTradeDeleted(trade.platformTradeId, trade.positionId || '');
+    }
+    // Also track by internal ID for deletion propagation
+    if (!data._deletedTradeIds) data._deletedTradeIds = [];
+    if (!data._deletedTradeIds.includes(id)) data._deletedTradeIds.push(id);
+  }
   data.trades = data.trades.filter(t => t.id !== id);
   save(data);
 }
@@ -1041,25 +1052,7 @@ export function upsertTradeFromPlatform(normalizedTrade) {
   });
 
   if (existing === -1) {
-    console.log(`[upsertTrade] NEW trade`, {
-      platformTradeId: normalizedTrade.platformTradeId,
-      positionId: normalizedTrade.positionId,
-      result_net: normalizedTrade.result_net,
-      exit_price: normalizedTrade.exit_price,
-        existingTrades: (data.trades || []).map(t => ({
-        id: t.id,
-        platformTradeId: t.platformTradeId,
-        positionId: t.positionId,
-        result_net: t.result_net,
-        resultNet: t.resultNet,
-        fp: _tradeFingerprint(t),
-      })),
-    });
-  } else {
-    console.log(`[upsertTrade] UPDATE trade`, {
-      platformTradeId: normalizedTrade.platformTradeId,
-      positionId: normalizedTrade.positionId,
-    });
+    console.log(`[upsertTrade] NEW: pos=${normalizedTrade.positionId}, net=${normalizedTrade.result_net}`);
   }
 
   let trade, isNew;
@@ -1256,6 +1249,16 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   if (existingIdx === -1) {
     existingIdx = data.accounts.findIndex(a => 
       (!a.platformName || !a.platformAccountId) && a.name === platformAccountName
+    );
+  }
+
+  // Fallback: match by connectionName (survives Quantower account ID regeneration).
+  // When the bridge returns a new platformAccountId but same connectionName,
+  // update the existing account's platformAccountId rather than creating a duplicate.
+  if (existingIdx === -1 && connectionName) {
+    existingIdx = data.accounts.findIndex(a =>
+      a.platformName === 'quantower'
+      && a.connectionName === connectionName
     );
   }
 

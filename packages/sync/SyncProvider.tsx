@@ -88,9 +88,10 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
       const mergeArr = (remote: any, local: any) =>
         remote !== undefined ? (remote ?? []) : local;
 
-      // Merge trades: start with remote (authoritative), then preserve local trades
-      // that don't exist in remote yet (pending push). This prevents data loss when
-      // a platform-synced trade hasn't been pushed to Supabase before the next pull.
+      // Merge trades: start with remote, but when IDs match, local data takes
+      // priority (platform sync may have updated result_net, platformTradeId,
+      // etc. since the last push). This prevents platform-synced trades from
+      // being reverted to stale remote data on every pull.
       function mergeTrades(remote: any[], local: any[]): any[] {
         if (!remote) return local;
         const remoteById = new Map(remote.map((t: any) => [t.id, t]));
@@ -99,7 +100,12 @@ export const SyncProvider = ({ children }: { children: React.ReactNode }) => {
         );
         const result = [...remote];
         for (const lt of local) {
-          if (remoteById.has(lt.id)) continue;
+          if (remoteById.has(lt.id)) {
+            // Local (platform-synced) trade is more recent → overwrite remote entry
+            const idx = result.findIndex(r => r.id === lt.id);
+            if (idx !== -1) result[idx] = { ...result[idx], ...lt, id: lt.id };
+            continue;
+          }
           if (lt.platformTradeId && remoteByPlatformId.has(lt.platformTradeId)) continue;
           result.push(lt);
         }
