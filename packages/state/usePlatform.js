@@ -87,13 +87,26 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
-      // Auto-create accounts from bridge data if not yet mapped
-      // This ensures trades are imported even on first sync before user
-      // manually clicks "Sincronizar contas"
+      // Auto-create/map accounts from bridge data if not yet mapped.
+      // First tries to find existing internal account by (platformName, connectionId, name)
+      // to handle the case where Quantower regenerated account IDs (old mapping stale).
+      // Only creates a new account if no match found.
       if (data.accounts?.length > 0) {
         const existingMapping = getAccountMapping(data.platformId);
+        const allData = getAll();
         for (const acc of data.accounts) {
-          if (!existingMapping[acc.platformAccountId]) {
+          if (existingMapping[acc.platformAccountId]) continue;
+          // Try match by connection+name (platformAccountId may have changed)
+          const existing = allData.accounts.find(a =>
+            a.platformName === data.platformId
+            && a.connectionId === (acc.connectionId || '')
+            && (a.name === (acc.name || acc.platformAccountId) || a.platformAccountId === acc.platformAccountId)
+          );
+          if (existing) {
+            updateAccount(existing.id, { platformAccountId: acc.platformAccountId });
+            dsSetAccountMapping(data.platformId, acc.platformAccountId, existing.id);
+            console.log(`[SYNCED] remapped account: platformAccountId=${acc.platformAccountId} → internal=${existing.id}, name=${acc.name}`);
+          } else {
             const result = upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
             console.log(`[SYNCED] auto-created account: platformAccountId=${acc.platformAccountId}, name=${acc.name}, isNew=${result?.isNew}`);
           }
