@@ -179,7 +179,7 @@ export class QuantowerAdapter extends BaseAdapter {
     return (data.trades || []).map(t => ({
       platformTradeId: t.platformTradeId || `qt_${t.id}`,
       symbol: t.symbol || '',
-      side: t.side || '',
+      side: ['short', 'sell'].includes((t.side || '').toLowerCase()) ? 'Short' : 'Long',
       quantity: t.quantity ?? 0,
       entryPrice: t.entryPrice ?? 0,
       exitPrice: t.exitPrice ?? 0,
