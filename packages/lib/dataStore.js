@@ -40,6 +40,7 @@ const seed = {
   livePositions: [],  // posições abertas em tempo real
   tradeLedger: {},  // { platformTradeId: { internalTradeId, status, platformAccountId, internalAccountId, firstSeenAt, lastSeenAt } }
   _deletedPlatformAccountIds: {},  // { platformName: [platformAccountId, ...] } — contas que o usuário deletou, pra não recriar
+  _hiddenPlatformAccountIds: {},  // { platformName: [platformAccountId, ...] } — contas que o usuário escondeu, pra manter hidden em recriação
 }
 
 function load() {
@@ -103,6 +104,7 @@ function load() {
     data.connectionFirmMap = data.connectionFirmMap || {}
     data.accountFirmOverride = data.accountFirmOverride || {}
     data._deletedPlatformAccountIds = data._deletedPlatformAccountIds || {}
+    data._hiddenPlatformAccountIds = data._hiddenPlatformAccountIds || {}
 
     if (needsSave) {
       localStorage.setItem(LS_KEY, JSON.stringify(data));
@@ -208,6 +210,15 @@ export function createAccount(partial){
 export function updateAccount(id, patch){
   const data = load()
   const idx = data.accounts.findIndex(a=>a.id===id); if (idx===-1) return null
+  // Track hidden platformAccountIds so auto-created accounts stay hidden
+  if (patch.hidden === true && data.accounts[idx].platformAccountId) {
+    if (!data._hiddenPlatformAccountIds) data._hiddenPlatformAccountIds = {};
+    const pName = data.accounts[idx].platformName || '_';
+    if (!data._hiddenPlatformAccountIds[pName]) data._hiddenPlatformAccountIds[pName] = [];
+    if (!data._hiddenPlatformAccountIds[pName].includes(data.accounts[idx].platformAccountId)) {
+      data._hiddenPlatformAccountIds[pName].push(data.accounts[idx].platformAccountId);
+    }
+  }
   data.accounts[idx] = { ...data.accounts[idx], ...patch }
   save(data); return data.accounts[idx]
 }
@@ -1317,7 +1328,12 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
     lastPlatformSync: now,
     firmId: effectiveFirmId,
     dateCreated: now.split('T')[0],
-    hidden: existingIdx !== -1 ? data.accounts[existingIdx].hidden || false : false,
+    hidden: existingIdx !== -1
+      ? data.accounts[existingIdx].hidden || false
+      : ((() => {
+          const hiddenIds = data._hiddenPlatformAccountIds?.['quantower'] || [];
+          return hiddenIds.includes(platformAccountId);
+        })()),
   };
 
   let internalAccountId;
