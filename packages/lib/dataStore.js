@@ -39,6 +39,7 @@ const seed = {
   goals: [],    // armazena goals
   livePositions: [],  // posições abertas em tempo real
   tradeLedger: {},  // { platformTradeId: { internalTradeId, status, platformAccountId, internalAccountId, firstSeenAt, lastSeenAt } }
+  _deletedPlatformAccountIds: {},  // { platformName: [platformAccountId, ...] } — contas que o usuário deletou, pra não recriar
 }
 
 function load() {
@@ -101,6 +102,7 @@ function load() {
     // Migration: connection/firm mapping (backward-compatible)
     data.connectionFirmMap = data.connectionFirmMap || {}
     data.accountFirmOverride = data.accountFirmOverride || {}
+    data._deletedPlatformAccountIds = data._deletedPlatformAccountIds || {}
 
     if (needsSave) {
       localStorage.setItem(LS_KEY, JSON.stringify(data));
@@ -220,6 +222,17 @@ export function deleteAccount(id){
   if (!data._deletedAccountIds) data._deletedAccountIds = [];
   if (!data._deletedAccountIds.includes(id)) {
     data._deletedAccountIds.push(id);
+  }
+
+  // Track deleted platformAccountId so auto-creation doesn't bring it back on next sync
+  if (accountToDelete?.platformAccountId && accountToDelete?.platformName) {
+    if (!data._deletedPlatformAccountIds) data._deletedPlatformAccountIds = {};
+    if (!data._deletedPlatformAccountIds[accountToDelete.platformName]) {
+      data._deletedPlatformAccountIds[accountToDelete.platformName] = [];
+    }
+    if (!data._deletedPlatformAccountIds[accountToDelete.platformName].includes(accountToDelete.platformAccountId)) {
+      data._deletedPlatformAccountIds[accountToDelete.platformName].push(accountToDelete.platformAccountId);
+    }
   }
 
   // Instead of silently dropping the accountId from payouts, preserve a snapshot
@@ -1239,7 +1252,14 @@ export function upsertQuantowerAccount(platformAccount, firmId, connectionId, co
   const data = load();
   const platformAccountId = platformAccount.platformAccountId;
   const platformAccountName = platformAccount.name || platformAccountId;
-  
+
+  // Se esta conta foi deletada pelo usuário anteriormente, não recriar
+  const deletedIds = data._deletedPlatformAccountIds?.['quantower'] || [];
+  if (deletedIds.includes(platformAccountId)) {
+    console.log(`[upsertQuantowerAccount] Skipped (previously deleted): ${platformAccountId}`);
+    return { internalAccountId: null, isNew: false, skipped: true };
+  }
+
   // First try exact platform match
   let existingIdx = data.accounts.findIndex(a => 
     a.platformName === 'quantower' && a.platformAccountId === platformAccountId

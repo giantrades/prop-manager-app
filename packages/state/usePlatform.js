@@ -111,7 +111,11 @@ export function usePlatform() {
             console.log(`[SYNCED] remapped account: platformAccountId=${acc.platformAccountId} → internal=${existing.id}, name=${acc.name}`);
           } else {
             const result = upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
-            console.log(`[SYNCED] auto-created account: platformAccountId=${acc.platformAccountId}, name=${acc.name}, isNew=${result?.isNew}`);
+            if (result?.skipped) {
+              console.log(`[SYNCED] skipped deleted account: ${acc.platformAccountId}`);
+            } else {
+              console.log(`[SYNCED] auto-created account: platformAccountId=${acc.platformAccountId}, name=${acc.name}, isNew=${result?.isNew}`);
+            }
           }
         }
       }
@@ -150,7 +154,11 @@ export function usePlatform() {
               meta.connectionId,
               meta.connectionName
             );
-            console.log(`[SYNCED] created trade-only account: platformAccountId=${pid}, connectionName=${meta.connectionName || '(none)'}, isNew=${result?.isNew}`);
+            if (result?.skipped) {
+              console.log(`[SYNCED] skipped deleted account: ${pid}`);
+            } else {
+              console.log(`[SYNCED] created trade-only account: platformAccountId=${pid}, connectionName=${meta.connectionName || '(none)'}, isNew=${result?.isNew}`);
+            }
           }
         }
       }
