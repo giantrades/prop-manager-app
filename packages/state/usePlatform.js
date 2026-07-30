@@ -17,6 +17,7 @@ import {
   getPlatformSettings,
   setPlatformSettings,
   upsertTradeFromPlatform,
+  upsertQuantowerAccount,
   updateAccount,
   updateLivePositions,
   closeLivePosition,
@@ -85,6 +86,19 @@ export function usePlatform() {
 
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
+
+      // Auto-create accounts from bridge data if not yet mapped
+      // This ensures trades are imported even on first sync before user
+      // manually clicks "Sincronizar contas"
+      if (data.accounts?.length > 0) {
+        const existingMapping = getAccountMapping(data.platformId);
+        for (const acc of data.accounts) {
+          if (!existingMapping[acc.platformAccountId]) {
+            const result = upsertQuantowerAccount(acc, null, acc.connectionId, acc.connectionName);
+            console.log(`[SYNCED] auto-created account: platformAccountId=${acc.platformAccountId}, name=${acc.name}, isNew=${result?.isNew}`);
+          }
+        }
+      }
 
       // Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
       const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
