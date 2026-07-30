@@ -117,6 +117,26 @@ export function usePlatform() {
           }
         }
       }
+      // Also ensure every unique platformAccountId from trades is mapped,
+      // even if the bridge /accounts didn't return that account.
+      // Creates a minimal account entry so trades aren't silently lost.
+      if (rawTrades.length > 0) {
+        const mapping = getAccountMapping(data.platformId);
+        const tradeAcctIds = [...new Set(rawTrades.map(t => t.platformAccountId).filter(Boolean))];
+        for (const pid of tradeAcctIds) {
+          if (mapping[pid]) continue;
+          // Try to find existing internal account by platformAccountId
+          const allData = getAll();
+          const existing = allData.accounts.find(a => a.platformName === data.platformId && a.platformAccountId === pid);
+          if (existing) {
+            dsSetAccountMapping(data.platformId, pid, existing.id);
+            console.log(`[SYNCED] mapped trade-only account: ${pid} → ${existing.id}`);
+          } else {
+            const result = upsertQuantowerAccount({ platformAccountId: pid, name: pid, connectionId: '', connectionName: '' }, null, '', '');
+            console.log(`[SYNCED] created trade-only account: platformAccountId=${pid}, isNew=${result?.isNew}`);
+          }
+        }
+      }
 
       if (rawTrades.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
