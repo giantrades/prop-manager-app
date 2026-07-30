@@ -509,7 +509,11 @@ export default function TradesPage() {
             setEditing(trade);
             setOpen(true);
           }}
-          onDelete={(id) => deleteTrade(id)}
+          onDelete={async (id) => {
+            if (window.confirm(`Tem certeza que deseja excluir este trade?`)) {
+              await deleteTrade(id);
+            }
+          }}
         />      </div>
 
       {/* MODAL */}
