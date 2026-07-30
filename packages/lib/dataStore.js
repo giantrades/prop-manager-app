@@ -1177,6 +1177,8 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
       const netPnl = exitData.netPnl ?? pos.netPnl ?? 0;
       const grossPnl = exitData.grossPnl ?? pos.grossPnl ?? 0;
 
+      const feeVal = exitData.fee ?? pos.fee ?? 0;
+      const swapsVal = exitData.swaps ?? pos.swaps ?? 0;
       const tradeData = {
         entry_datetime: entryTime || new Date().toISOString(),
         exit_datetime: exitData.exitTime || new Date().toISOString(),
@@ -1186,10 +1188,10 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
         volume: pos.quantity || 0,
         entry_price: entryPrice || 0,
         exit_price: exitData.exitPrice || pos.currentPrice || 0,
-        result_net: netPnl,
+        result_net: (grossPnl ?? 0) - Math.abs(feeVal) - Math.abs(swapsVal),
         result_gross: grossPnl,
-        fee: exitData.fee ?? pos.fee ?? 0,
-        swaps: exitData.swaps ?? pos.swaps ?? 0,
+        fee: feeVal,
+        swaps: swapsVal,
         source: pos.platformId || 'quantower',
         platformTradeId,
         positionId: rawId,
@@ -1197,6 +1199,7 @@ export function closeLivePosition(platformPositionId, exitData = {}, resolvedAcc
         connectionName: pos.connectionName || '',
         isLive: false,
       };
+      console.log(`[closeLivePosition] snapshot: platformTradeId=${platformTradeId}, gross=${grossPnl}, fee=${feeVal}, swaps=${swapsVal}, net=${tradeData.result_net}`);
       upsertTradeFromPlatform(tradeData);
     }
   }

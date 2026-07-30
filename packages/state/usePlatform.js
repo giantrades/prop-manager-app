@@ -123,8 +123,9 @@ export function usePlatform() {
               volume: trade.quantity,
               entry_price: trade.entryPrice ?? trade.entry_price,
               exit_price: trade.exitPrice ?? trade.exit_price,
-              result_net: trade.netPnl,
+              result_net: (trade.grossPnl ?? 0) - Math.abs(trade.fee ?? 0),
               result_gross: trade.grossPnl,
+              fee: trade.fee,
               source: data.platformId,
               platformTradeId: trade.platformTradeId,
               platformName: trade.platformName || data.platformId,
@@ -149,10 +150,9 @@ export function usePlatform() {
         }
         
         // Log filtered trades for debugging
-        const filteredCount = rawTrades.length - tradesToImport.length;
-        if (filteredCount > 0) {
-          console.log(`[Quantower Sync] Filtered out ${filteredCount} trades (unmapped accounts + entry fills)`);
-        }
+        console.log(`[SYNCED] rawTrades=${rawTrades.length}, toImport=${tradesToImport.length}, accountMapping keys=${Object.keys(accountMapping).join(',')}`);
+        rawTrades.forEach(t => console.log(`[SYNCED] trade: platformTradeId=${t.platformTradeId}, platformAccountId=${t.platformAccountId}, gross=${t.grossPnl}, fee=${t.fee}, netPnl=${t.netPnl}`));
+        tradesToImport.forEach(t => console.log(`[SYNCED] importing: platformTradeId=${t.platformTradeId}, accountId=${accountMapping[t.platformAccountId]}, gross=${t.grossPnl}, fee=${t.fee}, net=${(t.grossPnl ?? 0) - Math.abs(t.fee ?? 0)}`));
       }
     }));
 
@@ -216,7 +216,7 @@ export function usePlatform() {
             volume:         rt.quantity,
             entry_price:    rt.entryPrice,
             exit_price:     rt.exitPrice,
-            result_net:     rt.netPnl,
+            result_net:     (rt.grossPnl ?? 0) - Math.abs(rt.fee ?? 0) - Math.abs(rt.swaps ?? 0),
             result_gross:   rt.grossPnl,
             fee:            rt.fee,
             swaps:          rt.swaps,
@@ -225,6 +225,7 @@ export function usePlatform() {
             positionId:     rt.positionId || '',
             isLive: false,
           });
+          console.log(`[POSITION_CLOSED] realTrade: platformTradeId=${rt.platformTradeId}, gross=${rt.grossPnl}, fee=${rt.fee}, swaps=${rt.swaps}, net=${(rt.grossPnl ?? 0) - Math.abs(rt.fee ?? 0) - Math.abs(rt.swaps ?? 0)}`);
 
           // Remove from live positions (closeLivePosition does this inside, but we need to do it here manually for realTrade)
           updateLivePositions(getLivePositions().filter(p => p.platformPositionId !== data.position.platformPositionId));
@@ -259,10 +260,11 @@ export function usePlatform() {
       console.log(`📈 New position: ${data.position.symbol} ${data.position.side}`);
     }));
 
-    // Auto-start if any platform has autoSync enabled
+    // Auto-start if any platform is enabled
     const allData = getAll();
     const platforms = allData.settings?.platforms || {};
-    const shouldAutoStart = Object.values(platforms).some(p => p.enabled && p.autoSync);
+    const shouldAutoStart = Object.values(platforms).some(p => p.enabled);
+    console.log(`[usePlatform] shouldAutoStart=${shouldAutoStart}`, Object.entries(platforms).map(([k,v]) => `${k}: enabled=${v.enabled}`));
     if (shouldAutoStart) {
       pm.startAutoSync();
       setIsRunning(true);

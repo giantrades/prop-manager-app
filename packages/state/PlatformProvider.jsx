@@ -14,11 +14,13 @@ export function PlatformProvider({ children }) {
       if (qtAdapter) qtAdapter.setBridgeUrl(qtSettings.bridgeUrl);
     }
 
-    // Auto-start if any platform has autoSync enabled
+    // Auto-start if any platform is enabled (autoSync not required — fixes
+    // bug where autoSync was never saved in legacy settings)
     const timer = setTimeout(() => {
       const allData = getAll();
       const platforms = allData.settings?.platforms || {};
-      const shouldAutoStart = Object.values(platforms).some(p => p.enabled && p.autoSync);
+      const shouldAutoStart = Object.values(platforms).some(p => p.enabled);
+      console.log(`[PlatformProvider] shouldAutoStart=${shouldAutoStart}`, Object.entries(platforms).map(([k,v]) => `${k}: enabled=${v.enabled}`));
       if (shouldAutoStart) {
         pm.startAutoSync();
       }

@@ -529,6 +529,22 @@ export default function PlatformConnectionSettings() {
     }
   }, [connFirmMap, backfillEnabled]);
 
+  /* --- Force Resync all data --- */
+  const handleForceResync = useCallback(async () => {
+    setSyncingConnId('all');
+    try {
+      const pm = getPlatformManager();
+      const result = await pm.syncPlatform('quantower');
+      console.log(`[ForceResync] ${result.trades.length} trades, ${result.accounts.length} contas, ${result.positions.length} posições`);
+      alert(`✅ Resync concluído: ${result.trades.length} trades, ${result.accounts.length} contas`);
+      refresh();
+    } catch (err) {
+      alert('❌ Erro no resync: ' + err.message);
+    } finally {
+      setSyncingConnId(null);
+    }
+  }, []);
+
   /* --- Sync Platform (accounts + trades) for a connection --- */
   const handleSyncConnection = useCallback(async (connectionId, connectionName) => {
     setSyncingConnId(connectionId);
@@ -672,15 +688,24 @@ export default function PlatformConnectionSettings() {
         </div>
 
         {bridgeStatus && (
-          <p style={{
-            fontSize: 12, marginTop: 8, marginBottom: 0,
-            color: bridgeStatus.online ? '#22c55e' : '#ef4444',
-          }}>
-            {bridgeStatus.online
-              ? `✅ Conectado — ${bridgeStatus.accountsCount ?? bridgeAccounts.length} contas · ${connections.length} conexões`
-              : `❌ Offline — ${bridgeStatus.error || 'Verifique se a Bridge está rodando no Quantower'}`
-            }
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+            <p style={{ margin: 0, fontSize: 12, color: bridgeStatus.online ? '#22c55e' : '#ef4444', flex: 1 }}>
+              {bridgeStatus.online
+                ? `✅ Conectado — ${bridgeStatus.accountsCount ?? bridgeAccounts.length} contas · ${connections.length} conexões`
+                : `❌ Offline — ${bridgeStatus.error || 'Verifique se a Bridge está rodando no Quantower'}`
+              }
+            </p>
+            {bridgeStatus.online && (
+              <button
+                className="btn ghost small"
+                onClick={handleForceResync}
+                disabled={syncingConnId === 'all'}
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+              >
+                {syncingConnId === 'all' ? '⏳ Sincronizando...' : '🔄 Force Resync'}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

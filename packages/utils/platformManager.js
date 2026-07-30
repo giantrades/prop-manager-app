@@ -253,8 +253,9 @@ class PlatformManager {
       newTrades.push(trade);
     }
 
+    console.log(`[syncPlatform] from=${fromParam}, bridge returned ${trades.length} trades, ${accounts.length} accounts, ${positions.length} positions — entryFills=${trades.length - newTrades.length - trades.filter(t => Number(t.netPnl) === 0 && (!t.exitDateTime || !t.exitPrice)).length}, deleted=${trades.length - newTrades.length}, new=${newTrades.length}`);
+
     // Note: ledger 'imported' write moved to dataStore.js upsertTradeFromPlatform
-    // so it only fires AFTER a trade is actually saved.
 
     this._lastSyncTime.set(platformId, new Date().toISOString());
 
@@ -491,6 +492,7 @@ const from = this._lastSyncTime.get(id);
         }
 
         if (newTrades.length > 0) {
+          console.log(`[_syncAllTrades] ${id}: bridge returned ${trades.length} trades, new=${newTrades.length}`);
           this._emit(PLATFORM_EVENTS.SYNCED, {
             platformId: id,
             accounts,
@@ -498,6 +500,8 @@ const from = this._lastSyncTime.get(id);
             totalTrades: trades.length,
             timestamp: new Date().toISOString(),
           });
+        } else {
+          console.log(`[_syncAllTrades] ${id}: bridge returned ${trades.length} trades, all already imported`);
         }
         this._lastSyncTime.set(id, new Date().toISOString());
       } catch (err) {
@@ -521,11 +525,10 @@ const from = this._lastSyncTime.get(id);
     try {
       const adapter = this.adapters.get(platformId);
       if (!adapter) return null;
-      // Busca trades desde início do dia (UTC) - fallback para pegar trades do dia
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      const from = today.toISOString();
+      // Busca trades dos últimos 3 dias — cobre trades que entram D-1 e fecham hoje
+      const from = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
       const trades = await adapter.getTrades(from, undefined);
+      console.log(`[_fetchClosedTrade] from=${from.slice(0,10)}, bridge returned ${trades.length} trades, looking for pos=${(pos.platformPositionId || '').replace(/^qt_pos_/, '')}`);
       // Extrai o raw positionId para matching
       const rawPosId = (pos.platformPositionId || '').replace(/^qt_pos_/, '');
       const match = trades.find(t => {
@@ -605,19 +608,21 @@ const from = this._lastSyncTime.get(id);
           }
 
           // Detect closed positions
-          for (const pos of previousPositions) {
-            if (!currIds.has(pos.platformPositionId)) {
-              // Tentar buscar trade real antes de emitir POSITION_CLOSED com snapshot
-              this._fetchClosedTrade(id, pos).then(realTrade => {
-                this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
-                  platformId: id,
-                  position: realTrade
-                    ? { ...pos, currentPrice: realTrade.exitPrice, netPnl: realTrade.netPnl, grossPnl: realTrade.grossPnl }
-                    : pos,
-                  realTrade: realTrade || null,
-                });
+          const closedPositions = previousPositions.filter(p => !currIds.has(p.platformPositionId));
+          if (closedPositions.length > 0) {
+            console.log(`[Poll] ${id}: ${previousPositions.length} prev → ${currentPositions.length} curr, closed=${closedPositions.map(p => p.platformPositionId).join(',')}`);
+          }
+          for (const pos of closedPositions) {
+            this._fetchClosedTrade(id, pos).then(realTrade => {
+              console.log(`[Poll] ${id} closed pos=${pos.platformPositionId}: realTrade=${!!realTrade}, symbol=${pos.symbol}, gross=${pos.grossPnl}`);
+              this._emit(PLATFORM_EVENTS.POSITION_CLOSED, {
+                platformId: id,
+                position: realTrade
+                  ? { ...pos, currentPrice: realTrade.exitPrice, netPnl: realTrade.netPnl, grossPnl: realTrade.grossPnl }
+                  : pos,
+                realTrade: realTrade || null,
               });
-            }
+            });
           }
 
           // Always emit updated positions for live P&L refresh (even empty array to clear UI)
