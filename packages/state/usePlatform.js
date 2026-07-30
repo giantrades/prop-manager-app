@@ -87,6 +87,11 @@ export function usePlatform() {
     unsubs.push(pm.on(PLATFORM_EVENTS.SYNCED, (data) => {
       setLastSync(data.timestamp);
 
+      // Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
+      const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
+
+      console.log(`[SYNCED] accounts=${data.accounts?.length || 0}, rawTrades=${rawTrades.length}, accountMapping keys=${Object.keys(getAccountMapping(data.platformId)).join(',')}`);
+
       // Auto-create/map accounts from bridge data if not yet mapped.
       // First tries to find existing internal account by (platformName, connectionId, name)
       // to handle the case where Quantower regenerated account IDs (old mapping stale).
@@ -113,8 +118,6 @@ export function usePlatform() {
         }
       }
 
-      // Import new trades ONLY for accounts that are MAPPED (have firm/internalAccountId)
-      const rawTrades = data.newTrades?.length > 0 ? data.newTrades : (data.trades || []);
       if (rawTrades.length > 0) {
         const accountMapping = getAccountMapping(data.platformId);
         
