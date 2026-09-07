@@ -1,10 +1,18 @@
 // src/utils/googleDrive.js
 
 // ============================================================
-// 🔹 CONFIGURAÇÕES PADRÃO - V1
+// 🔹 CREDENCIAIS — NUNCA hardcoded neste arquivo.
+// Vêm de env (Vite) ou de parâmetros explícitos de initGoogleDrive().
+// Configure em: Netlify Site settings → Environment variables:
+//   VITE_GOOGLE_CLIENT_ID, VITE_GOOGLE_API_KEY
+// E restrinja a chave no Google Cloud Console por HTTP referrer
+// (APIs & Services → Credentials → API key → Website restrictions).
+// Ver main-app/.env.example
 // ============================================================
-const DEFAULT_CLIENT_ID = "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com";
-const DEFAULT_API_KEY = "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M";
+const VITE_ENV =
+  (typeof import.meta !== "undefined" && import.meta.env) || {};
+const ENV_CLIENT_ID = VITE_ENV.VITE_GOOGLE_CLIENT_ID || "";
+const ENV_API_KEY = VITE_ENV.VITE_GOOGLE_API_KEY || "";
 
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 const SCOPES = "https://www.googleapis.com/auth/drive.file";
@@ -110,9 +118,16 @@ function stopTokenRefresh() {
  * Inicializa o Google API Client + Google Identity Services
  */
 export async function initGoogleDrive(
-  clientId = DEFAULT_CLIENT_ID,
-  apiKey = DEFAULT_API_KEY
+  clientId = ENV_CLIENT_ID,
+  apiKey = ENV_API_KEY
 ) {
+  if (!clientId || !apiKey) {
+    throw new Error(
+      "[googleDrive] credenciais ausentes: defina VITE_GOOGLE_CLIENT_ID e " +
+        "VITE_GOOGLE_API_KEY no env (ver main-app/.env.example) ou passe " +
+        "clientId/apiKey explícitos para initGoogleDrive()."
+    );
+  }
   try {
     // Evita inicializar múltiplas vezes
     if (gapiInited && gisInited && tokenClient) return true;

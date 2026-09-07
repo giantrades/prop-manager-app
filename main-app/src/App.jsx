@@ -31,10 +31,9 @@ export default function App() {
     let mounted = true;
     (async () => {
       try {
-        await initGoogleDrive(
-          "466867392278-f22vqhvgre89q3e8bvbi4je8vovnc92n.apps.googleusercontent.com",
-          "AIzaSyCYWpRFtpOjjZym0UhKQIN3zU7-y557E9M"
-        );
+        // Credenciais via env (VITE_GOOGLE_CLIENT_ID / VITE_GOOGLE_API_KEY) —
+        // nunca hardcoded (S0.1). initGoogleDrive lança erro se faltarem.
+        await initGoogleDrive();
         if (!mounted) return;
         setDriveReady(true);
         setLogged(isSignedIn());
