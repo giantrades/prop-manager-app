@@ -1,10 +1,10 @@
 [build]
-  command = "pnpm build:all && node scripts/merge-builds.js"
+  command = "pnpm --frozen-lockfile build:all && node scripts/merge-builds.js"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
-  PNPM_VERSION = "8"
+  PNPM_VERSION = "9"
 
 # Roteamento para SPA - Trading Journal
 [[redirects]]
