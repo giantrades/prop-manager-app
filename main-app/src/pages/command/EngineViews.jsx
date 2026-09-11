@@ -604,7 +604,7 @@ export function ForecastPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Forecast</h1></div>
-      <ModuleTabs module="planejamento" />
+      <ModuleTabs module="gastos" />
       <Forecast forecast={data?.forecast} safeAvailable={data?.safeAvailable} loading={loading} />
     </div>
   );
@@ -831,7 +831,7 @@ export function ExpensesPage() {
 }
 
 export function FinancialJournalPage() {
-  const { loading, data, finance } = useEngineData(async (f) => {
+  const { loading, data, finance, reload } = useEngineData(async (f) => {
     const [suggested, confirmed] = await Promise.all([f.wealth.suggestJournalEvents(), f.wealth.listJournalEvents()]);
     // Unifica: eventos sugeridos (não confirmados) + confirmados.
     const confirmedIds = new Set(confirmed.map((e) => e.id));
@@ -841,25 +841,60 @@ export function FinancialJournalPage() {
     ];
     return events.sort((a, b) => b.date.localeCompare(a.date));
   });
+  const financeRef = useRef(finance);
+  financeRef.current = finance;
 
   const onConfirm = useCallback(
     async (event) => {
       if (!finance) return;
       try {
         await finance.wealth.confirmJournalEvent(event);
+        reload();
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[journal] falha ao confirmar evento', err);
       }
     },
-    [finance],
+    [finance, reload],
   );
+
+  const [form, setForm] = useState({ title: '', date: new Date().toISOString().slice(0, 10), amount: '', note: '' });
+
+  const onCreate = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f || !form.title.trim()) return;
+    await f.wealth.createJournalEvent({
+      date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
+      title: form.title,
+      amount: form.amount ? Number(form.amount) : undefined,
+      note: form.note.trim() || undefined,
+    });
+    setForm({ title: '', date: new Date().toISOString().slice(0, 10), amount: '', note: '' });
+    reload();
+  }, [form, reload]);
+
+  const onDelete = useCallback(async (id) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.wealth.removeJournalEvent(id);
+    reload();
+  }, [reload]);
 
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Marcos</h1></div>
       <ModuleTabs module="planejamento" />
-      <FinancialJournal events={data ?? []} onConfirm={onConfirm} loading={loading} />
+      <div className="mj-new">
+        <div className="mj-new-title">Novo marco</div>
+        <div className="mj-new-grid">
+          <input className="cmd-select" style={{ maxWidth: 'none' }} placeholder="Título (ex.: primeiro payout 10k)" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} aria-label="Título do marco" />
+          <input className="cmd-select" type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} aria-label="Data do marco" />
+          <input className="cmd-select" type="number" placeholder="Valor (opcional)" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} aria-label="Valor do marco" />
+          <input className="cmd-select" style={{ maxWidth: 'none' }} placeholder="Nota (opcional)" value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} aria-label="Nota do marco" />
+          <button className="cmd-refresh" onClick={onCreate} disabled={!form.title.trim()}>Adicionar</button>
+        </div>
+      </div>
+      <FinancialJournal events={data ?? []} onConfirm={onConfirm} onDelete={onDelete} loading={loading} />
     </div>
   );
 }

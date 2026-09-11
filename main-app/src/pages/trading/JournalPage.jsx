@@ -7,6 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
+import { PlaybookPanel } from './PlaybookPage';
 import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
 import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats } from '@apps/lib/db';
@@ -74,7 +75,7 @@ export default function JournalPage() {
   const checklistOk = checklistBlocked ? false : (data?.checklistOk ?? null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [view, setView] = useState('dashboard');
+  const [view, setView] = useState('review');
   // A7 — bucket do histograma com persistência.
   const [histBucket, setHistBucket] = useState(() => {
     const v = Number(localStorage.getItem('journalHistogramBucket'));
@@ -319,64 +320,34 @@ export default function JournalPage() {
         <>
           <ModuleTabs module="trading" />
           <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
-            <button className={`jd-tab${view === 'dashboard' ? ' active' : ''}`} role="tab" aria-selected={view === 'dashboard'} onClick={() => setView('dashboard')}>Dashboard</button>
-            <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
             <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
+            <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
+            <button className={`jd-tab${view === 'playbook' ? ' active' : ''}`} role="tab" aria-selected={view === 'playbook'} onClick={() => setView('playbook')}>Playbook</button>
           </div>
-          {view === 'dashboard' ? (
+          {view === 'review' ? (
             <>
-              <div className="jd-filters" role="group" aria-label="Filtros do dashboard">
-                <select
-                  className="jd-filter"
-                  value={dashFilters.period}
-                  onChange={(e) => setDashFilter('period', e.target.value)}
-                  aria-label="Período"
-                >
+              <div className="jd-filters" role="group" aria-label="Filtros do review">
+                <select className="jd-filter" value={dashFilters.period} onChange={(e) => setDashFilter('period', e.target.value)} aria-label="Período">
                   <option value="all">Todo o período</option>
                   <option value="7">Últimos 7 dias</option>
                   <option value="30">Últimos 30 dias</option>
                   <option value="90">Últimos 90 dias</option>
                 </select>
-                <select
-                  className="jd-filter"
-                  value={dashFilters.accountId}
-                  onChange={(e) => setDashFilter('accountId', e.target.value)}
-                  aria-label="Conta"
-                >
+                <select className="jd-filter" value={dashFilters.accountId} onChange={(e) => setDashFilter('accountId', e.target.value)} aria-label="Conta">
                   <option value="">Todas as contas</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
+                  {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
                 </select>
                 {(dashFilters.period !== 'all' || dashFilters.accountId) && (
                   <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
                 )}
               </div>
-              <JournalDashboard trades={dashTrades} payouts={payouts} loading={loading} />
-              <PnLCalendar trades={dashTrades} loading={loading} selectedDay={selectedDay} onSelectDay={setSelectedDay} />
-              {selectedDay && (
-                <DayTrades
-                  dateKey={selectedDay}
-                  trades={dashTrades.filter((t) => {
-                    const stamp = t.exitDatetime || t.entryDatetime;
-                    if (!stamp) return false;
-                    const d = new Date(stamp);
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === selectedDay;
-                  })}
-                  onClose={() => setSelectedDay(null)}
-                  onEdit={(t) => { setEditing(t); setShowForm(true); }}
-                />
-              )}
-            </>
-          ) : view === 'review' ? (
-            <>
               <HeatmapSection trades={dashTrades} sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
               <BreakdownSection trades={dashTrades} loading={loading} />
               <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
               <DurationAnalysis trades={dashTrades} loading={loading} />
               <WeeklyReview trades={dashTrades} loading={loading} />
             </>
-          ) : (
+          ) : view === 'trades' ? (
             <Trades
               trades={trades}
               accounts={accounts}
@@ -385,6 +356,8 @@ export default function JournalPage() {
               onEdit={(t) => { setEditing(t); setShowForm(true); }}
               onDelete={handleDelete}
             />
+          ) : (
+            <PlaybookPanel />
           )}
         </>
       )}

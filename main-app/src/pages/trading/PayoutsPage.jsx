@@ -2,12 +2,14 @@
 // (`applyPayout`). A alocação (Tax→Living→Invest→Cash) é feita AQUI, inline — sem
 // aba separada (antes era /payout-center). Ver DOCS/11_PAGE_MAP.md.
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
 import Payouts from '@apps/ui/Payouts';
 import PayoutCenter from '@apps/ui/PayoutCenter';
+import { fmtMoney } from '@apps/ui/currency';
 import { listFirms } from '@apps/lib/db';
 
 export default function PayoutsPage() {
@@ -69,6 +71,18 @@ export default function PayoutsPage() {
     : payouts;
   const pending = visible.filter((p) => !allocIds.includes(p.id));
 
+  const payoutSeries = useMemo(() => {
+    const byMonth = new Map();
+    for (const p of visible) {
+      const ym = String(p.date || p.updatedAt || '').slice(0, 7);
+      if (!ym) continue;
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
+    }
+    const months = [...byMonth.keys()].sort().slice(-12);
+    let cum = 0;
+    return months.map((ym) => { cum += byMonth.get(ym); return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number(cum.toFixed(2)) }; });
+  }, [visible]);
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
@@ -87,6 +101,27 @@ export default function PayoutsPage() {
       </div>
       <ModuleTabs module="investimentos" />
       {done && <div className="cmd-msg" role="status">{done}</div>}
+
+      {payoutSeries.length > 1 && (
+        <div className="dash-section">
+          <div className="dash-title"><span>Payouts acumulados</span></div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+              <defs>
+                <linearGradient id="pay-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+              <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+              <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
+              <Area type="monotone" dataKey="payout" stroke="#10b981" strokeWidth={2} fill="url(#pay-grad)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <Payouts payouts={visible} accounts={accounts} firms={firms} loading={loading} onCreate={handleCreate} onDelete={handleDelete} />
 

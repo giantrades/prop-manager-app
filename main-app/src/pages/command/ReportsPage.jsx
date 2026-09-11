@@ -1,154 +1,156 @@
-// Batch D — Relatórios v1 (audit UX P2). COMPOSIÇÃO PURA: só lê selectors dos
-// motores (`firmPnlHistory`, `freeCash`, `taxCockpit`, `netWorth`) e exibe +
-// exporta. Nenhum número novo, nenhum writer.
-import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+// Relatórios — visão simples e objetiva: situação do mês + evolução (patrimônio,
+// entradas e gastos) dos últimos meses. Base para "como foi o mês" e para exportar.
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
-import { firmPnlHistory } from '@apps/lib/db';
+import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
+import { fmtMoney } from '@apps/ui/currency';
+import { monthlySeries, computeFreeCash } from '@apps/lib/db';
 import {
-  ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
-
-const FIRM_COLORS = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'];
-
-
-const ymLabel = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
 
 export default function ReportsPage() {
   const finance = useFinance();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
+  const { loading, data, reload: load } = usePageData('reports', async (f) => {
+    const [txs, nw, snapshots] = await Promise.all([
+      f.ds.transactions.list(),
+      f.wealth.netWorth(),
+      f.wealth.netWorthSeries(),
+    ]);
+    const ym = new Date().toISOString().slice(0, 7);
+    const series = monthlySeries(txs, 12, ym);
+    const freeCash = computeFreeCash(txs, ym);
+    return { series, freeCash, nw, snapshots, ym };
+  });
+
   const financeRef = useRef(finance);
   financeRef.current = finance;
+  const [exporting, setExporting] = useState(false);
 
-  const load = useCallback(async () => {
-    const f = financeRef.current;
-    if (!f) return;
-    setLoading(true);
-    try {
-      const [txs, nw] = await Promise.all([f.ds.transactions.list(), f.wealth.netWorth()]);
-      const history = firmPnlHistory(txs, 6);
-      const perMonth = [];
-      for (const ym of history.months) {
-        const [fc, tax] = await Promise.all([f.money.freeCash(ym), f.money.taxCockpit(ym)]);
-        const firmTotal = history.rows
-          .filter((r) => r.ym === ym)
-          .reduce((s, r) => s + Object.entries(r).reduce((a, [k, v]) => (k === 'ym' ? a : a + (Number(v) || 0)), 0), 0);
-        perMonth.push({ ym, freeCash: fc.freeCash, income: fc.income, expenses: fc.expenses, estTax: tax.estTax, firmTotal });
-      }
-      setData({ history, perMonth, netWorth: nw?.netWorth ?? null });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
+  const months = data?.series ?? [];
 
   const handleExportCSV = useCallback(() => {
     if (!data) return;
-    const head = 'mes,firm_pnl,receitas,despesas,free_cash,ir_est';
-    const lines = data.perMonth.map((m) => [m.ym, m.firmTotal, m.income, m.expenses, m.freeCash, m.estTax].join(','));
-    const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-6m-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Relatório exportado.');
-  }, [data, toast]);
+    setExporting(true);
+    try {
+      const head = 'mes,entradas,gastos,saldo';
+      const lines = months.map((m) => [m.ym, m.income, m.expenses, m.balance].join(','));
+      const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-${data.ym}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Relatório exportado.');
+    } finally {
+      setExporting(false);
+    }
+  }, [data, months, toast]);
 
-  const months = data?.history?.months ?? [];
-  const firms = data?.history?.firms ?? [];
-  const chartRows = (data?.history?.rows ?? []).map((r) => ({ ...r, ym: ymLabel(String(r.ym)) }));
+  const nwSeries = useMemo(() => (data?.snapshots ?? []).map((s) => ({ at: String(s.snapshotAt).slice(0, 10), valor: s.netWorth })), [data]);
 
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Relatórios</h1>
         <div className="cmd-actions">
-          <button className="cmd-refresh" onClick={handleExportCSV} disabled={!data}>Exportar CSV</button>
+          <button className="cmd-refresh" onClick={handleExportCSV} disabled={!data || exporting}>Exportar CSV</button>
           <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
       </div>
+      <ModuleTabs module="relatorios" />
 
-      {loading ? (
-        <div role="status" aria-live="polite" className="cmd-msg">Carregando relatório…</div>
-      ) : !data ? (
-        <div role="status" className="cmd-msg">Sem dados.</div>
+      {loading || !data ? (
+        <div className="cmd-msg" role="status" aria-live="polite">Carregando relatório…</div>
       ) : (
         <>
-          <div className="rp-cards">
+          <div className="dash-cards">
             <div className="card accent3">
               <h3>Patrimônio atual</h3>
-              <div className="stat">{fmtMoney(data.netWorth)}</div>
+              <div className="stat">{fmtMoney(data.nw.netWorth, 'BRL')}</div>
+              <div className="muted">derivado</div>
             </div>
             <div className="card accent1">
-              <h3>Firm P&L (6m)</h3>
-              <div className="stat">{fmtMoney(data.perMonth.reduce((s, m) => s + m.firmTotal, 0))}</div>
+              <h3>Entrou no mês</h3>
+              <div className="stat">{fmtMoney(data.freeCash.income, 'BRL')}</div>
+              <div className="muted">{data.ym}</div>
             </div>
-            <div className="card accent4">
-              <h3>IR estimado (6m)</h3>
-              <div className="stat">{fmtMoney(data.perMonth.reduce((s, m) => s + m.estTax, 0))}</div>
+            <div className="card accent2">
+              <h3>Gastou no mês</h3>
+              <div className="stat">{fmtMoney(data.freeCash.expenses, 'BRL')}</div>
+              <div className="muted">{data.ym}</div>
+            </div>
+            <div className={`card ${data.freeCash.freeCash >= 0 ? 'accent1' : 'accent2'}`}>
+              <h3>Saldo do mês</h3>
+              <div className="stat">{fmtMoney(data.freeCash.freeCash, 'BRL')}</div>
+              <div className="muted">entradas − gastos</div>
             </div>
           </div>
 
-          {chartRows.length > 0 && firms.length > 0 && (
-            <div className="rp-chart" role="img" aria-label="Firm P&L mensal por firm">
-              <div className="rp-chart-title">Firm P&L mensal</div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartRows} margin={{ left: -4, right: 8, top: 4, bottom: 4 }}>
+          <div className="rp-widgets">
+            <div className="dash-section">
+              <div className="dash-title"><span>Entradas × Gastos (12 meses)</span></div>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={months} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: '#a1a7b3' }}
-                    width={56}
-                    tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
-                  />
-                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} />
+                  <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} tickFormatter={(v) => String(v).slice(5, 7) + '/' + String(v).slice(2, 4)} />
+                  <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'BRL')} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  {firms.map((firmId, i) => (
-                    <Bar key={firmId} dataKey={firmId} stackId="pnl" fill={FIRM_COLORS[i % FIRM_COLORS.length]} radius={[4, 4, 0, 0]} />
-                  ))}
+                  <Bar dataKey="income" name="Entradas" fill="#2ecc71" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expenses" name="Gastos" fill="#e74c3c" radius={[4, 4, 0, 0]} />
+                  <Line type="monotone" dataKey="balance" name="Saldo" stroke="#7c5cff" strokeWidth={2} dot={false} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          )}
 
-          <div className="rp-table-wrap">
-            <table className="rp-table">
-              <caption className="rp-chart-title">Fechamento mensal (6m)</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Mês</th>
-                  <th scope="col">Firm P&L</th>
-                  <th scope="col">Receitas</th>
-                  <th scope="col">Despesas</th>
-                  <th scope="col">Free cash</th>
-                  <th scope="col">IR est.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.perMonth.map((m) => (
-                  <tr key={m.ym}>
-                    <th scope="row">{ymLabel(m.ym)}</th>
-                    <td>{fmtMoney(m.firmTotal)}</td>
-                    <td>{fmtMoney(m.income)}</td>
-                    <td>{fmtMoney(m.expenses)}</td>
-                    <td>{fmtMoney(m.freeCash)}</td>
-                    <td>{fmtMoney(m.estTax)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="dash-section">
+              <div className="dash-title"><span>Evolução do patrimônio</span></div>
+              {nwSeries.length > 1 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <AreaChart data={nwSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="rp-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#7c5cff" stopOpacity={0.5} />
+                        <stop offset="100%" stopColor="#7c5cff" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="at" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={28} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'BRL')} />
+                    <Area type="monotone" dataKey="valor" stroke="#7c5cff" strokeWidth={2} fill="url(#rp-grad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="muted">Sem histórico de patrimônio ainda.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="dash-section">
+            <div className="dash-title"><span>Mês a mês (12 meses)</span></div>
+            <div className="dash-table-wrap">
+              <table className="dash-table">
+                <thead>
+                  <tr><th scope="col">Mês</th><th scope="col">Entradas</th><th scope="col">Gastos</th><th scope="col">Saldo</th></tr>
+                </thead>
+                <tbody>
+                  {months.slice().reverse().map((m) => (
+                    <tr key={m.ym}>
+                      <th scope="row">{String(m.ym).slice(5, 7)}/{String(m.ym).slice(2, 4)}</th>
+                      <td className="dash-pos">{fmtMoney(m.income, 'BRL')}</td>
+                      <td className="dash-neg">{fmtMoney(m.expenses, 'BRL')}</td>
+                      <td className={m.balance >= 0 ? 'dash-pos' : 'dash-neg'}>{fmtMoney(m.balance, 'BRL')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
@@ -157,17 +159,13 @@ export default function ReportsPage() {
 }
 
 const RP_CSS = `
-.rp-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.rp-cards .card { margin-bottom: 0; }
-.rp-chart { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); margin-bottom: 14px; }
-.rp-chart-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
-.rp-table-wrap { overflow-x: auto; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
-.rp-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-.rp-table caption { text-align: left; }
-.rp-table th, .rp-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.rp-table th:first-child, .rp-table td:first-child { text-align: left; }
-.rp-table thead th { color: var(--muted, #a1a7b3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-@media (max-width: 719px) { .rp-cards { grid-template-columns: 1fr; } }
+.rp-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.dash-table-wrap { overflow-x: auto; }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dash-table th, .dash-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.dash-table th:first-child, .dash-table td:first-child { text-align: left; }
+.dash-table thead th { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+@media (max-width: 900px) { .rp-widgets { grid-template-columns: 1fr; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('rp-styles')) {
   const style = document.createElement('style');

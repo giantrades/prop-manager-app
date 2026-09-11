@@ -5,8 +5,9 @@ import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
+import FirmPnl from '@apps/ui/FirmPnl';
 import { fmtMoney } from '@apps/ui/currency';
-import { firmPnlByFirm, listFirms, computeAccountBalance } from '@apps/lib/db';
+import { firmPnlByFirm, firmPnlHistory, listFirms, computeAccountBalance } from '@apps/lib/db';
 
 const KIND_LABEL = {
   prop: 'Prop', wallet: 'Cripto/Carteira', investment: 'Investimento', bank: 'Banco', cash: 'Dinheiro', crypto: 'Cripto/Carteira',
@@ -38,7 +39,7 @@ export default function AccountsDashboardPage() {
     ]);
     const balances = {};
     for (const a of accounts) balances[a.id] = computeAccountBalance(txs, a.id);
-    return { accounts, propExts, payouts, txs, firms, balances, firmsPnl: firmPnlByFirm(txs).slice(0, 5) };
+    return { accounts, propExts, payouts, txs, firms, balances, firmsPnl: firmPnlByFirm(txs), history: firmPnlHistory(txs, 6) };
   });
 
   const stats = useMemo(() => {
@@ -82,36 +83,32 @@ export default function AccountsDashboardPage() {
             <StatCard label="Firms" value={String((data.firms ?? []).length)} sub="empresas cadastradas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
           </div>
 
-          <div className="dash-section">
-            <div className="dash-title">
-              <span>Contas por tipo</span>
-              <NavLink className="dash-link" to="/accounts">gerenciar →</NavLink>
-            </div>
-            {Object.keys(stats.byKind).length === 0 ? (
-              <div className="muted">Nenhuma conta ainda.</div>
-            ) : Object.entries(stats.byKind).map(([kind, n]) => (
-              <div key={kind} className="dash-row">
-                <span className="dash-row-name">{KIND_LABEL[kind] ?? kind}</span>
-                <span className="dash-row-val">{n}</span>
-              </div>
-            ))}
-          </div>
-
-          {data.firmsPnl.length > 0 && (
+          <div className="ad-widgets">
             <div className="dash-section">
               <div className="dash-title">
-                <span>P&L por firm</span>
-                <NavLink className="dash-link" to="/firms">detalhar →</NavLink>
+                <span>Contas por tipo</span>
+                <NavLink className="dash-link" to="/accounts">gerenciar →</NavLink>
               </div>
-              {data.firmsPnl.map((firm) => (
-                <div key={firm.firmId} className="dash-row">
-                  <span className="dash-row-name">{firm.firmId}</span>
-                  <span className="dash-row-sub">payouts {fmtMoney(firm.payouts, 'USD')}</span>
-                  <span className={`dash-row-val ${firm.profit >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(firm.profit, 'USD')}</span>
+              {Object.keys(stats.byKind).length === 0 ? (
+                <div className="muted">Nenhuma conta ainda.</div>
+              ) : Object.entries(stats.byKind).map(([kind, n]) => (
+                <div key={kind} className="dash-row">
+                  <span className="dash-row-name">{KIND_LABEL[kind] ?? kind}</span>
+                  <span className="dash-row-val">{n}</span>
                 </div>
               ))}
             </div>
-          )}
+
+            {data.firmsPnl.length > 0 && (
+              <div className="dash-section">
+                <div className="dash-title">
+                  <span>P&L por firm</span>
+                  <NavLink className="dash-link" to="/firms">firms →</NavLink>
+                </div>
+                <FirmPnl rows={data.firmsPnl} history={data.history} colorById={Object.fromEntries((data.firms ?? []).map((f) => [f.id, f.color]))} loading={false} />
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -124,7 +121,8 @@ const AD_CSS = `
 .ad-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
 .ad-stat-value { font-size: 1.7rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 .ad-stat-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 6px; }
-@media (max-width: 1000px) { .ad-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ad-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 1000px) { .ad-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ad-widgets { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .ad-cards { grid-template-columns: 1fr; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('ad-styles')) {

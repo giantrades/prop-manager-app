@@ -2,8 +2,9 @@
 // Composição pura: patrimônio (NetWorth + série) e carteira (portfolio).
 import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
-import React from 'react';
+import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
@@ -22,10 +23,24 @@ export default function InvestmentsDashboardPage() {
       f.ds.positions.list(),
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
-    return { nw, snapshots, portfolio, positions, top };
+    const payouts = await f.ds.payouts.list();
+    return { nw, snapshots, portfolio, positions, top, payouts };
   });
 
   const pf = data?.portfolio;
+
+  const payoutSeries = useMemo(() => {
+    const payouts = data?.payouts ?? [];
+    const byMonth = new Map();
+    for (const p of payouts) {
+      const ym = String(p.date || p.updatedAt || '').slice(0, 7);
+      if (!ym) continue;
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
+    }
+    const months = [...byMonth.keys()].sort().slice(-12);
+    let cum = 0;
+    return months.map((ym) => { cum += byMonth.get(ym); return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number(cum.toFixed(2)) }; });
+  }, [data]);
 
   return (
     <div className="cmd-page">
@@ -61,32 +76,71 @@ export default function InvestmentsDashboardPage() {
             </div>
           </div>
 
-          {data.top.length > 0 && (
+          <div className="inv-widgets">
+            {data.top.length > 0 && (
+              <div className="dash-section">
+                <div className="dash-title">
+                  <span>Maiores posições</span>
+                  <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
+                </div>
+                {data.top.map((p) => (
+                  <div key={p.id} className="dash-row">
+                    <span className="dash-row-name">{p.symbol}</span>
+                    <span className="dash-row-sub">{p.qty} un.</span>
+                    <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
+                    <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="dash-section">
               <div className="dash-title">
-                <span>Maiores posições</span>
-                <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
+                <span>Payouts acumulados</span>
+                <NavLink className="dash-link" to="/payouts">payouts →</NavLink>
               </div>
-              {data.top.map((p) => (
-                <div key={p.id} className="dash-row">
-                  <span className="dash-row-name">{p.symbol}</span>
-                  <span className="dash-row-sub">{p.qty} un.</span>
-                  <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
-                  <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
-                </div>
-              ))}
+              {payoutSeries.length > 1 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="inv-grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
+                    <Area type="monotone" dataKey="payout" stroke="#10b981" strokeWidth={2} fill="url(#inv-grad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="muted">Sem payouts ainda.</div>
+              )}
             </div>
-          )}
 
-          <div className="dash-section">
-            <div className="dash-title">
-              <span>Evolução do patrimônio</span>
-              <NavLink className="dash-link" to="/networth">net worth →</NavLink>
+            <div className="dash-section inv-span2">
+              <div className="dash-title">
+                <span>Evolução do patrimônio</span>
+              </div>
+              <NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} />
             </div>
-            <NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} />
           </div>
         </>
       )}
     </div>
   );
+}
+
+const INV_CSS = `
+.inv-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.inv-span2 { grid-column: 1 / -1; }
+@media (max-width: 900px) { .inv-widgets { grid-template-columns: 1fr; } }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('inv-styles')) {
+  const style = document.createElement('style');
+  style.id = 'inv-styles';
+  style.textContent = INV_CSS;
+  document.head.appendChild(style);
 }

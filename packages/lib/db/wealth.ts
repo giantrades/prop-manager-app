@@ -1169,6 +1169,33 @@ export class WealthService {
     return confirmed;
   }
 
+  /** Cria um marco manual (type 'custom' ou informado). Sempre confirmado. */
+  async createJournalEvent(input: {
+    date: string;
+    title: string;
+    amount?: number;
+    note?: string;
+    type?: JournalEventType;
+  }): Promise<JournalEvent> {
+    const id = `je-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const event: JournalEvent = {
+      id,
+      date: input.date,
+      type: input.type ?? 'custom',
+      title: input.title.trim(),
+      amount: input.amount,
+      note: input.note,
+      confirmed: true,
+    };
+    await this.ds.meta.setKey(`journal:${id}`, event);
+    return event;
+  }
+
+  /** Remove um marco (confirmado ou sugerido descartado). */
+  async removeJournalEvent(id: string): Promise<void> {
+    await this.ds.meta.remove(`meta:journal:${id}`);
+  }
+
   async listJournalEvents(): Promise<JournalEvent[]> {
     const all = await this.ds.meta.list();
     const events: JournalEvent[] = [];

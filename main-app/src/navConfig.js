@@ -60,10 +60,8 @@ export const MODULES = [
     dashboard: "/trading",
     children: [
       { to: "/trading", label: "Resumo", icon: Activity, end: true, keywords: "trading dashboard resumo" },
-      { to: "/journal", label: "Trading Journal", icon: BookOpen, keywords: "trades journal" },
-      { to: "/playbook", label: "Playbook", icon: Target, keywords: "estratégias setup checklist" },
-      { to: "/risk", label: "Risk", icon: ShieldAlert, keywords: "risco drawdown headroom" },
-      { to: "/live-positions", label: "Positions", icon: Activity, keywords: "posições abertas live stoploss takeprofit fechar" },
+      { to: "/journal", label: "Journal", icon: BookOpen, keywords: "trades journal review playbook" },
+      { to: "/live-positions", label: "Positions", icon: TrendingUp, keywords: "posições abertas live stoploss takeprofit fechar" },
     ],
   },
   {
@@ -75,6 +73,7 @@ export const MODULES = [
       { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
       { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills orçamento extratos" },
       { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
+      { to: "/forecast", label: "Forecast", icon: LineChart, keywords: "previsão fluxo caixa" },
     ],
   },
   {
@@ -85,7 +84,6 @@ export const MODULES = [
     children: [
       { to: "/investimentos", label: "Resumo", icon: PiggyBank, end: true, keywords: "investimentos dashboard resumo" },
       { to: "/portfolio", label: "Portfolio", icon: TrendingUp, keywords: "investimentos ações cripto" },
-      { to: "/networth", label: "Net Worth", icon: Wallet, keywords: "patrimônio total" },
       { to: "/payouts", label: "Payouts e Withdrawals", icon: ArrowDownToLine, keywords: "saques pagamentos withdrawals alocar" },
     ],
   },
@@ -97,7 +95,6 @@ export const MODULES = [
     children: [
       { to: "/planejamento", label: "Resumo", icon: Target, end: true, keywords: "planejamento dashboard resumo" },
       { to: "/goals", label: "Goals", icon: Target, keywords: "metas objetivos" },
-      { to: "/forecast", label: "Forecast", icon: LineChart, keywords: "previsão fluxo caixa" },
       { to: "/journal-events", label: "Marcos", icon: Sparkles, keywords: "marcos linha do tempo eventos vida" },
     ],
   },

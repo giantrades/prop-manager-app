@@ -25,7 +25,7 @@ const TYPE_META = {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function FinancialJournal({ events = [], onConfirm, currency = 'R$', loading = false }) {
+export default function FinancialJournal({ events = [], onConfirm, onDelete, currency = 'R$', loading = false }) {
   if (loading) {
     return (
       <div className="fj-root fj-loading" role="status" aria-live="polite">
@@ -61,6 +61,9 @@ export default function FinancialJournal({ events = [], onConfirm, currency = 'R
               <button className="fj-confirm-btn" onClick={() => onConfirm(e)}>Confirmar</button>
             )}
             {e.confirmed && <span className="fj-badge">confirmado</span>}
+            {onDelete && (
+              <button className="fj-del-btn" onClick={() => onDelete(e.id)} aria-label={`Excluir ${e.title}`}>Excluir</button>
+            )}
           </div>
         );
       })}
@@ -87,6 +90,7 @@ const FJ_CSS = `
 .fj-confirm-btn { margin-top: 10px; font-size: 12px; padding: 6px 14px; border-radius: 10px; background: rgba(124,92,255,0.12); border: 1px solid rgba(124,92,255,0.3); color: var(--brand, #7c5cff); font-weight: 700; cursor: pointer; }
 .fj-confirm-btn:hover { background: rgba(124,92,255,0.2); }
 .fj-badge { display: inline-block; margin-top: 8px; font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(46,204,113,0.15); color: var(--green, #2ecc71); font-weight: 700; text-transform: uppercase; }
+.fj-del-btn { margin-top: 8px; margin-left: 8px; font-size: 11px; padding: 5px 10px; border-radius: 8px; background: transparent; border: 1px solid rgba(231,76,60,0.3); color: var(--red, #e74c3c); cursor: pointer; }
 .fj-empty { padding: 24px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
 
 @keyframes fj-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }

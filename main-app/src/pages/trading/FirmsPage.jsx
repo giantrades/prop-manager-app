@@ -1,16 +1,11 @@
-// Firms — cadastro de empresas/corretoras (nome, tipo, cor, logo) + P&L por firm.
-// A cor da firm propaga para contas, pills e gráficos. Persistido em `meta`
-// (`listFirms`/`saveFirm`/`deleteFirm`). Substitui a antiga página Firm P&L.
+// Firms — cadastro de empresas/corretoras (nome, tipo, cor, ícone, logo). A cor/ícone
+// propagam para contas, listas e gráficos. Persistido em `meta`.
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import FirmPnl from '@apps/ui/FirmPnl';
-import {
-  listFirms, saveFirm, deleteFirm, firmPnlByFirm, firmPnlHistory,
-  FIRM_TYPES, DEFAULT_FIRM_COLOR,
-} from '@apps/lib/db';
+import { listFirms, saveFirm, deleteFirm, FIRM_TYPES, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
 import { Building2, Pencil, Trash2, Plus, X } from 'lucide-react';
 
 function emptyFirm() {
@@ -23,23 +18,17 @@ export default function FirmsPage() {
   const finance = useFinance();
   const { toast } = useToast();
   const { loading, data, reload: load } = usePageData('firms', async (f) => {
-    const [firms, accounts, txs] = await Promise.all([
-      listFirms(f.ds), f.ds.accounts.list(), f.ds.transactions.list(),
-    ]);
-    return { firms, accounts, rows: firmPnlByFirm(txs), history: firmPnlHistory(txs, 6) };
+    const [firms, accounts] = await Promise.all([listFirms(f.ds), f.ds.accounts.list()]);
+    return { firms, accounts };
   });
   const firms = data?.firms ?? [];
   const accounts = data?.accounts ?? [];
-  const rows = data?.rows ?? [];
-  const history = data?.history ?? null;
 
   const financeRef = useRef(finance);
   financeRef.current = finance;
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const colorById = useMemo(() => Object.fromEntries(firms.map((f) => [f.id, f.color])), [firms]);
-  const profitById = useMemo(() => Object.fromEntries(rows.map((r) => [r.firmId, r.profit])), [rows]);
   const countByFirm = useMemo(() => {
     const acc = {};
     for (const a of accounts) if (a.firmId) acc[a.firmId] = (acc[a.firmId] ?? 0) + 1;
@@ -94,9 +83,7 @@ export default function FirmsPage() {
             <div className="cmd-empty" role="status">Nenhuma empresa cadastrada. Crie a primeira para colorir contas e gráficos.</div>
           ) : (
             <div className="firm-grid">
-              {firms.map((firm) => {
-                const profit = profitById[firm.id];
-                return (
+              {firms.map((firm) => (
                   <div key={firm.id} className="firm-card" style={{ borderTopColor: firm.color }}>
                     <div className="firm-card-head">
                       <span className="firm-dot" style={{ background: firm.color }} />
@@ -104,20 +91,14 @@ export default function FirmsPage() {
                       <div className="firm-name">{firm.name}</div>
                     </div>
                     <div className="firm-meta">{firm.type} · {countByFirm[firm.id] ?? 0} conta(s)</div>
-                    {profit != null && (
-                      <div className={`firm-profit ${profit >= 0 ? 'dash-pos' : 'dash-neg'}`}>{profit >= 0 ? '+' : ''}{profit.toFixed(0)}</div>
-                    )}
                     <div className="firm-actions">
                       <button className="cmd-refresh" onClick={() => setForm({ ...firm })} aria-label={`Editar ${firm.name}`}><Pencil size={14} /></button>
                       <button className="cmd-refresh" onClick={() => onDelete(firm.id)} aria-label={`Excluir ${firm.name}`}><Trash2 size={14} /></button>
                     </div>
                   </div>
-                );
-              })}
+              ))}
             </div>
           )}
-
-          <FirmPnl rows={rows} history={history} colorById={colorById} loading={false} />
         </>
       )}
 

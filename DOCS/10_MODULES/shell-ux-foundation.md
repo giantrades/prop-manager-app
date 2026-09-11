@@ -61,6 +61,25 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch N — reestruturação de abas + widgets (executado)
+- **Trading**: abas Resumo | Journal | Positions (Risk removido). Resumo enxuto: cards glass
+  (PnL, winrate, PF, capital, payouts, ROI) + gráfico **PnL acumulado com marcadores de
+  payout/withdrawal** + widgets (Calendário de PnL, **Drawdown** via `computeMaxDrawdown`,
+  **Histograma de R**) lado a lado. Sem "contas em risco"/checklist redundantes.
+- **Journal**: abas internas **Review | Trades | Playbook** (Playbook movido p/ dentro;
+  `PlaybookPanel`). Dashboard antigo do journal saiu (infos no Resumo).
+- **Investimentos**: Net Worth deixa de ser aba — vira widget do Resumo (junto de maiores
+  posições e **payouts acumulados**).
+- **Firms**: página só de cadastro (nome/tipo/cor/**ícone**/logo); gráficos de firm foram
+  para o Resumo de **Contas** (lado a lado com contas por tipo).
+- **Contas**: dashboard por tipo (Prop/Cripto-Carteira/Investimento/Banco/Dinheiro).
+- **Forecast** → Gastos (aba). **Marcos**: criação manual funciona (`createJournalEvent`/
+  `removeJournalEvent` no motor + form) e ganhou widget no Resumo de Planejamento.
+- **Relatórios**: sai o gráfico de firm; entra resumo do mês + evolução (patrimônio, entradas
+  × gastos, e tabela mês a mês de 12 meses).
+- Gate: `tsc` 0 + build verde + 234 testes verdes.
+- Pendente: Forecast mais útil/parametrizável; widgets antigos restantes.
+
 ## Batch M — Contas/Goals/Firms + limpeza de navbar (executado)
 - **Contas por tipo simplificado**: só `Prop · Cripto/Carteira · Investimento · Banco ·
   Dinheiro` (contas `crypto` antigas exibem como Cripto/Carteira).

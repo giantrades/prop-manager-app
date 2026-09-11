@@ -1,5 +1,5 @@
-// Batch G4 — Dashboard do módulo Planejamento (porta de entrada).
-// Composição pura: metas (progresso derivado) + forecast 30/60/90 + calendário.
+// Dashboard do módulo Planejamento (porta de entrada).
+// Composição pura: metas (progresso derivado) + marcos + safável.
 import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
@@ -7,21 +7,21 @@ import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
-import Forecast from '@apps/ui/Forecast';
 
 
 export default function PlanningDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {
-    const [goals, forecast, safeAvailable] = await Promise.all([
+    const [goals, safeAvailable, marcos] = await Promise.all([
       f.wealth.goals(),
-      f.wealth.forecast(),
       f.wealth.safeAvailable(),
+      f.wealth.listJournalEvents(),
     ]);
-    return { goals, forecast, safeAvailable };
+    return { goals, safeAvailable, marcos };
   });
 
   const goals = data?.goals ?? [];
   const completed = goals.filter((g) => g.completed).length;
+  const marcos = data?.marcos ?? [];
 
   return (
     <div className="cmd-page">
@@ -45,24 +45,27 @@ export default function PlanningDashboardPage() {
               <div className="stat">{fmtMoney(data.safeAvailable)}</div>
               <div className="muted">posso comprar isso?</div>
             </div>
-            <div className={`card ${data.forecast.netMonthly >= 0 ? 'accent1' : 'accent2'}`}>
-              <h3>Fluxo mensal</h3>
-              <div className="stat">{fmtMoney(data.forecast.netMonthly)}</div>
-              <div className="muted">líquido/mês</div>
-            </div>
             <div className="card accent3">
-              <h3>Em 90 dias</h3>
-              <div className="stat">{fmtMoney(data.forecast.d90)}</div>
-              <div className="muted">projeção</div>
+              <h3>Marcos</h3>
+              <div className="stat">{marcos.length}</div>
+              <div className="muted">momentos registrados</div>
             </div>
           </div>
 
           <div className="dash-section">
             <div className="dash-title">
-              <span>Projeção de caixa</span>
-              <NavLink className="dash-link" to="/forecast">forecast →</NavLink>
+              <span>Marcos recentes</span>
+              <NavLink className="dash-link" to="/journal-events">ver todos →</NavLink>
             </div>
-            <Forecast forecast={data.forecast} safeAvailable={data.safeAvailable} loading={false} />
+            {marcos.length === 0 ? (
+              <div className="muted">Nenhum marco ainda — crie em Marcos.</div>
+            ) : marcos.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5).map((m) => (
+              <div key={m.id} className="dash-row">
+                <span className="dash-row-name">{m.title}</span>
+                <span className="dash-row-sub">{String(m.date).slice(0, 10)}</span>
+                {m.amount != null && <span className="dash-row-val">{fmtMoney(m.amount)}</span>}
+              </div>
+            ))}
           </div>
 
           <div className="dash-section">

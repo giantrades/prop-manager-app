@@ -18,7 +18,7 @@ import Strategies from '@apps/ui/Strategies';
 import PreTradeChecklist from '@apps/ui/PreTradeChecklist';
 import EmotionalDiary from '@apps/ui/EmotionalDiary';
 
-export default function PlaybookPage() {
+export function PlaybookPanel() {
   const finance = useFinance();
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -73,14 +73,22 @@ export default function PlaybookPage() {
   }, [load]);
 
   return (
-    <div className="cmd-page">
-      <div className="cmd-page-head"><h1 className="cmd-page-title">Playbook</h1></div>
-      <ModuleTabs module="trading" />
+    <>
       <PreTradeChecklist items={template} checked={checked} onToggle={handleToggle} loading={loading} />
       <div className="pb-section-title">Setups (edge por estratégia)</div>
       <Strategies metrics={metrics} onUnlink={handleUnlink} loading={loading} />
       <div className="pb-section-title">Diário emocional</div>
       <EmotionalDiary entry={entry} rows={diaryRows} onSave={handleSaveDiary} loading={loading} />
+    </>
+  );
+}
+
+export default function PlaybookPage() {
+  return (
+    <div className="cmd-page">
+      <div className="cmd-page-head"><h1 className="cmd-page-title">Playbook</h1></div>
+      <ModuleTabs module="trading" />
+      <PlaybookPanel />
     </div>
   );
 }

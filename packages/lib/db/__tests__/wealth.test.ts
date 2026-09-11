@@ -460,3 +460,18 @@ describe('Fase 4 â€” Wealth OS', () => {
     });
   });
 });
+
+describe('wealth — marcos (JournalEvent)', () => {
+  it('createJournalEvent cria marco confirmado; listJournalEvents inclui; removeJournalEvent apaga', async () => {
+    const ctx = makeService();
+    const { ds, wealth } = ctx;
+    const ev = await wealth.createJournalEvent({ date: '2026-03-01T00:00:00Z', title: 'Primeiro payout', amount: 5000 });
+    expect(ev.confirmed).toBe(true);
+    expect(ev.type).toBe('custom');
+    let list = await wealth.listJournalEvents();
+    expect(list.map((e) => e.id)).toContain(ev.id);
+    await wealth.removeJournalEvent(ev.id);
+    list = await wealth.listJournalEvents();
+    expect(list.map((e) => e.id)).not.toContain(ev.id);
+  });
+});
