@@ -210,8 +210,8 @@ export async function pullAllPages<T>(
   for (;;) {
     const window = rangeForPage(page, pageSize);
     const rows = await fetchRange(window);
-    all.push(...rows);
-    if (rows.length < pageSize) break;
+    all.push(...(Array.isArray(rows) ? rows : []));
+    if (!Array.isArray(rows) || rows.length < pageSize) break;
     page += 1;
   }
   return all;

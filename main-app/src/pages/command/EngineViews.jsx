@@ -5,7 +5,7 @@
 //
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { nowIso } from '@apps/lib/db';
