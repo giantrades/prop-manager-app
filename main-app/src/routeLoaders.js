@@ -4,6 +4,7 @@
 export const pageLoaders = {
   '/': () => import('./pages/command/HomePage.jsx'),
   '/dinheiro': () => import('./pages/command/MoneyDashboardPage.jsx'),
+  '/gastos': () => import('./pages/command/GastosDashboardPage.jsx'),
   '/contas': () => import('./pages/command/AccountsDashboardPage.jsx'),
   '/trading': () => import('./pages/command/TradingDashboardPage.jsx'),
   '/investimentos': () => import('./pages/command/InvestmentsDashboardPage.jsx'),

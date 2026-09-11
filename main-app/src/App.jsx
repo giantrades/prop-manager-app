@@ -15,6 +15,7 @@ import { PALETTE_ROUTES } from "./navConfig";
 // Chunks por rota (fonte única em routeLoaders.js — usada no lazy e no prefetch).
 const HomePage = lazy(pageLoaders['/']);
 const MoneyDashboardPage = lazy(pageLoaders['/dinheiro']);
+const GastosDashboardPage = lazy(pageLoaders['/gastos']);
 const AccountsDashboardPage = lazy(pageLoaders['/contas']);
 const TradingDashboardPage = lazy(pageLoaders['/trading']);
 const InvestmentsDashboardPage = lazy(pageLoaders['/investimentos']);
@@ -237,6 +238,7 @@ export default function App() {
             {/* Command Center (novo, motor-driven) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/dinheiro" element={<MoneyDashboardPage />} />
+            <Route path="/gastos" element={<GastosDashboardPage />} />
             <Route path="/contas" element={<AccountsDashboardPage />} />
             <Route path="/trading" element={<TradingDashboardPage />} />
             <Route path="/investimentos" element={<InvestmentsDashboardPage />} />

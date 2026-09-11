@@ -74,10 +74,19 @@ export const MODULES = [
     children: [
       { to: "/dinheiro", label: "Resumo", icon: Banknote, end: true, keywords: "dinheiro dashboard resumo" },
       { to: "/wallets", label: "Wallets", icon: Wallet, keywords: "carteiras bancos dinheiro" },
-      { to: "/expenses", label: "Gastos", icon: Receipt, keywords: "despesas mobills orçamento" },
       { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
-      { to: "/payouts", label: "Payouts", icon: ArrowDownToLine, keywords: "saques pagamentos" },
+      { to: "/payouts", label: "Payouts e Withdrawals", icon: ArrowDownToLine, keywords: "saques pagamentos withdrawals" },
       { to: "/payout-center", label: "Alocar", icon: ArrowDownToLine, keywords: "alocar saque tax living invest" },
+    ],
+  },
+  {
+    id: "gastos",
+    label: "Gastos",
+    icon: Receipt,
+    dashboard: "/gastos",
+    children: [
+      { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
+      { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills orçamento extratos" },
     ],
   },
   {

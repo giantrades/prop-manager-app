@@ -802,8 +802,8 @@ export function ExpensesPage() {
 
   return (
     <div className="cmd-page">
-      <div className="cmd-page-head"><h1 className="cmd-page-title">Gastos</h1></div>
-      <ModuleTabs module="dinheiro" />
+      <div className="cmd-page-head"><h1 className="cmd-page-title">Lançamentos</h1></div>
+      <ModuleTabs module="gastos" />
       <Expenses
         txs={data?.txs ?? []}
         categories={data?.categories ?? []}

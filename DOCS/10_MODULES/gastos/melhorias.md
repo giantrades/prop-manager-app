@@ -103,3 +103,13 @@
 - **D5 TransferÃªncia entre carteiras** na UI de Gastos (o ledger jÃ¡ tem `transfer`).
 - **D6 Dashboard do mÃ³dulo Dinheiro**: resumo de Gastos (mÃªs, orÃ§amento, top categorias)
   como porta de entrada, com abas â€” ver `shell-ux-foundation.md` Batch G.
+
+## Batch E — Gastos vira módulo próprio (âncora) + dashboard (executado)
+- **E1 anchor**: Gastos saiu de dentro de Dinheiro e virou âncora da sidebar (app próprio),
+  com dashboard `/gastos` (`GastosDashboardPage`: gasto do mês, orçamento, a pagar, saldo,
+  próximas contas, top categorias, últimos lançamentos) e aba "Lançamentos" (`/expenses`).
+- **E2 payouts**: Dinheiro passa a ter "Payouts e Withdrawals" (nome atualizado) + Alocar.
+- **E3 criar empresa no modal da conta**: o seletor de firm em `Accounts.tsx` ganhou
+  "+ Nova empresa" (cria e já vincula à conta) — `onSaveFirm`.
+- Próximo (profundidade): separar orçamento/categorias/contas-a-pagar em abas próprias do
+  módulo Gastos (hoje são toggles in-page), e dashboard com gráficos.

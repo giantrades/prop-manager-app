@@ -44,7 +44,7 @@ export default function PayoutsPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
-        <h1 className="cmd-page-title">Payouts</h1>
+        <h1 className="cmd-page-title">Payouts e Withdrawals</h1>
         <select
           className="cmd-select"
           value={accountFilter}

@@ -10,7 +10,7 @@ import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
   Pencil, Trash2, Plus, Copy, Gauge, X,
 } from 'lucide-react';
-import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck } from '@apps/lib/db';
+import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
 
 const KINDS = ['prop', 'bank', 'wallet', 'investment', 'crypto', 'cash'];
 const PHASES = ['challenge1', 'challenge2', 'funded', 'paused', 'failed'];
@@ -62,11 +62,12 @@ function fmtMoney(v, cur = '$') {
  * @param {(accountId:string)=>Promise<void>|void} [props.onDelete]
  * @param {(accountId:string)=>void} [props.onSelect]
  * @param {(accountId:string)=>void} [props.onDuplicate]
+ * @param {(firm:{name:string;color?:string;type?:string})=>Promise<string|undefined>|void} [props.onSaveFirm]
  * @param {boolean} [props.loading]
  */
 export default function Accounts({
   accounts = [], props = {}, balances = {}, statusById = {}, firms = [],
-  onSave, onDelete, onSelect, onDuplicate, loading = false,
+  onSave, onDelete, onSelect, onDuplicate, onSaveFirm, loading = false,
 }) {
   const [editing, setEditing] = useState(null); // { account, prop } | null
   const [isNew, setIsNew] = useState(false);
@@ -74,6 +75,7 @@ export default function Accounts({
   const [templateId, setTemplateId] = useState('');
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState('all');
+  const [newFirm, setNewFirm] = useState(null); // { name, color } | null
 
   const applyFirmTemplate = (id) => {
     setTemplateId(id);
@@ -174,12 +176,37 @@ export default function Accounts({
                 <input className="ac3-input" value={account.institution || ''} onChange={(e) => update('institution', e.target.value)} placeholder="Ex.: FTMO, Nubank, XP" />
               </label>
               <label className="ac3-field"><span className="ac3-label">Empresa (firm)</span>
-                <select className="ac3-input" value={account.firmId || ''} onChange={(e) => update('firmId', e.target.value || undefined)} aria-label="Empresa">
-                  <option value="">—</option>
-                  {firms.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
-                </select>
+                <span style={{ display: 'flex', gap: 6 }}>
+                  <select className="ac3-input" value={account.firmId || ''} onChange={(e) => update('firmId', e.target.value || undefined)} aria-label="Empresa">
+                    <option value="">—</option>
+                    {firms.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                  </select>
+                  {onSaveFirm && (
+                    <button type="button" className="ac3-btn ac3-btn-sm" onClick={() => setNewFirm({ name: '', color: DEFAULT_FIRM_COLOR })} aria-label="Nova empresa" title="Nova empresa"><Plus size={14} /></button>
+                  )}
+                </span>
               </label>
             </div>
+
+            {newFirm && (
+              <div className="ac3-newfirm">
+                <input className="ac3-input" value={newFirm.name} onChange={(e) => setNewFirm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome da empresa (ex.: FTMO)" aria-label="Nome da nova empresa" />
+                <input type="color" value={newFirm.color} onChange={(e) => setNewFirm((p) => ({ ...p, color: e.target.value }))} aria-label="Cor da nova empresa" style={{ width: 44, height: 40, border: 'none', background: 'transparent', cursor: 'pointer' }} />
+                <button
+                  type="button"
+                  className="ac3-btn ac3-btn-sm ac3-btn-primary"
+                  disabled={!newFirm.name.trim()}
+                  onClick={async () => {
+                    const id = await onSaveFirm({ name: newFirm.name.trim(), color: newFirm.color });
+                    if (id) update('firmId', id);
+                    setNewFirm(null);
+                  }}
+                >
+                  Criar
+                </button>
+                <button type="button" className="ac3-btn ac3-btn-sm" onClick={() => setNewFirm(null)} aria-label="Cancelar nova empresa"><X size={14} /></button>
+              </div>
+            )}
 
             {isProp ? (
               <div className="ac3-prop">
@@ -418,6 +445,8 @@ const AC3_CSS = `
 .ac3-prop-title { font-size: 13px; font-weight: 800; }
 .ac3-advanced { padding: 4px 0; }
 .ac3-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ac3-newfirm { display: flex; gap: 8px; align-items: center; padding: 10px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px solid rgba(124,92,255,0.22); }
+.ac3-newfirm .ac3-input { flex: 1; }
 .ac3-field { display: flex; flex-direction: column; gap: 4px; }
 .ac3-label { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
 .ac3-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 9px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 40px; width: 100%; font-family: inherit; }

@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import { accountDashboard, computeAccountBalance, listFirms } from '@apps/lib/db';
+import { accountDashboard, computeAccountBalance, listFirms, saveFirm } from '@apps/lib/db';
 import Accounts from '@apps/ui/Accounts';
 import AccountDetail from '@apps/ui/AccountDetail';
 
@@ -120,6 +120,16 @@ export default function AccountsPage() {
     load();
   }, [load]);
 
+  // Cria empresa direto do modal da conta e devolve o id p/ vincular.
+  const handleSaveFirm = useCallback(async (firm) => {
+    const f = financeRef.current;
+    if (!f) return undefined;
+    await saveFirm(f.ds, firm);
+    load();
+    const updated = await listFirms(f.ds);
+    return updated.find((x) => x.name === firm.name)?.id;
+  }, [load]);
+
   const selected = accounts.find((a) => a.id === selectedId) || null;
   const firmById = Object.fromEntries(firms.map((f) => [f.id, f]));
   const statusById = {};
@@ -145,6 +155,7 @@ export default function AccountsPage() {
         onSave={handleSave}
         onDelete={handleDelete}
         onDuplicate={handleDuplicate}
+        onSaveFirm={handleSaveFirm}
         onSelect={setSelectedId}
       />
 

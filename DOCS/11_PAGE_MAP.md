@@ -49,6 +49,7 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/payouts` | Dinheiro | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
 | `/payout-center` | Dinheiro | `trading/PayoutCenterPage.jsx` | `PayoutCenter.tsx` | `money.applyPayoutAllocation` |
 | `/dinheiro` | Dinheiro | `command/MoneyDashboardPage.jsx` | `Wallets.tsx` (resumo) | `walletSummary`, `freeCash`, `pendingSummary`, `expensesByCategory` |
+| `/gastos` | Gastos | `command/GastosDashboardPage.jsx` | — | `computeFreeCash`, `budgetStatus`, `expensesByCategory`, `pendingBills` |
 | `/wallets` | Dinheiro | `command/EngineViews.jsx` → `WalletsPage()` | `Wallets.tsx` | `money.walletSummary()` |
 | `/expenses` | Dinheiro | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
 | `/tax` | Dinheiro | `command/EngineViews.jsx` → `TaxPage()` | `TaxCockpit.tsx` (+ `AssetSalesSection` local) | `money.taxCockpit()` |
@@ -106,14 +107,18 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
   pendentes, próximas contas e top categorias. UI monta de `walletSummary`/`freeCash`/
   `pendingSummary`/`expensesByCategory` (composição).
 - **WalletsPage** — saldo/in/out por carteira multi-moeda + gráfico de barras.
-- **ExpensesPage** — Gastos estilo Mobills (ícones, orçamento, recorrentes, rollover,
-  comparação de meses, contas a pagar/receber com status, parcelamento, cartão/fatura,
-  tags, ranking por estabelecimento, busca e visão por dia). UI grande em `Expenses.tsx`;
-  testes `expenses.test.ts`, `bankImport.test.ts`.
-- **PayoutsPage / PayoutCenterPage** — payouts (criar/aplicar no ledger) e alocação
-  (Tax→Living→Invest→Cash). Abas do módulo Dinheiro (antes ficavam em Contas).
 - **TaxPage** — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
-  **Dívida:** `AssetSalesSection` é local em `EngineViews.jsx` — extrair quando crescer.
+- **PayoutsPage / PayoutCenterPage** — "Payouts e Withdrawals" (criar/aplicar no ledger) e
+  alocação (Tax→Living→Invest→Cash). Abas do módulo Dinheiro.
+
+### Gastos (âncora `gastos`) — dashboard `/gastos`
+- **GastosDashboardPage** — porta de entrada: gasto do mês, orçamento, a pagar, saldo do mês,
+  próximas contas, top categorias e últimos lançamentos.
+- **ExpensesPage** (aba "Lançamentos", `/expenses`) — Gastos estilo Mobills (ícones,
+  orçamento, recorrentes, rollover, comparação de meses, contas a pagar/receber com status,
+  parcelamento, cartão/fatura, tags, ranking por estabelecimento, busca e visão por dia).
+  UI grande em `Expenses.tsx`; testes `expenses.test.ts`, `bankImport.test.ts`.
+  **Dívida:** hoje orçamento/categorias são toggles in-page; viram abas do módulo numa próxima rodada.
 
 ### Investimentos (âncora `investimentos`) — dashboard `/investimentos`
 - **InvestmentsDashboardPage** — patrimônio, investido, PnL, maiores posições + série
