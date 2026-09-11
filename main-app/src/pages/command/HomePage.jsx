@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import HomeCommandCenter from '@apps/ui/HomeCommandCenter';
+import ModuleTabs from '../../ModuleTabs';
 import { useCommandSnapshot } from '@apps/state';
 
 const WIDGETS = [
@@ -49,7 +50,7 @@ export default function HomePage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
-        <h1 className="cmd-page-title">Command Center</h1>
+        <h1 className="cmd-page-title">Home</h1>
         <div className="cmd-actions">
           <button className="cmd-refresh" onClick={() => setCustomizing((c) => !c)} aria-expanded={customizing}>
             Personalizar
@@ -59,6 +60,7 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+      <ModuleTabs module="home" />
       {customizing && (
         <div className="hm-custom" role="group" aria-label="Mostrar ou ocultar widgets">
           <div className="hm-custom-title">Widgets visíveis</div>

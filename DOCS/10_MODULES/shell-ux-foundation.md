@@ -61,6 +61,21 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch F — sidebar por dashboard + abas de módulo + mapa (executado)
+- **F1 sidebar sem acordeão**: clique no módulo vai **direto à dashboard** do módulo
+  (`Navbar.jsx` → `goToModule`). Removidos `openModules`/`toggleModule`/chevron/children.
+  A lista principal agora tem só as 8 âncoras visíveis.
+- **F2 abas de módulo**: novo `main-app/src/ModuleTabs.jsx` (`<ModuleTabs module="..." />`)
+  derivado de `navConfig.js`; todas as páginas usam esse componente (nada de `ws-tabs` à mão).
+  Workspaces: Home, Contas (Accounts|Firm P&L|Payouts|Alocar), Trading, Dinheiro
+  (Wallets|Gastos|Tax), Investimentos (Portfolio|Net Worth|Holdings), Planejamento,
+  Relatórios, Sistema.
+- **F3 mapa de código**: `DOCS/11_PAGE_MAP.md` (rota → módulo → container → UI → motor →
+  testes + peças transversais + convenções). É o ponto de entrada p/ qualquer melhoria.
+- **F4 agente de página**: `.opencode/agent/module-page-improvements.md` (uma rota por vez).
+  Agentes `phase0..phase5` **arquivados** em `DOCS/_ARCHIVE/agents/` (reconstrução concluída).
+- Gate: `vite build` verde + 220 testes verdes.
+
 ## Batch E — migração 7 âncoras (executado)
 - `navConfig.js`: HOME / CONTAS / TRADING / DINHEIRO / INVESTIMENTOS / PLANEJAMENTO /
   RELATÓRIOS + Sistema. Labels e keywords preservados; palette deriva sozinha.

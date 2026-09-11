@@ -11,7 +11,7 @@
 ```
 DOCS/10_MODULES/
   README.md                        <- você está aqui
-  shell-ux-foundation.md           <- TRANSVERSAL: shell/nav/palette/toast/PWA/push + batches V/C/B ✅ EXECUTADO (dono: module-shells)
+  shell-ux-foundation.md           <- TRANSVERSAL: shell/nav/palette/toast/PWA/push + batches V/C/D/E/B ✅ EXECUTADO (dono: module-shells)
   trading-journal/
     00-spec.md                     <- spec completa (J1–J12) ✅ EXECUTADA
     melhorias.md                   <- batch A (A1–A8) p/ o agente executar
@@ -26,6 +26,10 @@ DOCS/10_MODULES/
     melhorias.md                   <- batch A (A1–A4)
 ```
 
+> O mapa de código (rota → container → UI → motor) vive em `DOCS/11_PAGE_MAP.md`.
+> Os agentes das fases de reconstrução (`phase0..phase5`) foram **arquivados** em
+> `DOCS/_ARCHIVE/agents/` — a reconstrução terminou; melhorias agora são por página.
+
 > TODO que atravessa módulos (nav, palette, toast, PWA, Home, Settings global) é do
 > `module-shells` e vive em `shell-ux-foundation.md` como batch novo — nunca em doc solto
 > nem no `melhorias.md` de um módulo.
@@ -39,6 +43,8 @@ Cada módulo tem **um agente** em `.opencode/agent/module-*.md`. Para rodar um m
    `module-portfolio`, `module-propfirm-manager` (via `/agent <nome>`). Para TODO
    transversal (shell/nav/palette/PWA/Home/Settings global): `/agent module-shells`
    + diga o batch (ex. "execute o Batch C do shell-ux-foundation").
+   Para melhorias **por página** (uma rota por vez): `/agent module-page-improvements`
+   + a rota (ex. "melhore `/expenses`"); o mapa está em `DOCS/11_PAGE_MAP.md`.
 3. O prompt do agente aponta para a spec do módulo + contratos compartilhados.
 4. **Depois da spec, o agente lê `melhorias.md`**: cada item tem Status `[ ]`,
    Contexto, Proposta, Arquivos envolvidos e Critérios de aceite. Ele analisa os

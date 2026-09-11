@@ -3,8 +3,8 @@
 // aplicado no ledger (payout_in + fee) na criação; aqui distribui o net.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
+import ModuleTabs from '../../ModuleTabs';
 import PayoutCenter from '@apps/ui/PayoutCenter';
 
 export default function PayoutCenterPage() {
@@ -56,10 +56,7 @@ export default function PayoutCenterPage() {
     return (
       <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Payout Center</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace de payouts">
-        <NavLink to="/payouts" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Payouts</NavLink>
-        <NavLink to="/payout-center" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Alocar</NavLink>
-      </nav>
+      <ModuleTabs module="contas" />
         <div className="pcc-loading" role="status">Carregando…</div>
       </div>
     );
@@ -68,6 +65,7 @@ export default function PayoutCenterPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Payout Center</h1></div>
+      <ModuleTabs module="contas" />
       {done && <div className="pcc-done" role="status">{done}</div>}
 
       {payouts.length === 0 ? (

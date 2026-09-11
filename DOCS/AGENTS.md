@@ -13,6 +13,14 @@ o arquivo errado; por isso os dois foram movidos para `DOCS/_ARCHIVE/`.
 
 ## Ordem (reconstrução, ver `00_AUDITORIA_ULTRA/00-PIVOT_RECONSTRUCAO.md`)
 
+> **Status: reconstrução CONCLUÍDA.** Os agentes `phase0..phase5` foram **arquivados em
+> `DOCS/_ARCHIVE/agents/`** (executaram sua fase uma única vez). O trabalho agora é de
+> **melhoria contínua por módulo/página**:
+> - `/agent module-page-improvements` — ataca UMA rota por vez (ver `DOCS/11_PAGE_MAP.md`).
+> - `/agent module-shells` — transversal (nav/palette/PWA/Home/Settings global).
+> - `module-trading-journal`, `module-gastos`, `module-portfolio`, `module-propfirm-manager`
+>   — contexto das specs de cada módulo.
+
 1. **Agente 0 — Security + Scaffold + Contracts** sozinho: `01_STAGE0_STABILIZE/*`. Gate: chave rotacionada + PWA instalável + 6 contratos aprovados.
 2. **Agente 1 — Data Engine (novo)** sozinho: `03_STAGE2_DATA_ENGINE/*`. Gate: `app-db v3` + `DataService` + `DataChainEngine` verde + 2 payouts importados.
 3. Em paralelo (pós-gate 1): **Agente 2 Trading** (`04_*`), **Agente 3 Money** (`05_*`).

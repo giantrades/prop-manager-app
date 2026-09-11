@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCurrency, useCommandSnapshot, useFinance } from "@apps/state";
 import { useToast } from "@apps/ui/Toast";
 import { useDrive } from "@apps/state/DriveContext";
@@ -17,7 +17,6 @@ import {
   LogIn,
   Cloud,
   Bell,
-  ChevronRight,
 } from "lucide-react";
 
 /* ── Platform logos ── */
@@ -55,9 +54,7 @@ function timeAgo(isoString) {
 }
 
 /* Módulos e rotas: fonte única em ./navConfig.js (Batch D — antes duplicava App.jsx). */
-const NAV_MODULES_KEY = "navModulesOpen";
 const NAV_LAST_ROUTE_KEY = "pm:lastRoute";
-const NAV_MODULE_ROUTE_PREFIX = "pm:moduleRoute:";
 const NAV_SCROLL_KEY = "pm:navScroll";
 
 function isRouteActive(pathname, to, end) {
@@ -68,10 +65,6 @@ function isRouteActive(pathname, to, end) {
 /* Todas as rotas conhecidas (para validar o restore sem navegar p/ lixo) */
 function allKnownRoutes() {
   return MODULES.flatMap((m) => m.children.map((c) => c.to));
-}
-
-function moduleForRoute(pathname) {
-  return MODULES.find((m) => m.children.some((c) => isRouteActive(pathname, c.to, c.end))) ?? null;
 }
 
 function isKnownRoute(pathname) {
@@ -124,32 +117,6 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const isExpanded = isPinned || isHovered || mobileOpen || platformOpen;
   const location = useLocation();
 
-  /* Módulos abertos — persiste a preferência; abre sozinho o módulo da rota atual.
-     Defaults cobrem ids novos (migração 7 âncoras) sem colapsar quem já usava. */
-  const [openModules, setOpenModules] = useState(() => {
-    const defaults = {};
-    for (const m of MODULES) defaults[m.id] = true;
-    try {
-      const raw = localStorage.getItem(NAV_MODULES_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") return { ...defaults, ...parsed };
-      }
-    } catch {
-      /* usa o padrão abaixo */
-    }
-    return defaults;
-  });
-
-  useEffect(() => {
-    const active = MODULES.find((m) => moduleHasActive(m, location.pathname));
-    if (!active) return;
-    setOpenModules((prev) => {
-      if (prev[active.id]) return prev;
-      return { ...prev, [active.id]: true };
-    });
-  }, [location.pathname]);
-
   const navRef = useRef(null);
   const restoredRouteRef = useRef(false);
 
@@ -168,17 +135,15 @@ export default function Navbar({ isPinned, onTogglePin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Persiste rota global + última página de cada módulo; mantém item ativo visível */
+  /* Persiste rota global; mantém o módulo ativo visível */
   useEffect(() => {
     try {
       localStorage.setItem(NAV_LAST_ROUTE_KEY, location.pathname);
-      const mod = moduleForRoute(location.pathname);
-      if (mod) localStorage.setItem(NAV_MODULE_ROUTE_PREFIX + mod.id, location.pathname);
     } catch {
       /* offline/storage cheio */
     }
     try {
-      navRef.current?.querySelector(".sb-link-child.active")?.scrollIntoView({ block: "nearest" });
+      navRef.current?.querySelector(".sb-link.active")?.scrollIntoView({ block: "nearest" });
     } catch {
       /* noop */
     }
@@ -205,33 +170,11 @@ export default function Navbar({ isPinned, onTogglePin }) {
     return () => { clearTimeout(t); el.removeEventListener("scroll", onScroll); };
   }, []);
 
-  const toggleModule = (id) => {
-    setOpenModules((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      try {
-        localStorage.setItem(NAV_MODULES_KEY, JSON.stringify(next));
-      } catch {
-        /* offline/storage cheio — mantém só em memória */
-      }
-      return next;
-    });
-  };
-
-  const onModuleHeaderClick = (mod) => {
-    if (!isExpanded) {
-      /* Sidebar recolhida: volta à última página visitada do módulo */
-      let dest = mod.dashboard;
-      try {
-        const last = localStorage.getItem(NAV_MODULE_ROUTE_PREFIX + mod.id);
-        if (last && isKnownRoute(last) && mod.children.some((c) => isRouteActive(last, c.to, c.end))) dest = last;
-      } catch {
-        /* usa o dashboard */
-      }
-      navigate(dest);
-      setMobileOpen(false);
-    } else {
-      toggleModule(mod.id);
-    }
+  /* Clique no módulo: vai direto para a dashboard do módulo (sem acordeão).
+     As demais páginas do módulo ficam nas abas (ws-tabs) dentro da dashboard. */
+  const goToModule = (mod) => {
+    navigate(mod.dashboard);
+    setMobileOpen(false);
   };
 
   /* Close platform dropdown on outside click */
@@ -354,57 +297,26 @@ export default function Navbar({ isPinned, onTogglePin }) {
           </div>
         </div>
 
-        {/* Navigation — módulos autocontidos (DOCS/10_MODULES/README.md) */}
+        {/* Navigation — 7 âncoras; clique vai direto à dashboard do módulo.
+            Páginas internas do módulo vivem nas abas (ws-tabs) da dashboard.
+            Ver DOCS/00_VISAO/visao-produto.md + DOCS/11_PAGE_MAP.md. */}
         <div className="sb-nav" aria-label="Navegação principal" ref={navRef}>
           {MODULES.map((mod) => {
             const ModuleIcon = mod.icon;
-            const open = !!openModules[mod.id];
             const active = moduleHasActive(mod, location.pathname);
             return (
-              <div className="sb-module" key={mod.id}>
-                <button
-                  type="button"
-                  className={`sb-link sb-module-btn${active ? " active" : ""}`}
-                  aria-expanded={open}
-                  aria-controls={`sb-module-children-${mod.id}`}
-                  title={!isExpanded ? mod.label : undefined}
-                  onClick={() => onModuleHeaderClick(mod)}
-                >
-                  <span className="sb-link-icon">
-                    <ModuleIcon size={18} strokeWidth={1.75} />
-                  </span>
-                  <span className="sb-link-label">{mod.label}</span>
-                  <span className="sb-module-chevron" aria-hidden="true">
-                    <ChevronRight size={15} strokeWidth={2} />
-                  </span>
-                </button>
-                {open && (
-                  <div
-                    className="sb-module-children"
-                    id={`sb-module-children-${mod.id}`}
-                    role="group"
-                    aria-label={mod.label}
-                  >
-                    {mod.children.map(({ to, label, icon: Icon, end }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        end={end}
-                        className={({ isActive }) =>
-                          `sb-link sb-link-child${isActive ? " active" : ""}`
-                        }
-                        onClick={() => setMobileOpen(false)}
-                        title={!isExpanded ? label : undefined}
-                      >
-                        <span className="sb-link-icon">
-                          <Icon size={18} strokeWidth={1.75} />
-                        </span>
-                        <span className="sb-link-label">{label}</span>
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <button
+                key={mod.id}
+                type="button"
+                className={`sb-link sb-module-btn${active ? " active" : ""}`}
+                title={!isExpanded ? `${mod.label} — dashboard` : undefined}
+                onClick={() => goToModule(mod)}
+              >
+                <span className="sb-link-icon">
+                  <ModuleIcon size={18} strokeWidth={1.75} />
+                </span>
+                <span className="sb-link-label">{mod.label}</span>
+              </button>
             );
           })}
         </div>

@@ -2,6 +2,7 @@
 // import de payouts + logout. Sem dependência do storage legado (`dataStore`/`sync`/`drive`).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
 import { useCurrency } from '@apps/state';
 import { supabase } from '@apps/supabase/client';
@@ -142,6 +143,7 @@ export default function SettingsPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
+      <ModuleTabs module="system" />
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">

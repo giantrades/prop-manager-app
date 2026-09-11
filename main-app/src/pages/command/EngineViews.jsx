@@ -32,6 +32,7 @@ import TaxCockpit from '@apps/ui/TaxCockpit';
 import Forecast from '@apps/ui/Forecast';
 import FirmPnl from '@apps/ui/FirmPnl';
 import Expenses from '@apps/ui/Expenses';
+import ModuleTabs from '../../ModuleTabs';
 import FinancialJournal from '@apps/ui/FinancialJournal';
 
 /** Hook simples pra carregar dados de um motor (loader) e re-renderizar em mudança.
@@ -104,11 +105,7 @@ export function RiskPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Risk Center</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace trading">
-        <NavLink to="/journal" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Journal</NavLink>
-        <NavLink to="/playbook" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Playbook</NavLink>
-        <NavLink to="/risk" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Risk</NavLink>
-      </nav>
+      <ModuleTabs module="trading" />
       <RiskCenter snapshot={data} loading={loading} />
     </div>
   );
@@ -122,11 +119,7 @@ export function NetWorthPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Net Worth</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace patrimônio">
-        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
-        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
-        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
-      </nav>
+      <ModuleTabs module="investimentos" />
       <NetWorth netWorth={data?.nw} snapshots={data?.snapshots} loading={loading} />
     </div>
   );
@@ -404,14 +397,9 @@ export function PortfolioPage() {
           {quotes.status === 'refreshing' ? 'Atualizando…' : 'Atualizar preços'}
         </button>
       </div>
-      <nav className="ws-tabs" aria-label="Workspace patrimônio">
-        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
-        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
-        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
-      </nav>
+      <ModuleTabs module="investimentos" />
       <nav className="ws-tabs" aria-label="Visão do portfolio">
         <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Resumo</NavLink>
-        <NavLink to="/positions" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Holdings</NavLink>
         <button
           type="button"
           className={`ws-tab${showConfig ? ' active' : ''}`}
@@ -493,11 +481,7 @@ export function WalletsPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Wallets</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace patrimônio">
-        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
-        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
-        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
-      </nav>
+      <ModuleTabs module="dinheiro" />
       <Wallets rows={data ?? []} loading={loading} />
     </div>
   );
@@ -638,6 +622,7 @@ export function TaxPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Tax Cockpit</h1></div>
+      <ModuleTabs module="dinheiro" />
       <TaxCockpit cockpit={data} yearMonth={ym} loading={loading} onExportCSV={handleExportCSV} />
       <AssetSalesSection finance={finance} />
     </div>
@@ -652,11 +637,7 @@ export function ForecastPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Forecast</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace planejamento">
-        <NavLink to="/goals" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Goals</NavLink>
-        <NavLink to="/forecast" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Forecast</NavLink>
-        <NavLink to="/journal-events" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Marcos</NavLink>
-      </nav>
+      <ModuleTabs module="planejamento" />
       <Forecast forecast={data?.forecast} safeAvailable={data?.safeAvailable} loading={loading} />
     </div>
   );
@@ -720,10 +701,7 @@ export function FirmPnlPage() {
           <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
       </div>
-      <nav className="ws-tabs no-print" aria-label="Workspace de contas">
-        <NavLink to="/accounts" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Contas</NavLink>
-        <NavLink to="/firms" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Firms</NavLink>
-      </nav>
+      <ModuleTabs module="contas" />
       <FirmPnl rows={data?.rows ?? []} byAccount={data?.byAccount ?? {}} history={data?.history ?? null} loading={loading} />
     </div>
   );
@@ -844,6 +822,7 @@ export function ExpensesPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Gastos</h1></div>
+      <ModuleTabs module="dinheiro" />
       <Expenses
         txs={data?.txs ?? []}
         categories={data?.categories ?? []}
@@ -896,11 +875,7 @@ export function FinancialJournalPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Marcos</h1></div>
-      <nav className="ws-tabs" aria-label="Workspace planejamento">
-        <NavLink to="/goals" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Goals</NavLink>
-        <NavLink to="/forecast" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Forecast</NavLink>
-        <NavLink to="/journal-events" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Marcos</NavLink>
-      </nav>
+      <ModuleTabs module="planejamento" />
       <FinancialJournal events={data ?? []} onConfirm={onConfirm} loading={loading} />
     </div>
   );

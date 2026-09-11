@@ -52,6 +52,7 @@ export const MODULES = [
       { to: "/accounts", label: "Accounts", icon: Wallet, keywords: "contas prop firm" },
       { to: "/firms", label: "Firm P&L", icon: Building2, keywords: "propfirm gasto lucro empresa" },
       { to: "/payouts", label: "Payouts", icon: ArrowDownToLine, keywords: "saques pagamentos" },
+      { to: "/payout-center", label: "Alocar", icon: ArrowDownToLine, keywords: "alocar saque tax living invest" },
     ],
   },
   {
@@ -120,10 +121,9 @@ export const MODULES = [
   },
 ];
 
-/* Rotas de workspace (por aba, fora da sidebar) — continuam no Cmd+K. */
-export const EXTRA_ROUTES = [
-  { to: "/payout-center", label: "Payout Center", keywords: "alocar saque tax living invest" },
-];
+/* Rotas de workspace que NÃO viram aba (continuam no Cmd+K). Vazio hoje:
+   `/positions` e `/payout-center` são abas dos seus módulos. */
+export const EXTRA_ROUTES = [];
 
 export const PALETTE_ROUTES = [
   ...MODULES.flatMap((m) =>

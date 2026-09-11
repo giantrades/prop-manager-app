@@ -5,6 +5,7 @@
 
 import React from 'react';
 import ActionCenter from '@apps/ui/ActionCenter';
+import ModuleTabs from '../../ModuleTabs';
 import { useCommandSnapshot } from '@apps/state';
 
 export default function ActionCenterPage() {
@@ -17,6 +18,7 @@ export default function ActionCenterPage() {
           {loading ? '…' : 'Atualizar'}
         </button>
       </div>
+      <ModuleTabs module="home" />
       <ActionCenter actions={actions} loading={loading} />
     </div>
   );

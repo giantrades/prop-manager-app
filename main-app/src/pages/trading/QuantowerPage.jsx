@@ -2,6 +2,7 @@
 // (DataService/DataChainEngine). Fim do Risk com dado manual atrasado.
 
 import React, { useCallback, useMemo, useState } from 'react';
+import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
 import { useFinance } from '@apps/state';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
@@ -126,6 +127,7 @@ export default function QuantowerPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Quantower Sync</h1></div>
+      <ModuleTabs module="system" />
 
       <div className="qt-card">
         <div className="qt-grid">

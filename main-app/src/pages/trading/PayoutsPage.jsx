@@ -2,8 +2,8 @@
 // `DataService`/`DataChainEngine`. Cria Payout e o aplica no ledger (`applyPayout`).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
+import ModuleTabs from '../../ModuleTabs';
 import Payouts from '@apps/ui/Payouts';
 
 export default function PayoutsPage() {
@@ -69,10 +69,7 @@ export default function PayoutsPage() {
           ))}
         </select>
       </div>
-      <nav className="ws-tabs" aria-label="Workspace de payouts">
-        <NavLink to="/payouts" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Payouts</NavLink>
-        <NavLink to="/payout-center" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Alocar</NavLink>
-      </nav>
+      <ModuleTabs module="contas" />
       <Payouts payouts={visible} accounts={accounts} loading={loading} onCreate={handleCreate} onDelete={handleDelete} />
     </div>
   );

@@ -2,6 +2,7 @@
 // (importador opcional do PIVOT). Nada de trades/contas/goals antigos.
 
 import React, { useState } from 'react';
+import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
 import { importLegacyPayoutsFromStorage, seedDemoData } from '@apps/lib/db';
 
@@ -46,6 +47,7 @@ export default function DataPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Dados</h1></div>
+      <ModuleTabs module="system" />
       <div className="dp-card">
         <div className="dp-title">Importar payouts do app antigo</div>
         <p className="dp-desc">Lê os 2 payouts de <code>propmanager-data-v1</code> e cria <code>Payout</code> seed + transações <code>payout_in</code>/<code>fee</code> no <code>app-db v3</code>. Nada de trades/contas/goals antigos.</p>

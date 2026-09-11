@@ -6,6 +6,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import FinancialCalendar from '@apps/ui/FinancialCalendar';
+import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
 import { fetchEconomicEvents, monthRange, tradePnl, nowIso } from '@apps/lib/db';
 
@@ -122,6 +123,7 @@ export default function CalendarPage() {
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Financial Calendar</h1>
       </div>
+      <ModuleTabs module="home" />
       <FinancialCalendar
         yearMonth={yearMonth}
         trading={trading}
