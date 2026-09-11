@@ -6,6 +6,7 @@ import { useDrive } from "@apps/state/DriveContext";
 import { usePlatform } from "@apps/state/usePlatform";
 import AlertsBadge from "@apps/ui/AlertsBadge";
 import { MODULES } from "./navConfig";
+import { prefetchPage } from "./routeLoaders";
 import {
   Activity,
   ChevronsLeft,
@@ -311,6 +312,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
                 className={`sb-link sb-module-btn${active ? " active" : ""}`}
                 title={!isExpanded ? `${mod.label} — dashboard` : undefined}
                 onClick={() => goToModule(mod)}
+                onMouseEnter={() => prefetchPage(mod.dashboard)}
+                onFocus={() => prefetchPage(mod.dashboard)}
               >
                 <span className="sb-link-icon">
                   <ModuleIcon size={18} strokeWidth={1.75} />

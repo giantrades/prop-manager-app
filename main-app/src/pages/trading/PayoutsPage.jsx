@@ -1,38 +1,26 @@
 // STAGE 7 — PayoutsPage (engine-driven). Container que liga o editor de payouts ao
 // `DataService`/`DataChainEngine`. Cria Payout e o aplica no ledger (`applyPayout`).
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
 import Payouts from '@apps/ui/Payouts';
 
 export default function PayoutsPage() {
   const finance = useFinance();
-  const [payouts, setPayouts] = useState([]);
-  const [accounts, setAccounts] = useState([]);
+  const { loading, data, reload: load } = usePageData('payouts', async (f) => {
+    const [p, a] = await Promise.all([f.ds.payouts.list(), f.ds.accounts.list()]);
+    return {
+      payouts: p.sort((x, y) => (y.date || y.updatedAt || '').localeCompare(x.date || x.updatedAt || '')),
+      accounts: a.filter((x) => x.kind === 'prop'),
+    };
+  });
+  const payouts = data?.payouts ?? [];
+  const accounts = data?.accounts ?? [];
   const [accountFilter, setAccountFilter] = useState('');
-  const [loading, setLoading] = useState(true);
   const financeRef = useRef(finance);
   financeRef.current = finance;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [p, a] = await Promise.all([finance.ds.payouts.list(), finance.ds.accounts.list()]);
-      setPayouts(p.sort((x, y) => (y.date || y.updatedAt || '').localeCompare(x.date || x.updatedAt || '')));
-      setAccounts(a.filter((x) => x.kind === 'prop'));
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
 
   const handleCreate = useCallback(async (payout) => {
     const f = financeRef.current;

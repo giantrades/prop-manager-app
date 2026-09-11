@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
 import { csvToPositions } from '@apps/lib/db';
 import { useToast } from '@apps/ui/Toast';
 import GoalsEditor from '@apps/ui/GoalsEditor';
@@ -12,30 +13,14 @@ import Positions from '@apps/ui/Positions';
 
 export function GoalsManagePage() {
   const finance = useFinance();
-  const [goals, setGoals] = useState([]);
-  const [progress, setProgress] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { loading, data, reload: load } = usePageData('goals', async (f) => {
+    const [g, p] = await Promise.all([f.ds.goals.list(), f.wealth.goals()]);
+    return { goals: g, progress: p };
+  });
+  const goals = data?.goals ?? [];
+  const progress = data?.progress ?? [];
   const financeRef = useRef(finance);
   financeRef.current = finance;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [g, p] = await Promise.all([finance.ds.goals.list(), finance.wealth.goals()]);
-      setGoals(g);
-      setProgress(p);
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
 
   const handleSave = useCallback(async (goal) => {
     const f = financeRef.current;
@@ -65,30 +50,14 @@ export function GoalsManagePage() {
 export function PositionsManagePage() {
   const finance = useFinance();
   const { toast } = useToast();
-  const [positions, setPositions] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { loading, data, reload: load } = usePageData('positions', async (f) => {
+    const [p, a] = await Promise.all([f.ds.positions.list(), f.ds.accounts.list()]);
+    return { positions: p, accounts: a.filter((x) => x.kind === 'investment' || x.kind === 'crypto') };
+  });
+  const positions = data?.positions ?? [];
+  const accounts = data?.accounts ?? [];
   const financeRef = useRef(finance);
   financeRef.current = finance;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [p, a] = await Promise.all([finance.ds.positions.list(), finance.ds.accounts.list()]);
-      setPositions(p);
-      setAccounts(a.filter((x) => x.kind === 'investment' || x.kind === 'crypto'));
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
 
   const handleSave = useCallback(async (position) => {
     const f = financeRef.current;

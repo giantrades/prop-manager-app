@@ -2,41 +2,29 @@
 // usando o `PayoutCenter.tsx` + `MoneyService.applyPayoutAllocation`. O payout já foi
 // aplicado no ledger (payout_in + fee) na criação; aqui distribui o net.
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
 import PayoutCenter from '@apps/ui/PayoutCenter';
 
 export default function PayoutCenterPage() {
   const finance = useFinance();
-  const [payouts, setPayouts] = useState([]);
-  const [wallets, setWallets] = useState([]);
+  const { loading, data, reload: load } = usePageData('payout-center', async (f) => {
+    const [p, a, txs] = await Promise.all([f.ds.payouts.list(), f.ds.accounts.list(), f.ds.transactions.list()]);
+    return {
+      payouts: p.sort((x, y) => (y.date || y.updatedAt || '').localeCompare(x.date || x.updatedAt || '')),
+      wallets: a.filter((x) => ['wallet', 'bank', 'cash', 'crypto'].includes(x.kind)),
+      allocIds: txs.filter((t) => t.ref?.type === 'payoutId' && t.ref?.id).map((t) => t.ref.id),
+    };
+  });
+  const payouts = data?.payouts ?? [];
+  const wallets = data?.wallets ?? [];
+  const allocIds = data?.allocIds ?? [];
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(null);
-  const [allocIds, setAllocIds] = useState([]);
   const financeRef = useRef(finance);
   financeRef.current = finance;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [p, a, txs] = await Promise.all([finance.ds.payouts.list(), finance.ds.accounts.list(), finance.ds.transactions.list()]);
-      setPayouts(p.sort((x, y) => (y.date || y.updatedAt || '').localeCompare(x.date || x.updatedAt || '')));
-      setWallets(a.filter((x) => ['wallet', 'bank', 'cash', 'crypto'].includes(x.kind)));
-      setAllocIds(txs.filter((t) => t.ref?.type === 'payoutId' && t.ref?.id).map((t) => t.ref.id));
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
 
   const handleAllocate = useCallback(async (plan) => {
     const f = financeRef.current;

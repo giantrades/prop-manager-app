@@ -4,12 +4,18 @@
 //
 // Uso: <ModuleTabs module="dinheiro" />
 // Ver DOCS/11_PAGE_MAP.md.
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MODULES } from './navConfig';
+import { prefetchPage } from './routeLoaders';
 
 export default function ModuleTabs({ module: moduleId }) {
   const mod = MODULES.find((m) => m.id === moduleId);
+  // Prefetch dos chunks das abas ao montar — trocar de aba fica instantâneo.
+  useEffect(() => {
+    if (!mod) return;
+    for (const c of mod.children) prefetchPage(c.to);
+  }, [mod]);
   if (!mod) return null;
   return (
     <nav className="ws-tabs" aria-label={`Seções de ${mod.label}`}>
@@ -19,6 +25,8 @@ export default function ModuleTabs({ module: moduleId }) {
           to={to}
           end={end}
           className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}
+          onMouseEnter={() => prefetchPage(to)}
+          onFocus={() => prefetchPage(to)}
         >
           {label}
         </NavLink>

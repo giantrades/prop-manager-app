@@ -6,39 +6,41 @@ import CommandPalette from "@apps/ui/CommandPalette";
 import Navbar from "./Navbar";
 import Onboarding from "./Onboarding";
 import { usePwa } from "./usePwa";
+import { pageLoaders } from "./routeLoaders";
 import './styles.css';
 import { PALETTE_ROUTES } from "./navConfig";
 
 // UX foundation: code-split por rota — o chunk inicial carrega só shell.
 // Páginas pesadas (charts) vão para chunks sob demanda.
-const HomePage = lazy(() => import("./pages/command/HomePage.jsx"));
-const MoneyDashboardPage = lazy(() => import("./pages/command/MoneyDashboardPage.jsx"));
-const AccountsDashboardPage = lazy(() => import("./pages/command/AccountsDashboardPage.jsx"));
-const TradingDashboardPage = lazy(() => import("./pages/command/TradingDashboardPage.jsx"));
-const InvestmentsDashboardPage = lazy(() => import("./pages/command/InvestmentsDashboardPage.jsx"));
-const PlanningDashboardPage = lazy(() => import("./pages/command/PlanningDashboardPage.jsx"));
-const CalendarPage = lazy(() => import("./pages/command/CalendarPage.jsx"));
-const ActionCenterPage = lazy(() => import("./pages/command/ActionCenterPage.jsx"));
-const JournalPage = lazy(() => import("./pages/trading/JournalPage.jsx"));
-const PlaybookPage = lazy(() => import("./pages/trading/PlaybookPage.jsx"));
-const AccountsPage = lazy(() => import("./pages/trading/AccountsPage.jsx"));
-const PayoutsPage = lazy(() => import("./pages/trading/PayoutsPage.jsx"));
-const PayoutCenterPage = lazy(() => import("./pages/trading/PayoutCenterPage.jsx"));
-const SettingsPage = lazy(() => import("./pages/trading/SettingsPage.jsx"));
-const GoalsManagePage = lazy(() => import("./pages/trading/WealthEditors.jsx").then((m) => ({ default: m.GoalsManagePage })));
-const PositionsManagePage = lazy(() => import("./pages/trading/WealthEditors.jsx").then((m) => ({ default: m.PositionsManagePage })));
-const DataPage = lazy(() => import("./pages/trading/DataPage.jsx"));
-const QuantowerPage = lazy(() => import("./pages/trading/QuantowerPage.jsx"));
-const RiskPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.RiskPage })));
-const NetWorthPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.NetWorthPage })));
-const PortfolioPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.PortfolioPage })));
-const WalletsPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.WalletsPage })));
-const TaxPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.TaxPage })));
-const ForecastPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.ForecastPage })));
-const FirmPnlPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FirmPnlPage })));
-const ExpensesPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.ExpensesPage })));
-const FinancialJournalPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FinancialJournalPage })));
-const ReportsPage = lazy(() => import("./pages/command/ReportsPage.jsx"));
+// Chunks por rota (fonte única em routeLoaders.js — usada no lazy e no prefetch).
+const HomePage = lazy(pageLoaders['/']);
+const MoneyDashboardPage = lazy(pageLoaders['/dinheiro']);
+const AccountsDashboardPage = lazy(pageLoaders['/contas']);
+const TradingDashboardPage = lazy(pageLoaders['/trading']);
+const InvestmentsDashboardPage = lazy(pageLoaders['/investimentos']);
+const PlanningDashboardPage = lazy(pageLoaders['/planejamento']);
+const CalendarPage = lazy(pageLoaders['/calendar']);
+const ActionCenterPage = lazy(pageLoaders['/actions']);
+const JournalPage = lazy(pageLoaders['/journal']);
+const PlaybookPage = lazy(pageLoaders['/playbook']);
+const AccountsPage = lazy(pageLoaders['/accounts']);
+const PayoutsPage = lazy(pageLoaders['/payouts']);
+const PayoutCenterPage = lazy(pageLoaders['/payout-center']);
+const SettingsPage = lazy(pageLoaders['/settings']);
+const GoalsManagePage = lazy(pageLoaders['/goals']);
+const PositionsManagePage = lazy(pageLoaders['/positions']);
+const DataPage = lazy(pageLoaders['/import']);
+const QuantowerPage = lazy(pageLoaders['/quantower']);
+const RiskPage = lazy(pageLoaders['/risk']);
+const NetWorthPage = lazy(pageLoaders['/networth']);
+const PortfolioPage = lazy(pageLoaders['/portfolio']);
+const WalletsPage = lazy(pageLoaders['/wallets']);
+const TaxPage = lazy(pageLoaders['/tax']);
+const ForecastPage = lazy(pageLoaders['/forecast']);
+const FirmPnlPage = lazy(pageLoaders['/firms']);
+const ExpensesPage = lazy(pageLoaders['/expenses']);
+const FinancialJournalPage = lazy(pageLoaders['/journal-events']);
+const ReportsPage = lazy(pageLoaders['/reports']);
 
 function RouteFallback() {
   return (

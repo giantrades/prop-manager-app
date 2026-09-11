@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
 import { accountDashboard } from '@apps/lib/db';
 import Accounts from '@apps/ui/Accounts';
 import AccountDetail from '@apps/ui/AccountDetail';
@@ -12,34 +13,18 @@ const NEXT_PHASE = { challenge1: 'challenge2', challenge2: 'funded', funded: 'fu
 
 export default function AccountsPage() {
   const finance = useFinance();
-  const [accounts, setAccounts] = useState([]);
-  const [props, setProps] = useState({});
-  const [loading, setLoading] = useState(true);
+  const { loading, data, reload: load } = usePageData('accounts', async (f) => {
+    const [a, p] = await Promise.all([f.ds.accounts.list(), f.ds.propExtensions.list()]);
+    return { accounts: a, props: Object.fromEntries(p.map((x) => [x.accountId, x])) };
+  });
+  const accounts = data?.accounts ?? [];
+  const props = data?.props ?? {};
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [payouts, setPayouts] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const financeRef = useRef(finance);
   financeRef.current = finance;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [a, p] = await Promise.all([finance.ds.accounts.list(), finance.ds.propExtensions.list()]);
-      setAccounts(a);
-      setProps(Object.fromEntries(p.map((x) => [x.accountId, x])));
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
 
   const handleSave = useCallback(async (account, prop) => {
     const f = financeRef.current;

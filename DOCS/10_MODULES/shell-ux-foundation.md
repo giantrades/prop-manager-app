@@ -61,6 +61,21 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch H — transição suave entre abas (executado)
+Problema: trocar de aba dentro de um módulo dava "flash" (chunk lazy + Suspense) e
+recarregava tudo (skeleton) porque cada página remontava e refazia o fetch.
+- **H1 prefetch de chunks**: `main-app/src/routeLoaders.js` é a fonte única dos chunks
+  (usada pelo `lazy()` do App); `ModuleTabs` e os botões de módulo da sidebar chamam
+  `prefetchPage` ao montar/hover/focus. Trocar de aba não baixa chunk na hora.
+- **H2 cache SWR por rota**: `main-app/src/usePageData.js` (cache em memória + revalidação
+  no `datastore:change`). `useEngineData` agora cacheia por pathname. Voltar a uma aba
+  mostra o último dado na hora e revalida em background (sem skeleton).
+- **H3 containers migrados**: JournalPage, PlaybookPage, AccountsPage, PayoutsPage,
+  PayoutCenterPage, GoalsManagePage, PositionsManagePage e todos os dashboards passam a
+  usar o cache. `MoneyDashboardPage` migrado p/ `useEngineData`.
+- Pendente: SettingsPage/QuantowerPage/DataPage (Sistema) ainda com load próprio.
+- Gate: `tsc` 0 + build verde + 228 testes verdes.
+
 ## Batch G — dashboards de módulo (EXECUTADO — G1..G4)
 Cada âncora agora tem uma **dashboard como porta de entrada**; a primeira página do
 módulo virou aba ("Resumo" aponta de volta p/ a dashboard). Clique no módulo → dashboard.

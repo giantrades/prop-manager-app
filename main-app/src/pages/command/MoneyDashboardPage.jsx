@@ -1,10 +1,10 @@
 // D6 — Dashboard do módulo Dinheiro (porta de entrada, não a primeira aba).
 // Composição PURA dos motores: carteiras, free cash do mês, contas a pagar,
 // top categorias e payouts pendentes. Nenhum número novo.
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
+import useEngineData from '../../useEngineData';
 import Wallets from '@apps/ui/Wallets';
 import {
   listCategories, getBudgets, expensesByCategory, pendingSummary, pendingBills,
@@ -19,47 +19,29 @@ function fmtMoney(value, currency = 'R$') {
 }
 
 export default function MoneyDashboardPage() {
-  const finance = useFinance();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    const f = finance;
-    setLoading(true);
-    try {
-      const ym = new Date().toISOString().slice(0, 7);
-      const [wallets, freeCash, txs, categories, budgets, payouts] = await Promise.all([
-        f.money.walletSummary(),
-        f.money.freeCash(ym),
-        f.ds.transactions.list(),
-        listCategories(f.ds),
-        getBudgets(f.ds),
-        f.ds.payouts.list(),
-      ]);
-      const cats = categories ?? [];
-      const groups = expensesByCategory(txs, ym, cats);
-      const catName = new Map(cats.map((c) => [c.id, c]));
-      const topCats = groups.slice(0, 5).map((g) => ({
-        id: g.categoryId,
-        name: catName.get(g.categoryId)?.name ?? g.categoryId,
-        total: g.total,
-      }));
-      const pending = pendingSummary(txs);
-      const bills = pendingBills(txs).slice(0, 5);
-      const pendingPayouts = (payouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
-      setData({ wallets, freeCash, topCats, pending, bills, pendingPayouts, budgets, ym });
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
+  const { loading, data } = useEngineData(async (f) => {
+    const ym = new Date().toISOString().slice(0, 7);
+    const [wallets, freeCash, txs, categories, budgets, payouts] = await Promise.all([
+      f.money.walletSummary(),
+      f.money.freeCash(ym),
+      f.ds.transactions.list(),
+      listCategories(f.ds),
+      getBudgets(f.ds),
+      f.ds.payouts.list(),
+    ]);
+    const cats = categories ?? [];
+    const groups = expensesByCategory(txs, ym, cats);
+    const catName = new Map(cats.map((c) => [c.id, c]));
+    const topCats = groups.slice(0, 5).map((g) => ({
+      id: g.categoryId,
+      name: catName.get(g.categoryId)?.name ?? g.categoryId,
+      total: g.total,
+    }));
+    const pending = pendingSummary(txs);
+    const bills = pendingBills(txs).slice(0, 5);
+    const pendingPayouts = (payouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
+    return { wallets, freeCash, topCats, pending, bills, pendingPayouts, budgets, ym };
+  }, 'dash-dinheiro');
 
   return (
     <div className="cmd-page">

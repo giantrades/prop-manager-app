@@ -7,6 +7,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
+import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
 import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats } from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
@@ -51,14 +52,29 @@ function DayTrades({ dateKey, trades, onClose, onEdit }) {
 export default function JournalPage() {
   const finance = useFinance();
   const { toast } = useToast();
-  const [trades, setTrades] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [payouts, setPayouts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Cache SWR por rota: voltar p/ a aba não refaz skeleton.
+  const { loading, data, reload: load } = usePageData('journal', async (f) => {
+    const [t, a, ok, p] = await Promise.all([
+      f.ds.trades.list(),
+      f.ds.accounts.list(),
+      isDayComplete(f.ds),
+      f.ds.payouts.list(),
+    ]);
+    return {
+      trades: t.sort((x, y) => (y.entryDatetime || '').localeCompare(x.entryDatetime || '')),
+      accounts: a,
+      checklistOk: ok,
+      payouts: p,
+    };
+  });
+  const trades = data?.trades ?? [];
+  const accounts = data?.accounts ?? [];
+  const payouts = data?.payouts ?? [];
+  const [checklistBlocked, setChecklistBlocked] = useState(false);
+  const checklistOk = checklistBlocked ? false : (data?.checklistOk ?? null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [view, setView] = useState('dashboard');
-  const [checklistOk, setChecklistOk] = useState(null);
   // A7 — bucket do histograma com persistência.
   const [histBucket, setHistBucket] = useState(() => {
     const v = Number(localStorage.getItem('journalHistogramBucket'));
@@ -160,35 +176,6 @@ export default function JournalPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setLoading(true);
-    try {
-      const [t, a, ok, p] = await Promise.all([
-        finance.ds.trades.list(),
-        finance.ds.accounts.list(),
-        isDayComplete(finance.ds),
-        finance.ds.payouts.list(),
-      ]);
-      setTrades(t.sort((x, y) => (y.entryDatetime || '').localeCompare(x.entryDatetime || '')));
-      setAccounts(a);
-      setChecklistOk(ok);
-      setPayouts(p);
-    } finally {
-      setLoading(false);
-    }
-  }, [finance]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
-
   const strategies = useMemo(() => {
     const ids = [...new Set(trades.map((t) => t.strategyId).filter((s) => !!s))];
     return ids.map((id) => ({ id, name: id }));
@@ -199,7 +186,7 @@ export default function JournalPage() {
       if (!financeRef.current) return;
       const f = financeRef.current;
       if (!(await isDayComplete(f.ds))) {
-        setChecklistOk(false);
+        setChecklistBlocked(true);
         toast('Checklist pré-trade incompleto — complete o checklist do dia para operar.', { type: 'warn' });
         return;
       }
