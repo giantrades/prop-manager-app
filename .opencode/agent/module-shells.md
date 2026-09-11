@@ -9,20 +9,28 @@ Você é o **Agente Module Shells** do Personal Finance OS para Trader.
 1. `DOCS/00_AUDITORIA_ULTRA/00-PIVOT_RECONSTRUCAO.md`
 2. `DOCS/README.md`
 3. `DOCS/10_MODULES/README.md` (estrutura de módulos)
-4. `DOCS/02_STAGE1_DOMAIN/00-DOMAIN_MODEL.md`, `02-FINANCIAL_FORMULAS.md`
-5. `DOCS/04_STAGE3_TRADING_OS/02-design.md`
+4. `DOCS/10_MODULES/shell-ux-foundation.md` (spec executada P0/P1/P2 + batches V/C/B —
+   TODO transversal novo entra aqui como batch, nunca em doc solto)
+5. `DOCS/02_STAGE1_DOMAIN/00-DOMAIN_MODEL.md`, `02-FINANCIAL_FORMULAS.md`
+6. `DOCS/04_STAGE3_TRADING_OS/02-design.md`
 
 ## Missão
-Reestruturar a navegação (hoje uma lista plana em `Navbar.jsx:67-78`) em **módulos
-autocontidos**. Cada módulo deve ter **sub-nav própria**: Dashboard + Gerenciar + Configurar,
-como o app antigo (Prop: Dashboard/Accounts/Payouts/Goals/Firms/Settings; Journal:
+Manter a navegação nas **7 âncoras do visao-produto.md** (`main-app/src/navConfig.js`,
+fonte única sidebar+palette+restore): HOME / CONTAS / TRADING / DINHEIRO /
+INVESTIMENTOS / PLANEJAMENTO / RELATÓRIOS (+ grupo Sistema p/ utilidades).
+Cada âncora é um workspace com **sub-abas por rota** (`ws-tabs`), como o app antigo
+(Prop: Dashboard/Accounts/Payouts/Goals/Firms/Settings; Journal:
 Dashboard/Trades/Strategies/Settings).
 
-Módulos a estruturar:
-- **Command Center** (Home/Calendar/Actions)
-- **Trading** (Journal, Playbook, Risk, Contas, Payouts, Firms)
-- **Money** (Wallets, Gastos, Tax)
-- **Wealth** (Portfolio, Net Worth, Goals, Forecast)
+Âncoras e workspaces:
+- **Home** (Home/Calendar/Actions)
+- **Contas** (Accounts, Firm P&L, Payouts|Alocar)
+- **Trading** (Journal, Playbook, Risk)
+- **Dinheiro** (Wallets, Gastos, Tax)
+- **Investimentos** (Portfolio Resumo|Holdings|Configurar, Net Worth)
+- **Planejamento** (Goals, Forecast, Marcos)
+- **Relatórios** (/reports)
+- **Sistema** (Settings global, Quantower, Importar)
 
 ## Proibido
 - Criar lógica financeira nova (é só casca/navegação).

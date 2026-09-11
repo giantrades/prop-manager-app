@@ -5,6 +5,7 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md (§ Fiscal).
 
 import React from 'react';
+import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 function fmtMoney(value, currency = 'BRL') {
   if (value == null || Number.isNaN(value)) return '—';
@@ -64,6 +65,31 @@ export default function TaxCockpit({ cockpit, currency = 'BRL', yearMonth, onExp
         </div>
       </div>
 
+      <div className="tx-chart" role="img" aria-label="Gráfico day vs swing: líquido e IR">
+        <div className="tx-chart-title">Day vs Swing — líquido e IR</div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart
+            data={[
+              { m: 'Day', líquido: cockpit.dayNet, IR: cockpit.dayTax },
+              { m: 'Swing', líquido: cockpit.swingNet, IR: cockpit.swingTax },
+            ]}
+            margin={{ left: -4, right: 8, top: 4, bottom: 4 }}
+          >
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+            <XAxis dataKey="m" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#a1a7b3' }}
+              width={56}
+              tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
+            />
+            <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Bar dataKey="líquido" fill="#3498db" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="IR" fill="#e1b12c" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
       <div className="tx-detail">
         <div className="tx-row">
           <span>Fees informativas</span>
@@ -114,6 +140,8 @@ const TX_CSS = `
 .tx-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
 .tx-stat-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .tx-stat-tax { font-size: 11px; color: var(--yellow, #e1b12c); margin-top: 2px; }
+.tx-chart { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 12px 14px; }
+.tx-chart-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
 .tx-detail { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
 .tx-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted, #a1a7b3); }
 .tx-row span:last-child { color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; }

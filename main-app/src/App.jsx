@@ -7,31 +7,7 @@ import Navbar from "./Navbar";
 import Onboarding from "./Onboarding";
 import { usePwa } from "./usePwa";
 import './styles.css';
-
-const PALETTE_ROUTES = [
-  { to: "/", label: "Home", keywords: "command dashboard início" },
-  { to: "/calendar", label: "Calendar", keywords: "calendário financeiro" },
-  { to: "/actions", label: "Actions", keywords: "alertas ações pendentes" },
-  { to: "/journal", label: "Trading Journal", keywords: "trades journal diário" },
-  { to: "/playbook", label: "Playbook", keywords: "estratégias setup checklist" },
-  { to: "/risk", label: "Risk", keywords: "risco drawdown headroom" },
-  { to: "/accounts", label: "Accounts", keywords: "contas prop firm" },
-  { to: "/payouts", label: "Payouts", keywords: "saques pagamentos" },
-  { to: "/payout-center", label: "Payout Center", keywords: "alocar saque tax living invest" },
-  { to: "/positions", label: "Positions", keywords: "posições abertas investimentos" },
-  { to: "/quantower", label: "Quantower", keywords: "sync bridge live" },
-  { to: "/firms", label: "Firm P&L", keywords: "propfirm gasto lucro empresa" },
-  { to: "/import", label: "Importar", keywords: "csv dados" },
-  { to: "/wallets", label: "Wallets", keywords: "carteiras bancos dinheiro" },
-  { to: "/expenses", label: "Gastos", keywords: "despesas mobills orçamento" },
-  { to: "/tax", label: "Tax", keywords: "imposto darf fiscal" },
-  { to: "/portfolio", label: "Portfolio", keywords: "investimentos ações cripto" },
-  { to: "/networth", label: "Net Worth", keywords: "patrimônio total" },
-  { to: "/goals", label: "Goals", keywords: "metas objetivos" },
-  { to: "/forecast", label: "Forecast", keywords: "previsão fluxo caixa" },
-  { to: "/journal-events", label: "Diário", keywords: "eventos vida marcos" },
-  { to: "/settings", label: "Settings", keywords: "configurações moeda backup" },
-];
+import { PALETTE_ROUTES } from "./navConfig";
 
 // UX foundation: code-split por rota — o chunk inicial carrega só shell.
 // Páginas pesadas (charts) vão para chunks sob demanda.
@@ -57,6 +33,7 @@ const ForecastPage = lazy(() => import("./pages/command/EngineViews.jsx").then((
 const FirmPnlPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FirmPnlPage })));
 const ExpensesPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.ExpensesPage })));
 const FinancialJournalPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FinancialJournalPage })));
+const ReportsPage = lazy(() => import("./pages/command/ReportsPage.jsx"));
 
 function RouteFallback() {
   return (
@@ -266,6 +243,7 @@ export default function App() {
             <Route path="/firms" element={<FirmPnlPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/journal-events" element={<FinancialJournalPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
             <Route path="/import" element={<DataPage />} />
             <Route path="/quantower" element={<QuantowerPage />} />
 

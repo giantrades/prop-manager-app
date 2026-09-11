@@ -61,13 +61,55 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
-## Batch C — backlog do dono (anotado, não executar ainda)
-- **C1 — cada módulo vira um app inteiro**: ex. Gastos ≈ Mobills completo (só precisar dele);
-  mesmo padrão p/ Portfolio, Prop/Firms, Journal. Tudo bem demonstrado nos painéis de
-  comando/dashboards/centrais (Home + Action Center refletem cada módulo).
-- **C2 — Settings centraliza configs editáveis**: taxa USD→BRL editável (hoje só no Portfolio),
-  CDI, sessões de trading, firms/templates, alertas, moeda padrão, densidade, atalhos.
-  Nenhuma config espalhada em páginas avulsas.
+## Batch E — migração 7 âncoras (executado)
+- `navConfig.js`: HOME / CONTAS / TRADING / DINHEIRO / INVESTIMENTOS / PLANEJAMENTO /
+  RELATÓRIOS + Sistema. Labels e keywords preservados; palette deriva sozinha.
+- `Navbar.jsx`: defaults de módulos abertos com merge (quem já usava não perde estado).
+  Restore de rota/última-página/scroll continua funcionando (chaves por id; ids antigos
+  viram fallback p/ dashboard e são regravados).
+- `.opencode/agent/module-shells.md`: missão atualizada p/ 7 âncoras.
+- Gate: `vite build` verde + 220 testes verdes.
+
+## Batch D — auditoria UX externa (executado P0/P1 + housekeeping; P2 parcial)
+Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-down do
+`visao-produto.md` — o ganho está em replicá-lo, não em redesenhar telas.
+- **D1 workspace Patrimônio**: NetWorth|Wallets|Portfolio compartilham `ws-tabs`
+  (Visão Geral|Carteiras|Investimentos); Portfolio mantém 2ª linha (Resumo|Holdings|Configurar).
+- **D2 workspace Trading**: Journal|Playbook|Risk com `ws-tabs` nas 3 páginas.
+- **D2b workspace Planejamento**: Goals|Forecast|Marcos com `ws-tabs` nas 3 páginas.
+- **D3 rename Diário→Marcos**: `/journal-events` (nav + título + palette); keywords do
+  Trading Journal sem "diário". Glossário: Conta Prop (Trading) vs Carteira (Money) vs
+  posição de investimento (Portfolio) — nunca "conta" solto.
+- **D4 charts nas 3 telas com 0 recharts**: Wallets (barras saldo/carteira), Forecast
+  (área hoje→90d), Tax (barras day vs swing, líquido × IR). Só display de props.
+- **D5 Relatórios v1** (`/reports`, nav Wealth): cards patrimônio/firm-6m/IR-6m + barras
+  firm×mês + tabela fechamento 6m (freeCash+taxCockpit por mês) + CSV + Imprimir.
+- **D6 Payout Center sem select**: pendentes como cards clicáveis (alocado = tem tx com
+  `ref.type==='payoutId'`); form embaixo como antes.
+- **D7 Personalizar da Home**: painel próprio (`.hm-custom`) em vez de caixa `cmd-msg`.
+- **D8 housekeeping**: `GoalsPage` morto removido; `main-app/src/navConfig.js` fonte única
+  (MODULES + keywords + EXTRA_ROUTES p/ payout-center/positions) — Navbar e App importam.
+- **Diferido (decisão do dono)**: ~~migração p/ 7 âncoras~~ EXECUTADA (Batch E):
+  HOME/Home+Calendar+Actions; CONTAS/Accounts+Firms+Payouts; TRADING/Journal+Playbook+Risk;
+  DINHEIRO/Wallets+Gastos+Tax; INVESTIMENTOS/Portfolio+NetWorth+Holdings;
+  PLANEJAMENTO/Goals+Forecast+Marcos; RELATÓRIOS; + grupo Sistema (Settings/Quantower/
+  Importar, desvio intencional). `/positions` virou item sidebar (Holdings).
+  Seguem em aberto: exposição cambial dedicada e evolução ano a ano + DARF no Relatórios.
+- Gate: `vite build` verde + 220 testes verdes. Push c/ a próxima leva.
+
+## Batch C — settings em 2 níveis + Money na Home (executado)
+- **C2-global**: taxa USD→BRL de exibição editável no card Moeda (`SettingsPage.jsx`,
+  usa o `setRate` do `CurrencyProvider`; persistida em `usdBrlRate`). Global = só moeda,
+  dados, push, conta, sync.
+- **C2-módulo**: aba **Configurar** no workspace Portfolio (`PortfolioPage`): taxa FX do
+  motor + série CDI mensal saíram do topo da página p/ a aba. Padrão: config do módulo
+  vive no módulo (Gastos já tem categorias/orçamento/recorrentes inline; Trading tem
+  Playbook + sessões no heatmap).
+- **C1 (parcial)**: quadrante **Money** na Home (`HomeCommandCenter.tsx` + widget `money`
+  em `HomePage.jsx`): carteiras, free cash do mês, payouts pendentes — tudo do snapshot
+  (composição, zero lógica nova). Resto do C1 (profundidade app-inteiro por módulo) vira
+  batch nos `melhorias.md` de cada módulo, conforme você for anotando.
+- Gate: `vite build` verde + 220 testes verdes. Push c/ a próxima leva.
 
 ## Batch B — ideias UI/UX futuras (não executar agora)
 - **B1 — Modo claro**: EXCLUÍDO por decisão do dono (dark-only). Registrado para não reabrir.

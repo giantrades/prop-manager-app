@@ -104,6 +104,11 @@ export function RiskPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Risk Center</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace trading">
+        <NavLink to="/journal" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Journal</NavLink>
+        <NavLink to="/playbook" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Playbook</NavLink>
+        <NavLink to="/risk" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Risk</NavLink>
+      </nav>
       <RiskCenter snapshot={data} loading={loading} />
     </div>
   );
@@ -117,6 +122,11 @@ export function NetWorthPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Net Worth</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace patrimônio">
+        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
+        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
+        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
+      </nav>
       <NetWorth netWorth={data?.nw} snapshots={data?.snapshots} loading={loading} />
     </div>
   );
@@ -250,6 +260,8 @@ export function PortfolioPage() {
   // A3 — CDI manual mensal (série para o benchmark).
   const [cdiYm, setCdiYm] = useState('');
   const [cdiPct, setCdiPct] = useState('');
+  // C2 — Configurar (FX+CDI) vive no módulo, em aba própria.
+  const [showConfig, setShowConfig] = useState(false);
   const handleSaveCdi = useCallback(async () => {
     const f = financeRef.current;
     if (!f || !/^\d{4}-\d{2}$/.test(cdiYm) || !(Number(cdiPct) >= 0)) return;
@@ -392,10 +404,25 @@ export function PortfolioPage() {
           {quotes.status === 'refreshing' ? 'Atualizando…' : 'Atualizar preços'}
         </button>
       </div>
-      <nav className="ws-tabs" aria-label="Workspace do portfolio">
-        <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Overview</NavLink>
-        <NavLink to="/positions" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Holdings</NavLink>
+      <nav className="ws-tabs" aria-label="Workspace patrimônio">
+        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
+        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
+        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
       </nav>
+      <nav className="ws-tabs" aria-label="Visão do portfolio">
+        <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Resumo</NavLink>
+        <NavLink to="/positions" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Holdings</NavLink>
+        <button
+          type="button"
+          className={`ws-tab${showConfig ? ' active' : ''}`}
+          aria-pressed={showConfig}
+          onClick={() => setShowConfig((v) => !v)}
+        >
+          Configurar
+        </button>
+      </nav>
+      {showConfig ? (
+      <>
       <div className="cmd-msg" role="group" aria-label="Taxa USD para BRL" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>USD→BRL: <b>{data?.fx != null ? data.fx : '—'}</b>{data?.fxAt ? ` (${String(data.fxAt).slice(0, 10)})` : ''}</span>
         <input
@@ -434,6 +461,9 @@ export function PortfolioPage() {
         />
         <button className="cmd-refresh" onClick={handleSaveCdi}>Salvar CDI</button>
       </div>
+      </>
+      ) : null}
+      {!showConfig && (
       <Portfolio
         rows={data?.portfolio?.rows ?? []}
         summary={data?.portfolio ?? null}
@@ -453,16 +483,7 @@ export function PortfolioPage() {
         onRemoveDividendEvent={handleRemoveDividendEvent}
         onReceiveDividend={handleReceiveDividend}
       />
-    </div>
-  );
-}
-
-export function GoalsPage() {
-  const { loading, data } = useEngineData((f) => f.wealth.goals());
-  return (
-    <div className="cmd-page">
-      <div className="cmd-page-head"><h1 className="cmd-page-title">Goals</h1></div>
-      <Goals goals={data ?? []} loading={loading} />
+      )}
     </div>
   );
 }
@@ -472,6 +493,11 @@ export function WalletsPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Wallets</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace patrimônio">
+        <NavLink to="/networth" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Visão Geral</NavLink>
+        <NavLink to="/wallets" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Carteiras</NavLink>
+        <NavLink to="/portfolio" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Investimentos</NavLink>
+      </nav>
       <Wallets rows={data ?? []} loading={loading} />
     </div>
   );
@@ -626,6 +652,11 @@ export function ForecastPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Forecast</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace planejamento">
+        <NavLink to="/goals" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Goals</NavLink>
+        <NavLink to="/forecast" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Forecast</NavLink>
+        <NavLink to="/journal-events" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Marcos</NavLink>
+      </nav>
       <Forecast forecast={data?.forecast} safeAvailable={data?.safeAvailable} loading={loading} />
     </div>
   );
@@ -864,7 +895,12 @@ export function FinancialJournalPage() {
 
   return (
     <div className="cmd-page">
-      <div className="cmd-page-head"><h1 className="cmd-page-title">Financial Journal</h1></div>
+      <div className="cmd-page-head"><h1 className="cmd-page-title">Marcos</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace planejamento">
+        <NavLink to="/goals" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Goals</NavLink>
+        <NavLink to="/forecast" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Forecast</NavLink>
+        <NavLink to="/journal-events" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Marcos</NavLink>
+      </nav>
       <FinancialJournal events={data ?? []} onConfirm={onConfirm} loading={loading} />
     </div>
   );

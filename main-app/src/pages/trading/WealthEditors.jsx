@@ -55,6 +55,11 @@ export function GoalsManagePage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Goals</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace planejamento">
+        <NavLink to="/goals" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Goals</NavLink>
+        <NavLink to="/forecast" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Forecast</NavLink>
+        <NavLink to="/journal-events" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Marcos</NavLink>
+      </nav>
       <GoalsEditor goals={goals} loading={loading} onSave={handleSave} onDelete={handleDelete} />
       <Goals goals={progress} loading={loading} />
     </div>

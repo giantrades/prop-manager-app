@@ -11,6 +11,7 @@
 ```
 DOCS/10_MODULES/
   README.md                        <- você está aqui
+  shell-ux-foundation.md           <- TRANSVERSAL: shell/nav/palette/toast/PWA/push + batches V/C/B ✅ EXECUTADO (dono: module-shells)
   trading-journal/
     00-spec.md                     <- spec completa (J1–J12) ✅ EXECUTADA
     melhorias.md                   <- batch A (A1–A8) p/ o agente executar
@@ -25,13 +26,19 @@ DOCS/10_MODULES/
     melhorias.md                   <- batch A (A1–A4)
 ```
 
+> TODO que atravessa módulos (nav, palette, toast, PWA, Home, Settings global) é do
+> `module-shells` e vive em `shell-ux-foundation.md` como batch novo — nunca em doc solto
+> nem no `melhorias.md` de um módulo.
+
 ## Como atacar (1 agente/conversa por módulo)
 
 Cada módulo tem **um agente** em `.opencode/agent/module-*.md`. Para rodar um módulo:
 
 1. Abra o opencode na raiz.
 2. Novo agente/conversa → selecione `module-trading-journal`, `module-gastos`,
-   `module-portfolio`, `module-propfirm-manager` (via `/agent <nome>`).
+   `module-portfolio`, `module-propfirm-manager` (via `/agent <nome>`). Para TODO
+   transversal (shell/nav/palette/PWA/Home/Settings global): `/agent module-shells`
+   + diga o batch (ex. "execute o Batch C do shell-ux-foundation").
 3. O prompt do agente aponta para a spec do módulo + contratos compartilhados.
 4. **Depois da spec, o agente lê `melhorias.md`**: cada item tem Status `[ ]`,
    Contexto, Proposta, Arquivos envolvidos e Critérios de aceite. Ele analisa os

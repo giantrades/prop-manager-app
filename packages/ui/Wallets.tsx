@@ -4,6 +4,7 @@
 // Fonte: DOCS/05_STAGE4_MONEY_OS/00-produto.md.
 
 import React from 'react';
+import { ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 function fmtMoney(value, currency = 'USD') {
   if (value == null || Number.isNaN(value)) return '—';
@@ -60,6 +61,25 @@ export default function Wallets({ rows = [], loading = false }: {
         </div>
       </div>
 
+      {rows.length > 0 && (
+        <div className="wl-chart" role="img" aria-label="Gráfico de saldo por carteira">
+          <div className="wl-chart-title">Saldo por carteira</div>
+          <ResponsiveContainer width="100%" height={Math.max(140, rows.length * 36)}>
+            <BarChart data={rows.map((r) => ({ name: r.account.name, saldo: r.balance }))} layout="vertical" margin={{ left: 8, right: 12, top: 4, bottom: 4 }}>
+              <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#a1a7b3' }} width={96} />
+              <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} />
+              <Bar dataKey="saldo" radius={[0, 6, 6, 0]}>
+                {rows.map((r) => (
+                  <Cell key={r.account.id} fill={r.balance >= 0 ? '#2ecc71' : '#e74c3c'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       <div className="wl-grid">
         {rows.map((r) => (
           <div key={r.account.id} className="wl-card">
@@ -109,6 +129,8 @@ const WL_CSS = `
 .wl-total-cur-label { color: var(--muted, #a1a7b3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
 .wl-total-cur-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .wl-muted { color: var(--muted, #a1a7b3); font-size: 12px; }
+.wl-chart { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px; }
+.wl-chart-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
 .wl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .wl-card { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; }
 .wl-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; }

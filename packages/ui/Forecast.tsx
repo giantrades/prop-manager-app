@@ -5,6 +5,7 @@
 // Dados: `computeForecast` + `computeSafeAvailable` (packages/lib/db/wealth.ts).
 
 import React from 'react';
+import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 function fmtMoney(value, currency = 'R$') {
   if (value == null || Number.isNaN(value)) return '—';
@@ -59,6 +60,23 @@ export default function Forecast({ forecast = null, safeAvailable = null, curren
 
       <div className="fc-net">Fluxo mensal líquido: <strong>{fmtMoney(forecast.netMonthly, currency)}</strong></div>
 
+      <div className="fc-chart" role="img" aria-label="Gráfico de projeção hoje a 90 dias">
+        <div className="fc-chart-title">Projeção</div>
+        <ResponsiveContainer width="100%" height={180}>
+          <AreaChart data={horizons} margin={{ left: -4, right: 8, top: 4, bottom: 4 }}>
+            <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#a1a7b3' }}
+              width={56}
+              tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)}
+            />
+            <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} />
+            <Area type="monotone" dataKey="value" stroke="#7c5cff" fill="rgba(124,92,255,0.25)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* Safe Available */}
       {safeAvailable != null && (
         <div className={`fc-safe ${canBuy ? 'fc-safe-ok' : 'fc-safe-warn'}`} role="status">
@@ -90,6 +108,8 @@ const FC_CSS = `
 .fc-neg { color: var(--red, #e74c3c); }
 
 .fc-net { font-size: 12px; color: var(--muted, #a1a7b3); }
+.fc-chart { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; }
+.fc-chart-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
 
 .fc-safe { border-radius: 14px; padding: 16px; border: 1px solid; }
 .fc-safe-ok { background: rgba(46,204,113,0.08); border-color: rgba(46,204,113,0.3); }

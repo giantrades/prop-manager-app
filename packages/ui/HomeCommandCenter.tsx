@@ -1,6 +1,6 @@
 // STAGE 6 — HomeCommandCenter. COMPOSIÇÃO PURA. NÃO tem lógica financeira própria:
 // só agrega os números que os motores das fases 2/3/4 expõem (via `useCommandSnapshot`).
-// Header patrimonial + 4 quadrants (Trading Today / Investments / Goals / Action Center)
+// Header patrimonial + 5 quadrants (Trading Today / Action Center / Investments / Goals / Money)
 // + camada de Insights (AI leitura-only, com fonte citável).
 //
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md (T6.1).
@@ -44,7 +44,7 @@ function RiskPill({ status }) {
  * @param {import('../lib/db/financialIntelligence').ActionItem[]} [props.actions]
  * @param {import('../lib/db/financialIntelligence').Insight[]} [props.insights]
  * @param {boolean} [props.loading]
- * @param {Array<string>} [props.hidden] ids de seção ocultas (risk|investments|goals|actions|insights)
+ * @param {Array<string>} [props.hidden] ids de seção ocultas (risk|money|investments|goals|actions|insights)
  */
 export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], loading = false, hidden = [] }) {
   const hide = (id) => (hidden || []).includes(id);
@@ -63,6 +63,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const risk = snapshot.risk;
   const portfolio = snapshot.portfolio;
   const goals = snapshot.goals;
+  const moneyWallets = snapshot.walletSummary ?? [];
+  const moneyFreeCash = snapshot.freeCash ?? null;
+  const pendingPayouts = (snapshot.pendingPayouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
   const riskStatus = risk.rows.some((r) => r.status.status === 'STOP')
     ? 'STOP'
     : risk.rows.some((r) => r.status.status === 'WARN')
@@ -192,6 +195,29 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                 </div>
               ))
             )}
+          </div>
+        </section>)}
+
+        {/* Money — carteiras + free cash do mês + payouts pendentes (C1) */}
+        {!hide('money') && (<section className="hc-quad" aria-label="Money">
+          <div className="hc-quad-head">
+            <h3 className="hc-quad-title">Money</h3>
+          </div>
+          <div className="hc-quad-stats">
+            <div className="hc-stat">
+              <span className="hc-stat-label">Carteiras</span>
+              <span className="hc-stat-value">{moneyWallets.length}</span>
+            </div>
+            <div className="hc-stat">
+              <span className="hc-stat-label">Free cash (mês)</span>
+              <span className="hc-stat-value" style={{ color: (moneyFreeCash?.freeCash ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {fmtMoney(moneyFreeCash?.freeCash)}
+              </span>
+            </div>
+            <div className="hc-stat">
+              <span className="hc-stat-label">Payouts pendentes</span>
+              <span className="hc-stat-value">{pendingPayouts.length}</span>
+            </div>
           </div>
         </section>)}
 

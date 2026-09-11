@@ -5,7 +5,7 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md + DOCS/08_STAGE7_INTEGRATION/00-plano.md (Fase 8).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useSearchParams } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats } from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
@@ -329,6 +329,11 @@ export default function JournalPage() {
         />
       ) : (
         <>
+          <nav className="ws-tabs" aria-label="Workspace trading">
+            <NavLink to="/journal" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Journal</NavLink>
+            <NavLink to="/playbook" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Playbook</NavLink>
+            <NavLink to="/risk" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Risk</NavLink>
+          </nav>
           <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
             <button className={`jd-tab${view === 'dashboard' ? ' active' : ''}`} role="tab" aria-selected={view === 'dashboard'} onClick={() => setView('dashboard')}>Dashboard</button>
             <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>

@@ -5,14 +5,8 @@ import { useToast } from "@apps/ui/Toast";
 import { useDrive } from "@apps/state/DriveContext";
 import { usePlatform } from "@apps/state/usePlatform";
 import AlertsBadge from "@apps/ui/AlertsBadge";
+import { MODULES } from "./navConfig";
 import {
-  LayoutDashboard,
-  Wallet,
-  ArrowDownToLine,
-  Target,
-  Building2,
-  Settings,
-  BookOpen,
   Activity,
   ChevronsLeft,
   ChevronsRight,
@@ -22,19 +16,8 @@ import {
   LogOut,
   LogIn,
   Cloud,
-  CalendarDays,
   Bell,
-  ShieldAlert,
-  TrendingUp,
-  Landmark,
-  LineChart,
-  Database,
   ChevronRight,
-  Receipt,
-  Zap,
-  PiggyBank,
-  Banknote,
-  Sparkles
 } from "lucide-react";
 
 /* ── Platform logos ── */
@@ -71,71 +54,7 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-/* Módulos autocontidos — cada um com dashboard + gerenciar + configurar.
-   Ver DOCS/10_MODULES/README.md. */
-const MODULES = [
-  {
-    id: "command",
-    label: "Command Center",
-    icon: LayoutDashboard,
-    dashboard: "/",
-    children: [
-      { to: "/", label: "Home", icon: LayoutDashboard, end: true },
-      { to: "/calendar", label: "Calendar", icon: CalendarDays },
-      { to: "/actions", label: "Actions", icon: Bell },
-    ],
-  },
-  {
-    id: "trading",
-    label: "Trading",
-    icon: Activity,
-    dashboard: "/journal",
-    children: [
-      { to: "/journal", label: "Trading Journal", icon: BookOpen },
-      { to: "/playbook", label: "Playbook", icon: Target },
-      { to: "/risk", label: "Risk", icon: ShieldAlert },
-      { to: "/accounts", label: "Accounts", icon: Wallet },
-      { to: "/payouts", label: "Payouts", icon: ArrowDownToLine },
-      { to: "/firms", label: "Firm P&L", icon: Building2 },
-    ],
-  },
-  {
-    id: "money",
-    label: "Money",
-    icon: Banknote,
-    dashboard: "/wallets",
-    children: [
-      { to: "/wallets", label: "Wallets", icon: Wallet },
-      { to: "/expenses", label: "Gastos", icon: Receipt },
-      { to: "/tax", label: "Tax", icon: Landmark },
-    ],
-  },
-  {
-    id: "wealth",
-    label: "Wealth",
-    icon: PiggyBank,
-    dashboard: "/portfolio",
-    children: [
-      { to: "/portfolio", label: "Portfolio", icon: TrendingUp },
-      { to: "/networth", label: "Net Worth", icon: Wallet },
-      { to: "/goals", label: "Goals", icon: Target },
-      { to: "/forecast", label: "Forecast", icon: LineChart },
-      { to: "/journal-events", label: "Diário", icon: Sparkles },
-    ],
-  },
-  {
-    id: "system",
-    label: "Sistema",
-    icon: Settings,
-    dashboard: "/settings",
-    children: [
-      { to: "/settings", label: "Settings", icon: Settings },
-      { to: "/quantower", label: "Quantower", icon: Zap },
-      { to: "/import", label: "Importar", icon: Database },
-    ],
-  },
-];
-
+/* Módulos e rotas: fonte única em ./navConfig.js (Batch D — antes duplicava App.jsx). */
 const NAV_MODULES_KEY = "navModulesOpen";
 const NAV_LAST_ROUTE_KEY = "pm:lastRoute";
 const NAV_MODULE_ROUTE_PREFIX = "pm:moduleRoute:";
@@ -205,18 +124,21 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const isExpanded = isPinned || isHovered || mobileOpen || platformOpen;
   const location = useLocation();
 
-  /* Módulos abertos — persiste a preferência; abre sozinho o módulo da rota atual */
+  /* Módulos abertos — persiste a preferência; abre sozinho o módulo da rota atual.
+     Defaults cobrem ids novos (migração 7 âncoras) sem colapsar quem já usava. */
   const [openModules, setOpenModules] = useState(() => {
+    const defaults = {};
+    for (const m of MODULES) defaults[m.id] = true;
     try {
       const raw = localStorage.getItem(NAV_MODULES_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") return parsed;
+        if (parsed && typeof parsed === "object") return { ...defaults, ...parsed };
       }
     } catch {
       /* usa o padrão abaixo */
     }
-    return { command: true, trading: true, money: true, wealth: true, system: true };
+    return defaults;
   });
 
   useEffect(() => {

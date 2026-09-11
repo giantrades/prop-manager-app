@@ -10,9 +10,10 @@ import { useCommandSnapshot } from '@apps/state';
 
 const WIDGETS = [
   { id: 'risk', label: 'Trading Today' },
+  { id: 'actions', label: 'Action Center' },
+  { id: 'money', label: 'Money' },
   { id: 'investments', label: 'Investments' },
   { id: 'goals', label: 'Goals' },
-  { id: 'actions', label: 'Action Center' },
   { id: 'insights', label: 'Insights' },
 ];
 
@@ -59,13 +60,15 @@ export default function HomePage() {
         </div>
       </div>
       {customizing && (
-        <div className="cmd-msg" role="group" aria-label="Mostrar ou ocultar widgets" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div className="hm-custom" role="group" aria-label="Mostrar ou ocultar widgets">
+          <div className="hm-custom-title">Widgets visíveis</div>
           {WIDGETS.map((w) => (
-            <label key={w.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" checked={!hidden.includes(w.id)} onChange={() => toggleWidget(w.id)} style={{ width: 18, height: 18 }} />
+            <label key={w.id} className="hm-custom-row">
+              <input type="checkbox" checked={!hidden.includes(w.id)} onChange={() => toggleWidget(w.id)} />
               {w.label}
             </label>
           ))}
+          <button className="cmd-refresh" onClick={() => setCustomizing(false)}>Pronto</button>
         </div>
       )}
       <HomeCommandCenter snapshot={snapshot} actions={actions} insights={insights} loading={loading} hidden={hidden} />
@@ -84,6 +87,10 @@ const CMD_PAGE_CSS = `
 .cmd-refresh { padding: 8px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; cursor: pointer; min-height: 40px; }
 .cmd-refresh:disabled { opacity: 0.5; cursor: default; }
 .cmd-select { padding: 8px 12px; border-radius: 10px; background: #111623; border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; min-height: 40px; max-width: 220px; }
+.hm-custom { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 8px; }
+.hm-custom-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
+.hm-custom-row { display: flex; gap: 10px; align-items: center; font-size: 13px; cursor: pointer; min-height: 40px; }
+.hm-custom-row input { width: 18px; height: 18px; accent-color: var(--brand, #7c5cff); }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('cmd-page-styles')) {
   const style = document.createElement('style');

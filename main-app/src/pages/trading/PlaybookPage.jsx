@@ -2,6 +2,7 @@
 // diário emocional × R. Tudo no motor novo (strategies.ts + checklist.ts + meta).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import {
   allStrategyMetrics,
@@ -93,6 +94,11 @@ export default function PlaybookPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Playbook</h1></div>
+      <nav className="ws-tabs" aria-label="Workspace trading">
+        <NavLink to="/journal" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Journal</NavLink>
+        <NavLink to="/playbook" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Playbook</NavLink>
+        <NavLink to="/risk" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Risk</NavLink>
+      </nav>
       <PreTradeChecklist items={template} checked={checked} onToggle={handleToggle} loading={loading} />
       <div className="pb-section-title">Setups (edge por estratégia)</div>
       <Strategies metrics={metrics} onUnlink={handleUnlink} loading={loading} />

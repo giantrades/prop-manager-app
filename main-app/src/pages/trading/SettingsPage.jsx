@@ -53,11 +53,12 @@ function PushSettingsCard() {
 
 export default function SettingsPage() {
   const finance = useFinance();
-  const { currency, setCurrency, rate } = useCurrency();
+  const { currency, setCurrency, rate, setRate } = useCurrency();
   const fileRef = useRef(null);
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [conflicts, setConflicts] = useState([]);
+  const [rateInput, setRateInput] = useState('');
 
   const handleExport = useCallback(async () => {
     if (!finance) return;
@@ -147,6 +148,25 @@ export default function SettingsPage() {
           <button className={`st-btn${currency === 'USD' ? ' active' : ''}`} onClick={() => setCurrency('USD')}>USD</button>
           <button className={`st-btn${currency === 'BRL' ? ' active' : ''}`} onClick={() => setCurrency('BRL')}>BRL</button>
           <span className="st-rate">= {rate}</span>
+        </div>
+        <div className="st-row">
+          <input
+            className="cmd-select" style={{ maxWidth: 110 }}
+            type="number" min="0" step="0.0001" value={rateInput}
+            onChange={(e) => setRateInput(e.target.value)}
+            placeholder="USD→BRL ex.: 5.42" aria-label="Nova taxa USD para BRL (exibição)"
+          />
+          <button
+            className="st-btn"
+            disabled={!(Number(String(rateInput).replace(',', '.')) > 0)}
+            onClick={() => {
+              setRate(Number(String(rateInput).replace(',', '.')));
+              setRateInput('');
+              toast('Taxa USD→BRL atualizada.');
+            }}
+          >
+            Salvar taxa
+          </button>
         </div>
       </div>
 
