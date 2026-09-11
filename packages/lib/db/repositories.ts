@@ -70,6 +70,9 @@ export class AccountsRepo extends BaseRepository<Account> {
   }
 }
 
+// Fricção de tipos conhecida (Fase 1): PropExtension usa `accountId` como chave
+// (keyPath), não `id` — o runtime está certo (`DataService.keyOf` trata o caso).
+// @ts-expect-error PropExtension não tem `id`, mas o repositório só usa accountId
 export class PropExtensionsRepo extends BaseRepository<PropExtension> {
   constructor(ds: DataService) {
     super(ds, 'prop_extensions');

@@ -74,6 +74,25 @@ export function tradeR(trade: Trade, opts?: { stopPrice?: number; multiplier?: n
   });
 }
 
+/**
+ * VWAP de uma lista de execuções (fills). Campo único `Trade.executions`.
+ * Usado para derivar `entryPrice`/`exitPrice` de trades com execuções parciais.
+ * Retorna null se não houver execuções com quantidade.
+ */
+export function vwapOfExecutions(executions: Array<{ side: string; price: number; quantity: number }> | undefined): number | null {
+  if (!executions || executions.length === 0) return null;
+  let totalQty = 0;
+  let notional = 0;
+  for (const e of executions) {
+    const q = Number(e.quantity) || 0;
+    if (q <= 0) continue;
+    totalQty += q;
+    notional += Number(e.price) * q;
+  }
+  if (totalQty <= 0) return null;
+  return Number((notional / totalQty).toFixed(6));
+}
+
 // ---------------------------------------------------------------------------
 // Equity (derivado) — proibido escrever saldo direto
 // ---------------------------------------------------------------------------

@@ -1,0 +1,92 @@
+// STAGE 7 — DataPage. Importa os 2 payouts do app antigo para o `app-db v3`
+// (importador opcional do PIVOT). Nada de trades/contas/goals antigos.
+
+import React, { useState } from 'react';
+import { useFinance } from '@apps/state';
+import { importLegacyPayoutsFromStorage, seedDemoData } from '@apps/lib/db';
+
+export default function DataPage() {
+  const finance = useFinance();
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleImport = async () => {
+    if (!finance) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await importLegacyPayoutsFromStorage(finance.ds, finance.chain);
+      setResult({ type: 'payouts', count: res.importedCount, skipped: res.skippedCount });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[import] falha', err);
+      setError('Falha ao importar payouts.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSeed = async () => {
+    if (!finance) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const count = await seedDemoData(finance.ds, finance.chain);
+      setResult({ type: 'demo', count });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[seed] falha', err);
+      setError('Falha ao criar dados demo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="cmd-page">
+      <div className="cmd-page-head"><h1 className="cmd-page-title">Dados</h1></div>
+      <div className="dp-card">
+        <div className="dp-title">Importar payouts do app antigo</div>
+        <p className="dp-desc">Lê os 2 payouts de <code>propmanager-data-v1</code> e cria <code>Payout</code> seed + transações <code>payout_in</code>/<code>fee</code> no <code>app-db v3</code>. Nada de trades/contas/goals antigos.</p>
+        <button className="dp-btn dp-btn-primary" onClick={handleImport} disabled={busy || !finance}>
+          {busy ? 'Importando…' : 'Importar payouts'}
+        </button>
+
+        <div className="dp-sep" />
+
+        <div className="dp-title">Criar dados de demonstração</div>
+        <p className="dp-desc">Popula o app com contas, trades, payout, goals e posições de exemplo (só para visualizar o app com dados). Pode ser limpo depois.</p>
+        <button className="dp-btn" onClick={handleSeed} disabled={busy || !finance}>
+          {busy ? 'Criando…' : 'Criar dados demo'}
+        </button>
+
+        {result && (
+          <div className="dp-result" role="status">
+            {result.type === 'demo'
+              ? <>Dados demo criados: <b>{result.count} trades</b> + contas/payout/goals/posições.</>
+              : <>Importados: <b>{result.count}</b> · Pulados: <b>{result.skipped}</b>.</>}
+          </div>
+        )}
+        {error && <div className="dp-error" role="alert">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+const DP_CSS = `
+.dp-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.dp-title { font-size: 15px; font-weight: 800; }
+.dp-desc { font-size: 13px; color: var(--muted, #a1a7b3); }
+.dp-btn { padding: 10px 18px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 42px; align-self: flex-start; }
+.dp-btn-primary { background: var(--brand, #7c5cff); border-color: var(--brand, #7c5cff); color: #fff; font-weight: 700; }
+.dp-result { display: flex; flex-direction: column; gap: 6px; font-size: 13px; padding: 12px; border-radius: 10px; background: rgba(46,204,113,0.08); border: 1px solid rgba(46,204,113,0.2); }
+.dp-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0; }
+.dp-error { padding: 10px 12px; border-radius: 10px; background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.3); color: var(--red, #e74c3c); font-size: 13px; }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('dp-styles')) {
+  const style = document.createElement('style');
+  style.id = 'dp-styles';
+  style.textContent = DP_CSS;
+  document.head.appendChild(style);
+}

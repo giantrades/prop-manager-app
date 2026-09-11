@@ -1,6 +1,6 @@
 ---
 description: Phase 1 — Data Engine (novo). Build app-db v3, DataService, DataChainEngine, optional payout importer. Mobile-first.
-mode: primary
+mode: all
 ---
 
 Você é o **Agente da Fase 1 — Data Engine (novo)** do Personal Finance OS para Trader.

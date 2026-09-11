@@ -1,0 +1,111 @@
+// STAGE 5 — Forecast 30/60/90 + Safe Available ("posso comprar isso?").
+// Mobile-first 360px.
+//
+// Fonte: DOCS/06_STAGE5_WEALTH_OS/00-produto.md.
+// Dados: `computeForecast` + `computeSafeAvailable` (packages/lib/db/wealth.ts).
+
+import React from 'react';
+
+function fmtMoney(value, currency = 'R$') {
+  if (value == null || Number.isNaN(value)) return '—';
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
+  return `${sign}${currency}${abs.toFixed(2)}`;
+}
+
+/**
+ * @param {object} props
+ * @param {{today:number;d30:number;d60:number;d90:number;netMonthly:number}} [props.forecast]
+ * @param {number} [props.safeAvailable]
+ * @param {string} [props.currency]
+ * @param {boolean} [props.loading]
+ */
+export default function Forecast({ forecast = null, safeAvailable = null, currency = 'R$', loading = false }) {
+  if (loading) {
+    return (
+      <div className="fc-root fc-loading" role="status" aria-live="polite">
+        <div className="fc-skeleton" />
+        <div className="fc-skeleton" />
+        <span className="fc-screen-reader">Carregando forecast…</span>
+      </div>
+    );
+  }
+
+  if (!forecast) {
+    return <div className="fc-empty" role="status">Sem forecast.</div>;
+  }
+
+  const horizons = [
+    { label: 'Hoje', value: forecast.today },
+    { label: '30d', value: forecast.d30 },
+    { label: '60d', value: forecast.d60 },
+    { label: '90d', value: forecast.d90 },
+  ];
+
+  const canBuy = safeAvailable != null && safeAvailable > 0;
+
+  return (
+    <div className="fc-root">
+      {/* Forecast 30/60/90 */}
+      <div className="fc-horizons">
+        {horizons.map((h) => (
+          <div key={h.label} className="fc-horizon">
+            <div className="fc-horizon-label">{h.label}</div>
+            <div className={`fc-horizon-value ${h.value >= 0 ? 'fc-pos' : 'fc-neg'}`}>{fmtMoney(h.value, currency)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="fc-net">Fluxo mensal líquido: <strong>{fmtMoney(forecast.netMonthly, currency)}</strong></div>
+
+      {/* Safe Available */}
+      {safeAvailable != null && (
+        <div className={`fc-safe ${canBuy ? 'fc-safe-ok' : 'fc-safe-warn'}`} role="status">
+          <div className="fc-safe-label">Safe Available — posso comprar isso?</div>
+          <div className="fc-safe-value">{fmtMoney(safeAvailable, currency)}</div>
+          <div className="fc-safe-note">
+            {canBuy
+              ? 'Caixa operacional preservado (30d contas + reserva imposto).'
+              : 'Cuidado: comprometeria o caixa dos próximos 30 dias.'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FC_CSS = `
+.fc-root { display: flex; flex-direction: column; gap: 14px; }
+.fc-screen-reader { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.fc-loading { gap: 8px; }
+.fc-skeleton { height: 14px; border-radius: 8px; background: rgba(255,255,255,0.06); animation: fc-pulse 1.4s ease-in-out infinite; }
+.fc-skeleton:nth-child(2) { width: 80%; }
+
+.fc-horizons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fc-horizon { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; }
+.fc-horizon-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
+.fc-horizon-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.fc-pos { color: var(--green, #2ecc71); }
+.fc-neg { color: var(--red, #e74c3c); }
+
+.fc-net { font-size: 12px; color: var(--muted, #a1a7b3); }
+
+.fc-safe { border-radius: 14px; padding: 16px; border: 1px solid; }
+.fc-safe-ok { background: rgba(46,204,113,0.08); border-color: rgba(46,204,113,0.3); }
+.fc-safe-warn { background: rgba(225,177,44,0.08); border-color: rgba(225,177,44,0.3); }
+.fc-safe-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
+.fc-safe-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.fc-safe-note { font-size: 11px; color: var(--muted, #a1a7b3); }
+
+.fc-empty { padding: 24px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
+
+@media (max-width: 719px) { .fc-horizons { grid-template-columns: repeat(2, 1fr); gap: 8px; } }
+@keyframes fc-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('fc-styles')) {
+  const style = document.createElement('style');
+  style.id = 'fc-styles';
+  style.textContent = FC_CSS;
+  document.head.appendChild(style);
+}

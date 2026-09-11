@@ -1,6 +1,6 @@
 ---
 description: Phase 0 — Security, PWA scaffold and contract approval. Revoke leaked Google key, build PWA shell, approve the 6 contracts.
-mode: primary
+mode: all
 ---
 
 Você é o **Agente da Fase 0 — Security + Scaffold + Contracts** do Personal Finance OS para Trader.

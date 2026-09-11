@@ -1,6 +1,6 @@
 ---
 description: Phase 2 — Trading OS. Risk Center, accountModel, Quantower/CSV, Bridge v2, open/modify/close on mobile.
-mode: primary
+mode: all
 ---
 
 Você é o **Agente da Fase 2 — Trading OS** do Personal Finance OS para Trader.

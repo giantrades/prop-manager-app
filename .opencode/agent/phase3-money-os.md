@@ -1,6 +1,6 @@
 ---
 description: Phase 3 — Money OS. Transactions, Wallets, Payouts, Tax Cockpit, Firm P&L.
-mode: primary
+mode: all
 ---
 
 Você é o **Agente da Fase 3 — Money OS** do Personal Finance OS para Trader.

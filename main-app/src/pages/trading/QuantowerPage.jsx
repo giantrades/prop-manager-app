@@ -1,0 +1,260 @@
+// STAGE 11 — QuantowerPage. Conecta ao bridge v2, baixa trades e ingere no app-db v3
+// (DataService/DataChainEngine). Fim do Risk com dado manual atrasado.
+
+import React, { useCallback, useMemo, useState } from 'react';
+import LivePositions from '@apps/ui/LivePositions';
+import { useFinance } from '@apps/state';
+import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
+import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade } from '@apps/lib/db';
+
+export default function QuantowerPage() {
+  const finance = useFinance();
+  const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('qt:bridgeUrl') || import.meta.env.VITE_BRIDGE_URL || 'http://127.0.0.1:8787');
+  const [bridgeToken, setBridgeToken] = useState(() => localStorage.getItem('qt:bridgeToken') || import.meta.env.VITE_BRIDGE_TOKEN || '');
+  const [status, setStatus] = useState(null);
+  const [trades, setTrades] = useState([]);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [copyAccounts, setCopyAccounts] = useState([]);
+  const [copyProps, setCopyProps] = useState({});
+  const [copyForm, setCopyForm] = useState({ masterId: '', symbol: '', side: 'buy', qty: '' });
+  const [copyResult, setCopyResult] = useState(null);
+  const [livePositions, setLivePositions] = useState([]);
+
+  const savePrefs = useCallback(() => {
+    localStorage.setItem('qt:bridgeUrl', bridgeUrl);
+    localStorage.setItem('qt:bridgeToken', bridgeToken);
+  }, [bridgeUrl, bridgeToken]);
+
+  const adapter = useCallback(() => new QuantowerAdapter({ bridgeUrl, bridgeToken }), [bridgeUrl, bridgeToken]);
+
+  const handleCheck = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      savePrefs();
+      const a = adapter();
+      const s = await a.getStatus();
+      setStatus(s);
+      const positions = await a.getPositions().catch(() => []);
+      setLivePositions(positions);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Bridge offline.');
+    } finally {
+      setBusy(false);
+    }
+  }, [adapter, savePrefs]);
+
+  const handleClosePosition = useCallback(async (position) => {
+    setBusy(true);
+    try {
+      await adapter().closePosition(position);
+      const positions = await adapter().getPositions().catch(() => []);
+      setLivePositions(positions);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao fechar posição.');
+    } finally {
+      setBusy(false);
+    }
+  }, [adapter]);
+
+  const handleSync = useCallback(async () => {
+    if (!finance) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      savePrefs();
+      const a = adapter();
+      const list = await a.getAllTrades();
+      setTrades(list.slice(0, 8));
+      const res = await ingestQuantowerTrades(finance.ds, finance.chain, list);
+      setResult(res);
+      const [accs, props] = await Promise.all([finance.ds.accounts.list(), finance.ds.propExtensions.list()]);
+      setCopyAccounts(accs);
+      setCopyProps(Object.fromEntries(props.map((p) => [p.accountId, p])));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao sincronizar.');
+    } finally {
+      setBusy(false);
+    }
+  }, [adapter, finance, savePrefs]);
+
+  const copyMaster = useMemo(() => copyAccounts.find((a) => a.id === copyForm.masterId) || null, [copyAccounts, copyForm.masterId]);
+  const copyPreview = useMemo(() => {
+    if (!copyMaster || !copyForm.qty) return null;
+    return previewCopyTrade(copyMaster, copyAccounts, Number(copyForm.qty) || 0);
+  }, [copyMaster, copyAccounts, copyForm.qty]);
+
+  const handleCopy = useCallback(async () => {
+    if (!copyMaster || !copyForm.symbol || !copyForm.qty) {
+      setError('Preencha conta mestra, símbolo e qty para o copy-trade.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setCopyResult(null);
+    try {
+      const a = adapter();
+      const platformIdOf = (accountId) => {
+        const prop = copyProps[accountId];
+        const acct = copyAccounts.find((x) => x.id === accountId);
+        return prop?.quantowerAccountId || acct?.platformAccountId || null;
+      };
+      const sender = {
+        openPosition: (p) => {
+          const platformId = platformIdOf(p.accountId);
+          if (!platformId) throw new Error(`Conta ${p.accountId} sem quantowerAccountId/platformAccountId mapeado`);
+          return a.openPosition({ ...p, accountId: platformId });
+        },
+      };
+      const res = await executeCopyTrade(sender, copyMaster, copyAccounts, {
+        symbol: copyForm.symbol.toUpperCase(),
+        side: copyForm.side,
+        qty: Number(copyForm.qty),
+      });
+      setCopyResult(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha no copy-trade.');
+    } finally {
+      setBusy(false);
+    }
+  }, [adapter, copyAccounts, copyForm, copyMaster, copyProps]);
+
+  return (
+    <div className="cmd-page">
+      <div className="cmd-page-head"><h1 className="cmd-page-title">Quantower Sync</h1></div>
+
+      <div className="qt-card">
+        <div className="qt-grid">
+          <label className="qt-field"><span className="qt-label">Bridge URL</span>
+            <input className="qt-input" value={bridgeUrl} onChange={(e) => setBridgeUrl(e.target.value)} placeholder="http://127.0.0.1:8787" />
+          </label>
+          <label className="qt-field"><span className="qt-label">Token</span>
+            <input className="qt-input" type="password" value={bridgeToken} onChange={(e) => setBridgeToken(e.target.value)} placeholder="X-Bridge-Token" />
+          </label>
+        </div>
+        <div className="qt-actions">
+          <button className="qt-btn" onClick={handleCheck} disabled={busy}>Verificar conexão</button>
+          <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
+        </div>
+        {status && <div className="qt-status" role="status">Bridge OK · v{status.version || status.bridgeVersion || '?'}</div>}
+        {error && <div className="qt-error" role="alert">{error}</div>}
+      </div>
+
+      <div className="qt-card">
+        <div className="qt-list-title">Posições abertas (ao vivo)</div>
+        {livePositions.length === 0 ? (
+          <div className="qt-hint">Nenhuma posição aberta — verifique a conexão para carregar.</div>
+        ) : (
+          <LivePositions positions={livePositions} onClosePosition={handleClosePosition} />
+        )}
+      </div>
+
+      {result && (
+        <div className="qt-result" role="status">
+          <div>Criados: <b>{result.created}</b></div>
+          <div>Atualizados: <b>{result.updated}</b></div>
+          <div>Pulados: <b>{result.skipped}</b></div>
+        </div>
+      )}
+
+      {trades.length > 0 && (
+        <div className="qt-list">
+          <div className="qt-list-title">Amostra (8 primeiros)</div>
+          {trades.map((t) => (
+            <div key={t.platformTradeId} className="qt-item">
+              <span className="qt-symbol">{t.symbol}</span>
+              <span className="qt-side">{t.side}</span>
+              <span>net {t.netPnl}</span>
+              <span className="qt-acct">{t.accountName || t.platformAccountId}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="qt-card">
+        <div className="qt-list-title">Copy Trade (preview antes de enviar)</div>
+        {copyAccounts.length === 0 ? (
+          <div className="qt-hint">Sincronize os trades primeiro (carrega as contas) ou cadastre contas com copyGroup em Accounts.</div>
+        ) : (
+          <>
+            <div className="qt-grid">
+              <label className="qt-field"><span className="qt-label">Conta mestra</span>
+                <select className="qt-input" value={copyForm.masterId} onChange={(e) => setCopyForm({ ...copyForm, masterId: e.target.value })}>
+                  <option value="">—</option>
+                  {copyAccounts.filter((a) => a.copyGroup).map((a) => (
+                    <option key={a.id} value={a.id}>{a.name} (grupo {a.copyGroup})</option>
+                  ))}
+                </select>
+              </label>
+              <label className="qt-field"><span className="qt-label">Símbolo</span>
+                <input className="qt-input" value={copyForm.symbol} onChange={(e) => setCopyForm({ ...copyForm, symbol: e.target.value.toUpperCase() })} placeholder="EURUSD" />
+              </label>
+              <label className="qt-field"><span className="qt-label">Lado</span>
+                <select className="qt-input" value={copyForm.side} onChange={(e) => setCopyForm({ ...copyForm, side: e.target.value })}>
+                  <option value="buy">Buy</option>
+                  <option value="sell">Sell</option>
+                </select>
+              </label>
+              <label className="qt-field"><span className="qt-label">Qty (mestra)</span>
+                <input className="qt-input" type="number" value={copyForm.qty} onChange={(e) => setCopyForm({ ...copyForm, qty: e.target.value })} />
+              </label>
+            </div>
+            {copyPreview && (
+              <div className="qt-preview" role="status">
+                {copyPreviewMessage(copyPreview)}
+              </div>
+            )}
+            <div className="qt-actions">
+              <button className="qt-btn qt-btn-primary" onClick={handleCopy} disabled={busy || !copyMaster}>Executar copy</button>
+            </div>
+            {copyResult && (
+              <div className="qt-list">
+                {copyResult.sent.map((s) => (
+                  <div key={s.clientOrderId} className="qt-item">
+                    <span>{s.accountId}</span>
+                    <span>qty {s.qty}</span>
+                    <span>{s.ok ? '✅ enviada' : `❌ ${s.error}`}</span>
+                  </div>
+                ))}
+                {copyResult.failed > 0 && <div className="qt-error" role="alert">{copyResult.failed} réplica(s) falharam — as outras foram enviadas.</div>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const QT_CSS = `
+.qt-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.qt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.qt-field { display: flex; flex-direction: column; gap: 4px; }
+.qt-label { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
+.qt-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 42px; }
+.qt-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.qt-btn { padding: 10px 18px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 42px; font-weight: 600; }
+.qt-btn-primary { background: var(--brand, #7c5cff); border-color: var(--brand, #7c5cff); color: #fff; }
+.qt-status { padding: 10px 12px; border-radius: 10px; background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); color: var(--green, #2ecc71); font-size: 13px; }
+.qt-error { padding: 10px 12px; border-radius: 10px; background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.3); color: var(--red, #e74c3c); font-size: 13px; }
+.qt-result { display: flex; gap: 18px; font-size: 13px; padding: 12px; border-radius: 10px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.2); }
+.qt-list { display: flex; flex-direction: column; gap: 8px; }
+.qt-list-title { font-size: 12px; font-weight: 700; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
+.qt-item { display: flex; gap: 14px; align-items: center; font-size: 13px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); }
+.qt-symbol { font-weight: 800; }
+.qt-side { text-transform: capitalize; color: var(--muted, #a1a7b3); }
+.qt-acct { margin-left: auto; font-size: 12px; color: var(--muted, #a1a7b3); }
+.qt-hint { font-size: 12px; color: var(--muted, #a1a7b3); }
+.qt-preview { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.2); }
+@media (max-width: 719px) { .qt-grid { grid-template-columns: 1fr; } }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('qt-styles')) {
+  const style = document.createElement('style');
+  style.id = 'qt-styles';
+  style.textContent = QT_CSS;
+  document.head.appendChild(style);
+}

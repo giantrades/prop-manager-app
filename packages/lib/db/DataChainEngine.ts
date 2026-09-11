@@ -258,14 +258,18 @@ export class DataChainEngine {
   // -------------------------------------------------------------------------
 
   /**
-   * Aplica um payout: cria `Transaction` `payout_in` (net) + `fee` por conta do split.
+   * Aplica um payout: cria `Transaction` `payout_in` (gross) + `fee` por conta do split.
    * `destinationAccountId` é a conta de destino (wallet/bank) se houver; senão usa a
-   * primeira conta prop.
+   * primeira conta prop. `rate`/`rateTimestamp` = PTAX de venda do dia do recebimento
+   * (guardado na Transaction — FINANCIAL_FORMULAS.md, nunca recalcular depois).
    */
   async applyPayout(
     payout: Payout,
-    opts?: { destinationAccountId?: string },
+    opts?: { destinationAccountId?: string; rate?: number; rateTimestamp?: string },
   ): Promise<PayoutApplyResult> {
+    if (opts?.rate != null && opts.rate <= 0) {
+      throw new Error('rate=0 PROIBIDO no payout (zera cálculo silenciosamente)');
+    }
     const currency = await this.resolveCurrency(
       opts?.destinationAccountId ?? payout.accountIds[0],
     );
@@ -274,69 +278,40 @@ export class DataChainEngine {
     let totalFee = 0;
 
     const dest = opts?.destinationAccountId ?? payout.accountIds[0];
+    const mk = (id: string, accountId: string, firmId: string | undefined, kind: TransactionKind, amount: number, cur: string, note: string): Transaction => ({
+      id,
+      accountId,
+      firmId,
+      kind,
+      amount: Number(amount.toFixed(2)),
+      currency: cur,
+      rate: opts?.rate,
+      rateTimestamp: opts?.rateTimestamp,
+      date: payout.date ?? nowIso(),
+      ref: { type: 'payoutId', id: payout.id },
+      note,
+      updatedAt: nowIso(),
+      deviceId: this.ds.deviceId,
+      version: 0,
+    });
+
     const splitKeys = Object.keys(payout.splitByAccount ?? {});
     if (splitKeys.length > 0) {
       for (const accountId of splitKeys) {
         const s = payout.splitByAccount[accountId];
         const cur = (await this.resolveCurrency(dest)) ?? currency ?? 'USD';
-        records.push({
-          id: `${payout.id}:${accountId}:payout_in`,
-          accountId: dest ?? accountId,
-          firmId: accountId,
-          kind: 'payout_in',
-          amount: Number(s.net.toFixed(2)),
-          currency: cur,
-          date: payout.date ?? nowIso(),
-          ref: { type: 'payoutId', id: payout.id },
-          note: `payout ${accountId}`,
-          updatedAt: nowIso(),
-          deviceId: this.ds.deviceId,
-          version: 0,
-        });
-        records.push({
-          id: `${payout.id}:${accountId}:fee`,
-          accountId: dest ?? accountId,
-          firmId: accountId,
-          kind: 'fee',
-          amount: Number((-s.fee).toFixed(2)),
-          currency: cur,
-          date: payout.date ?? nowIso(),
-          ref: { type: 'payoutId', id: payout.id },
-          note: `fee payout ${accountId}`,
-          updatedAt: nowIso(),
-          deviceId: this.ds.deviceId,
-          version: 0,
-        });
+        // payout_in = GROSS (o que a firm grossou); fee = -fee (a parte da firm).
+        // O net (gross - fee) é o que entra na wallet. Firm P&L = Σ payout_in - Σ(...+fee).
+        const grossAmount = s.gross > 0 ? s.gross : s.net + s.fee;
+        records.push(mk(`${payout.id}:${accountId}:payout_in`, dest ?? accountId, accountId, 'payout_in', grossAmount, cur, `payout ${accountId}`));
+        records.push(mk(`${payout.id}:${accountId}:fee`, dest ?? accountId, accountId, 'fee', -s.fee, cur, `fee payout ${accountId}`));
         totalNet += s.net;
         totalFee += s.fee;
       }
     } else {
-      records.push({
-        id: `${payout.id}:payout_in`,
-        accountId: dest ?? '',
-        kind: 'payout_in',
-        amount: Number(payout.net.toFixed(2)),
-        currency: currency ?? 'USD',
-        date: payout.date ?? nowIso(),
-        ref: { type: 'payoutId', id: payout.id },
-        note: 'payout',
-        updatedAt: nowIso(),
-        deviceId: this.ds.deviceId,
-        version: 0,
-      });
-      records.push({
-        id: `${payout.id}:fee`,
-        accountId: dest ?? '',
-        kind: 'fee',
-        amount: Number((-payout.fee).toFixed(2)),
-        currency: currency ?? 'USD',
-        date: payout.date ?? nowIso(),
-        ref: { type: 'payoutId', id: payout.id },
-        note: 'fee payout',
-        updatedAt: nowIso(),
-        deviceId: this.ds.deviceId,
-        version: 0,
-      });
+      const grossAmount = payout.gross > 0 ? payout.gross : payout.net + payout.fee;
+      records.push(mk(`${payout.id}:payout_in`, dest ?? '', undefined, 'payout_in', grossAmount, currency ?? 'USD', 'payout'));
+      records.push(mk(`${payout.id}:fee`, dest ?? '', undefined, 'fee', -payout.fee, currency ?? 'USD', 'fee payout'));
       totalNet = payout.net;
       totalFee = payout.fee;
     }

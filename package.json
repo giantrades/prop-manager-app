@@ -4,16 +4,13 @@
   "version": "1.0.0",
   "workspaces": [
     "main-app",
-    "trading-journal",
     "packages/*"
   ],
   "scripts": {
     "build:main": "pnpm --filter main-app build",
-    "build:journal": "pnpm --filter trading-journal build",
-    "build:all": "pnpm build:main && pnpm build:journal",
+    "build:all": "pnpm build:main",
     "dev:main": "pnpm --filter main-app dev",
-    "dev:journal": "pnpm --filter trading-journal dev",
-    "dev:all": "concurrently \"pnpm --filter main-app dev\" \"pnpm --filter trading-journal dev\"",
+    "dev:all": "pnpm dev:main",
     "test": "vitest run",
     "test:watch": "vitest"
   },

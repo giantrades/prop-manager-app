@@ -17,6 +17,32 @@
   box-sizing: border-box;
 }
 
+/* UX foundation — acessibilidade global */
+:focus-visible {
+  outline: 2px solid var(--brand, #7c5cff);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* UX foundation — impressão limpa (relatórios) */
+@media print {
+  .sidebar, .sb-mobile-trigger, .sb-overlay, .tst-host, .cp-overlay, .ob-overlay,
+  .cmd-actions, .no-print {
+    display: none !important;
+  }
+  .main-content { margin-left: 0 !important; }
+  .container { max-width: 100% !important; }
+  body { background: #fff !important; color: #000 !important; }
+}
+
 html,
 body,
 #root {
@@ -50,7 +76,7 @@ a {
   --sb-expanded: 220px;
   --sb-bg: #0b0f16;
   --sb-border: #1a2232;
-  --sb-muted-txt: #4a5568;
+  --sb-muted-txt: #8b94a5;
   --sb-accent: #7c5cff;
   --sb-link-hover: #111724;
   --sb-transition: 240ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -1511,4 +1537,63 @@ select.select option {
 .select option {
   background-color: #0f1218;
   color: #e7eaf0;
+}
+
+/* ── Módulos autocontidos (DOCS/10_MODULES/README.md) ── */
+.sb-module {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Cabeçalho do módulo herda o layout do .sb-link; chevron indica abrir/fechar */
+.sb-module-btn {
+  cursor: pointer;
+}
+
+.sb-module-btn .sb-link-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-module-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-width: 22px;
+  color: var(--sb-muted-txt);
+  opacity: 0;
+  transition: opacity var(--sb-transition), transform 0.15s;
+}
+
+.sidebar:hover .sb-module-chevron,
+.sidebar.pinned .sb-module-chevron,
+.sidebar.mobile-open .sb-module-chevron,
+.sidebar.platform-open .sb-module-chevron {
+  opacity: 1;
+}
+
+.sb-module-btn[aria-expanded="true"] .sb-module-chevron {
+  transform: rotate(90deg);
+}
+
+/* Filhos recuados para dar hierarquia visual */
+.sb-module-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sb-module-children .sb-link {
+  margin-left: 16px;
+  width: calc(100% - 24px);
+}
+
+/* Sidebar recolhida: mostra só o ícone do módulo (filhos ocultos) */
+.sidebar:not(.pinned):not(:hover):not(.mobile-open):not(.platform-open) .sb-module-children {
+  display: none;
+}
+
+.sidebar:not(.pinned):not(:hover):not(.mobile-open):not(.platform-open) .sb-module-chevron {
+  display: none;
 }

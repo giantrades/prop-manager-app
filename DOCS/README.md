@@ -42,6 +42,14 @@ DOCS/
   07_STAGE6_COMMAND/
     00-produto.md                  <- Home (composição), Calendar, Alerts, AI layer leitura-only
     01-tasks.md                    <- T6.1–T6.7
+  08_STAGE7_INTEGRATION/
+    00-plano.md                    <- Fases 6–13 (unificação, auth, polish, fim do legado, LIVE, gaps, robustez)
+  10_MODULES/                      <- ★ cada módulo é um "app separado" (dashboard+gerenciar+configurar)
+    README.md                      <- índice + como atacar (1 agente/conversa por módulo)
+    trading-journal/00-spec.md     <- journal ✅ (J1–J12) + melhorias/ (6 itens p/ executar)
+    gastos/00-spec.md              <- Mobills-like + melhorias/ (4 itens)
+    portfolio/00-spec.md           <- dados LIVE + melhorias/ (4 itens)
+    propfirm/00-spec.md            <- Prop/Firm + melhorias/ (4 itens)
 ```
 
 ## Roadmap (reconstrução, mobile-first desde o dia 1)
@@ -54,6 +62,7 @@ DOCS/
 | 3 | Money OS | Payout->Wallet->Tax cadeia fim-a-fim + Firm P&L bate com cálculo manual |
 | 4 | Wealth OS | Net Worth derivado reconcilia (teste automático) + Portfolio cost-basis + Goals 2.0 |
 | 5 | Command + Intel | Home só composição + SPA fundida + AI leitura-only |
+| 6 | Build + Integração | Um app, uma fonte de verdade (app-db v3) + Sync Supabase + Auth + fim do legado — ver `08_STAGE7_INTEGRATION/00-plano.md` (roadmap pós-Fase 5) |
 
 ## Cadeia de dados (única verdade)
 

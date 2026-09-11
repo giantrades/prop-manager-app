@@ -160,9 +160,15 @@ describe('DataChainEngine — Trade -> Ledger -> Equity -> Eligibility -> Wallet
     const txs = await ds.transactions.list();
     const inTx = txs.find((x) => x.kind === 'payout_in');
     const feeTx = txs.find((x) => x.id === 'payout-1:acct-prop:fee');
-    expect(inTx?.amount).toBe(8000);
+    // payout_in = GROSS (o que a firm grossou); fee = -fee. Net = gross - fee = 8000.
+    expect(inTx?.amount).toBe(10000);
     expect(feeTx?.amount).toBe(-2000);
     expect(inTx?.accountId).toBe('wallet-1');
+    // Wallet recebe o net (gross - fee).
+    const walletBal = (await ds.transactions.list())
+      .filter((x) => x.accountId === 'wallet-1')
+      .reduce((s, x) => s + x.amount, 0);
+    expect(walletBal).toBe(8000);
   });
 });
 

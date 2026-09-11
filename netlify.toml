@@ -6,11 +6,8 @@
   NODE_VERSION = "20"
   PNPM_VERSION = "9"
 
-# Roteamento para SPA - Trading Journal
-[[redirects]]
-  from = "/journal/*"
-  to = "/journal/index.html"
-  status = 200
+# Trading Journal FUNDIDO no main-app (Fase 5): /journal/* é servido pelo index.html
+# do main-app (router único, client-side, sem reload). Sem redirect separado.
 
 # Roteamento para SPA - Main App (deve ficar por último)
 [[redirects]]

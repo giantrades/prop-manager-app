@@ -112,6 +112,8 @@ export type TransactionKind =
   | 'swap'
   | 'rebate'
   | 'expense'
+  | 'income'
+  | 'dividend'
   | 'transfer'
   | 'buy'
   | 'sell'
@@ -119,7 +121,7 @@ export type TransactionKind =
   | 'tax_reserve';
 
 export interface TransactionRef {
-  type: 'payoutId' | 'tradeId' | 'investmentId';
+  type: 'payoutId' | 'tradeId' | 'investmentId' | 'recurrence';
   id: string;
 }
 
@@ -134,6 +136,12 @@ export interface Transaction extends SyncedRecord {
   date: string; // ISO 8601 com timezone
   ref?: TransactionRef;
   note?: string;
+  category?: string; // G1 — id da categoria (ex.: 'moradia'). Aditivo; legado lê via prefixo na note.
+  recurrence?: { freq: 'monthly'; day: number }; // G6 — template recorrente (a cópia gerada NÃO carrega)
+  // A2 — anexos/comprovantes (base64 pequeno ou referência). Limite 300KB na UI.
+  attachments?: Record<string, object>;
+  // A4 — ativo da operação buy/sell (para FIFO de IR). Aditivo.
+  asset?: { symbol: string; qty: number; price: number };
 }
 
 export interface Position {
@@ -141,8 +149,16 @@ export interface Position {
   accountId: string;
   symbol: string;
   qty: number;
-  avgPrice: number;
-  lastMarkPrice?: number;
+  avgPrice: number; // na moeda da posição
+  currency?: 'BRL' | 'USD'; // default BRL
+  // A8 — renda fixa: accrual automático (só 'pre' com yieldRate; 'pos'/'ipca'
+  // precisam de índice externo e caem no marco manual).
+  assetKind?: 'equity' | 'fixed';
+  yieldRate?: number; // a.a. decimal (ex.: 0.12). Juros compostos 365d (aproximação).
+  yieldType?: 'pre' | 'pos' | 'ipca';
+  // A2 — alertas de preço (dispara 1x até rearmar; ver priceService).
+  alerts?: Array<{ id: string; dir: 'above' | 'below'; price: number }>;
+  lastMarkPrice?: number; // na moeda da posição
   lastMarkAt?: string;
   updatedAt: string;
   deviceId: string;
@@ -150,11 +166,23 @@ export interface Position {
 }
 
 export type TradeDirection = 'long' | 'short';
-export type TradeSource = 'manual' | 'quantower' | 'csv';
+export type TradeSource = 'manual' | 'quantower' | 'ctrader' | 'csv';
 
 export interface TradeAccountSplit {
   accountId: string;
   weight: number;
+}
+
+/** Execução de uma ordem dentro de um trade (fill). Campo ÚNICO — fim da
+ * dualidade antiga `executions vs PartialExecutions` (PascalCase). */
+export interface TradeExecution {
+  side: 'entry' | 'exit' | 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  timestamp: string; // ISO 8601 com timezone
+  commission?: number;
+  fee?: number;
+  swap?: number;
 }
 
 export interface Trade extends SyncedRecord {
@@ -177,11 +205,22 @@ export interface Trade extends SyncedRecord {
   // os campos obrigatórios já aprovados.
   stopPrice?: number; // risco inicial p/ R (null se não definido)
   multiplier?: number; // contract size (default 1)
+  // Execuções de fill (VWAP/MAE/MFE). Único campo — substitui `PartialExecutions`.
+  executions?: TradeExecution[];
+  // A2 — MAE/MFE reais (bridge futuro/manual). Quando presentes, `maeMfe()` os
+  // prefere ao proxy via fills. M1 verdadeiro exigiria série intra-trade (fora do schema).
+  mae?: number;
+  mfe?: number;
   source: TradeSource;
   quantowerId?: string;
+  // F5/F6 — plataforma de origem (qualquer broker). Dedup cTrader via primary-key `ct_<id>`.
+  platformName?: string;
+  platformTradeId?: string;
+  platformAccountId?: string;
   resultNet: number;
   resultR: number | null;
   notes?: string;
+  tags?: string[]; // J12 — etiquetas livres (minúsculas, sem espaços), p/ filtro e review
 }
 
 export type PayoutStatus = 'Pending' | 'Approved' | 'Paid';

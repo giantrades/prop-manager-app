@@ -42,6 +42,7 @@
 // ============================================================
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Diagnostics;
@@ -76,6 +77,22 @@ namespace QuantowerBridge
         private CancellationTokenSource _cts;
         private Thread _serverThread;
 
+        // ── Bridge v2: autenticação + idempotência ─────────────────────────
+        // X-Bridge-Token em TODAS as rotas (04-BRIDGE_V2_SPEC.md). Token gerado
+        // localmente (GUID) no primeiro run e salvo em arquivo ao lado do executável.
+        // Nunca hardcoded no .cs, nunca no repo.
+        private static string _bridgeToken;
+        private static readonly string _tokenPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "QuantowerBridge", "token.txt");
+
+        // Cache de idempotência: clientOrderId -> resposta JSON original (reenvio
+        // retorna a mesma resposta sem reenviar a ordem pro Quantower).
+        private static readonly ConcurrentDictionary<string, IdempotentEntry> _idempotency = new();
+        private const int IdempotencyMaxEntries = 200;
+        private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromMinutes(10);
+        private static readonly object _idempotencyLock = new();
+
         private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -96,6 +113,22 @@ namespace QuantowerBridge
             try
             {
                 FileLog("OnRun() called");
+
+                // ── Bridge v2: rotação manual de token ──────────────────────
+                var args = Environment.GetCommandLineArgs();
+                if (args.Any(a => string.Equals(a, "--rotate-token", StringComparison.OrdinalIgnoreCase)))
+                {
+                    string rotated = Guid.NewGuid().ToString("N");
+                    File.WriteAllText(_tokenPath, rotated);
+                    FileLog($"🔑 Token rotacionado (use-o no app para reparear).");
+                    Log($"🔑 Bridge token rotacionado — repareie o app com o novo token.", StrategyLoggingLevel.Trading);
+                    return;
+                }
+
+                // Carrega (ou gera) o token da bridge — nunca hardcoded.
+                _bridgeToken = LoadOrCreateToken();
+                FileLog($"🔑 Bridge token carregado (hash={ComputeSha1Hash(_bridgeToken).Substring(0, 8)}…).");
+
                 _cts = new CancellationTokenSource();
                 _listener = new HttpListener();
 
@@ -249,6 +282,79 @@ namespace QuantowerBridge
             catch { }
         }
 
+        // ── Bridge v2: token + idempotência helpers ─────────────────────────
+
+        /// <summary>Carrega o token do arquivo de config ou gera um novo (GUID).</summary>
+        private static string LoadOrCreateToken()
+        {
+            try
+            {
+                if (File.Exists(_tokenPath))
+                {
+                    string t = File.ReadAllText(_tokenPath).Trim();
+                    if (!string.IsNullOrEmpty(t)) return t;
+                }
+                string newToken = Guid.NewGuid().ToString("N");
+                Directory.CreateDirectory(Path.GetDirectoryName(_tokenPath));
+                File.WriteAllText(_tokenPath, newToken);
+                FileLog($"🔑 Token gerado e salvo em {_tokenPath}");
+                return newToken;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"⚠️ Não consegui salvar token: {ex.Message} — usando token efêmero");
+                return Guid.NewGuid().ToString("N");
+            }
+        }
+
+        /// <summary>Confere o header X-Bridge-Token contra o token atual.</summary>
+        private static bool IsAuthorized(HttpListenerRequest request)
+        {
+            if (string.IsNullOrEmpty(_bridgeToken)) return false;
+            string header = request.Headers["X-Bridge-Token"];
+            if (string.IsNullOrEmpty(header)) return false;
+            return string.Equals(header.Trim(), _bridgeToken, StringComparison.Ordinal);
+        }
+
+        /// <summary>Se clientOrderId já foi processado, retorna a resposta original (idempotência).</summary>
+        private static bool TryGetIdempotent(string clientOrderId, out string json)
+        {
+            json = null;
+            if (string.IsNullOrEmpty(clientOrderId)) return false;
+            if (_idempotency.TryGetValue(clientOrderId, out var entry) &&
+                (DateTime.UtcNow - entry.CreatedAt) <= IdempotencyTtl)
+            {
+                json = entry.ResponseJson;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Guarda a resposta de um clientOrderId processado (com eviction).</summary>
+        private static void RememberIdempotent(string clientOrderId, string responseJson)
+        {
+            if (string.IsNullOrEmpty(clientOrderId)) return;
+            lock (_idempotencyLock)
+            {
+                if (_idempotency.Count >= IdempotencyMaxEntries)
+                {
+                    var oldest = _idempotency.OrderBy(kv => kv.Value.CreatedAt).First();
+                    _idempotency.TryRemove(oldest.Key, out _);
+                }
+                _idempotency[clientOrderId] = new IdempotentEntry
+                {
+                    CreatedAt = DateTime.UtcNow,
+                    ResponseJson = responseJson
+                };
+            }
+        }
+
+        private class IdempotentEntry
+        {
+            public DateTime CreatedAt;
+            public string ResponseJson;
+        }
+
         // ── HTTP Server Loop ───────────────────────────────
         private void ServerLoop()
         {
@@ -309,15 +415,34 @@ namespace QuantowerBridge
                     return;
                 }
 
+                // ── Bridge v2: autenticação em TODAS as rotas (sem exceção) ──
+                // Inclusive /positions/close, que hoje não pede nada.
+                if (!IsAuthorized(request))
+                {
+                    response.StatusCode = 401;
+                    byte[] err = Encoding.UTF8.GetBytes(ErrorJson("invalid_token", "Token de bridge inválido ou ausente (header X-Bridge-Token).", false));
+                    response.ContentLength64 = err.Length;
+                    response.OutputStream.Write(err, 0, err.Length);
+                    return;
+                }
+
                 string path = request.Url?.AbsolutePath?.ToLower().TrimEnd('/') ?? "";
 
-                // Normalize path - handle cases where funnel might add prefix
-                if (path.StartsWith("/status")) path = "/status";
+                // Normalize path - preserve v2 sub-rotas (open/modify/close/place/cancel).
+                if (path == "/positions/open" || path == "/positions/modify" || path == "/positions/close")
+                {
+                    // keep as-is
+                }
+                else if (path.StartsWith("/positions")) path = "/positions";
+                else if (path == "/orders/place" || path == "/orders/cancel")
+                {
+                    // keep as-is
+                }
+                else if (path.StartsWith("/orders")) path = "/orders";
+                else if (path.StartsWith("/status")) path = "/status";
                 else if (path.StartsWith("/accounts")) path = "/accounts";
                 else if (path.StartsWith("/trades")) path = "/trades";
-                else if (path == "/positions" || path == "/positions/close") { /* keep as-is */ }
-                else if (path.StartsWith("/positions")) path = "/positions";
-                else if (path.StartsWith("/orders")) path = "/orders";
+                else if (path.StartsWith("/health")) path = "/health";
 
                 // Silently ignore common scanner/bot paths (no log, no 404)
                 if (path == "/auth" || path == "/robots.txt" || path == "/.env" ||
@@ -345,6 +470,18 @@ namespace QuantowerBridge
                     case "/positions/close":
                         json = HandleClosePosition(request);
                         break;
+                    case "/positions/open":
+                        json = HandleOpenPosition(request);
+                        break;
+                    case "/positions/modify":
+                        json = HandleModifyPosition(request);
+                        break;
+                    case "/orders/place":
+                        json = HandlePlaceOrder(request);
+                        break;
+                    case "/orders/cancel":
+                        json = HandleCancelOrder(request);
+                        break;
                     case "/positions":
                         json = BuildPositionsJson();
                         break;
@@ -352,7 +489,7 @@ namespace QuantowerBridge
                         json = BuildOrdersJson();
                         break;
                     case "/health":
-                        json = JsonSerializer.Serialize(new { status = "ok", timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
+                        json = BuildHealthJson();
                         break;
                     default:
                         Log($"⚠️ 404 Not Found: {path}", StrategyLoggingLevel.Trading);
@@ -391,53 +528,290 @@ namespace QuantowerBridge
         {
             response.Headers.Add("Access-Control-Allow-Origin", "*");
             response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Bridge-Token");
             response.Headers.Add("Access-Control-Max-Age", "86400");
-            response.Headers.Add("Access-Control-Allow-Private-Network", "true");
+            // 04-BRIDGE_V2_SPEC.md: removemos Access-Control-Allow-Private-Network.
+            // Esse header opt-in permitia que uma página pública acessasse o bridge
+            // na rede privada — reintroduzir só depois do token, se necessário.
         }
 
         private static string HandleClosePosition(HttpListenerRequest request)
         {
             if (request.HttpMethod != "POST")
-            {
-                return JsonSerializer.Serialize(new { success = false, error = "Method not allowed. Use POST." }, JsonOptions);
-            }
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var closeRequest = ReadJson<ClosePositionRequest>(request);
+            if (closeRequest == null || string.IsNullOrEmpty(closeRequest.Id))
+                return ErrorJson("position_not_found", "Missing required field: id", false);
+            if (TryGetIdempotent(closeRequest.ClientOrderId, out string cached)) return cached;
 
             try
             {
-                string body;
-                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
-                {
-                    body = reader.ReadToEnd();
-                }
-
-                var closeRequest = JsonSerializer.Deserialize<ClosePositionRequest>(body, JsonOptions);
-                if (closeRequest == null || string.IsNullOrEmpty(closeRequest.Id))
-                {
-                    return JsonSerializer.Serialize(new { success = false, error = "Missing required field: id" }, JsonOptions);
-                }
-
                 var position = Core.Instance.Positions.FirstOrDefault(p => p.Id == closeRequest.Id);
                 if (position == null)
-                {
-                    return JsonSerializer.Serialize(new { success = false, error = $"Position not found: {closeRequest.Id}" }, JsonOptions);
-                }
+                    return ErrorJson("position_not_found", $"Position not found: {closeRequest.Id}", false);
 
-                position.Close();
+                var result = position.Close();
+                if (!IsSuccess(result))
+                    return ErrorJson("unknown", result?.Message ?? "Falha ao fechar posição", true);
+
                 string successMsg = $"Position {closeRequest.Id} closed successfully";
                 FileLog($"[CLOSE] {successMsg}");
-                return JsonSerializer.Serialize(new { success = true, message = successMsg }, JsonOptions);
+                string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = closeRequest.Id, message = successMsg }, JsonOptions);
+                RememberIdempotent(closeRequest.ClientOrderId, resp);
+                return resp;
             }
             catch (Exception ex)
             {
                 FileLog($"[CLOSE] Error: {ex.Message}");
-                return JsonSerializer.Serialize(new { success = false, error = ex.Message }, JsonOptions);
+                return ErrorJson("quantower_disconnected", ex.Message, true);
             }
         }
 
+        // ── Bridge v2: /positions/open ──────────────────────────────────────
+        private static string HandleOpenPosition(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var req = ReadJson<OpenPositionRequest>(request);
+            if (req == null || string.IsNullOrEmpty(req.AccountId) || string.IsNullOrEmpty(req.Symbol) || req.Qty <= 0)
+                return ErrorJson("invalid_request", "Missing required field: accountId, symbol, side, qty, clientOrderId", false);
+            if (TryGetIdempotent(req.ClientOrderId, out string cached)) return cached;
+
+            try
+            {
+                var account = Core.Instance.Accounts.FirstOrDefault(a => a.Id == req.AccountId);
+                if (account == null) return ErrorJson("position_not_found", $"Account not found: {req.AccountId}", false);
+                var symbol = Core.Instance.Symbols.FirstOrDefault(s => s.Name == req.Symbol);
+                if (symbol == null) return ErrorJson("symbol_closed", $"Symbol not found: {req.Symbol}", false);
+                var side = string.Equals(req.Side, "sell", StringComparison.OrdinalIgnoreCase) ? Side.Sell : Side.Buy;
+
+                var orderParams = new PlaceOrderRequestParameters
+                {
+                    Account = account,
+                    Symbol = symbol,
+                    Side = side,
+                    Quantity = req.Qty,
+                    TimeInForce = TimeInForce.Day,
+                    OrderTypeId = OrderType.Market,
+                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Price) : null,
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Price) : null
+                };
+                var result = Core.Instance.PlaceOrder(orderParams);
+                if (!IsSuccess(result))
+                    return ErrorJson("unknown", result?.Message ?? "Falha ao abrir posição", true);
+
+                string positionId = req.ClientOrderId;
+                string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = positionId, filledPrice = symbol.Ask, filledQty = req.Qty }, JsonOptions);
+                RememberIdempotent(req.ClientOrderId, resp);
+                FileLog($"[OPEN] {req.Symbol} {side} {req.Qty} @ {account.Id}");
+                return resp;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[OPEN] Error: {ex.Message}");
+                return ErrorJson("quantower_disconnected", ex.Message, true);
+            }
+        }
+
+        // ── Bridge v2: /positions/modify (SL/TP) ────────────────────────────
+        private static string HandleModifyPosition(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var req = ReadJson<ModifyPositionRequest>(request);
+            if (req == null || string.IsNullOrEmpty(req.PlatformPositionId))
+                return ErrorJson("position_not_found", "Missing required field: platformPositionId", false);
+            if (TryGetIdempotent(req.ClientOrderId, out string cached)) return cached;
+
+            try
+            {
+                var position = Core.Instance.Positions.FirstOrDefault(p => p.Id == req.PlatformPositionId);
+                if (position == null)
+                    return ErrorJson("position_not_found", $"Position not found: {req.PlatformPositionId}", false);
+
+                if (req.Sl.HasValue)
+                {
+                    if (position.StopLoss == null)
+                        return ErrorJson("position_not_found", "Posição não tem Stop Loss para modificar", false);
+                    var res = Core.Instance.ModifyOrder(position.StopLoss, price: req.Sl.Value);
+                    if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar SL", true);
+                }
+                if (req.Tp.HasValue)
+                {
+                    if (position.TakeProfit == null)
+                        return ErrorJson("position_not_found", "Posição não tem Take Profit para modificar", false);
+                    var res = Core.Instance.ModifyOrder(position.TakeProfit, price: req.Tp.Value);
+                    if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar TP", true);
+                }
+
+                string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = req.PlatformPositionId }, JsonOptions);
+                RememberIdempotent(req.ClientOrderId, resp);
+                FileLog($"[MODIFY] {req.PlatformPositionId} sl={req.Sl} tp={req.Tp}");
+                return resp;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[MODIFY] Error: {ex.Message}");
+                return ErrorJson("quantower_disconnected", ex.Message, true);
+            }
+        }
+
+        // ── Bridge v2: /orders/place (limit/stop) ───────────────────────────
+        private static string HandlePlaceOrder(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var req = ReadJson<PlaceOrderRequest>(request);
+            if (req == null || string.IsNullOrEmpty(req.AccountId) || string.IsNullOrEmpty(req.Symbol) || req.Qty <= 0)
+                return ErrorJson("invalid_request", "Missing required field: accountId, symbol, side, qty, type, price, clientOrderId", false);
+            if (TryGetIdempotent(req.ClientOrderId, out string cached)) return cached;
+
+            try
+            {
+                var account = Core.Instance.Accounts.FirstOrDefault(a => a.Id == req.AccountId);
+                if (account == null) return ErrorJson("position_not_found", $"Account not found: {req.AccountId}", false);
+                var symbol = Core.Instance.Symbols.FirstOrDefault(s => s.Name == req.Symbol);
+                if (symbol == null) return ErrorJson("symbol_closed", $"Symbol not found: {req.Symbol}", false);
+                var side = string.Equals(req.Side, "sell", StringComparison.OrdinalIgnoreCase) ? Side.Sell : Side.Buy;
+                bool isLimit = string.Equals(req.Type, "limit", StringComparison.OrdinalIgnoreCase);
+
+                var orderParams = new PlaceOrderRequestParameters
+                {
+                    Account = account,
+                    Symbol = symbol,
+                    Side = side,
+                    Quantity = req.Qty,
+                    TimeInForce = TimeInForce.Day,
+                    OrderTypeId = isLimit ? OrderType.Limit : OrderType.Stop,
+                    Price = isLimit ? req.Price : -1,
+                    TriggerPrice = isLimit ? -1 : req.Price,
+                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Price) : null,
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Price) : null
+                };
+                var result = Core.Instance.PlaceOrder(orderParams);
+                if (!IsSuccess(result))
+                    return ErrorJson("unknown", result?.Message ?? "Falha ao colocar ordem", true);
+
+                string resp = JsonSerializer.Serialize(new { success = true, platformOrderId = req.ClientOrderId }, JsonOptions);
+                RememberIdempotent(req.ClientOrderId, resp);
+                FileLog($"[ORDERS/PLACE] {req.Symbol} {side} {req.Qty} type={req.Type}");
+                return resp;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[ORDERS/PLACE] Error: {ex.Message}");
+                return ErrorJson("quantower_disconnected", ex.Message, true);
+            }
+        }
+
+        // ── Bridge v2: /orders/cancel ───────────────────────────────────────
+        private static string HandleCancelOrder(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var req = ReadJson<CancelOrderRequest>(request);
+            if (req == null || string.IsNullOrEmpty(req.PlatformOrderId))
+                return ErrorJson("order_not_found", "Missing required field: platformOrderId", false);
+            if (TryGetIdempotent(req.ClientOrderId, out string cached)) return cached;
+
+            try
+            {
+                var order = Core.Instance.Orders.FirstOrDefault(o => o.Id == req.PlatformOrderId);
+                if (order == null)
+                    return ErrorJson("order_not_found", $"Order not found: {req.PlatformOrderId}", false);
+
+                var result = order.Cancel();
+                if (!IsSuccess(result))
+                    return ErrorJson("unknown", result?.Message ?? "Falha ao cancelar ordem", true);
+
+                string resp = JsonSerializer.Serialize(new { success = true }, JsonOptions);
+                RememberIdempotent(req.ClientOrderId, resp);
+                FileLog($"[ORDERS/CANCEL] {req.PlatformOrderId}");
+                return resp;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[ORDERS/CANCEL] Error: {ex.Message}");
+                return ErrorJson("quantower_disconnected", ex.Message, true);
+            }
+        }
+
+        // ── Helpers de contrato de erro / JSON ──────────────────────────────
+        private static bool IsSuccess(TradingOperationResult result)
+        {
+            return result != null &&
+                string.Equals(result.Status?.ToString(), "Success", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ErrorJson(string code, string message, bool retryable)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                success = false,
+                error = new { code, message, retryable }
+            }, JsonOptions);
+        }
+
+        private static T ReadJson<T>(HttpListenerRequest request) where T : class
+        {
+            string body;
+            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                body = reader.ReadToEnd();
+            }
+            if (string.IsNullOrWhiteSpace(body)) return null;
+            return JsonSerializer.Deserialize<T>(body, JsonOptions);
+        }
+
+        // ── Request DTOs (v2) ───────────────────────────────────────────────
         private class ClosePositionRequest
         {
             public string Id { get; set; }
+            public string ClientOrderId { get; set; }
+        }
+
+        private class OpenPositionRequest
+        {
+            public string AccountId { get; set; }
+            public string Symbol { get; set; }
+            public string Side { get; set; }
+            public double Qty { get; set; }
+            public double? Sl { get; set; }
+            public double? Tp { get; set; }
+            public string Note { get; set; }
+            public string ClientOrderId { get; set; }
+        }
+
+        private class ModifyPositionRequest
+        {
+            public string PlatformPositionId { get; set; }
+            public double? Sl { get; set; }
+            public double? Tp { get; set; }
+            public string ClientOrderId { get; set; }
+        }
+
+        private class PlaceOrderRequest
+        {
+            public string AccountId { get; set; }
+            public string Symbol { get; set; }
+            public string Side { get; set; }
+            public double Qty { get; set; }
+            public string Type { get; set; }
+            public double Price { get; set; }
+            public double? Sl { get; set; }
+            public double? Tp { get; set; }
+            public string ClientOrderId { get; set; }
+        }
+
+        private class CancelOrderRequest
+        {
+            public string PlatformOrderId { get; set; }
+            public string ClientOrderId { get; set; }
         }
 
         // ── JSON Builders (using System.Text.Json) ───────────
@@ -453,7 +827,8 @@ namespace QuantowerBridge
             var status = new
             {
                 online = true,
-                version = "1.0.0",
+                version = BridgeVersion,
+                build = BuildIdentifier,
                 platform = "quantower",
                 port,
                 timestamp = DateTime.UtcNow.ToString("O"),
@@ -465,6 +840,21 @@ namespace QuantowerBridge
             };
 
             return JsonSerializer.Serialize(status, JsonOptions);
+        }
+
+        // ── Bridge v2: versão + build para o handshake do cliente ───────────
+        private const string BridgeVersion = "2.0.0";
+        private static string BuildIdentifier =>
+            $"2.0.0-{DateTime.UtcNow:yyyyMMddHHmm}";
+
+        private static string BuildHealthJson()
+        {
+            return JsonSerializer.Serialize(new
+            {
+                status = "ok",
+                timestamp = DateTime.UtcNow.ToString("O"),
+                version = BridgeVersion
+            }, JsonOptions);
         }
 
         private static string BuildAccountsJson()

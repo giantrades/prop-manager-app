@@ -34,9 +34,6 @@
       "@apps/lib/*": [
         "../packages/lib/*"
       ],
-      "@apps/lib": [
-        "../packages/lib/dataStore.js"
-      ],
       "@apps/state": [
         "../packages/state"
       ],
@@ -54,6 +51,15 @@
       ],
       "@apps/ui/*": [
         "../packages/ui/*"
+      ],
+      "@apps/auth": [
+        "../packages/auth"
+      ],
+      "@apps/sync": [
+        "../packages/sync"
+      ],
+      "@apps/supabase": [
+        "../packages/supabase"
       ]
     }
   },

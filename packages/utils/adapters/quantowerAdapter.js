@@ -1,16 +1,28 @@
 import { BaseAdapter } from './baseAdapter.js';
 
+// ── Configuração de URL ──────────────────────────────────────────────────────
+// 04-BRIDGE_V2_SPEC.md: o default `bridgeUrl` NÃO passava pelo filtro isPageSecure.
+// Em produção HTTPS sem `options.bridgeUrl`, a tentativa primária era bloqueada como
+// mixed content e a lista de fallback (só http://) ficava vazia — o adapter nunca
+// conectava, silenciosamente. Agora o default passa pelo MESMO filtro.
 const FALLBACK_URLS = [
   'http://127.0.0.1:8787',
   'http://100.80.100.89:8787',
 ];
-// When page is HTTPS, skip HTTP-only fallback URLs to avoid Mixed Content blocking
 const isPageSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
-const FILTERED_FALLBACKS = isPageSecure
-  ? FALLBACK_URLS.filter(u => u.startsWith('https://'))
-  : FALLBACK_URLS;
+// Aplica o filtro à lista toda (default + fallbacks) — nunca deixa http em https.
+const SECURE_FALLBACKS = FALLBACK_URLS.filter((u) => u.startsWith('https://'));
+const FILTERED_FALLBACKS = isPageSecure ? SECURE_FALLBACKS : FALLBACK_URLS;
+
 const FETCH_TIMEOUT_MS = 5000;
 const RETRY_DELAYS = [5000, 10000, 30000, 60000];
+
+/**
+ * Versão mínima do bridge que este adapter espera (handshake).
+ * 04-BRIDGE_V2_SPEC.md: se o bridge reportar versão diferente, mostramos banner
+ * "bridge desatualizada" em vez de chamar rotas de contrato desconhecido.
+ */
+export const EXPECTED_BRIDGE_VERSION = '2.0.0';
 
 export class QuantowerAdapter extends BaseAdapter {
   constructor(options = {}) {
@@ -20,10 +32,22 @@ export class QuantowerAdapter extends BaseAdapter {
       logoUrl: '/assets/logos/quantower-mini.svg',
     });
 
-    this.bridgeUrl = options.bridgeUrl || FALLBACK_URLS[0];
+    // default passa pelo filtro (fix 04-BRIDGE_V2_SPEC.md)
+    const defaultUrl = isPageSecure
+      ? (options.bridgeUrl?.startsWith('https://') ? options.bridgeUrl : '')
+      : (options.bridgeUrl || FALLBACK_URLS[0]);
+    this.bridgeUrl = defaultUrl || FALLBACK_URLS[0];
+    this.bridgeToken = options.bridgeToken || '';
     this._retryCount = 0;
     this._retryTimer = null;
     this._lastWorkingUrl = null;
+    this._versionChecked = false;
+  }
+
+  _authHeaders() {
+    const headers = { Accept: 'application/json' };
+    if (this.bridgeToken) headers['X-Bridge-Token'] = this.bridgeToken;
+    return headers;
   }
 
   _getUrls(endpoint) {
@@ -45,9 +69,13 @@ export class QuantowerAdapter extends BaseAdapter {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: { Accept: 'application/json', ...fetchOptions.headers },
+        headers: { ...this._authHeaders(), ...fetchOptions.headers },
         ...fetchOptions,
       });
+      // 401 = token inválido/ausente — erro específico, não só "bridge offline".
+      if (res.status === 401) {
+        throw new BridgeAuthError('Token de bridge inválido ou ausente', 401);
+      }
       if (!res.ok) throw new Error(`Bridge returned ${res.status}: ${res.statusText}`);
       return await res.json();
     } finally {
@@ -76,6 +104,7 @@ export class QuantowerAdapter extends BaseAdapter {
       } catch (err) {
         lastErr = err;
         if (err.name === 'AbortError') break;
+        if (err instanceof BridgeAuthError) break; // não adianta tentar outro URL
       }
     }
 
@@ -102,6 +131,7 @@ export class QuantowerAdapter extends BaseAdapter {
       } catch (err) {
         lastErr = err;
         if (err.name === 'AbortError') break;
+        if (err instanceof BridgeAuthError) break;
       }
     }
 
@@ -125,18 +155,31 @@ export class QuantowerAdapter extends BaseAdapter {
     }
   }
 
+  /** Handshake de versão: compara `/status.version` com EXPECTED_BRIDGE_VERSION. */
+  _assertVersion(version) {
+    if (this._versionChecked) return;
+    this._versionChecked = true;
+    if (version && version !== EXPECTED_BRIDGE_VERSION) {
+      const err = new BridgeVersionError(version);
+      this._markError(err);
+      throw err;
+    }
+  }
+
   async getStatus() {
     try {
       const data = await this._fetch('/status');
+      this._assertVersion(data.version);
       this._markSynced();
       return {
         online: data.online === true,
         version: data.version || '?',
+        build: data.build || null,
         platform: 'quantower',
         accountsCount: data.accountsCount || 0,
         positionsCount: data.positionsCount || 0,
         tradesCount: data.tradesCount || 0,
-        connections: (data.connections || []).map(c => ({
+        connections: (data.connections || []).map((c) => ({
           id: c.id,
           name: c.name,
         })),
@@ -152,6 +195,9 @@ export class QuantowerAdapter extends BaseAdapter {
         tradesCount: 0,
         connections: [],
         error: err.message,
+        code: err instanceof BridgeVersionError ? 'bridge_stale_version'
+          : err instanceof BridgeAuthError ? 'auth_failed'
+          : 'bridge_offline',
       };
     }
   }
@@ -159,7 +205,7 @@ export class QuantowerAdapter extends BaseAdapter {
   async getAccounts() {
     const data = await this._fetch('/accounts');
     this._markSynced();
-    return (data.accounts || []).map(acc => ({
+    return (data.accounts || []).map((acc) => ({
       platformAccountId: acc.id,
       name: acc.name,
       balance: acc.balance ?? 0,
@@ -176,7 +222,7 @@ export class QuantowerAdapter extends BaseAdapter {
     if (!from && !to) params.from = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
     const data = await this._fetch('/trades', params);
     this._markSynced();
-    return (data.trades || []).map(t => ({
+    return (data.trades || []).map((t) => ({
       platformTradeId: t.platformTradeId || `qt_${t.id}`,
       symbol: t.symbol || '',
       side: ['short', 'sell'].includes((t.side || '').toLowerCase()) ? 'Short' : 'Long',
@@ -203,7 +249,7 @@ export class QuantowerAdapter extends BaseAdapter {
   async getPositions() {
     const data = await this._fetch('/positions');
     this._markSynced();
-    return (data.positions || []).map(p => {
+    return (data.positions || []).map((p) => {
       const side = ['long', 'buy'].includes((p.side || '').toLowerCase()) ? 'Long' : 'Short';
       return {
         platformPositionId: `qt_pos_${p.id}`,
@@ -227,19 +273,183 @@ export class QuantowerAdapter extends BaseAdapter {
     });
   }
 
-  async closePosition(position) {
-    const rawId = (position.platformPositionId || '').replace(/^qt_pos_/, '');
-    if (!rawId) throw new Error('Invalid position: missing platformPositionId');
-    const result = await this._fetchPost('/positions/close', { id: rawId });
-    if (!result.success) throw new Error(result.error || 'Failed to close position');
+  async getOrders() {
+    const data = await this._fetch('/orders');
+    this._markSynced();
+    return (data.orders || []).map((o) => ({
+      platformOrderId: `qt_ord_${o.id}`,
+      symbol: o.symbol || '',
+      side: ['short', 'sell'].includes((o.side || '').toLowerCase()) ? 'Short' : 'Long',
+      quantity: o.quantity ?? 0,
+      filledQuantity: o.filledQuantity ?? 0,
+      remainingQuantity: o.remainingQuantity ?? 0,
+      price: o.price ?? 0,
+      status: o.status || '',
+      platformAccountId: o.accountId || '',
+      accountName: o.accountName || '',
+    }));
+  }
+
+  // ── v2: escrita com clientOrderId idempotente ─────────────────────────────
+
+  /** Gera um clientOrderId (UUID) para idempotência. */
+  static newClientOrderId() {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `coid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  /**
+   * Abre posição. `clientOrderId` (UUID) garante idempotência: reenvio do mesmo
+   * clientOrderId retorna a mesma resposta sem segunda ordem no Quantower.
+   */
+  async openPosition({ accountId, symbol, side, qty, sl, tp, note, clientOrderId }) {
+    const body = {
+      accountId,
+      symbol,
+      side: side === 'short' || side === 'sell' ? 'sell' : 'buy',
+      qty,
+      sl: sl ?? null,
+      tp: tp ?? null,
+      note: note ?? null,
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
+    };
+    const result = await this._fetchPost('/positions/open', body);
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
     return result;
   }
 
+  /** Edita SL/TP de posição aberta. `platformPositionId` (sem prefixo `qt_pos_`). */
+  async modifyPosition({ platformPositionId, sl, tp, clientOrderId }) {
+    const rawId = (platformPositionId || '').replace(/^qt_pos_/, '');
+    if (!rawId) throw new Error('Invalid position: missing platformPositionId');
+    const body = {
+      platformPositionId: rawId,
+      sl: sl ?? null,
+      tp: tp ?? null,
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
+    };
+    const result = await this._fetchPost('/positions/modify', body);
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
+    return result;
+  }
+
+  /** Coloca ordem (limit/stop). `type` = 'limit' | 'stop'. */
+  async placeOrder({ accountId, symbol, side, qty, type, price, sl, tp, clientOrderId }) {
+    const body = {
+      accountId,
+      symbol,
+      side: side === 'short' || side === 'sell' ? 'sell' : 'buy',
+      qty,
+      type,
+      price,
+      sl: sl ?? null,
+      tp: tp ?? null,
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
+    };
+    const result = await this._fetchPost('/orders/place', body);
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
+    return result;
+  }
+
+  /** Cancela ordem pendente. */
+  async cancelOrder({ platformOrderId, clientOrderId }) {
+    const rawId = (platformOrderId || '').replace(/^qt_ord_/, '');
+    if (!rawId) throw new Error('Invalid order: missing platformOrderId');
+    const body = {
+      platformOrderId: rawId,
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
+    };
+    const result = await this._fetchPost('/orders/cancel', body);
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
+    return result;
+  }
+
+  async closePosition(position) {
+    const rawId = (position.platformPositionId || '').replace(/^qt_pos_/, '');
+    if (!rawId) throw new Error('Invalid position: missing platformPositionId');
+    const result = await this._fetchPost('/positions/close', {
+      id: rawId,
+      clientOrderId: QuantowerAdapter.newClientOrderId(),
+    });
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
+    return result;
+  }
+
+  /** Se o SW colocou a escrita na fila (offline), lança erro honesto (não sucesso). */
+  _assertNotQueued(result) {
+    if (result && result.queued === true) {
+      throw new BridgeQueuedError(result.error?.message || 'Operação na fila (bridge offline)');
+    }
+  }
+
   setBridgeUrl(url) {
-    this.bridgeUrl = url || FALLBACK_URLS[0];
+    // aplica o mesmo filtro de segurança ao setar manualmente
+    if (isPageSecure && url && !url.startsWith('https://')) {
+      url = '';
+    }
+    this.bridgeUrl = url || (isPageSecure ? '' : FALLBACK_URLS[0]) || FALLBACK_URLS[0];
     this._cancelRetry();
     this._retryCount = 0;
+    this._versionChecked = false;
     this.getStatus().catch(() => {});
+  }
+
+  setBridgeToken(token) {
+    this.bridgeToken = token || '';
+    this._versionChecked = false;
+    this.getStatus().catch(() => {});
+  }
+}
+
+// ── Erros tipados (contrato de erro do bridge) ──────────────────────────────
+export class BridgeAuthError extends Error {
+  constructor(message, status = 401) {
+    super(message);
+    this.name = 'BridgeAuthError';
+    this.code = 'auth_failed';
+    this.status = status;
+  }
+}
+
+export class BridgeVersionError extends Error {
+  constructor(version) {
+    super(`Bridge desatualizada: versão ${version} (esperado ${EXPECTED_BRIDGE_VERSION})`);
+    this.name = 'BridgeVersionError';
+    this.code = 'bridge_stale_version';
+    this.bridgeVersion = version;
+  }
+}
+
+export class BridgeApiError extends Error {
+  constructor(errorPayload, response) {
+    const payload = errorPayload?.error || errorPayload;
+    super(payload?.message || (typeof payload === 'string' ? payload : 'Erro do bridge'));
+    this.name = 'BridgeApiError';
+    this.code = payload?.code || (typeof payload === 'string' ? 'unknown' : payload?.code || 'unknown');
+    this.retryable = payload?.retryable ?? false;
+    this.response = response;
+  }
+}
+
+export class BridgeQueuedError extends Error {
+  constructor(message = 'Operação na fila (bridge offline)') {
+    super(message);
+    this.name = 'BridgeQueuedError';
+    this.code = 'bridge_offline';
+    this.retryable = true;
+    this.queued = true;
   }
 }
 

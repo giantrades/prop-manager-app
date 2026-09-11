@@ -7,7 +7,7 @@
 // por data (Firm P&L / Wallets), único caminho pra PWA 360px + offline.
 
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
-import { DB_NAME, DB_VERSION, type StoreName } from './types';
+import { DB_NAME, DB_VERSION, STORE_NAMES, type StoreName } from './types';
 
 interface AppDbSchema extends DBSchema {
   accounts: {
@@ -96,17 +96,9 @@ export async function openAppDb(): Promise<IDBPDatabase<AppDbSchema>> {
   const db = await openDB<AppDbSchema>(DB_NAME, DB_VERSION, {
     upgrade(database, oldVersion, _newVersion, tx) {
       // v1 -> v3. Nunca alterar v3 in-place depois que Stage 2+ escreve código.
-      const storeNames = STORE_NAMES as unknown as Stores[];
-      for (const name of storeNames) {
-        const def = STORE_DEFS[name as StoreName];
-        if (database.objectStoreNames.contains(name)) continue;
-        const store = database.createObjectStore(name, { keyPath: def.keyPath });
-        if (def.indexes) {
-          for (const [indexName, keyPath] of Object.entries(def.indexes)) {
-            store.createIndex(indexName, keyPath, { unique: indexName === 'quantowerId' });
-          }
-        }
-      }
+      // Usa tipos DOM (IDBDatabase) aqui: mesma chamada em runtime, sem a
+      // fricção dos genéricos do `idb` (que poluem o type-check sem mudar nada).
+      upgradeStores(database as unknown as IDBDatabase);
       // Limpa stores órfãs de versões anteriores (se houver).
       void oldVersion;
       void tx;
@@ -115,9 +107,24 @@ export async function openAppDb(): Promise<IDBPDatabase<AppDbSchema>> {
   return db;
 }
 
+/** Cria os stores/índices do contrato (idempotente). */
+function upgradeStores(database: IDBDatabase): void {
+  const storeNames: StoreName[] = [...STORE_NAMES];
+  for (const name of storeNames) {
+    const def = STORE_DEFS[name];
+    if (database.objectStoreNames.contains(name)) continue;
+    const store = database.createObjectStore(name, { keyPath: def.keyPath });
+    if (def.indexes) {
+      for (const [indexName, keyPath] of Object.entries(def.indexes)) {
+        store.createIndex(indexName, keyPath, { unique: indexName === 'quantowerId' });
+      }
+    }
+  }
+}
+
 /** Cria o adapter de produção em cima do app-db v3. */
 export async function createProductionAdapter() {
   const { IndexedDbAdapter } = await import('./adapter');
   const db = await openAppDb();
-  return new IndexedDbAdapter(db);
+  return new IndexedDbAdapter(db as unknown as IDBPDatabase);
 }

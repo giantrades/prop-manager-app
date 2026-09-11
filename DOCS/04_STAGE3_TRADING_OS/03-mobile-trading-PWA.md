@@ -21,10 +21,13 @@
 
 ## Tasks
 
-- [ ] T-M1 PWA shell (manifest + SW + instalável + offline leitura)
-- [ ] T-M2 Positions mobile: lista live + P&L + botão Fechar com confirm + retry fila
-- [ ] T-M3 Bridge `/open` + `/modify` + token + `clientOrderId` + teste em demo
-- [ ] T-M4 Copy-group UI (multiplier, conta alvo, preview antes de enviar)
-- [ ] T-M5 Teste campo: celular fora do PC via Tailscale abre/fecha/edita SL/TP sem duplicar
+- [x] T-M1 PWA shell (manifest + SW + instalável + offline leitura) — manifest + SW por rota (`main-app/public`, `trading-journal/public`)
+- [x] T-M2 Positions mobile: lista live + P&L + botão Fechar com confirm + retry fila
+      (`packages/ui/LivePositions.jsx` + SW `sync_queue`)
+- [x] T-M3 Bridge `/open` + `/modify` + token + `clientOrderId` + teste em demo — `04-BRIDGE_V2_SPEC.md`
+- [x] T-M4 Copy-group UI (multiplier, conta alvo, preview antes de enviar) — `packages/lib/db/copyTrade.ts`
+- [~] T-M5 Teste campo: celular fora do PC via Tailscale abre/fecha/edita SL/TP sem duplicar
+      (teste manual — bridge compilado + pareado; executar no dispositivo físico)
 
 Gate: abrir + editar SL/TP + fechar pelo celular em conta demo, bridge off mostra cache + fila.
+

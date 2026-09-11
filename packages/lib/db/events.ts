@@ -12,6 +12,8 @@ export const EVENTS = {
   QUANTOWER_ERROR: 'quantower:error',
   RISK_WARNING: 'risk:warning',
   GOAL_COMPLETED: 'goal:completed',
+  PAYOUT_ELIGIBLE: 'payout:eligible',
+  PRICE_ALERT: 'price:alert',
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];
@@ -63,6 +65,23 @@ export interface GoalCompletedPayload {
   finalValue: number;
 }
 
+export interface PayoutEligiblePayload {
+  accountId: string;
+  accountName: string;
+  equity: number;
+  triggeredAt: string;
+}
+
+export interface PriceAlertPayload {
+  positionId: string;
+  symbol: string;
+  alertId: string;
+  dir: 'above' | 'below';
+  price: number;
+  current: number;
+  triggeredAt: string;
+}
+
 export type EventPayloadMap = {
   [EVENTS.DATASTORE_CHANGE]: DatastoreChangePayload;
   [EVENTS.SYNC_PUSHED]: SyncPushedPayload;
@@ -72,6 +91,8 @@ export type EventPayloadMap = {
   [EVENTS.QUANTOWER_ERROR]: QuantowerErrorPayload;
   [EVENTS.RISK_WARNING]: RiskWarningPayload;
   [EVENTS.GOAL_COMPLETED]: GoalCompletedPayload;
+  [EVENTS.PAYOUT_ELIGIBLE]: PayoutEligiblePayload;
+  [EVENTS.PRICE_ALERT]: PriceAlertPayload;
 };
 
 export type Listener<K extends EventName> = (payload: EventPayloadMap[K]) => void;

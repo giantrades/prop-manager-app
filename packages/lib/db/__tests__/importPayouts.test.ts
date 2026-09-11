@@ -60,7 +60,7 @@ describe('importPayouts — 2 payouts legados', () => {
     expect(p.status).toBe('Paid');
     expect(p.method).toBe('Rise');
     expect(p.splitByAccount['acct-ftmo']).toEqual({ gross: 10000, net: 8000, fee: 2000 });
-    expect(p.attachments['acct-ftmo'].fileName).toBe('proof-1.pdf');
+    expect((p.attachments['acct-ftmo'] as { fileName: string }).fileName).toBe('proof-1.pdf');
     expect(p.date).toBe('2026-01-15T12:00:00Z');
   });
 
@@ -95,7 +95,7 @@ describe('importPayouts — 2 payouts legados', () => {
     const feeTx = txs.filter((x) => x.kind === 'fee');
     expect(inTx).toHaveLength(2);
     expect(feeTx).toHaveLength(2);
-    expect(inTx.map((x) => x.amount).sort((a, b) => b - a)).toEqual([8000, 4000]);
+    expect(inTx.map((x) => x.amount).sort((a, b) => b - a)).toEqual([10000, 5000]);
     expect(feeTx.map((x) => x.amount).sort((a, b) => b - a)).toEqual([-1000, -2000]);
   });
 

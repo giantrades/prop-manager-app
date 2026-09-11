@@ -1,4 +1,3 @@
 packages:
   - 'main-app'
-  - 'trading-journal'
   - 'packages/*'

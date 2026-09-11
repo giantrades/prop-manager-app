@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { NavLink } from "react-router-dom";
-import { useCurrency } from "@apps/state";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useCurrency, useCommandSnapshot, useFinance } from "@apps/state";
+import { useToast } from "@apps/ui/Toast";
 import { useDrive } from "@apps/state/DriveContext";
 import { usePlatform } from "@apps/state/usePlatform";
+import AlertsBadge from "@apps/ui/AlertsBadge";
 import {
   LayoutDashboard,
   Wallet,
@@ -19,8 +21,20 @@ import {
   CloudUpload,
   LogOut,
   LogIn,
-  ExternalLink,
-  Cloud
+  Cloud,
+  CalendarDays,
+  Bell,
+  ShieldAlert,
+  TrendingUp,
+  Landmark,
+  LineChart,
+  Database,
+  ChevronRight,
+  Receipt,
+  Zap,
+  PiggyBank,
+  Banknote,
+  Sparkles
 } from "lucide-react";
 
 /* ── Platform logos ── */
@@ -57,14 +71,83 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-const NAV_LINKS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/accounts", label: "Accounts", icon: Wallet },
-  { to: "/payouts", label: "Payouts", icon: ArrowDownToLine },
-  { to: "/goals", label: "Goals", icon: Target },
-  { to: "/firms", label: "Firms", icon: Building2 },
-  { to: "/settings", label: "Settings", icon: Settings },
+/* Módulos autocontidos — cada um com dashboard + gerenciar + configurar.
+   Ver DOCS/10_MODULES/README.md. */
+const MODULES = [
+  {
+    id: "command",
+    label: "Command Center",
+    icon: LayoutDashboard,
+    dashboard: "/",
+    children: [
+      { to: "/", label: "Home", icon: LayoutDashboard, end: true },
+      { to: "/calendar", label: "Calendar", icon: CalendarDays },
+      { to: "/actions", label: "Actions", icon: Bell },
+    ],
+  },
+  {
+    id: "trading",
+    label: "Trading",
+    icon: Activity,
+    dashboard: "/journal",
+    children: [
+      { to: "/journal", label: "Trading Journal", icon: BookOpen },
+      { to: "/playbook", label: "Playbook", icon: Target },
+      { to: "/risk", label: "Risk", icon: ShieldAlert },
+      { to: "/accounts", label: "Accounts", icon: Wallet },
+      { to: "/payouts", label: "Payouts", icon: ArrowDownToLine },
+      { to: "/payout-center", label: "Payout Center", icon: ArrowDownToLine },
+      { to: "/positions", label: "Positions", icon: TrendingUp },
+      { to: "/quantower", label: "Quantower", icon: Zap },
+      { to: "/firms", label: "Firm P&L", icon: Building2 },
+      { to: "/import", label: "Importar", icon: Database },
+    ],
+  },
+  {
+    id: "money",
+    label: "Money",
+    icon: Banknote,
+    dashboard: "/wallets",
+    children: [
+      { to: "/wallets", label: "Wallets", icon: Wallet },
+      { to: "/expenses", label: "Gastos", icon: Receipt },
+      { to: "/tax", label: "Tax", icon: Landmark },
+    ],
+  },
+  {
+    id: "wealth",
+    label: "Wealth",
+    icon: PiggyBank,
+    dashboard: "/portfolio",
+    children: [
+      { to: "/portfolio", label: "Portfolio", icon: TrendingUp },
+      { to: "/networth", label: "Net Worth", icon: Wallet },
+      { to: "/goals", label: "Goals", icon: Target },
+      { to: "/forecast", label: "Forecast", icon: LineChart },
+      { to: "/journal-events", label: "Diário", icon: Sparkles },
+    ],
+  },
+  {
+    id: "system",
+    label: "Sistema",
+    icon: Settings,
+    dashboard: "/settings",
+    children: [
+      { to: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
+
+const NAV_MODULES_KEY = "navModulesOpen";
+
+function isRouteActive(pathname, to, end) {
+  if (end) return pathname === to;
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+function moduleHasActive(mod, pathname) {
+  return mod.children.some((c) => isRouteActive(pathname, c.to, c.end));
+}
 
 export default function Navbar({ isPinned, onTogglePin }) {
   const {
@@ -75,6 +158,14 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const { currency, setCurrency, rate } = useCurrency();
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
     usePlatform();
+  const { actions } = useCommandSnapshot();
+  const alertCount = actions.length;
+  const navigate = useNavigate();
+  const finance = useFinance();
+  const { toast } = useToast();
+  const notifyBackup = (msg, type = 'ok') => {
+    toast(msg, { type });
+  };
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -83,11 +174,6 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
   const platformItemRef = useRef(null);
   const platformDropdownRef = useRef(null);
-
-  const journalUrl =
-    import.meta.env.DEV
-      ? import.meta.env.VITE_JOURNAL_URL || "http://localhost:5175/"
-      : "/journal/";
 
   const dotColor = (logged || protonLogged) ? "#22c55e" : "#ef4444";
   const driveTitle = "Cloud Sync";
@@ -102,6 +188,52 @@ export default function Navbar({ isPinned, onTogglePin }) {
       : "#9CA3AF";
 
   const isExpanded = isPinned || isHovered || mobileOpen || platformOpen;
+  const location = useLocation();
+
+  /* Módulos abertos — persiste a preferência; abre sozinho o módulo da rota atual */
+  const [openModules, setOpenModules] = useState(() => {
+    try {
+      const raw = localStorage.getItem(NAV_MODULES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch {
+      /* usa o padrão abaixo */
+    }
+    return { command: true, trading: true, money: true, wealth: true, system: true };
+  });
+
+  useEffect(() => {
+    const active = MODULES.find((m) => moduleHasActive(m, location.pathname));
+    if (!active) return;
+    setOpenModules((prev) => {
+      if (prev[active.id]) return prev;
+      return { ...prev, [active.id]: true };
+    });
+  }, [location.pathname]);
+
+  const toggleModule = (id) => {
+    setOpenModules((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(NAV_MODULES_KEY, JSON.stringify(next));
+      } catch {
+        /* offline/storage cheio — mantém só em memória */
+      }
+      return next;
+    });
+  };
+
+  const onModuleHeaderClick = (mod) => {
+    if (!isExpanded) {
+      /* Sidebar recolhida: o ícone do módulo leva ao dashboard dele */
+      navigate(mod.dashboard);
+      setMobileOpen(false);
+    } else {
+      toggleModule(mod.id);
+    }
+  };
 
   /* Close platform dropdown on outside click */
   useEffect(() => {
@@ -139,29 +271,31 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
   const onBackup = async () => {
     try {
-      const { getFullBackupPayload } = await import("@apps/utils/backupPayload.js");
-      const all = await getFullBackupPayload();
+      if (!finance) return;
+      const { dumpAppDb } = await import("@apps/lib/db");
+      const all = await dumpAppDb(finance.ds);
       await backup(JSON.stringify(all));
-      alert("✅ Backup saved to Google Drive!");
+      notifyBackup("✅ Backup do app-db v3 salvo no Google Drive!");
     } catch (err) {
       console.error("Backup error:", err);
-      alert("⚠️ Failed to save backup to Google Drive");
+      notifyBackup("⚠️ Falha ao salvar backup no Google Drive", "error");
     }
   };
 
   const onProtonBackup = async () => {
     try {
-      const { getFullBackupPayload } = await import("@apps/utils/backupPayload.js");
-      const all = await getFullBackupPayload();
+      if (!finance) return;
+      const { dumpAppDb } = await import("@apps/lib/db");
+      const all = await dumpAppDb(finance.ds);
       await backupToProton(JSON.stringify(all));
       if (protonSupported) {
-        alert("✅ Backup saved to Proton Drive local folder!");
+        notifyBackup("✅ Backup do app-db v3 salvo na pasta do Proton Drive!");
       } else {
-        alert("⬇️ Backup file downloaded — move it to your Proton Drive folder.");
+        notifyBackup("⬇️ Backup baixado — mova-o para a pasta do Proton Drive.");
       }
     } catch (err) {
       console.error("Proton Backup error:", err);
-      alert("⚠️ Failed to save backup to Proton Drive");
+      notifyBackup("⚠️ Falha ao salvar backup no Proton Drive", "error");
     }
   };
 
@@ -202,6 +336,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
               className="sb-pin-btn"
               onClick={onTogglePin}
               title={isPinned ? "Collapse sidebar" : "Pin sidebar open"}
+              aria-label={isPinned ? "Desafixar barra lateral" : "Fixar barra lateral"}
+              aria-pressed={isPinned}
             >
               {isPinned ? (
                 <ChevronsLeft size={15} />
@@ -212,55 +348,80 @@ export default function Navbar({ isPinned, onTogglePin }) {
             <button
               className="sb-close-btn"
               onClick={() => setMobileOpen(false)}
+              aria-label="Fechar menu"
             >
               <X size={17} />
             </button>
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="sb-nav">
-          {NAV_LINKS.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `sb-link${isActive ? " active" : ""}`
-              }
-              onClick={() => setMobileOpen(false)}
-              title={!isExpanded ? label : undefined}
-            >
-              <span className="sb-link-icon">
-                <Icon size={18} strokeWidth={1.75} />
-              </span>
-              <span className="sb-link-label">{label}</span>
-            </NavLink>
-          ))}
-
-          <div className="sb-divider" />
-
-          {/* Cross-app link */}
-          <a
-            href={journalUrl}
-            className="sb-link sb-external"
-            title={!isExpanded ? "Trading Journal" : undefined}
-          >
-            <span className="sb-link-icon">
-              <BookOpen size={20} strokeWidth={2} />
-            </span>
-            <span className="sb-link-label">
-              Trading Journal
-              <ExternalLink
-                size={12}
-                style={{ opacity: 0.6, marginLeft: 4 }}
-              />
-            </span>
-          </a>
+        {/* Navigation — módulos autocontidos (DOCS/10_MODULES/README.md) */}
+        <div className="sb-nav" aria-label="Navegação principal">
+          {MODULES.map((mod) => {
+            const ModuleIcon = mod.icon;
+            const open = !!openModules[mod.id];
+            const active = moduleHasActive(mod, location.pathname);
+            return (
+              <div className="sb-module" key={mod.id}>
+                <button
+                  type="button"
+                  className={`sb-link sb-module-btn${active ? " active" : ""}`}
+                  aria-expanded={open}
+                  aria-controls={`sb-module-children-${mod.id}`}
+                  title={!isExpanded ? mod.label : undefined}
+                  onClick={() => onModuleHeaderClick(mod)}
+                >
+                  <span className="sb-link-icon">
+                    <ModuleIcon size={18} strokeWidth={1.75} />
+                  </span>
+                  <span className="sb-link-label">{mod.label}</span>
+                  <span className="sb-module-chevron" aria-hidden="true">
+                    <ChevronRight size={15} strokeWidth={2} />
+                  </span>
+                </button>
+                {open && (
+                  <div
+                    className="sb-module-children"
+                    id={`sb-module-children-${mod.id}`}
+                    role="group"
+                    aria-label={mod.label}
+                  >
+                    {mod.children.map(({ to, label, icon: Icon, end }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        end={end}
+                        className={({ isActive }) =>
+                          `sb-link sb-link-child${isActive ? " active" : ""}`
+                        }
+                        onClick={() => setMobileOpen(false)}
+                        title={!isExpanded ? label : undefined}
+                      >
+                        <span className="sb-link-icon">
+                          <Icon size={18} strokeWidth={1.75} />
+                        </span>
+                        <span className="sb-link-label">{label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* ── Footer ── */}
         <div className="sb-footer">
+          {/* Alertas (Action Center) */}
+          <div className="sb-footer-item" title={!isExpanded ? "Ações em aberto" : undefined}>
+            <div className="sb-footer-icon" style={{ fontSize: 13 }}>
+              <Bell size={18} strokeWidth={1.75} />
+            </div>
+            <div className="sb-footer-content">
+              <AlertsBadge count={alertCount} onClick={() => navigate('/actions')} label="Ações" />
+            </div>
+          </div>
+
           {/* Platform Status */}
           <div
             ref={platformItemRef}

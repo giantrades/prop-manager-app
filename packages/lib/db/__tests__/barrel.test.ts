@@ -15,6 +15,23 @@ import {
   createMultiTabCoordinator,
   STORE_NAMES,
   EVENTS,
+  getRiskStatus,
+  RiskService,
+  csvToTrades,
+  strategyMetrics,
+  previewCopyTrade,
+  MoneyService,
+  computeFirmPnl,
+  computeTaxCockpit,
+  splitByWeight,
+  WealthService,
+  computeNetWorth,
+  computeFifoLots,
+  computePortfolio,
+  computeForecast,
+  computeSafeAvailable,
+  computeGoalProgress,
+  deriveJournalEvents,
 } from '../index';
 
 describe('barrel @apps/lib/db — consumo sem circular import', () => {
@@ -31,6 +48,23 @@ describe('barrel @apps/lib/db — consumo sem circular import', () => {
     expect(typeof normalizeLegacyPayout).toBe('function');
     expect(typeof withLock).toBe('function');
     expect(typeof createMultiTabCoordinator).toBe('function');
+    expect(typeof getRiskStatus).toBe('function');
+    expect(typeof RiskService).toBe('function');
+    expect(typeof csvToTrades).toBe('function');
+    expect(typeof strategyMetrics).toBe('function');
+    expect(typeof previewCopyTrade).toBe('function');
+    expect(typeof MoneyService).toBe('function');
+    expect(typeof computeFirmPnl).toBe('function');
+    expect(typeof computeTaxCockpit).toBe('function');
+    expect(typeof splitByWeight).toBe('function');
+    expect(typeof WealthService).toBe('function');
+    expect(typeof computeNetWorth).toBe('function');
+    expect(typeof computeFifoLots).toBe('function');
+    expect(typeof computePortfolio).toBe('function');
+    expect(typeof computeForecast).toBe('function');
+    expect(typeof computeSafeAvailable).toBe('function');
+    expect(typeof computeGoalProgress).toBe('function');
+    expect(typeof deriveJournalEvents).toBe('function');
   });
 
   it('STORE_NAMES contém os 11 stores do contrato', () => {

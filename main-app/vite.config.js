@@ -19,5 +19,18 @@ export default defineConfig({
   },
   server: {
     port: 5174
-  }
+  },
+  build: {
+    // UX foundation: code-split — vendor/charts separados do chunk inicial.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          icons: ['lucide-react'],
+        },
+      },
+    },
+  },
 })

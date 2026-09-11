@@ -1,50 +1,217 @@
-import React, { useEffect, useState } from "react";
-import { Routes, Route } from "react-router-dom";
-import Dashboard from "./pages/Dashboard.jsx";
-import Accounts from "./pages/Accounts.jsx";
-import Payouts from "./pages/Payouts.jsx";
-import Settings from "./pages/Settings.jsx";
-import Firms from "./pages/Firms.jsx";
-import Login from "./pages/Login.jsx";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Routes, Route, useNavigate } from "react-router-dom";
+import { useFinance } from "@apps/state";
+import { useToast } from "@apps/ui/Toast";
+import CommandPalette from "@apps/ui/CommandPalette";
 import Navbar from "./Navbar";
+import Onboarding from "./Onboarding";
+import { usePwa } from "./usePwa";
 import './styles.css';
-import { useJournal } from "@apps/journal-state";
-import Goals from "./pages/Goals.jsx/"
+
+const PALETTE_ROUTES = [
+  { to: "/", label: "Home", keywords: "command dashboard início" },
+  { to: "/calendar", label: "Calendar", keywords: "calendário financeiro" },
+  { to: "/actions", label: "Actions", keywords: "alertas ações pendentes" },
+  { to: "/journal", label: "Trading Journal", keywords: "trades journal diário" },
+  { to: "/playbook", label: "Playbook", keywords: "estratégias setup checklist" },
+  { to: "/risk", label: "Risk", keywords: "risco drawdown headroom" },
+  { to: "/accounts", label: "Accounts", keywords: "contas prop firm" },
+  { to: "/payouts", label: "Payouts", keywords: "saques pagamentos" },
+  { to: "/payout-center", label: "Payout Center", keywords: "alocar saque tax living invest" },
+  { to: "/positions", label: "Positions", keywords: "posições abertas investimentos" },
+  { to: "/quantower", label: "Quantower", keywords: "sync bridge live" },
+  { to: "/firms", label: "Firm P&L", keywords: "propfirm gasto lucro empresa" },
+  { to: "/import", label: "Importar", keywords: "csv dados" },
+  { to: "/wallets", label: "Wallets", keywords: "carteiras bancos dinheiro" },
+  { to: "/expenses", label: "Gastos", keywords: "despesas mobills orçamento" },
+  { to: "/tax", label: "Tax", keywords: "imposto darf fiscal" },
+  { to: "/portfolio", label: "Portfolio", keywords: "investimentos ações cripto" },
+  { to: "/networth", label: "Net Worth", keywords: "patrimônio total" },
+  { to: "/goals", label: "Goals", keywords: "metas objetivos" },
+  { to: "/forecast", label: "Forecast", keywords: "previsão fluxo caixa" },
+  { to: "/journal-events", label: "Diário", keywords: "eventos vida marcos" },
+  { to: "/settings", label: "Settings", keywords: "configurações moeda backup" },
+];
+
+// UX foundation: code-split por rota — o chunk inicial carrega só shell.
+// Páginas pesadas (charts) vão para chunks sob demanda.
+const HomePage = lazy(() => import("./pages/command/HomePage.jsx"));
+const CalendarPage = lazy(() => import("./pages/command/CalendarPage.jsx"));
+const ActionCenterPage = lazy(() => import("./pages/command/ActionCenterPage.jsx"));
+const JournalPage = lazy(() => import("./pages/trading/JournalPage.jsx"));
+const PlaybookPage = lazy(() => import("./pages/trading/PlaybookPage.jsx"));
+const AccountsPage = lazy(() => import("./pages/trading/AccountsPage.jsx"));
+const PayoutsPage = lazy(() => import("./pages/trading/PayoutsPage.jsx"));
+const PayoutCenterPage = lazy(() => import("./pages/trading/PayoutCenterPage.jsx"));
+const SettingsPage = lazy(() => import("./pages/trading/SettingsPage.jsx"));
+const GoalsManagePage = lazy(() => import("./pages/trading/WealthEditors.jsx").then((m) => ({ default: m.GoalsManagePage })));
+const PositionsManagePage = lazy(() => import("./pages/trading/WealthEditors.jsx").then((m) => ({ default: m.PositionsManagePage })));
+const DataPage = lazy(() => import("./pages/trading/DataPage.jsx"));
+const QuantowerPage = lazy(() => import("./pages/trading/QuantowerPage.jsx"));
+const RiskPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.RiskPage })));
+const NetWorthPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.NetWorthPage })));
+const PortfolioPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.PortfolioPage })));
+const WalletsPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.WalletsPage })));
+const TaxPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.TaxPage })));
+const ForecastPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.ForecastPage })));
+const FirmPnlPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FirmPnlPage })));
+const ExpensesPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.ExpensesPage })));
+const FinancialJournalPage = lazy(() => import("./pages/command/EngineViews.jsx").then((m) => ({ default: m.FinancialJournalPage })));
+
+function RouteFallback() {
+  return (
+    <div role="status" aria-live="polite" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '24px 0' }}>
+      <div style={{ height: 14, borderRadius: 8, background: 'rgba(255,255,255,0.06)' }} />
+      <div style={{ height: 14, width: '70%', borderRadius: 8, background: 'rgba(255,255,255,0.06)' }} />
+      <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>Carregando página…</span>
+    </div>
+  );
+}
 import {
   initGoogleDrive,
   isSignedIn,
-  signIn,
-  signOut,
   onSignChange,
-  listFiles,
-  backupToDrive as driveBackup,
 } from "@apps/utils/googleDrive.js";
 
 export default function App() {
   const [driveReady, setDriveReady] = useState(false);
-  const [logged, setLogged] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(() => {
     return localStorage.getItem("sidebarPinned") !== "false";
   });
+  const navigate = useNavigate();
+  const finance = useFinance();
+  const { toast } = useToast();
+  const pwa = usePwa();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [entities, setEntities] = useState({ accounts: [], strategies: [] });
+  const [onboarding, setOnboarding] = useState({ checked: false, show: false });
+
+  // Onboarding: app vazio (sem contas nem trades) e nunca dispensado.
+  useEffect(() => {
+    if (!finance || onboarding.checked) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (localStorage.getItem("onboardingDone") === "1") return;
+        const [accounts, trades] = await Promise.all([
+          finance.ds.accounts.list(),
+          finance.ds.trades.list(),
+        ]);
+        if (!cancelled && accounts.length === 0 && trades.length === 0) {
+          setOnboarding({ checked: true, show: true });
+          return;
+        }
+      } catch {
+        /* offline/sem banco: não bloqueia */
+      }
+      if (!cancelled) setOnboarding((s) => ({ ...s, checked: true }));
+    })();
+    return () => { cancelled = true; };
+  }, [finance, onboarding.checked]);
+
+  const dismissOnboarding = useCallback(() => {
+    try {
+      localStorage.setItem("onboardingDone", "1");
+    } catch {
+      /* noop */
+    }
+    setOnboarding({ checked: true, show: false });
+  }, []);
+
+  // Entidades para busca global (carrega só ao abrir a palette).
+  useEffect(() => {
+    if (!paletteOpen || !finance) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [accounts, trades] = await Promise.all([
+          finance.ds.accounts.list(),
+          finance.ds.trades.list(),
+        ]);
+        if (cancelled) return;
+        const strategies = [...new Set(trades.map((t) => t.strategyId).filter(Boolean))];
+        setEntities({ accounts, strategies });
+      } catch {
+        /* noop */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [paletteOpen, finance]);
+
+  const paletteItems = useMemo(() => {
+    const go = (to) => () => navigate(to);
+    const items = [
+      ...PALETTE_ROUTES.map((r) => ({
+        id: `route:${r.to}`, label: r.label, hint: 'Página', keywords: r.keywords, run: go(r.to),
+      })),
+      { id: 'action:new-trade', label: 'Novo trade', hint: 'Ação', keywords: 'criar registrar journal', run: () => navigate('/journal?new=1') },
+      { id: 'action:refresh-prices', label: 'Atualizar preços', hint: 'Ação', keywords: 'portfolio live cotação', run: () => navigate('/portfolio') },
+      { id: 'action:recurring', label: 'Gerar recorrentes', hint: 'Ação', keywords: 'gastos despesas mensais', run: () => navigate('/expenses') },
+      ...entities.accounts.map((a) => ({
+        id: `account:${a.id}`, label: a.name, hint: 'Conta', keywords: `${a.kind} ${a.institution || ''}`,
+        run: go('/accounts'),
+      })),
+      ...entities.strategies.map((s) => ({
+        id: `strategy:${s}`, label: s, hint: 'Estratégia', keywords: 'setup playbook',
+        run: go('/playbook'),
+      })),
+    ];
+    return items;
+  }, [navigate, entities]);
+
+  // Atalhos globais: Ctrl/Cmd+K palette, "/" palette, "N" novo trade. Nunca em campo de texto.
+  useEffect(() => {
+    const isTyping = () => {
+      const el = document.activeElement;
+      return !!el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
+    };
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((p) => !p);
+        return;
+      }
+      if (isTyping()) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        setPaletteOpen(true);
+      } else if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        navigate('/journal?new=1');
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigate]);
+
+  // Update do PWA disponível → toast com ação.
+  useEffect(() => {
+    if (pwa.updateReady) {
+      toast('Nova versão disponível.', { action: { label: 'Atualizar', run: () => pwa.applyUpdate() }, durationMs: 12000 });
+    }
+  }, [pwa.updateReady, pwa.applyUpdate, toast]);
+
+  const handleInstall = useCallback(async () => {
+    const res = await pwa.install();
+    if (res === 'manual') {
+      toast(pwa.isIOS
+        ? 'No iPhone: Compartilhar → Adicionar à Tela de Início.'
+        : 'Use o menu do navegador → Instalar app.', { durationMs: 8000 });
+    }
+  }, [pwa, toast]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        // Credenciais via env (VITE_GOOGLE_CLIENT_ID / VITE_GOOGLE_API_KEY) —
-        // nunca hardcoded (S0.1). initGoogleDrive lança erro se faltarem.
         await initGoogleDrive();
         if (!mounted) return;
         setDriveReady(true);
-        setLogged(isSignedIn());
         onSignChange(() => {
           if (!mounted) return;
-          setLogged(isSignedIn());
         });
       } catch (err) {
         console.error("Falha ao inicializar Google Drive:", err);
         setDriveReady(false);
-        setLogged(false);
       }
     })();
     return () => {
@@ -63,17 +230,59 @@ export default function App() {
   return (
     <div className={`app-shell${sidebarPinned ? " sidebar-pinned" : ""}`}>
       <Navbar isPinned={sidebarPinned} onTogglePin={handleTogglePin} />
+      {!pwa.online && (
+        <div role="alert" style={{ background: 'rgba(225,177,44,0.12)', borderBottom: '1px solid rgba(225,177,44,0.3)', color: 'var(--yellow,#e1b12c)', fontSize: 12, padding: '8px 16px', textAlign: 'center' }}>
+          Offline — mostrando dados locais.
+        </div>
+      )}
+      {(pwa.canInstall || (pwa.isIOS && !pwa.installed)) && (
+        <button
+          type="button"
+          onClick={handleInstall}
+          aria-label="Instalar aplicativo"
+          style={{ position: 'fixed', right: 16, bottom: 76, zIndex: 9998, background: 'var(--brand,#7c5cff)', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+        >
+          Instalar app
+        </button>
+      )}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
+      <Onboarding open={onboarding.show} onDone={dismissOnboarding} onGo={(to) => navigate(to)} />
       <main className="main-content">
         <div className="container">
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/payouts" element={<Payouts />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/firms" element={<Firms />} />
-            <Route path="/goals" element={<Goals />} />
+            {/* Command Center (novo, motor-driven) */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/actions" element={<ActionCenterPage />} />
+            <Route path="/risk" element={<RiskPage />} />
+            <Route path="/networth" element={<NetWorthPage />} />
+            <Route path="/portfolio" element={<PortfolioPage />} />
+            <Route path="/positions" element={<PositionsManagePage />} />
+            <Route path="/goals" element={<GoalsManagePage />} />
+            <Route path="/wallets" element={<WalletsPage />} />
+            <Route path="/tax" element={<TaxPage />} />
+            <Route path="/forecast" element={<ForecastPage />} />
+            <Route path="/firms" element={<FirmPnlPage />} />
+            <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/journal-events" element={<FinancialJournalPage />} />
+            <Route path="/import" element={<DataPage />} />
+            <Route path="/quantower" element={<QuantowerPage />} />
+
+            {/* Trading Journal (engine-driven — parte do Command, sem reload) */}
+            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/journal/*" element={<JournalPage />} />
+            <Route path="/playbook" element={<PlaybookPage />} />
+
+            {/* Money OS (engine-driven) */}
+            <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/payouts" element={<PayoutsPage />} />
+            <Route path="/payout-center" element={<PayoutCenterPage />} />
+
+            {/* Legado */}
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
+          </Suspense>
         </div>
       </main>
     </div>

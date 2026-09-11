@@ -163,5 +163,4 @@ A bridge precisa enviar headers CORS. Verifique no código do bridge se `Access-
 | `setup-new-pc.bat` | Automação completa de setup (admin) |
 | `setup-wake-trigger.ps1` | Cria tarefa agendada com startup + wake (Event ID 107) |
 | `setup-tailscale-funnel.ps1` | Cria tarefa agendada com startup + logon, aguarda tailscaled, com log |
-| `merge-builds.js` | Utilitário de build |
-| `migrate-to-supabase.ts` | Migração de dados |
+| `merge-builds.js` | Utilitário de build (copia main-app/dist -> dist/) |

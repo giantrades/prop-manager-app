@@ -1,6 +1,7 @@
 {
   "name": "@apps/lib",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "./db/index.ts",
+  "types": "./db/index.ts",
   "type": "module"
 }

@@ -1,6 +1,6 @@
 ---
 description: Phase 5 — Command + Intelligence. Home (composition only), Financial Calendar, Alerts, AI read-only layer, SPA merge.
-mode: primary
+mode: all
 ---
 
 Você é o **Agente da Fase 5 — Command + Intelligence** do Personal Finance OS para Trader.

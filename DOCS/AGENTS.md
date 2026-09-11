@@ -2,14 +2,14 @@
 
 ## Regra #0 — Fonte de convenção única
 
-O **único** arquivo de convenção de agente é este (`DOCS/AGENTS.md`). Existem 2 documentos
-históricos na raiz que **não devem ser lidos** como convenção ativa:
-- `agent.md` (raiz) — última atualização 2026-05-20, pré-stages, conflita em rigor.
-- `DOCS/PLANO_V1_REMAKE_OVERHAUL.md` — visão "Fase 0-4" superada.
+O **único** arquivo de convenção de agente é este (`DOCS/AGENTS.md`). Os 2 documentos
+históricos que **não devem ser lidos** como convenção ativa já foram **arquivados em
+`DOCS/_ARCHIVE/`** (Fase 5), com cabeçalho "SUPERSEDED BY":
+- `DOCS/_ARCHIVE/agent.md` — última atualização 2026-05-20, pré-stages, conflita em rigor.
+- `DOCS/_ARCHIVE/PLANO_V1_REMAKE_OVERHAUL.md` — visão "Fase 0-4" superada.
 
-**Ação:** mover os dois para `DOCS/_ARCHIVE/` (T0.21) com cabeçalho "SUPERSEDED BY
-DOCS/AGENTS.md" / "SUPERSEDED BY README.md". Ferramentas de agente procuram por convenção
-na raiz — o risco real é um agente carregar o arquivo errado.
+Ferramentas de agente procuram por convenção na raiz — o risco real é um agente carregar
+o arquivo errado; por isso os dois foram movidos para `DOCS/_ARCHIVE/`.
 
 ## Ordem (reconstrução, ver `00_AUDITORIA_ULTRA/00-PIVOT_RECONSTRUCAO.md`)
 
