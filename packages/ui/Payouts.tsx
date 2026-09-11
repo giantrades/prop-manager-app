@@ -39,13 +39,18 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
   const [sortAsc, setSortAsc] = useState(false);
 
   const accountList = accounts as Array<{ id: string; name: string; firmId?: string }>;
-  const firmList = firms as Array<{ id: string; name: string; color: string }>;
+  const firmList = firms as Array<{ id: string; name: string; color: string; icon?: string }>;
   const accountById = useMemo(() => Object.fromEntries(accountList.map((a) => [a.id, a])), [accountList]);
   const firmById = useMemo(() => Object.fromEntries(firmList.map((f) => [f.id, f])), [firmList]);
   const firmColorOf = (accountId: string) => {
     const acc = accountById[accountId];
     const firm = acc?.firmId ? firmById[acc.firmId] : null;
     return firm?.color || DEFAULT_FIRM_COLOR;
+  };
+  const firmIconOf = (accountId: string) => {
+    const acc = accountById[accountId];
+    const firm = acc?.firmId ? firmById[acc.firmId] : null;
+    return firm?.icon || null;
   };
 
   const summary = useMemo(() => {
@@ -225,7 +230,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                     <td>
                       {(p.accountIds ?? []).map((id) => (
                         <span key={id} className="py-acct-chip">
-                          <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />
+                          {firmIconOf(id) ? <span>{firmIconOf(id)}</span> : <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />}
                           {accountById[id]?.name ?? id}
                         </span>
                       ))}
@@ -252,7 +257,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                 <div className="py-card-meta">gross {fmtMoney(p.gross)} · fee {fmtMoney(p.fee)} · {p.method}</div>
                 <div className="py-card-accts">
                   {(p.accountIds ?? []).map((id) => (
-                    <span key={id} className="py-acct-chip"><span className="py-firm-dot" style={{ background: firmColorOf(id) }} />{accountById[id]?.name ?? id}</span>
+                    <span key={id} className="py-acct-chip">{firmIconOf(id) ? <span>{firmIconOf(id)}</span> : <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />}{accountById[id]?.name ?? id}</span>
                   ))}
                 </div>
                 {onDelete && <button className="py-btn py-btn-sm py-btn-danger" onClick={() => onDelete(p.id)}>Excluir</button>}

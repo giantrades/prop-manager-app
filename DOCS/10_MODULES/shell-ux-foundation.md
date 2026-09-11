@@ -61,6 +61,20 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch M — Contas/Goals/Firms + limpeza de navbar (executado)
+- **Contas por tipo simplificado**: só `Prop · Cripto/Carteira · Investimento · Banco ·
+  Dinheiro` (contas `crypto` antigas exibem como Cripto/Carteira).
+- **Dashboard de Contas** reescrita no estilo da dashboard antiga (cards com glow):
+  Líquido **por moeda**, Capital gerido, Total payouts, ROI, Contas (total) e Firms —
+  sem enquadrar tudo como prop. `AccountsDashboardPage.jsx`.
+- **Firms com ícone**: `FirmDef.icon` (emoji) + seletor no cadastro; o ícone aparece nas
+  contas e nos chips de payout (cor ainda propaga). `firms.ts` (+ teste).
+- **Goals**: cards de resumo clicáveis (Total / Em andamento / Concluídas) com filtro,
+  no estilo da Goals antiga (`WealthEditors.jsx`).
+- **Limpeza na navbar**: removido o botão flutuante "Instalar app" (todas as páginas) e o
+  bloco de login/logout de Google/Proton da sidebar (agora só em Settings → Backup).
+- Gate: `tsc` 0 + build verde + 233 testes verdes.
+
 ## Batch L — reaproveitar widgets do app antigo (executado)
 - **Trading dashboard**: cards com **glow** (PnL hoje, Capital nominal, Total payouts, ROI,
   Winrate, Profit factor) + **gráfico de área** com toggle PnL acumulado × Payouts acumulados

@@ -37,14 +37,60 @@ export function GoalsManagePage() {
     load();
   }, [load]);
 
+  const [filter, setFilter] = useState('all');
+  const counts = {
+    all: progress.length,
+    active: progress.filter((g) => !g.completed).length,
+    completed: progress.filter((g) => g.completed).length,
+  };
+  const shown = filter === 'active' ? progress.filter((g) => !g.completed)
+    : filter === 'completed' ? progress.filter((g) => g.completed)
+    : progress;
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Goals</h1></div>
       <ModuleTabs module="planejamento" />
+      <div className="go-summary">
+        {[
+          { key: 'all', label: 'Total', count: counts.all, sub: 'metas', color: '#7c5cff' },
+          { key: 'active', label: 'Em andamento', count: counts.active, sub: 'ativas', color: '#f59e0b' },
+          { key: 'completed', label: 'Concluídas', count: counts.completed, sub: 'finalizadas', color: '#10b981' },
+        ].map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            className={`go-sum-card${filter === c.key ? ' active' : ''}`}
+            style={{ borderColor: filter === c.key ? c.color : 'rgba(255,255,255,0.08)' }}
+            onClick={() => setFilter(c.key)}
+          >
+            <span className="go-sum-glow" style={{ background: `radial-gradient(circle, ${c.color}33 0%, transparent 70%)` }} />
+            <span className="go-sum-label">{c.label}</span>
+            <span className="go-sum-value" style={{ color: c.color }}>{c.count}</span>
+            <span className="go-sum-sub">{c.sub}</span>
+          </button>
+        ))}
+      </div>
       <GoalsEditor goals={goals} loading={loading} onSave={handleSave} onDelete={handleDelete} />
-      <Goals goals={progress} loading={loading} />
+      <Goals goals={shown} loading={loading} />
     </div>
   );
+}
+
+const GO_CSS = `
+.go-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.go-sum-card { position: relative; overflow: hidden; text-align: left; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 16px 18px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.go-sum-glow { position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; border-radius: 50%; }
+.go-sum-label { position: relative; display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; color: var(--muted, #a1a7b3); margin-bottom: 8px; }
+.go-sum-value { position: relative; display: block; font-size: 2rem; font-weight: 800; line-height: 1; }
+.go-sum-sub { position: relative; display: block; font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; }
+@media (max-width: 560px) { .go-summary { grid-template-columns: 1fr; } }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('go-styles')) {
+  const style = document.createElement('style');
+  style.id = 'go-styles';
+  style.textContent = GO_CSS;
+  document.head.appendChild(style);
 }
 
 export function PositionsManagePage() {

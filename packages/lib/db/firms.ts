@@ -14,6 +14,7 @@ export interface FirmDef {
   name: string;
   type: string;
   color: string; // hex
+  icon?: string; // emoji (ex.: '🏦') — aparece em contas, gráficos e listas
   logo?: string; // data URL (pequeno)
   notes?: string;
 }
@@ -27,6 +28,7 @@ function normalize(f: unknown): FirmDef | null {
     name: o.name,
     type: typeof o.type === 'string' && o.type ? o.type : 'Outro',
     color: typeof o.color === 'string' && o.color ? o.color : DEFAULT_FIRM_COLOR,
+    icon: typeof o.icon === 'string' && o.icon ? o.icon : undefined,
     logo: typeof o.logo === 'string' ? o.logo : undefined,
     notes: typeof o.notes === 'string' ? o.notes : undefined,
   };
@@ -50,6 +52,7 @@ export async function saveFirm(ds: DataService, firm: Partial<FirmDef>): Promise
     name,
     type: firm.type || 'Outro',
     color: firm.color || DEFAULT_FIRM_COLOR,
+    icon: firm.icon,
     logo: firm.logo,
     notes: firm.notes,
   };

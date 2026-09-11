@@ -47,4 +47,11 @@ describe('firms — registro', () => {
     const ds = makeDs();
     expect(await saveFirm(ds, { name: '   ' })).toEqual([]);
   });
+
+  it('persiste ícone (emoji) da firm', async () => {
+    const ds = makeDs();
+    await saveFirm(ds, { name: 'FTMO', icon: '🏦' });
+    const list = await listFirms(ds);
+    expect(list[0].icon).toBe('🏦');
+  });
 });

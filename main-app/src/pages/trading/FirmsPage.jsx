@@ -14,8 +14,10 @@ import {
 import { Building2, Pencil, Trash2, Plus, X } from 'lucide-react';
 
 function emptyFirm() {
-  return { name: '', type: 'Futures', color: DEFAULT_FIRM_COLOR, logo: null, notes: '' };
+  return { name: '', type: 'Futures', color: DEFAULT_FIRM_COLOR, icon: '', logo: null, notes: '' };
 }
+
+const ICON_CHOICES = ['🏦', '🏛️', '💹', '📈', '🪙', '💠', '🐂', '🐻', '⚡', '🔥', '💎', '🎯', '🌐', '🏢'];
 
 export default function FirmsPage() {
   const finance = useFinance();
@@ -98,7 +100,7 @@ export default function FirmsPage() {
                   <div key={firm.id} className="firm-card" style={{ borderTopColor: firm.color }}>
                     <div className="firm-card-head">
                       <span className="firm-dot" style={{ background: firm.color }} />
-                      {firm.logo ? <img className="firm-logo" src={firm.logo} alt={firm.name} /> : <Building2 size={18} style={{ color: firm.color }} />}
+                      {firm.icon ? <span className="firm-icon">{firm.icon}</span> : firm.logo ? <img className="firm-logo" src={firm.logo} alt={firm.name} /> : <Building2 size={18} style={{ color: firm.color }} />}
                       <div className="firm-name">{firm.name}</div>
                     </div>
                     <div className="firm-meta">{firm.type} · {countByFirm[firm.id] ?? 0} conta(s)</div>
@@ -143,6 +145,21 @@ export default function FirmsPage() {
                   </span>
                 </label>
               </div>
+              <div className="ac3-field">
+                <span className="ac3-label">Ícone (emoji)</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  {ICON_CHOICES.map((ic) => (
+                    <button
+                      key={ic}
+                      type="button"
+                      className={`firm-icon-btn${form.icon === ic ? ' active' : ''}`}
+                      onClick={() => setForm((p) => ({ ...p, icon: p.icon === ic ? '' : ic }))}
+                      aria-label={`Ícone ${ic}`}
+                    >{ic}</button>
+                  ))}
+                  <input className="ac3-input" style={{ width: 70 }} value={form.icon} onChange={(e) => setForm((p) => ({ ...p, icon: e.target.value }))} placeholder="ou digite" aria-label="Ícone personalizado" />
+                </div>
+              </div>
               <label className="ac3-field"><span className="ac3-label">Logo (PNG/JPG, máx 300KB)</span>
                 <input className="ac3-input" type="file" accept="image/*" onChange={(e) => { setLogo(e.target.files?.[0]); e.target.value = ''; }} />
               </label>
@@ -173,6 +190,9 @@ const FIRM_CSS = `
 .firm-card-head { display: flex; align-items: center; gap: 8px; }
 .firm-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .firm-logo { width: 22px; height: 22px; object-fit: contain; }
+.firm-icon { font-size: 18px; }
+.firm-icon-btn { width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.firm-icon-btn.active { border-color: var(--brand, #7c5cff); background: rgba(124,92,255,0.15); }
 .firm-name { font-size: 14px; font-weight: 700; flex: 1; }
 .firm-meta { font-size: 11px; color: var(--muted, #a1a7b3); }
 .firm-profit { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }

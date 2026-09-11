@@ -13,17 +13,18 @@ import {
 } from 'lucide-react';
 import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
 
-const KINDS = ['prop', 'bank', 'wallet', 'investment', 'crypto', 'cash'];
+const KINDS = ['prop', 'wallet', 'investment', 'bank', 'cash'];
 const PHASES = ['challenge1', 'challenge2', 'funded', 'paused', 'failed'];
 const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
 
 const KIND_META = {
   prop: { label: 'Prop', icon: Building2, color: 'var(--brand, #7c5cff)' },
-  bank: { label: 'Banco', icon: Landmark, color: 'var(--blue, #3498db)' },
-  wallet: { label: 'Carteira', icon: Wallet, color: 'var(--green, #2ecc71)' },
+  wallet: { label: 'Cripto/Carteira', icon: Wallet, color: 'var(--green, #2ecc71)' },
   investment: { label: 'Investimento', icon: TrendingUp, color: 'var(--yellow, #e1b12c)' },
-  crypto: { label: 'Cripto', icon: Bitcoin, color: '#f7931a' },
+  bank: { label: 'Banco', icon: Landmark, color: 'var(--blue, #3498db)' },
   cash: { label: 'Dinheiro', icon: Banknote, color: 'var(--gray, #8b94a5)' },
+  // legado: contas antigas do tipo crypto exibem como Cripto/Carteira
+  crypto: { label: 'Cripto/Carteira', icon: Wallet, color: 'var(--green, #2ecc71)' },
 };
 
 const PHASE_LABEL = {
@@ -350,7 +351,7 @@ export default function Accounts({
                       {a.hidden && <span className="ac3-mini-badge">oculta</span>}
                     </div>
                     <div className="ac3-card-sub">
-                      {firm && <span style={{ color: accent }}>● </span>}
+                      {firm && <span style={{ color: accent }}>{firm.icon ? `${firm.icon} ` : '● '}</span>}
                       {M.label}{a.institution ? ` · ${a.institution}` : ''} · {a.currency}
                     </div>
                   </div>

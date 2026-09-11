@@ -221,16 +221,6 @@ export default function App() {
           Offline — mostrando dados locais.
         </div>
       )}
-      {(pwa.canInstall || (pwa.isIOS && !pwa.installed)) && (
-        <button
-          type="button"
-          onClick={handleInstall}
-          aria-label="Instalar aplicativo"
-          style={{ position: 'fixed', right: 16, bottom: 76, zIndex: 9998, background: 'var(--brand,#7c5cff)', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
-        >
-          Instalar app
-        </button>
-      )}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
       <Onboarding open={onboarding.show} onDone={dismissOnboarding} onGo={(to) => navigate(to)} />
       <main className="main-content">
