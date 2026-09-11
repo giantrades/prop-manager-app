@@ -12,6 +12,7 @@ import {
   sessionAnalysis,
   maeMfe,
   weeklyReview,
+  tradeReplay,
 } from '../journalAnalytics';
 import type { Trade } from '../types';
 
@@ -274,3 +275,32 @@ describe('J10–J11 — MAE/MFE e review semanal (cálculo à mão)', () => {
     expect(r.bestSymbol).toBeNull();
   });
 });
+
+describe('B1 — tradeReplay (sequência temporal)', () => {
+  const b1base = { symbol: 'XAUUSD', direction: 'long' as const, qty: 1, entryPrice: 100, commission: 0, swap: 0, rebate: 0, fees: 0 };
+  it('entry → fills ordenados → exit + MAE/MFE + notas', () => {
+    const t = trade({
+      ...b1base, id: 'R1', exitPrice: 105,
+      entryDatetime: '2026-09-08T10:00:00Z', exitDatetime: '2026-09-08T12:00:00Z',
+      resultNet: 10, notes: 'rompimento limpo',
+      executions: [
+        { side: 'entry', price: 104, quantity: 2, timestamp: '2026-09-08T10:20:00Z' },
+        { side: 'entry', price: 102, quantity: 2, timestamp: '2026-09-08T10:05:00Z' },
+      ],
+    });
+    const r = tradeReplay(t);
+    expect(r.points.map((p) => p.label)).toEqual(['Entrada', 'Fill 1 (entry)', 'Fill 2 (entry)', 'Saída']);
+    expect(r.points.map((p) => p.price)).toEqual([100, 102, 104, 105]);
+    expect(r.points.map((p) => p.kind)).toEqual(['entry', 'fill', 'fill', 'exit']);
+    expect(r.notes).toBe('rompimento limpo');
+    expect(r.mfe).toBe(4); // fills 102/104, entry 100, qty 1
+    expect(r.mae).toBe(0);
+  });
+
+  it('sem fills mostra s� entry?exit', () => {
+    const t = trade({ ...b1base, id: 'R2', exitPrice: 110, exitDatetime: '2026-09-08T11:00:00Z', resultNet: 10 });
+    const r = tradeReplay(t);
+    expect(r.points.map((p) => p.kind)).toEqual(['entry', 'exit']);
+  });
+});
+

@@ -369,6 +369,54 @@ export async function saveFxUSD(ds: DataService, rate: number): Promise<FxRate> 
   return v;
 }
 
+/** B1 — provento anunciado (data-com). Vira `dividend` via "marcar como recebido". */
+export const DIVIDENDS_ANNOUNCED_KEY = 'dividends:announced';
+
+export interface DividendEvent {
+  id: string;
+  symbol: string;
+  positionId?: string;
+  exDate: string; // YYYY-MM-DD
+  amountPerShare?: number;
+  note?: string;
+}
+
+export async function getAnnouncedDividends(ds: DataService): Promise<DividendEvent[]> {
+  const rec = await ds.meta.getKey(DIVIDENDS_ANNOUNCED_KEY);
+  const v = rec?.value;
+  if (!Array.isArray(v)) return [];
+  return (v as DividendEvent[]).filter(
+    (e) => e && typeof e.id === 'string' && typeof e.symbol === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.exDate ?? ''),
+  );
+}
+
+export async function saveAnnouncedDividend(ds: DataService, ev: DividendEvent): Promise<DividendEvent[]> {
+  if (!ev || typeof ev.id !== 'string' || !ev.id) throw new Error('id obrigatório');
+  if (!ev.symbol?.trim()) throw new Error('símbolo obrigatório');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ev.exDate ?? '')) throw new Error('exDate inválida (use YYYY-MM-DD)');
+  if (ev.amountPerShare != null && !(ev.amountPerShare >= 0)) throw new Error('valor inválido');
+  const list = await getAnnouncedDividends(ds);
+  const next = [...list.filter((x) => x.id !== ev.id), { ...ev, symbol: ev.symbol.trim().toUpperCase() }];
+  next.sort((a, b) => (a.exDate < b.exDate ? -1 : 1));
+  await ds.meta.setKey(DIVIDENDS_ANNOUNCED_KEY, next);
+  return next;
+}
+
+export async function removeAnnouncedDividend(ds: DataService, id: string): Promise<DividendEvent[]> {
+  const list = await getAnnouncedDividends(ds);
+  const next = list.filter((x) => x.id !== id);
+  await ds.meta.setKey(DIVIDENDS_ANNOUNCED_KEY, next);
+  return next;
+}
+
+/** Anunciados com exDate >= hoje (ordenados). Passados somem da lista. */
+export function upcomingDividends(events: DividendEvent[], now?: string): DividendEvent[] {
+  const today = (now ?? nowIso()).slice(0, 10);
+  return events
+    .filter((e) => e.exDate >= today)
+    .sort((a, b) => (a.exDate < b.exDate ? -1 : a.exDate > b.exDate ? 1 : 0));
+}
+
 /**
  * Portfolio = posições com cost basis (qty×avgPrice) + mark-to-market manual.
  * `totalValue` usa `markPriceOf` (lastMark fresco, senão avgPrice). Posições com

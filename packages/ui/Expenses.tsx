@@ -18,7 +18,7 @@ import {
 import {
   computeFreeCash, expensesByCategory, incomeByKind, monthlySeries,
   budgetStatus, categoryOf, recurringDue, detectRecurringCandidates, compareMonths,
-  parseBankFile, buildBankImport,
+  parseBankFile, buildBankImport, rolloverAmount,
   DEFAULT_CATEGORIES,
 } from '@apps/lib/db';
 
@@ -144,6 +144,8 @@ function compressImage(file, maxBytes = ATTACH_MAX_BYTES) {
  * @param {object} [props.savingsGoal] — A4: { [ym]: amount }
  * @param {(ym:string,amount:number)=>void} [props.onSaveSavingsGoal] — A4
  * @param {(entries:Array<object>)=>void} [props.onImportBatch] — A3: importar extrato
+ * @param {Array<string>} [props.rolloverCats] — B1: opt-in de rollover por categoria
+ * @param {(catId:string)=>void} [props.onToggleRollover] — B1
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
@@ -151,6 +153,7 @@ export default function Expenses({
   txs = [], categories = [], budgets = {}, accounts = [],
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
+  rolloverCats = [], onToggleRollover,
   currency = 'R$', loading = false,
 }) {
   const now = new Date();
@@ -179,6 +182,9 @@ export default function Expenses({
   const series = useMemo(() => monthlySeries(txs, 6, key), [txs, key]);
   const monthBudgets = budgets[key] || {};
   const bStatus = useMemo(() => budgetStatus(txs, monthBudgets, key, cats), [txs, monthBudgets, key, cats]);
+  // B1 — rollover da sobra do mês anterior (opt-in por categoria).
+  const rollovers = useMemo(() => rolloverAmount(txs, budgets, rolloverCats, key, cats), [txs, budgets, rolloverCats, key, cats]);
+  const rolloverByCat = useMemo(() => new Map(rollovers.map((r) => [r.categoryId, r])), [rollovers]);
   const due = useMemo(() => recurringDue(txs, key), [txs, key]);
   // A1 — candidatas a recorrente (mesma categoria+valor em 3+ meses).
   const candidates = useMemo(() => detectRecurringCandidates(txs, cats), [txs, cats]);
@@ -543,14 +549,26 @@ export default function Expenses({
           {bStatus.length === 0 && <div className="ex-hint">Sem metas. Defina abaixo por categoria.</div>}
           {bStatus.map((b) => {
             const cat = catById.get(b.categoryId) ?? { name: b.categoryId, icon: 'Tag', color: 'gray' };
+            const ro = rolloverByCat.get(b.categoryId);
+            const opted = rolloverCats.includes(b.categoryId);
             return (
               <div key={b.categoryId} className={`ex-budget${b.over ? ' over' : ''}`}>
                 <CatIcon name={cat.icon} color={cat.color} size={16} />
                 <div className="ex-budget-main">
                   <div className="ex-budget-top"><span>{cat.name}</span><span>{fmtMoney(b.spent, currency)} / {fmtMoney(b.budget, currency)}</span></div>
                   <div className="ex-bar-wrap"><span className="ex-bar" style={{ width: `${Math.min(100, b.pct)}%` }} /></div>
+                  {opted && ro && ro.rollover > 0 && (
+                    <div className="ex-hint">+{fmtMoney(ro.rollover, currency)} de sobra do mês passado → efetivo {fmtMoney(ro.effective, currency)}</div>
+                  )}
                 </div>
                 <span className="ex-budget-pct">{b.pct}%{b.over ? ' ⚠️' : ''}</span>
+                <button
+                  className={`ex-mini${opted ? ' ex-mini-on' : ''}`}
+                  onClick={() => onToggleRollover?.(b.categoryId)}
+                  title={opted ? 'Desativar rollover' : 'Ativar rollover da sobra'}
+                  aria-pressed={opted}
+                  aria-label={`Rollover de ${cat.name}`}
+                >↻</button>
               </div>
             );
           })}
@@ -814,6 +832,7 @@ const EX_CSS = `
 .ex-item-amount.ex-pos-t { color: var(--green, #2ecc71); }
 .ex-item-actions { display: flex; gap: 4px; }
 .ex-mini { background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--muted, #a1a7b3); padding: 5px 7px; cursor: pointer; min-width: 34px; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+.ex-mini-on { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.4); }
 .ex-mini.ex-danger { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.3); }
 .ex-form { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
 .ex-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

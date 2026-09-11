@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { EventBus } from '../events';
-import { WealthService, computePortfolio, applyBenchmark, saveCdiPoint, getCdiSeries, stockSalesTaxBase } from '../wealth';
+import { WealthService, computePortfolio, applyBenchmark, saveCdiPoint, getCdiSeries, stockSalesTaxBase, saveAnnouncedDividend, getAnnouncedDividends, removeAnnouncedDividend, upcomingDividends } from '../wealth';
 import type { Position } from '../types';
 
 function makeService() {
@@ -218,3 +218,30 @@ describe('A4 — stockSalesTaxBase FIFO (cálculo à mão)', () => {
     expect(stockSalesTaxBase(txs, '2026-05')).toMatchObject({ sales: [], monthGain: 0 });
   });
 });
+
+describe('B1 � dividendos anunciados (data-com)', () => {
+  it('save valida, ordena e filtra; remove apaga', async () => {
+    const { ds } = makeService();
+    expect(await getAnnouncedDividends(ds)).toEqual([]);
+    await saveAnnouncedDividend(ds, { id: 'd1', symbol: 'vale3', exDate: '2026-10-10', amountPerShare: 2.5 });
+    await saveAnnouncedDividend(ds, { id: 'd2', symbol: 'PETR4', exDate: '2026-09-20' });
+    const all = await getAnnouncedDividends(ds);
+    expect(all.map((e) => e.id)).toEqual(['d2', 'd1']);
+    expect(all[0].symbol).toBe('PETR4');
+    expect(all[1].symbol).toBe('VALE3'); // normalizado para upper
+    await expect(saveAnnouncedDividend(ds, { id: 'x', symbol: '', exDate: '2026-10-10' })).rejects.toThrow();
+    await expect(saveAnnouncedDividend(ds, { id: 'x', symbol: 'A', exDate: '10/10/2026' })).rejects.toThrow();
+    await removeAnnouncedDividend(ds, 'd2');
+    expect((await getAnnouncedDividends(ds)).map((e) => e.id)).toEqual(['d1']);
+  });
+
+  it('upcoming: exDate >= hoje, ordenado; passado some', () => {
+    const list = [
+      { id: 'a', symbol: 'A', exDate: '2026-09-20' },
+      { id: 'b', symbol: 'B', exDate: '2026-09-01' },
+      { id: 'c', symbol: 'C', exDate: '2026-09-19' },
+    ];
+    expect(upcomingDividends(list, '2026-09-19T12:00:00Z').map((e) => e.id)).toEqual(['c', 'a']);
+  });
+});
+

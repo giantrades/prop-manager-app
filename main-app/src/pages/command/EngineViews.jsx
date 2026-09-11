@@ -12,6 +12,7 @@ import { nowIso } from '@apps/lib/db';
 import {
   firmPnlByFirm,
   computeFirmPnlByAccount,
+  firmPnlHistory,
   stockSalesTaxBase,
   computeDcaFromTransactions,
   refreshQuotes,
@@ -133,18 +134,20 @@ export function PortfolioPage() {
   // A5 — taxa USD→BRL (manual, com data). Sem taxa, posições USD ficam fora dos totais.
   const [fxInput, setFxInput] = useState('');
   const { loading, data, finance } = useEngineData(async (f) => {
-    const { applyBenchmark, getCdiSeries } = await import('@apps/lib/db');
-    const [fxRec, allocation, txs, histRec, cdi] = await Promise.all([
+    const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends } = await import('@apps/lib/db');
+    const [fxRec, allocation, txs, histRec, cdi, announced, positions] = await Promise.all([
       f.ds.meta.getKey('fx:USDBRL'),
       f.wealth.allocation(),
       f.ds.transactions.list(),
       f.ds.meta.getKey(PORTFOLIO_HISTORY_KEY),
       getCdiSeries(f.ds),
+      getAnnouncedDividends(f.ds),
+      f.ds.positions.list(),
     ]);
     const fx = fxRec?.value?.rate > 0 ? fxRec.value.rate : null;
     const portfolio = await f.wealth.portfolio(fx != null ? { fxUSD: fx } : {});
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
-    return { portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi, benchmark: applyBenchmark(history, cdi) };
+    return { portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi, benchmark: applyBenchmark(history, cdi), announced: upcomingDividends(announced), positions };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -312,6 +315,49 @@ export function PortfolioPage() {
     setFiredIds((prev) => prev.filter((x) => x !== alertId));
   }, []);
 
+  // B1 — anunciar / remover / receber provento (receber cria dividend via A1).
+  const handleSaveDividendEvent = useCallback(async (ev) => {
+    const f = financeRef.current;
+    if (!f || !ev?.exDate) return;
+    const { saveAnnouncedDividend } = await import('@apps/lib/db');
+    const pos = (data?.positions ?? []).find((p) => p.id === ev.positionId);
+    await saveAnnouncedDividend(f.ds, {
+      id: `div-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      symbol: pos?.symbol ?? '',
+      positionId: ev.positionId || undefined,
+      exDate: ev.exDate,
+      amountPerShare: ev.amountPerShare != null && ev.amountPerShare !== '' ? Number(ev.amountPerShare) : undefined,
+      note: ev.note || undefined,
+    });
+  }, [data]);
+
+  const handleRemoveDividendEvent = useCallback(async (id) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const { removeAnnouncedDividend } = await import('@apps/lib/db');
+    await removeAnnouncedDividend(f.ds, id);
+  }, []);
+
+  const handleReceiveDividend = useCallback(async (ev) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const positions = await f.ds.positions.list();
+    const pos = positions.find((p) => p.id === ev.positionId) ?? positions.find((p) => p.symbol === ev.symbol);
+    if (!pos) return;
+    const perShare = Number(ev.amountPerShare) || 0;
+    const amount = Number((perShare * (pos.qty ?? 0)).toFixed(2));
+    if (!(amount > 0)) return;
+    await f.money.recordDividend({
+      accountId: pos.accountId,
+      positionId: pos.id,
+      amount,
+      currency: pos.currency ?? 'BRL',
+      note: `Provento ${pos.symbol} ex ${ev.exDate}`,
+    });
+    const { removeAnnouncedDividend } = await import('@apps/lib/db');
+    await removeAnnouncedDividend(f.ds, ev.id);
+  }, []);
+
   // A1 — registrar provento ligado à posição (entra no yield, sem mexer no custo).
   const handleDividend = useCallback(async (row, amount) => {
     const f = financeRef.current;
@@ -396,6 +442,11 @@ export function PortfolioPage() {
         onDeleteAlert={handleDeleteAlert}
         onRearmAlert={handleRearmAlert}
         firedAlertIds={firedIds}
+        announced={data?.announced ?? []}
+        positions={data?.positions ?? []}
+        onSaveDividendEvent={handleSaveDividendEvent}
+        onRemoveDividendEvent={handleRemoveDividendEvent}
+        onReceiveDividend={handleReceiveDividend}
       />
     </div>
   );
@@ -592,7 +643,7 @@ export function FirmPnlPage() {
         ...v,
       }));
     }
-    return { rows, byAccount };
+    return { rows, byAccount, history: firmPnlHistory(txs, 6) };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -633,22 +684,23 @@ export function FirmPnlPage() {
           <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
       </div>
-      <FirmPnl rows={data?.rows ?? []} byAccount={data?.byAccount ?? {}} loading={loading} />
+      <FirmPnl rows={data?.rows ?? []} byAccount={data?.byAccount ?? {}} history={data?.history ?? null} loading={loading} />
     </div>
   );
 }
 
 export function ExpensesPage() {
   const { loading, data, finance } = useEngineData(async (f) => {
-    const { getSavingsGoal } = await import('@apps/lib/db');
-    const [txs, accounts, categories, budgets, savingsGoal] = await Promise.all([
+    const { getSavingsGoal, getRolloverCats } = await import('@apps/lib/db');
+    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats] = await Promise.all([
       f.ds.transactions.list(),
       f.ds.accounts.list(),
       listCategories(f.ds),
       getBudgets(f.ds),
       getSavingsGoal(f.ds),
+      getRolloverCats(f.ds),
     ]);
-    return { txs, accounts, categories, budgets, savingsGoal };
+    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -710,6 +762,15 @@ export function ExpensesPage() {
     await f.money.updateTransaction(id, { recurrence: { freq: 'monthly', day } });
   }, []);
 
+  // B1 — opt-in/out de rollover por categoria.
+  const onToggleRollover = useCallback(async (catId) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const { getRolloverCats, setRolloverCats } = await import('@apps/lib/db');
+    const cur = await getRolloverCats(f.ds);
+    await setRolloverCats(f.ds, cur.includes(catId) ? cur.filter((c) => c !== catId) : [...cur, catId]);
+  }, []);
+
   // A4 — meta de economia mensal.
   const onSaveSavingsGoal = useCallback(async (ym, amount) => {
     const f = financeRef.current;
@@ -757,6 +818,8 @@ export function ExpensesPage() {
         onMakeRecurring={onMakeRecurring}
         onSaveSavingsGoal={onSaveSavingsGoal}
         onImportBatch={onImportBatch}
+        rolloverCats={data?.rolloverCats ?? []}
+        onToggleRollover={onToggleRollover}
         onSaveCategory={onSaveCategory}
         onGenerate={onGenerate}
         loading={loading}

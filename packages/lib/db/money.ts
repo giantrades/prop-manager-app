@@ -341,6 +341,61 @@ export function firmPnlReport(
   });
 }
 
+export interface FirmHistory {
+  months: string[];
+  firms: string[];
+  rows: Array<Record<string, number | string>>; // { ym, [firmId]: profit }
+}
+
+/** B1 — lucro por firm por mês (últimos `months`, terminando em `refYm`). */
+export function firmPnlHistory(
+  transactions: Transaction[],
+  months: number,
+  refYm?: string,
+): FirmHistory {
+  const now = new Date();
+  const ref = refYm ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [ry, rm] = ref.split('-').map(Number);
+  const monthList: string[] = [];
+  for (let i = months - 1; i >= 0; i -= 1) {
+    const d = new Date(ry, rm - 1 - i, 1);
+    monthList.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const inRange = new Set(monthList);
+  // firmId -> ym -> profit
+  const grid = new Map<string, Map<string, number>>();
+  const signed = (t: Transaction): number | null => {
+    if (t.kind === 'payout_in' || t.kind === 'rebate') return t.amount;
+    if (
+      t.kind === 'challenge_cost' || t.kind === 'reset_fee' || t.kind === 'monthly_fee' ||
+      t.kind === 'fee' || t.kind === 'commission' || t.kind === 'swap'
+    ) {
+      return -Math.abs(t.amount);
+    }
+    return null;
+  };
+  for (const t of transactions) {
+    if (!t.firmId) continue;
+    const ym = t.date.slice(0, 7);
+    if (!inRange.has(ym)) continue;
+    const v = signed(t);
+    if (v == null) continue;
+    let row = grid.get(t.firmId);
+    if (!row) {
+      row = new Map();
+      grid.set(t.firmId, row);
+    }
+    row.set(ym, r2((row.get(ym) ?? 0) + v));
+  }
+  const firms = [...grid.keys()].sort();
+  const rows = monthList.map((ym) => {
+    const row: Record<string, number | string> = { ym };
+    for (const f of firms) row[f] = grid.get(f)?.get(ym) ?? 0;
+    return row;
+  });
+  return { months: monthList, firms, rows };
+}
+
 export interface ChallengeEv {
   attempts: number;
   approved: number;
@@ -489,6 +544,7 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
 
 const CATEGORY_META_KEY = 'expense:categories';
 const BUDGET_META_KEY = 'expense:budgets';
+const ROLLOVER_META_KEY = 'expense:rollover';
 
 /** Lista categorias (custom salvas em meta + defaults). Custom sobrescreve default de mesmo id. */
 export async function listCategories(ds: DataService): Promise<CategoryDef[]> {
@@ -618,6 +674,56 @@ export async function saveBudget(
   else delete month[categoryId];
   await ds.meta.setKey(BUDGET_META_KEY, { ...all, [yearMonth]: month });
   return getBudgets(ds);
+}
+
+/** B1 — categorias com rollover opt-in (sobra do mês anterior soma na meta). */
+export async function getRolloverCats(ds: DataService): Promise<string[]> {
+  const rec = await ds.meta.getKey(ROLLOVER_META_KEY);
+  const v = rec?.value;
+  return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+}
+
+export async function setRolloverCats(ds: DataService, ids: string[]): Promise<string[]> {
+  const clean = [...new Set(ids.filter((x) => typeof x === 'string' && x))];
+  await ds.meta.setKey(ROLLOVER_META_KEY, clean);
+  return getRolloverCats(ds);
+}
+
+export interface RolloverInfo {
+  categoryId: string;
+  rollover: number; // sobra do mês anterior (0 se estourou/sem meta)
+  base: number; // meta do mês atual
+  effective: number; // base + rollover
+}
+
+/**
+ * B1 — rollover: para cada categoria opt-in, sobra = max(0, meta − gasto) do mês
+ * anterior. Opt-out volta ao comportamento atual (sem somar nada).
+ */
+export function rolloverAmount(
+  transactions: Transaction[],
+  budgets: Record<string, Record<string, number>>,
+  rolloverCats: string[],
+  yearMonth: string,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): RolloverInfo[] {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  const prevYm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const prev = budgets[prevYm] ?? {};
+  const cur = budgets[yearMonth] ?? {};
+  const spentPrev = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.kind !== 'expense' || t.date.slice(0, 7) !== prevYm) continue;
+    const id = categoryOf(t, cats) ?? 'outros';
+    spentPrev.set(id, r2((spentPrev.get(id) ?? 0) + Math.abs(t.amount)));
+  }
+  return rolloverCats.map((categoryId) => {
+    const base = cur[categoryId] ?? 0;
+    const prevBudget = prev[categoryId] ?? 0;
+    const rollover = prevBudget > 0 ? Math.max(0, r2(prevBudget - (spentPrev.get(categoryId) ?? 0))) : 0;
+    return { categoryId, rollover, base: r2(base), effective: r2(base + rollover) };
+  });
 }
 
 export interface BudgetStatus {

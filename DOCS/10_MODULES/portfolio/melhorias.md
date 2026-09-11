@@ -64,7 +64,7 @@
 - Fora de escopo: curva de juros/mercado (dados externos — separado).
 
 ## B1 — Dividendos anunciados (data-com)
-- Status: [ ] aberta
+- Status: [x] executada
 - Contexto: o app sabe o que você RECEBEU (A1), mas não o que está por vir. Acompanhar data-com evita vender véspera e planeja renda.
 - Proposta: `DividendEvent {symbol, exDate, amountPerShare?, confirmed}` em meta (`dividends:announced`); seção "Próximos proventos" (exDate ≥ hoje, ordenado) + botão "marcar como recebido" (cria `dividend` via `recordDividend`). Sem data-com passada, some da lista.
 - Arquivos: `wealth.ts` ou `money.ts` (helpers meta), `Portfolio.tsx` (seção + form simples), testes

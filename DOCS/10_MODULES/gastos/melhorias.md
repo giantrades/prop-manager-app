@@ -40,7 +40,7 @@
 - Fora de escopo: categorias customizáveis (spec G9) e import OFX (A3).
 
 ## B1 — Rollover de sobra do orçamento
-- Status: [ ] aberta
+- Status: [x] executada
 - Contexto: sobrou do orçamento de Moradia este mês? Hoje a sobra evapora; deveria somar ao mês seguinte.
 - Proposta: `rolloverAmount(budgets, txs, ym)` = Σ max(0, meta − gasto) do mês anterior; orçamento efetivo = meta + rollover; UI mostra "+X de rollover" na barra. Opt-in por categoria (flag no budget).
 - Arquivos: `money.ts` (motor puro + testes), `Expenses.tsx` (badge + barra)

@@ -22,6 +22,9 @@ import {
   compareMonths,
   getSavingsGoal,
   saveSavingsGoal,
+  getRolloverCats,
+  setRolloverCats,
+  rolloverAmount,
 } from '../money';
 import type { Transaction } from '../types';
 
@@ -210,6 +213,28 @@ describe('gastos A4 ï¿½ comparativo mï¿½s a mï¿½s + meta de economia', () => {
     expect(await getSavingsGoal(ds)).toEqual({ '2026-09': 8000 });
     await saveSavingsGoal(ds, '2026-09', 0);
     expect(await getSavingsGoal(ds)).toEqual({});
+  });
+});
+
+
+describe('gastos B1 — rollover de sobra', () => {
+  const e = (id, ym, day, category, amount) => tx({ id, kind: 'expense', category, amount: -amount, date: ym + '-' + String(day).padStart(2, '0') + 'T12:00:00Z' });
+  // ago: moradia meta 2000 gastou 1500 => sobra 500; lazer meta 300 gastou 400 => 0
+  const list = [e('a1', '2026-08', 5, 'moradia', 1500), e('a2', '2026-08', 6, 'lazer', 400)];
+  const budgets = { '2026-08': { moradia: 2000, lazer: 300 }, '2026-09': { moradia: 2000 } };
+
+  it('sobra soma na meta; estouro zera; sem opt-in some da lista', () => {
+    const rows = rolloverAmount(list, budgets, ['moradia', 'lazer'], '2026-09');
+    expect(rows.find((r) => r.categoryId === 'moradia')).toMatchObject({ rollover: 500, base: 2000, effective: 2500 });
+    expect(rows.find((r) => r.categoryId === 'lazer')).toMatchObject({ rollover: 0, base: 0, effective: 0 });
+    expect(rolloverAmount(list, budgets, [], '2026-09')).toEqual([]);
+  });
+
+  it('opt-in persiste em meta', async () => {
+    const { ds } = makeService();
+    expect(await getRolloverCats(ds)).toEqual([]);
+    await setRolloverCats(ds, ['moradia', 'lazer', 'moradia']);
+    expect(await getRolloverCats(ds)).toEqual(['moradia', 'lazer']);
   });
 });
 

@@ -37,15 +37,22 @@ function fmtPct(value) {
  * @param {(row:object, alertId:string)=>void} [props.onDeleteAlert] — A2
  * @param {(alertId:string)=>void} [props.onRearmAlert] — A2: volta a poder disparar
  * @param {Array<string>} [props.firedAlertIds] — A2: ids já disparados
+ * @param {Array<object>} [props.announced] — B1: proventos anunciados (data-com)
+ * @param {Array<object>} [props.positions] — B1: posições p/ select do form
+ * @param {(ev:object)=>void} [props.onSaveDividendEvent] — B1
+ * @param {(id:string)=>void} [props.onRemoveDividendEvent] — B1
+ * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
  * @param {boolean} [props.loading]
  */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], loading = false }) {
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false }) {
   const benchByAt = React.useMemo(() => new Map((benchmark || []).map((b) => [b.at, b.index])), [benchmark]);
   const [divRow, setDivRow] = React.useState(null);
   const [divAmount, setDivAmount] = React.useState('');
   const [alertRow, setAlertRow] = React.useState(null);
   const [alertDir, setAlertDir] = React.useState('above');
   const [alertPrice, setAlertPrice] = React.useState('');
+  const [showDivForm, setShowDivForm] = React.useState(false);
+  const [divEv, setDivEv] = React.useState({ positionId: '', exDate: '', amountPerShare: '', note: '' });
   const fired = React.useMemo(() => new Set(firedAlertIds || []), [firedAlertIds]);
   const allAlerts = React.useMemo(() => {
     const list = [];
@@ -217,6 +224,71 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* B1 — proventos anunciados (data-com) */}
+      {(onSaveDividendEvent || announced.length > 0) && (
+        <div className="pf-section">
+          <div className="pf-section-title">Próximos proventos ({announced.length})</div>
+          {announced.length === 0 ? (
+            <div className="pf-empty" role="status">Nenhum provento anunciado.</div>
+          ) : announced.map((e) => (
+            <div key={e.id} className="pf-alert-row">
+              <span className="pf-alert-sym">{e.symbol}</span>
+              <span className="pf-alert-cond">ex {String(e.exDate).slice(8, 10)}/{String(e.exDate).slice(5, 7)}{e.amountPerShare != null ? ` • ${fmtMoney(e.amountPerShare, currency)}/ação` : ''}</span>
+              <span className="pf-alert-actions">
+                {onReceiveDividend && (
+                  <button className="pf-mark-btn" onClick={() => onReceiveDividend(e)}>Marcar recebido</button>
+                )}
+                {onRemoveDividendEvent && (
+                  <button className="pf-mark-btn" onClick={() => onRemoveDividendEvent(e.id)} aria-label={`Remover ${e.symbol}`}>x</button>
+                )}
+              </span>
+            </div>
+          ))}
+          {onSaveDividendEvent && (
+            <>
+              <button className="pf-mark-btn" onClick={() => setShowDivForm((s) => !s)}>
+                {showDivForm ? 'Fechar' : '+ Anunciar provento'}
+              </button>
+              {showDivForm && (
+                <div className="pf-div-form" role="group" aria-label="Anunciar provento">
+                  <select
+                    className="pf-div-input" value={divEv.positionId}
+                    onChange={(e) => setDivEv((f) => ({ ...f, positionId: e.target.value }))}
+                    aria-label="Posição"
+                  >
+                    <option value="">Posição…</option>
+                    {(positions || []).map((p) => (
+                      <option key={p.id} value={p.id}>{p.symbol}</option>
+                    ))}
+                  </select>
+                  <input
+                    className="pf-div-input" type="date" value={divEv.exDate}
+                    onChange={(e) => setDivEv((f) => ({ ...f, exDate: e.target.value }))}
+                    aria-label="Data-com"
+                  />
+                  <input
+                    className="pf-div-input" type="number" min="0" step="0.0001"
+                    value={divEv.amountPerShare} onChange={(e) => setDivEv((f) => ({ ...f, amountPerShare: e.target.value }))}
+                    placeholder="R$/ação" aria-label="Valor por ação"
+                  />
+                  <button
+                    className="pf-mark-btn"
+                    disabled={!divEv.exDate}
+                    onClick={() => {
+                      onSaveDividendEvent({ ...divEv, amountPerShare: divEv.amountPerShare === '' ? undefined : Number(divEv.amountPerShare) });
+                      setDivEv({ positionId: '', exDate: '', amountPerShare: '', note: '' });
+                      setShowDivForm(false);
+                    }}
+                  >
+                    Salvar
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

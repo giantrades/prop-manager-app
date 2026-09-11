@@ -32,7 +32,7 @@
 - Aceite: relatório reconcilia com a tela e com o Tax; `tsc` 0; build verde.
 
 ## B1 — Comparador histórico firm a firm
-- Status: [ ] aberta
+- Status: [x] executada
 - Contexto: o comparador atual é fotografia do total. A pergunta real é "qual firm me pagou melhor POR MÊS ao longo do tempo?".
 - Proposta: `firmPnlHistory(txs, months)` (lucro por firm por mês, reutilizando a lógica do `firmPnlReport`) + barras agrupadas por mês na Firm P&L + ranking "lucro/mês".
 - Arquivos: `money.ts` (motor + testes), `FirmPnl.tsx` (chart)

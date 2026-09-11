@@ -5,7 +5,7 @@ import { DataService } from '../DataService';
 import { DataChainEngine } from '../DataChainEngine';
 import { EventBus } from '../events';
 import { accountDashboard, accountTradeStats } from '../accountModel';
-import { challengeEv, firmPnlReport } from '../money';
+import { challengeEv, firmPnlReport, firmPnlHistory } from '../money';
 import { ctraderToTrade, ingestCtraderTrades } from '../ctraderIngest';
 import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck } from '../firmTemplates';
 import type { Account, PropExtension, Payout, Trade, Transaction } from '../types';
@@ -257,3 +257,27 @@ describe('A4 â€” firmPnlReport (cÃ¡lculo Ã  mÃ£o, com rate)', () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe('B1 — firmPnlHistory (lucro por firm por mês)', () => {
+  const h = (id, firmId, kind, amount, ym) => ({ id, accountId: 'a1', firmId, kind, amount, currency: 'USD', date: ym + '-15T12:00:00Z', updatedAt: ym + '-15T12:00:00Z', deviceId: 'dev-prop', version: 0 });
+
+  it('agrupa por mês com zeros preenchidos; ignora kinds neutros e sem firm', () => {
+    const txs = [
+      h('p1', 'E8', 'payout_in', 1000, '2026-08'),
+      h('c1', 'E8', 'challenge_cost', -500, '2026-08'),
+      h('p2', 'E8', 'payout_in', 2000, '2026-09'),
+      h('f1', 'FTMO', 'payout_in', 3000, '2026-09'),
+      h('t1', 'E8', 'transfer', 9999, '2026-09'),
+      h('n1', undefined, 'payout_in', 777, '2026-09'),
+      h('o1', 'E8', 'payout_in', 1, '2026-01'),
+    ];
+    const r = firmPnlHistory(txs, 2, '2026-09');
+    expect(r.months).toEqual(['2026-08', '2026-09']);
+    expect(r.firms).toEqual(['E8', 'FTMO']);
+    expect(r.rows).toEqual([
+      { ym: '2026-08', E8: 500, FTMO: 0 },
+      { ym: '2026-09', E8: 2000, FTMO: 3000 },
+    ]);
+  });
+});
+

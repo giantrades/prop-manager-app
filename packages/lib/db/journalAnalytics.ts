@@ -148,6 +148,47 @@ export interface MaeMfe {
   mfe: number | null;
 }
 
+export interface ReplayPoint {
+  at: string; // ISO (entry/exit/fill)
+  label: string; // 'Entrada' | 'Fill N' | 'Saída'
+  price: number;
+  kind: 'entry' | 'fill' | 'exit';
+}
+
+export interface TradeReplay {
+  points: ReplayPoint[];
+  mae: number | null;
+  mfe: number | null;
+  notes: string;
+}
+
+/**
+ * B1 — Replay do trade: sequência temporal entrada → fills → saída + contexto
+ * MAE/MFE (reuso de `maeMfe()`) + notas. Sem fills, mostra entry→exit.
+ * Puro (UI só renderiza).
+ */
+export function tradeReplay(trade: Trade): TradeReplay {
+  const fills = (trade.executions || [])
+    .filter((x) => x && typeof x.price === 'number' && !Number.isNaN(x.price))
+    .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+  const points: ReplayPoint[] = [
+    { at: trade.entryDatetime, label: 'Entrada', price: trade.entryPrice, kind: 'entry' },
+  ];
+  fills.forEach((f, i) => {
+    points.push({
+      at: f.timestamp || trade.entryDatetime,
+      label: `Fill ${i + 1} (${f.side})`,
+      price: f.price,
+      kind: 'fill',
+    });
+  });
+  if (trade.exitPrice != null && trade.exitDatetime) {
+    points.push({ at: trade.exitDatetime, label: 'Saída', price: trade.exitPrice, kind: 'exit' });
+  }
+  const { mae, mfe } = maeMfe(trade);
+  return { points, mae, mfe, notes: trade.notes ?? '' };
+}
+
 /**
  * J10 — MAE/MFE (proxy via fills).
  * Excursão máxima adversa/favorável em $ a partir dos fills (`executions` com

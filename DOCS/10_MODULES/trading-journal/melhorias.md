@@ -69,7 +69,7 @@
 - Fora de escopo: dedup por fingerprint de trades antigos sem `quantowerId` (separado).
 
 ## B1 — Replay de trade (fills + contexto)
-- Status: [ ] aberta
+- Status: [x] executada
 - Contexto: revisar um trade hoje é ler números. Reconstruir a decisão (entrada → fills → saída, com MAE/MFE) ensina muito mais.
 - Proposta: motor `tradeReplay(trade)` (pontos ordenados por tempo a partir de `executions` + entry/exit) + expansível "Replay" na linha do trade (mini-chart + notas). Reuso de `maeMfe()` para contexto.
 - Arquivos: `journalAnalytics.ts`, `Trades.tsx` (expansível), teste com fills à mão

@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
 } from 'recharts';
 
 function fmtMoney(value, currency = 'USD') {
@@ -19,10 +19,15 @@ function fmtMoney(value, currency = 'USD') {
  * @param {object} props
  * @param {Array<{firmId:string;firmName?:string;payouts:number;costs:number;rebates:number;fees:number;profit:number}>} props.rows
  * @param {Record<string,Array<{accountId:string;accountName?:string;payouts:number;costs:number;rebates:number;fees:number;profit:number}>>} [props.byAccount]
+ * @param {{months:Array<string>;firms:Array<string>;rows:Array<object>}} [props.history] — B1: lucro por firm por mês
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function FirmPnl({ rows = [], byAccount = {}, currency = 'USD', loading = false }) {
+const FIRM_COLORS = [
+  'var(--green,#2ecc71)', 'var(--blue,#3498db)', 'var(--yellow,#e1b12c)', 'var(--brand,#7c5cff)',
+  'var(--red,#e74c3c)', 'var(--muted,#a1a7b3)',
+];
+export default function FirmPnl({ rows = [], byAccount = {}, history = null, currency = 'USD', loading = false }) {
   const [open, setOpen] = useState(null);
   if (loading) {
     return (
@@ -39,6 +44,25 @@ export default function FirmPnl({ rows = [], byAccount = {}, currency = 'USD', l
 
   return (
     <div className="fp-root">
+      {history && history.months.length > 1 && history.firms.length > 0 && (
+        <div className="fp-section">
+          <div className="fp-section-title">Lucro por firm por mês</div>
+          <div style={{ width: '100%', height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={history.rows.map((r) => ({ ...r, ym: String(r.ym).slice(5, 7) + '/' + String(r.ym).slice(2, 4) }))}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} formatter={(v) => fmtMoney(v, currency)} />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#a1a7b3' }} />
+                {history.firms.map((f, i) => (
+                  <Bar key={f} dataKey={f} fill={FIRM_COLORS[i % FIRM_COLORS.length]} radius={[3, 3, 0, 0]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       {ranked.length > 1 && (
         <div className="fp-section">
           <div className="fp-section-title">Comparador — lucro por firm</div>
