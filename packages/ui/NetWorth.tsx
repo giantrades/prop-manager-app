@@ -6,16 +6,11 @@
 // Fonte: DOCS/06_STAGE5_WEALTH_OS/00-produto.md + 02-FINANCIAL_FORMULAS.md.
 // Dados: `computeNetWorth` (packages/lib/db/wealth.ts) — NUNCA digitado na tela.
 
+import { fmtMoney as fmtMoneyShared } from './currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 /**
  * @param {object} props

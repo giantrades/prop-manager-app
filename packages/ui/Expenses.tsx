@@ -5,6 +5,8 @@
 //
 // Fonte: DOCS/10_MODULES/gastos/00-spec.md (G1–G9).
 
+import { fmtMoney as fmtMoneyShared } from './currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo, useState } from 'react';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
@@ -55,13 +57,6 @@ function CatIcon({ name, color, size = 18 }) {
   );
 }
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 function ymKey(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;

@@ -4,6 +4,7 @@
 //
 // Fonte: DOCS/10_MODULES/00-trading-journal.md (J1).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { calendarPnl, MIN_SAMPLE } from '@apps/lib/db';
 
@@ -13,10 +14,6 @@ const MONTHS_PT = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
-function fmtMoney(v, cur = 'R$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${cur}${Math.abs(v).toFixed(2)}`;
-}
 
 function shiftMonth(year, month, delta) {
   const d = new Date(year, month - 1 + delta, 1);

@@ -3,16 +3,10 @@
 //
 // Fonte: DOCS/05_STAGE4_MONEY_OS/00-produto.md.
 
+import { fmtMoney } from './currency';
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
-function fmtMoney(value, currency = 'USD') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 const KIND_LABEL = {
   wallet: 'Wallet',

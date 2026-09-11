@@ -2,12 +2,9 @@
 // Grava via `ds.positions.put` / `wealth.markPosition` (único writer). Proveniência de
 // preço: `lastMarkPrice` fresco vs `avgPrice` (velho) — nunca inventa preço.
 
+import { fmtMoney } from './currency';
 import React, { useState } from 'react';
 
-function fmtMoney(v) {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${Math.abs(v).toFixed(2)}`;
-}
 
 function emptyPos(accountId) {
   return { accountId, symbol: '', qty: 0, avgPrice: 0, lastMarkPrice: '' };

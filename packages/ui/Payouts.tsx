@@ -5,6 +5,7 @@
 //
 // Fonte: DOCS/05_STAGE4_MONEY_OS/00-produto.md + DOCS/10_MODULES/propfirm.
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { computePayoutSplitByWeight } from '@apps/lib/db';
 import { Search, Plus, Trash2, X, Download } from 'lucide-react';
@@ -13,13 +14,6 @@ const METHODS = ['Wise', 'Payoneer', 'Bank', 'Crypto', 'Other'];
 const STATUSES = ['Pending', 'Approved', 'Paid'];
 const DEFAULT_FIRM_COLOR = '#7c5cff';
 
-function fmtMoney(v, cur = '$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  const abs = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${cur}${(abs / 1000).toFixed(2)}`;
-  return `${sign}${cur}${abs.toFixed(2)}`;
-}
 const statusClass = (s) => (s === 'Paid' ? 'py-st-paid' : s === 'Approved' ? 'py-st-approved' : 'py-st-pending');
 
 function emptyForm() {

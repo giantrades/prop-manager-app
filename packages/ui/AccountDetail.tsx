@@ -5,18 +5,12 @@
 //
 // Fonte: DOCS/10_MODULES/propfirm/00-spec.md (F1, F3, F8).
 
+import { fmtMoney } from './currency';
 import React, { useId } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
-function fmtMoney(v, cur = '$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  const abs = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${cur}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${cur}${abs.toFixed(2)}`;
-}
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';

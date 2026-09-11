@@ -2,18 +2,12 @@
 // = Σ payout_in - Σ(challenge+reset+monthly+fee) + Σ rebate - Σ(commission+swap).
 // Mobile-first 360px.
 
+import { fmtMoney } from './currency';
 import React, { useState } from 'react';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, Legend,
 } from 'recharts';
 
-function fmtMoney(value, currency = 'USD') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 /**
  * @param {object} props

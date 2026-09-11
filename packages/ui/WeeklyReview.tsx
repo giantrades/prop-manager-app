@@ -4,13 +4,10 @@
 //
 // Fonte: DOCS/10_MODULES/00-trading-journal.md (J11).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { weeklyReview } from '@apps/lib/db';
 
-function fmtMoney(v, cur = 'R$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${cur}${Math.abs(v).toFixed(2)}`;
-}
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';

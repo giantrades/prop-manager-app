@@ -5,6 +5,7 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/00-DOMAIN_MODEL.md + DOCS/04_STAGE3_TRADING_OS.
 // Ver DOCS/11_PAGE_MAP.md.
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
@@ -44,13 +45,6 @@ function emptyProp() {
   };
 }
 
-function fmtMoney(v, cur = '$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  const abs = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${cur}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${cur}${abs.toFixed(2)}`;
-}
 function curSymbol(c) {
   return c === 'BRL' ? 'R$' : c === 'USD' ? '$' : (c || '');
 }

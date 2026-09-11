@@ -1,18 +1,12 @@
 // Batch G3 — Dashboard do módulo Contas (porta de entrada).
 // Composição pura: risco por conta (RiskService), payouts e P&L por firm.
+import { fmtMoney } from '@apps/ui/currency';
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import { firmPnlByFirm, listFirms } from '@apps/lib/db';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 const STATUS_CLASS = { SAFE: 'dash-pill-safe', WARN: 'dash-pill-warn', STOP: 'dash-pill-stop' };
 

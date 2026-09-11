@@ -7,6 +7,8 @@
 //
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Financial Calendar) + 01-tasks.md (T6.2).
 
+import { fmtMoney as fmtMoneyShared } from './currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 
 const LAYERS = [
@@ -19,13 +21,6 @@ const LAYERS = [
 
 export type LayerId = (typeof LAYERS)[number]['id'];
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 const DOW = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 

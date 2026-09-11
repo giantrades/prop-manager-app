@@ -4,6 +4,7 @@
 //
 // Fonte: DOCS/08_STAGE7_INTEGRATION/00-plano.md (Fase 8) + DOCS/04_STAGE3_TRADING_OS.
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
@@ -19,10 +20,6 @@ import {
 } from 'recharts';
 import { tradePnl, winrate, profitFactor } from '@apps/lib/db';
 
-function fmtMoney(v, cur = 'R$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${cur}${Math.abs(v).toFixed(2)}`;
-}
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';

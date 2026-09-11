@@ -4,16 +4,11 @@
 //
 // Fonte: DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md (§ Fiscal).
 
+import { fmtMoney as fmtMoneyShared } from './currency';
+function fmtMoney(v, cur = 'BRL') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
-function fmtMoney(value, currency = 'BRL') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';

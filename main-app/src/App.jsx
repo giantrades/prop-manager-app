@@ -1,7 +1,8 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Routes, Route, useNavigate } from "react-router-dom";
-import { useFinance } from "@apps/state";
+import { useFinance, useCurrency } from "@apps/state";
 import { useToast } from "@apps/ui/Toast";
+import { setDisplayCurrency } from "@apps/ui/currency";
 import CommandPalette from "@apps/ui/CommandPalette";
 import Navbar from "./Navbar";
 import Onboarding from "./Onboarding";
@@ -61,6 +62,10 @@ export default function App() {
   });
   const navigate = useNavigate();
   const finance = useFinance();
+  const { currency, rate } = useCurrency();
+  // Sincroniza a moeda de exibição global (fmtMoney nos componentes) durante o render,
+  // para que TODOS os valores já saiam convertidos quando o usuário troca USD/BRL.
+  setDisplayCurrency(currency === 'BRL' ? 'BRL' : 'USD', rate);
   const { toast } = useToast();
   const pwa = usePwa();
   const [paletteOpen, setPaletteOpen] = useState(false);

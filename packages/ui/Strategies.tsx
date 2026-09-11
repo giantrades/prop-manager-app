@@ -2,6 +2,7 @@
 // long/short + PnL ponderado. `n<20` = "sem amostra" (nunca estatística decorativa).
 // COMPOSIÇÃO: recebe `metrics` de `allStrategyMetrics(trades)` + callbacks.
 
+import { fmtMoney } from './currency';
 import React from 'react';
 
 function fmtR(v) {
@@ -14,10 +15,6 @@ function fmtPct(v) {
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtMoney(v) {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}$${Math.abs(v).toFixed(2)}`;
-}
 
 function fmtPF(pf) {
   if (pf === 'infinity') return '∞';

@@ -1,6 +1,7 @@
 // Positions (live) — posições abertas vindas da ponte (Quantower/cTrader). Permite
 // gerenciar SL/TP (`modifyPosition`) e fechar (`closePosition`). Nada de storage
 // próprio: a fonte é a plataforma; aqui é só leitura + comandos ao bridge.
+import { fmtMoney } from '@apps/ui/currency';
 import React, { useMemo, useRef, useState } from 'react';
 import { usePlatform, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
@@ -8,13 +9,6 @@ import ModuleTabs from '../../ModuleTabs';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { Activity, RefreshCw, X } from 'lucide-react';
 
-function fmtMoney(v, cur = '$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  const abs = Math.abs(v);
-  const sign = v < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${cur}${(abs / 1000).toFixed(2)}`;
-  return `${sign}${cur}${abs.toFixed(2)}`;
-}
 
 export default function LivePositionsPage() {
   const { livePositions, statuses, lastSync, refreshStatuses } = usePlatform();

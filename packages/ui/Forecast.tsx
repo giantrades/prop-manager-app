@@ -4,16 +4,11 @@
 // Fonte: DOCS/06_STAGE5_WEALTH_OS/00-produto.md.
 // Dados: `computeForecast` + `computeSafeAvailable` (packages/lib/db/wealth.ts).
 
+import { fmtMoney as fmtMoneyShared } from './currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 /**
  * @param {object} props

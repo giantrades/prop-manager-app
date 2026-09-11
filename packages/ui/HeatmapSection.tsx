@@ -4,13 +4,10 @@
 //
 // Fonte: DOCS/10_MODULES/00-trading-journal.md (J2, J7).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { heatmapBySymbol, heatmapBySession, DEFAULT_SESSIONS } from '@apps/lib/db';
 
-function fmtMoney(v, cur = 'R$') {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${cur}${Math.abs(v).toFixed(2)}`;
-}
 
 function intensity(pnl, maxAbs) {
   if (!maxAbs) return 0;

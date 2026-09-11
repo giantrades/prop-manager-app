@@ -5,15 +5,9 @@
 // Fonte: DOCS/06_STAGE5_WEALTH_OS/00-produto.md.
 // Dados: `deriveJournalEvents` + `WealthService.suggestJournalEvents` (packages/lib/db/wealth.ts).
 
+import { fmtMoney } from './currency';
 import React from 'react';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 const TYPE_META = {
   first_payout: { label: 'Primeiro payout', emoji: '🎉' },

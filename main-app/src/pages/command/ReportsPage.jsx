@@ -1,6 +1,8 @@
 // Batch D — Relatórios v1 (audit UX P2). COMPOSIÇÃO PURA: só lê selectors dos
 // motores (`firmPnlHistory`, `freeCash`, `taxCockpit`, `netWorth`) e exibe +
 // exporta. Nenhum número novo, nenhum writer.
+import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
@@ -11,13 +13,6 @@ import {
 
 const FIRM_COLORS = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'];
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 const ymLabel = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
 

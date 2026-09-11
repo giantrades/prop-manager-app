@@ -7,14 +7,11 @@
 //
 // Fonte: DOCS/04_STAGE3_TRADING_OS/00-produto.md (Journal) + 01-tasks.md (T3.5).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradePnl, calcR, vwapOfExecutions } from '@apps/lib/db';
 import NotesEditor from './NotesEditor';
 
-function fmtMoney(v) {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${Math.abs(v).toFixed(2)}`;
-}
 
 /**
  * @param {object} props

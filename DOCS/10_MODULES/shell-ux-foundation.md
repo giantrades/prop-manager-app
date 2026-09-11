@@ -61,6 +61,21 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch J — formatação de moeda global (USD/BRL) (executado)
+- **Problema**: cada componente formatava por conta própria com `$`/`R$` fixo; trocar a
+  moeda no Settings não mudava os valores.
+- **Solução**: `packages/ui/currency.ts` — store reativo (`setDisplayCurrency`, `convertMoney`,
+  `fmtMoney(value, fromCurrency)`). O 2º arg é a moeda de ORIGEM (aceita `$|USD|R$|BRL`); o
+  valor é convertido para a moeda de exibição e formatado. `App.jsx` sincroniza a store
+  durante o render (re-renderiza a árvore ao trocar USD/BRL); `main.jsx` inicializa do
+  `localStorage`.
+- **Aplicado**: ~30 componentes passaram a usar o `fmtMoney` compartilhado. Telas de valores
+  em BRL mantêm o default `R$` via wrapper (Expenses, Tax, NetWorth, Portfolio, Forecast,
+  Goals, Calendar, Home, dashboards Gastos/Investimentos/Planejamento/Relatórios).
+- **Settings**: campo **USD → BRL** agora aplica na hora (sem botão "Salvar"), no estilo do
+  app (fundo escuro), como a Settings antiga. Alternar USD/BRL converte tudo.
+- Gate: `tsc` 0 + build verde + 232 testes verdes.
+
 ## Batch I — reorg de âncoras + Positions live + Payouts rico (executado)
 - **I1 Dinheiro extinto**: módulo `dinheiro` removido. `Tax` → Gastos (aba);
   `Wallets` removido (info já vive em Contas/Accounts, agora com líquido **por moeda**);

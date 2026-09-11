@@ -59,7 +59,6 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [conflicts, setConflicts] = useState([]);
-  const [rateInput, setRateInput] = useState('');
 
   const handleExport = useCallback(async () => {
     if (!finance) return;
@@ -149,27 +148,20 @@ export default function SettingsPage() {
         <div className="st-row">
           <button className={`st-btn${currency === 'USD' ? ' active' : ''}`} onClick={() => setCurrency('USD')}>USD</button>
           <button className={`st-btn${currency === 'BRL' ? ' active' : ''}`} onClick={() => setCurrency('BRL')}>BRL</button>
-          <span className="st-rate">= {rate}</span>
         </div>
-        <div className="st-row">
+        <label className="st-field">
+          <span className="st-label">USD → BRL</span>
           <input
-            className="cmd-select" style={{ maxWidth: 110 }}
-            type="number" min="0" step="0.0001" value={rateInput}
-            onChange={(e) => setRateInput(e.target.value)}
-            placeholder="USD→BRL ex.: 5.42" aria-label="Nova taxa USD para BRL (exibição)"
+            className="st-input"
+            type="number" step="0.01" min="0"
+            value={rate}
+            onChange={(e) => setRate(parseFloat(e.target.value || '0') || 0)}
+            aria-label="Cotação USD para BRL"
           />
-          <button
-            className="st-btn"
-            disabled={!(Number(String(rateInput).replace(',', '.')) > 0)}
-            onClick={() => {
-              setRate(Number(String(rateInput).replace(',', '.')));
-              setRateInput('');
-              toast('Taxa USD→BRL atualizada.');
-            }}
-          >
-            Salvar taxa
-          </button>
-        </div>
+        </label>
+        <p className="st-hint">
+          Esse valor é aplicado ao seletor de moeda (USD/BRL) e converte todos os valores do app.
+        </p>
       </div>
 
       <div className="st-card">
@@ -203,6 +195,11 @@ const ST_CSS = `
 .st-title { font-size: 14px; font-weight: 800; }
 .st-row { display: flex; gap: 8px; align-items: center; }
 .st-rate { font-size: 12px; color: var(--muted, #a1a7b3); }
+.st-field { display: flex; flex-direction: column; gap: 6px; max-width: 260px; }
+.st-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.st-input { background: #111623; border: 1px solid #273044; border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 14px; min-height: 42px; width: 100%; font-family: inherit; font-variant-numeric: tabular-nums; }
+.st-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
+.st-hint { font-size: 12px; color: var(--muted, #a1a7b3); margin: 0; }
 .st-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .st-btn { padding: 10px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 40px; }
 .st-btn.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); font-weight: 700; }

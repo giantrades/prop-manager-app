@@ -3,15 +3,9 @@
 //
 // Fonte: DOCS/05_STAGE4_MONEY_OS/00-produto.md + FINANCIAL_FORMULAS.md (Eligibility checklist).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 
-function fmtMoney(value, currency = 'USD') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(2)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';

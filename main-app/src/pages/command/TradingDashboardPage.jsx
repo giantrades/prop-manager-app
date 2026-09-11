@@ -1,5 +1,6 @@
 // Batch G4 — Dashboard do módulo Trading (porta de entrada).
 // Reúne o Journal (analytics) + situação de risco + checklist do Playbook.
+import { fmtMoney } from '@apps/ui/currency';
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
@@ -7,13 +8,6 @@ import useEngineData from '../../useEngineData';
 import JournalDashboard from '@apps/ui/JournalDashboard';
 import { getChecklistTemplate, getDayCheck, nowIso } from '@apps/lib/db';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 export default function TradingDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {

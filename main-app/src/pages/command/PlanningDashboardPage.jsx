@@ -1,5 +1,7 @@
 // Batch G4 — Dashboard do módulo Planejamento (porta de entrada).
 // Composição pura: metas (progresso derivado) + forecast 30/60/90 + calendário.
+import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
@@ -7,13 +9,6 @@ import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
 import Forecast from '@apps/ui/Forecast';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 export default function PlanningDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {

@@ -4,15 +4,9 @@
 //
 // Fonte: DOCS/04_STAGE3_TRADING_OS/00-produto.md + 05-PWA_MOBILE_SPEC.md
 
+import { fmtMoney } from './currency';
 import React from 'react';
 
-function fmtMoney(value, currency = 'USD') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 function fmtPct(value) {
   if (value == null || Number.isNaN(value)) return '—';

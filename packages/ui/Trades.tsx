@@ -4,13 +4,10 @@
 //
 // Fonte: DOCS/04_STAGE3_TRADING_OS/00-produto.md (Journal) + 01-tasks.md (T3.5).
 
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradeReplay } from '@apps/lib/db';
 
-function fmtMoney(v) {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `${v < 0 ? '-' : ''}${Math.abs(v).toFixed(2)}`;
-}
 
 function fmtR(v) {
   if (v == null || Number.isNaN(v)) return 'n/a';

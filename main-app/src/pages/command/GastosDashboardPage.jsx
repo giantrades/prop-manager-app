@@ -1,5 +1,7 @@
 // Módulo Gastos — dashboard (porta de entrada). Composição pura dos motores de
 // dinheiro: free cash, orçamento, top categorias, contas a pagar e últimos lançamentos.
+import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
@@ -9,13 +11,6 @@ import {
   pendingBills, pendingSummary, computeFreeCash, categoryOf,
 } from '@apps/lib/db';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 
 export default function GastosDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {

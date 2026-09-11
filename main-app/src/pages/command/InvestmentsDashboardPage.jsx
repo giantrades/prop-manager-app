@@ -1,18 +1,13 @@
 // Batch G4 — Dashboard do módulo Investimentos (porta de entrada).
 // Composição pura: patrimônio (NetWorth + série) e carteira (portfolio).
+import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
+function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
 
-function fmtMoney(value, currency = 'R$') {
-  if (value == null || Number.isNaN(value)) return '—';
-  const abs = Math.abs(value);
-  const sign = value < 0 ? '-' : '';
-  if (abs >= 1000) return `${sign}${currency}${(abs / 1000).toFixed(1)}k`;
-  return `${sign}${currency}${abs.toFixed(2)}`;
-}
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
