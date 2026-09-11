@@ -61,6 +61,15 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch K — notificações como gaveta (executado)
+- A notificação da navbar **não navega mais** para `/actions`: abre uma **gaveta**
+  (`packages/ui/NotificationsDrawer.tsx`) com a lista de ações em aberto.
+- **Lida** = sai do sinal: `main-app/src/useReadNotifications.js` guarda os ids lidos em
+  `localStorage` (`notifications:read`); a contagem do badge = não lidas. Clicar num item
+  marca como lida (some da gaveta) e "Marcar todas" limpa o badge. Novo alerta (id novo)
+  volta a aparecer. Rodapé da gaveta leva ao Action Center completo.
+- Gate: `tsc` 0 + build verde + 232 testes verdes.
+
 ## Batch J — formatação de moeda global (USD/BRL) (executado)
 - **Problema**: cada componente formatava por conta própria com `$`/`R$` fixo; trocar a
   moeda no Settings não mudava os valores.

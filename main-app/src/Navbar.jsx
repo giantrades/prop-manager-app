@@ -5,6 +5,8 @@ import { useToast } from "@apps/ui/Toast";
 import { useDrive } from "@apps/state/DriveContext";
 import { usePlatform } from "@apps/state/usePlatform";
 import AlertsBadge from "@apps/ui/AlertsBadge";
+import NotificationsDrawer from "@apps/ui/NotificationsDrawer";
+import useReadNotifications from "./useReadNotifications";
 import { MODULES } from "./navConfig";
 import { prefetchPage } from "./routeLoaders";
 import {
@@ -87,7 +89,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
     usePlatform();
   const { actions } = useCommandSnapshot();
-  const alertCount = actions.length;
+  const { unread, markRead, markAllRead } = useReadNotifications(actions);
+  const alertCount = unread.length;
   const navigate = useNavigate();
   const finance = useFinance();
   const { toast } = useToast();
@@ -98,6 +101,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [platformDropdownTop, setPlatformDropdownTop] = useState(240);
 
   const platformItemRef = useRef(null);
@@ -332,7 +336,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
               <Bell size={18} strokeWidth={1.75} />
             </div>
             <div className="sb-footer-content">
-              <AlertsBadge count={alertCount} onClick={() => navigate('/actions')} label="Ações" />
+              <AlertsBadge count={alertCount} onClick={() => setNotifOpen(true)} label="Notificações" />
             </div>
           </div>
 
@@ -561,6 +565,15 @@ export default function Navbar({ isPinned, onTogglePin }) {
           )}
         </div>
       )}
+
+      <NotificationsDrawer
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        items={unread}
+        onRead={markRead}
+        onReadAll={markAllRead}
+        onGoActions={() => { setNotifOpen(false); navigate('/actions'); }}
+      />
     </>
   );
 }
