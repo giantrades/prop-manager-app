@@ -46,6 +46,7 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/firms` | Contas | `command/EngineViews.jsx` → `FirmPnlPage()` | `FirmPnl.tsx` | `money.ts` (`firmPnlByFirm`, `firmPnlHistory`) |
 | `/payouts` | Contas | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
 | `/payout-center` | Contas | `trading/PayoutCenterPage.jsx` | `PayoutCenter.tsx` | `money.applyPayoutAllocation` |
+| `/dinheiro` | Dinheiro | `command/MoneyDashboardPage.jsx` | `Wallets.tsx` (resumo) | `walletSummary`, `freeCash`, `pendingSummary`, `expensesByCategory` |
 | `/wallets` | Dinheiro | `command/EngineViews.jsx` → `WalletsPage()` | `Wallets.tsx` | `money.walletSummary()` |
 | `/expenses` | Dinheiro | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
 | `/tax` | Dinheiro | `command/EngineViews.jsx` → `TaxPage()` | `TaxCockpit.tsx` (+ `AssetSalesSection` local) | `money.taxCockpit()` |
@@ -85,11 +86,15 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 - **PayoutCenterPage** — alocação Tax→Living→Invest→Cash; cards de pendentes;
   `money.applyPayoutAllocation`.
 
-### Dinheiro (âncora `dinheiro`) — dashboard `/wallets`
+### Dinheiro (âncora `dinheiro`) — dashboard `/dinheiro`
+- **MoneyDashboardPage** — porta de entrada: free cash do mês, a pagar, carteiras, payouts
+  pendentes, próximas contas e top categorias. UI monta de `walletSummary`/`freeCash`/
+  `pendingSummary`/`expensesByCategory` (composição).
 - **WalletsPage** — saldo/in/out por carteira multi-moeda + gráfico de barras.
 - **ExpensesPage** — Gastos estilo Mobills (ícones, orçamento, recorrentes, rollover,
-  comparação de meses). UI grande em `Expenses.tsx`; testes `expenses.test.ts`,
-  `bankImport.test.ts`.
+  comparação de meses, contas a pagar/receber com status, parcelamento, cartão/fatura,
+  tags, ranking por estabelecimento, busca e visão por dia). UI grande em `Expenses.tsx`;
+  testes `expenses.test.ts`, `bankImport.test.ts`.
 - **TaxPage** — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
   **Dívida:** `AssetSalesSection` é local em `EngineViews.jsx` — extrair quando crescer.
 

@@ -819,6 +819,20 @@ export function ExpensesPage() {
     }
   }, []);
 
+  // D2 — parcelamento (N despesas mensais, contas a pagar).
+  const onAddInstallments = useCallback(async (input) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.money.recordInstallments(input);
+  }, []);
+
+  // D5 — transferência entre carteiras (débito na origem + crédito no destino).
+  const onTransfer = useCallback(async (input) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.money.recordTransferBetween(input);
+  }, []);
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Gastos</h1></div>
@@ -837,6 +851,8 @@ export function ExpensesPage() {
         onMakeRecurring={onMakeRecurring}
         onSaveSavingsGoal={onSaveSavingsGoal}
         onImportBatch={onImportBatch}
+        onAddInstallments={onAddInstallments}
+        onTransfer={onTransfer}
         rolloverCats={data?.rolloverCats ?? []}
         onToggleRollover={onToggleRollover}
         onSaveCategory={onSaveCategory}

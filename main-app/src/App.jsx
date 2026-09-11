@@ -12,6 +12,7 @@ import { PALETTE_ROUTES } from "./navConfig";
 // UX foundation: code-split por rota — o chunk inicial carrega só shell.
 // Páginas pesadas (charts) vão para chunks sob demanda.
 const HomePage = lazy(() => import("./pages/command/HomePage.jsx"));
+const MoneyDashboardPage = lazy(() => import("./pages/command/MoneyDashboardPage.jsx"));
 const CalendarPage = lazy(() => import("./pages/command/CalendarPage.jsx"));
 const ActionCenterPage = lazy(() => import("./pages/command/ActionCenterPage.jsx"));
 const JournalPage = lazy(() => import("./pages/trading/JournalPage.jsx"));
@@ -230,6 +231,7 @@ export default function App() {
           <Routes>
             {/* Command Center (novo, motor-driven) */}
             <Route path="/" element={<HomePage />} />
+            <Route path="/dinheiro" element={<MoneyDashboardPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/actions" element={<ActionCenterPage />} />
             <Route path="/risk" element={<RiskPage />} />

@@ -68,7 +68,30 @@
   extrato agora é aplicada de fato.
 - Gate: `vite build` verde + 220 testes verdes.
 
-## Batch D — paridade Mobills (backlog priorizado)
+## Batch D — paridade Mobills (executado D1–D6)
+- **D1 Contas a pagar/receber [x]**: `Transaction.paid?`/`dueDate?` (aditivo); `paid===false`
+  fica fora do `computeFreeCash` (título pendente, não caixa) e entra ao quitar. Seletores
+  `pendingBills`/`pendingSummary` (motor + testes). UI: seção "Contas a pagar/receber" com
+  atraso, botão Pagar/Receber e badge "pendente" nas linhas; form com "Já pago" + vencimento.
+- **D2 Parcelamento e cartão [x]**: `Transaction.installments?`/`card?`; `recordInstallments`
+  cria N despesas mensais (sobra na última, `paid=false`). UI: "Parcelar em 2–48x", campo
+  Cartão, badge `n/of`, seção "Fatura por cartão".
+- **D3 Visão diária [x]**: toggle Categoria | Dia nos lançamentos, com subtotal por dia
+  (composição, sem motor novo).
+- **D4 Ranking por estabelecimento [x]**: `merchantRanking(txs, ym)` (motor + teste) agrupando
+  por nota normalizada, ignora pendentes; seção "Onde mais gastei". Campo `tags?` aditivo.
+- **D5 Transferência entre carteiras [x]**: `recordTransferBetween` (dupla entrada, neutro no
+  caixa; corrige o `recordTransfer` de entrada única que perdia patrimônio). UI: sheet
+  "Transferir" com De/Para/Valor/Data.
+- **D6 Dashboard do Dinheiro [x]**: nova rota `/dinheiro` (`MoneyDashboardPage`) como porta de
+  entrada do módulo — free cash, a pagar, carteiras, payouts pendentes, próximas contas, top
+  categorias. Wallets **virou aba** (Resumo|Wallets|Gastos|Tax). Ver também
+  `shell-ux-foundation.md` Batch G.
+- Gate: `vite build` verde + 228 testes verdes (6 novos: D1/D2/D4/D5).
+- Pendente (próximas rodadas): D3 saldo acumulado por dia; D4 campo merchant dedicado;
+  relatório PDF; metas por estabelecimento.
+
+## Batch D — backlog original (referência)
 - **D1 Contas a pagar/receber com status**: flag paga/pendente por lançamento + badges e
   filtro "a pagar"; base para "próximas contas" (B2). Mexe em `types.ts` + `MoneyService`
   (campo aditivo, sem nova fórmula) + UI.

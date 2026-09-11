@@ -121,7 +121,7 @@ export type TransactionKind =
   | 'tax_reserve';
 
 export interface TransactionRef {
-  type: 'payoutId' | 'tradeId' | 'investmentId' | 'recurrence';
+  type: 'payoutId' | 'tradeId' | 'investmentId' | 'recurrence' | 'transfer';
   id: string;
 }
 
@@ -142,6 +142,15 @@ export interface Transaction extends SyncedRecord {
   attachments?: Record<string, object>;
   // A4 — ativo da operação buy/sell (para FIFO de IR). Aditivo.
   asset?: { symbol: string; qty: number; price: number };
+  // D1 — contas a pagar/receber. `undefined` = pago (legado); `false` = pendente.
+  paid?: boolean;
+  dueDate?: string; // ISO: vencimento da conta (a pagar/receber)
+  // D2 — parcelamento: parcela atual / total + agrupador.
+  installments?: { n: number; of: number; groupId: string };
+  // D2 — cartão/fatura (agrupa lançamentos por cartão).
+  card?: string;
+  // D4 — tags livres (ex.: 'viagem', 'trabalho').
+  tags?: string[];
 }
 
 export interface Position {

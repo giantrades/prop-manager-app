@@ -70,8 +70,9 @@ export const MODULES = [
     id: "dinheiro",
     label: "Dinheiro",
     icon: Banknote,
-    dashboard: "/wallets",
+    dashboard: "/dinheiro",
     children: [
+      { to: "/dinheiro", label: "Resumo", icon: Banknote, end: true, keywords: "dinheiro dashboard resumo" },
       { to: "/wallets", label: "Wallets", icon: Wallet, keywords: "carteiras bancos dinheiro" },
       { to: "/expenses", label: "Gastos", icon: Receipt, keywords: "despesas mobills orçamento" },
       { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },

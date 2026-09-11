@@ -66,8 +66,9 @@ Problema: hoje clicar numa âncora leva à **primeira aba** (ex. Dinheiro → `/
 não a uma dashboard. A dashboard deve ser a porta de entrada do módulo, com os seus
 próprios indicadores, e as abas navegam para as páginas internas.
 - **G1** rota de dashboard própria por módulo (ex. `/dinheiro`, `/contas`, `/trading`).
-- **G2** Dinheiro: Wallets vira aba; dashboard mostra resumo de Gastos (mês, orçamento,
-  top categorias), saldo por carteira e payouts pendentes.
+- **G2** Dinheiro: ~~Wallets vira aba; dashboard~~ FEITO (Batch D6): rota `/dinheiro`
+  (`MoneyDashboardPage`) com free cash, a pagar, carteiras, payouts, próximas contas e top
+  categorias; abas Resumo|Wallets|Gastos|Tax.
 - **G3** Contas: dashboard com equity/DD agregado + payouts; abas Accounts|Firms|Payouts|Alocar.
 - **G4** Trading/Investimentos/Planejamento: dashboards reutilizando os componentes
   `*Dashboard` já existentes; `navConfig.js` ganha `dashboard` apontando p/ a nova rota.

@@ -25,6 +25,10 @@ import {
   getRolloverCats,
   setRolloverCats,
   rolloverAmount,
+  pendingBills,
+  pendingSummary,
+  merchantRanking,
+  computeAccountBalance,
 } from '../money';
 import type { Transaction } from '../types';
 
@@ -217,7 +221,7 @@ describe('gastos A4 � comparativo m�s a m�s + meta de economia', () => {
 });
 
 
-describe('gastos B1 � rollover de sobra', () => {
+describe('gastos B1 � rollover de sobra', () => {
   const e = (id, ym, day, category, amount) => tx({ id, kind: 'expense', category, amount: -amount, date: ym + '-' + String(day).padStart(2, '0') + 'T12:00:00Z' });
   // ago: moradia meta 2000 gastou 1500 => sobra 500; lazer meta 300 gastou 400 => 0
   const list = [e('a1', '2026-08', 5, 'moradia', 1500), e('a2', '2026-08', 6, 'lazer', 400)];
@@ -235,6 +239,103 @@ describe('gastos B1 � rollover de sobra', () => {
     expect(await getRolloverCats(ds)).toEqual([]);
     await setRolloverCats(ds, ['moradia', 'lazer', 'moradia']);
     expect(await getRolloverCats(ds)).toEqual(['moradia', 'lazer']);
+  });
+});
+
+describe('gastos D1 — contas a pagar/receber (paid/pendente)', () => {
+  it('computeFreeCash ignora títulos não pagos (paid=false)', () => {
+    const list = [
+      tx({ id: 'i1', kind: 'income', amount: 1000, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'e1', kind: 'expense', amount: -200, date: '2026-09-06T12:00:00Z' }),
+      tx({ id: 'e2', kind: 'expense', amount: -500, date: '2026-09-07T12:00:00Z', paid: false }),
+    ];
+    expect(computeFreeCash(list, '2026-09')).toEqual({ income: 1000, expenses: 200, freeCash: 800 });
+  });
+
+  it('pendingBills lista pendentes por vencimento e marca atraso', () => {
+    const list = [
+      tx({ id: 'p1', kind: 'expense', amount: -100, dueDate: '2026-09-20T00:00:00Z', paid: false }),
+      tx({ id: 'p2', kind: 'expense', amount: -50, dueDate: '2026-09-10T00:00:00Z', paid: false }),
+      tx({ id: 'ok', kind: 'expense', amount: -30, dueDate: '2026-09-15T00:00:00Z' }),
+    ];
+    const rows = pendingBills(list, '2026-09-15T12:00:00Z');
+    expect(rows.map((r) => r.tx.id)).toEqual(['p2', 'p1']);
+    expect(rows.find((r) => r.tx.id === 'p2').overdue).toBe(true);
+    expect(rows.find((r) => r.tx.id === 'p1').overdue).toBe(false);
+  });
+
+  it('pendingSummary soma a pagar × a receber', () => {
+    const list = [
+      tx({ id: 'p1', kind: 'expense', amount: -100, paid: false, date: '2026-09-20T12:00:00Z' }),
+      tx({ id: 'r1', kind: 'income', amount: 300, paid: false, date: '2026-09-21T12:00:00Z' }),
+    ];
+    expect(pendingSummary(list, '2026-09-15T12:00:00Z')).toEqual({ payable: 100, receivable: 300, count: 2, overdue: 0 });
+  });
+
+  it('recordExpense grava paid=false e dueDate', async () => {
+    const { ds, money } = makeService();
+    const t = await money.recordExpense({ accountId: 'w', amount: 90, currency: 'BRL', category: 'moradia', paid: false, dueDate: '2026-09-25T00:00:00Z' });
+    expect(t.paid).toBe(false);
+    expect(t.dueDate).toBe('2026-09-25T00:00:00Z');
+    const all = await ds.transactions.list();
+    expect(computeFreeCash(all, '2026-09')).toEqual({ income: 0, expenses: 0, freeCash: 0 });
+    await money.updateTransaction(t.id, { paid: true });
+    const after = await ds.transactions.list();
+    expect(computeFreeCash(after, '2026-09')).toEqual({ income: 0, expenses: 90, freeCash: -90 });
+  });
+});
+
+describe('gastos D2 — parcelamento e cartão', () => {
+  it('recordInstallments divide o total (sobra na última) e cria contas a pagar', async () => {
+    const { ds, money } = makeService();
+    const list = await money.recordInstallments({
+      accountId: 'w', currency: 'BRL', totalAmount: 100, count: 3, category: 'compras', card: 'Nubank', firstDate: '2026-09-15T12:00:00Z', note: 'Fone',
+    });
+    expect(list).toHaveLength(3);
+    expect(list.map((t) => Math.abs(t.amount))).toEqual([33.33, 33.33, 33.34]);
+    expect(list.every((t) => t.paid === false)).toBe(true);
+    expect(list.every((t) => t.card === 'Nubank')).toBe(true);
+    expect(list.map((t) => t.installments.n)).toEqual([1, 2, 3]);
+    expect(list.every((t) => t.installments.groupId === list[0].installments.groupId)).toBe(true);
+    const all = await ds.transactions.list();
+    expect(computeFreeCash(all, '2026-09')).toEqual({ income: 0, expenses: 0, freeCash: 0 });
+  });
+});
+
+describe('gastos D4 — ranking por estabelecimento', () => {
+  it('agrupa despesas pagas por note, maior primeiro, e ignora pendentes', () => {
+    const list = [
+      tx({ id: 'm1', kind: 'expense', amount: -30, note: 'iFood', date: '2026-09-02T12:00:00Z' }),
+      tx({ id: 'm2', kind: 'expense', amount: -20, note: 'ifood', date: '2026-09-03T12:00:00Z' }),
+      tx({ id: 'm3', kind: 'expense', amount: -80, note: 'Uber', date: '2026-09-04T12:00:00Z' }),
+      tx({ id: 'pend', kind: 'expense', amount: -999, note: 'Uber', date: '2026-09-05T12:00:00Z', paid: false }),
+    ];
+    expect(merchantRanking(list, '2026-09')).toEqual([
+      { name: 'Uber', total: 80, count: 1 },
+      { name: 'iFood', total: 50, count: 2 },
+    ]);
+  });
+});
+
+describe('gastos D5 — transferência entre carteiras (dupla entrada)', () => {
+  it('debita a origem e credita o destino; neutro no free cash', async () => {
+    const { ds, money } = makeService();
+    const [out, inn] = await money.recordTransferBetween({
+      fromAccountId: 'w-a', toAccountId: 'w-b', amount: 200, currency: 'BRL', date: '2026-09-10T12:00:00Z', note: 'reserva',
+    });
+    expect(out.amount).toBe(-200);
+    expect(inn.amount).toBe(200);
+    expect(out.ref.id).toBe(inn.ref.id);
+    const all = await ds.transactions.list();
+    expect(computeAccountBalance(all, 'w-a')).toBe(-200);
+    expect(computeAccountBalance(all, 'w-b')).toBe(200);
+    expect(computeFreeCash(all, '2026-09')).toEqual({ income: 0, expenses: 0, freeCash: 0 });
+  });
+
+  it('rejeita origem=destino e valor 0', async () => {
+    const { money } = makeService();
+    await expect(money.recordTransferBetween({ fromAccountId: 'w', toAccountId: 'w', amount: 10, currency: 'BRL' })).rejects.toThrow();
+    await expect(money.recordTransferBetween({ fromAccountId: 'a', toAccountId: 'b', amount: 0, currency: 'BRL' })).rejects.toThrow();
   });
 });
 

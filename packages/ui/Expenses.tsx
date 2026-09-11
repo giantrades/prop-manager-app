@@ -19,6 +19,7 @@ import {
   computeFreeCash, expensesByCategory, incomeByKind, monthlySeries,
   budgetStatus, categoryOf, recurringDue, detectRecurringCandidates, compareMonths,
   parseBankFile, buildBankImport, rolloverAmount,
+  pendingBills, pendingSummary, merchantRanking,
   DEFAULT_CATEGORIES,
 } from '@apps/lib/db';
 
@@ -74,7 +75,12 @@ function shiftMonth(year, month, delta) {
 const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function emptyForm() {
-  return { type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '', recur: false, recurDay: new Date().getDate(), attachments: {} };
+  return {
+    type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '',
+    recur: false, recurDay: new Date().getDate(), attachments: {},
+    // D1/D2/D4
+    paid: true, dueDate: '', card: '', installmentCount: '', tags: '',
+  };
 }
 
 // A2 — limite por anexo (300KB) com compressão client-side para imagens.
@@ -153,7 +159,7 @@ export default function Expenses({
   txs = [], categories = [], budgets = {}, accounts = [],
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
-  rolloverCats = [], onToggleRollover,
+  rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer,
   currency = 'R$', loading = false,
 }) {
   const now = new Date();
@@ -161,6 +167,7 @@ export default function Expenses({
   const [typeFilter, setTypeFilter] = useState('all');
   const [catFilter, setCatFilter] = useState('');
   const [q, setQ] = useState('');
+  const [groupBy, setGroupBy] = useState('cat');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -168,6 +175,8 @@ export default function Expenses({
   const [showCats, setShowCats] = useState(false);
   const [newCat, setNewCat] = useState({ name: '', icon: 'Tag', color: 'gray' });
   const [undo, setUndo] = useState(null);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transfer, setTransfer] = useState({ from: '', to: '', amount: '', date: '', note: '' });
 
   const cats = categories.length ? categories : DEFAULT_CATEGORIES;
   const catById = useMemo(() => {
@@ -231,6 +240,35 @@ export default function Expenses({
     return gains.filter((g) => monthTxs.some((t) => t.kind === g.kind));
   }, [gains, monthTxs, q]);
 
+  // D1 — contas a pagar/receber (títulos pendentes, qualquer mês; atraso em destaque).
+  const bills = useMemo(() => pendingBills(txs), [txs]);
+  const billSummary = useMemo(() => pendingSummary(txs), [txs]);
+  // D2 — fatura por cartão no mês (despesas pagas + pendentes do cartão).
+  const cardTotals = useMemo(() => {
+    const acc = new Map();
+    for (const t of txs) {
+      if (t.kind !== 'expense' || !t.card) continue;
+      if (t.date.slice(0, 7) !== key) continue;
+      acc.set(t.card, (acc.get(t.card) ?? 0) + Math.abs(t.amount));
+    }
+    return [...acc.entries()].map(([card, total]) => ({ card, total })).sort((a, b) => b.total - a.total);
+  }, [txs, key]);
+  // D4 — onde mais gastei (estabelecimento derivado da nota).
+  const merchants = useMemo(() => merchantRanking(txs, key, 6), [txs, key]);
+  // D3 — lançamentos agrupados por dia (extrato).
+  const dayGroups = useMemo(() => {
+    const acc = new Map();
+    for (const t of monthTxs) {
+      const day = (t.date || '').slice(0, 10);
+      const cur = acc.get(day) ?? { day, items: [], total: 0 };
+      cur.items.push(t);
+      if (t.kind === 'expense') cur.total -= Math.abs(t.amount);
+      else if (['payout_in', 'rebate', 'income', 'dividend'].includes(t.kind)) cur.total += t.amount;
+      acc.set(day, cur);
+    }
+    return [...acc.values()].sort((a, b) => b.day.localeCompare(a.day));
+  }, [monthTxs]);
+
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const startAdd = () => {
@@ -256,6 +294,11 @@ export default function Expenses({
       recur: false,
       recurDay: new Date().getDate(),
       attachments: { ...(t.attachments ?? {}) },
+      paid: t.paid !== false,
+      dueDate: (t.dueDate || '').slice(0, 16),
+      card: t.card ?? '',
+      installmentCount: '',
+      tags: (t.tags ?? []).join(', '),
     });
     setAttachError(null);
     setShowForm(true);
@@ -265,12 +308,17 @@ export default function Expenses({
     const amt = Number(form.amount);
     if (!amt || amt <= 0 || !form.accountId) return;
     const attachments = form.attachments && Object.keys(form.attachments).length > 0 ? form.attachments : undefined;
+    const tags = form.tags.split(',').map((s) => s.trim()).filter(Boolean);
     const base = {
       accountId: form.accountId,
       amount: amt,
       date: form.date ? new Date(form.date).toISOString() : new Date().toISOString(),
       note: form.note.trim() || undefined,
       attachments,
+      paid: form.paid,
+      dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
+      card: form.card.trim() || undefined,
+      tags: tags.length ? tags : undefined,
     };
     if (editingId) {
       const patch = form.type === 'expense'
@@ -278,16 +326,39 @@ export default function Expenses({
         : { amount: amt, ...base };
       onUpdate?.(editingId, patch);
     } else if (form.type === 'expense') {
-      onAdd?.({
-        kind: 'expense', ...base, amount: amt, category: form.category,
-        recurrence: form.recur ? { freq: 'monthly', day: Math.min(28, Math.max(1, Number(form.recurDay) || 1)) } : undefined,
-      });
+      const parts = Number(form.installmentCount);
+      if (parts >= 2 && onAddInstallments) {
+        // D2 — parcelamento: N parcelas mensais (contas a pagar).
+        onAddInstallments({
+          accountId: form.accountId, currency: 'BRL', totalAmount: amt, count: parts,
+          category: form.category, card: base.card, note: base.note,
+          firstDate: base.dueDate ?? base.date,
+        });
+      } else {
+        onAdd?.({
+          kind: 'expense', ...base, amount: amt, category: form.category,
+          recurrence: form.recur ? { freq: 'monthly', day: Math.min(28, Math.max(1, Number(form.recurDay) || 1)) } : undefined,
+        });
+      }
     } else {
       onAdd?.({ kind: 'income', ...base, amount: amt });
     }
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm());
+  };
+
+  // D5 — transferência entre carteiras (dupla entrada).
+  const handleTransfer = () => {
+    const amt = Number(transfer.amount);
+    if (!(amt > 0) || !transfer.from || !transfer.to || transfer.from === transfer.to) return;
+    onTransfer?.({
+      fromAccountId: transfer.from, toAccountId: transfer.to, amount: amt, currency: 'BRL',
+      date: transfer.date ? new Date(transfer.date).toISOString() : undefined,
+      note: transfer.note.trim() || undefined,
+    });
+    setTransfer({ from: '', to: '', amount: '', date: '', note: '' });
+    setShowTransfer(false);
   };
 
   // A2 — anexa arquivo ao form (comprime imagem; erro visível, nunca alert()).
@@ -420,8 +491,38 @@ export default function Expenses({
         </select>
         <button className={`ex-btn ex-btn-ghost${showBudget ? ' ex-btn-on' : ''}`} aria-pressed={showBudget} onClick={() => setShowBudget((s) => !s)}>Orçamento</button>
         <button className={`ex-btn ex-btn-ghost${showCats ? ' ex-btn-on' : ''}`} aria-pressed={showCats} onClick={() => setShowCats((s) => !s)}>Categorias</button>
+        <button className="ex-btn ex-btn-ghost" onClick={() => setShowTransfer(true)}>Transferir</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato</button>
       </div>
+
+      {/* D1 — Contas a pagar / a receber */}
+      {bills.length > 0 && (
+        <div className="ex-bills" role="region" aria-label="Contas a pagar e a receber">
+          <div className="ex-bills-head">
+            <span className="ex-section-title">Contas a pagar / receber</span>
+            <span className="ex-bills-sum">
+              {billSummary.payable > 0 && <span className="ex-neg-t">a pagar {fmtMoney(billSummary.payable, currency)}</span>}
+              {billSummary.receivable > 0 && <span className="ex-pos-t">a receber {fmtMoney(billSummary.receivable, currency)}</span>}
+              {billSummary.overdue > 0 && <span className="ex-badge-late">{billSummary.overdue} atrasada(s)</span>}
+            </span>
+          </div>
+          {bills.slice(0, 8).map((b) => {
+            const cat = catById.get(categoryOf(b.tx, cats) ?? 'outros');
+            const isIncome = b.tx.kind !== 'expense';
+            return (
+              <div key={b.tx.id} className={`ex-bill${b.overdue ? ' late' : ''}`}>
+                <CatIcon name={isIncome ? 'Gift' : (cat?.icon ?? 'Tag')} color={isIncome ? 'green' : (cat?.color ?? 'gray')} size={16} />
+                <div className="ex-bill-main">
+                  <span className="ex-bill-name">{b.tx.note || cat?.name || 'Lançamento'}</span>
+                  <span className="ex-bill-due">vence {b.dueDate || b.tx.date.slice(0, 10)}{b.overdue ? ' · atrasado' : ''}</span>
+                </div>
+                <span className={`ex-bill-amount ${isIncome ? 'ex-pos-t' : 'ex-neg-t'}`}>{fmtMoney(Math.abs(b.tx.amount), currency)}</span>
+                <button className="ex-btn ex-btn-sm ex-btn-primary" onClick={() => onUpdate?.(b.tx.id, { paid: true })}>{isIncome ? 'Receber' : 'Pagar'}</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       <input
         ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif" style={{ display: 'none' }}
         onChange={(e) => { handleImportFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Importar extrato OFX ou CSV"
@@ -560,6 +661,32 @@ export default function Expenses({
           <label className="ex-field"><span>Nota</span>
             <input className="ex-input" type="text" value={form.note} onChange={(e) => setF('note', e.target.value)} placeholder="Ex.: aluguel" aria-label="Nota" />
           </label>
+          <div className="ex-form-row">
+            <label className="ex-field"><span>Estabelecimento / tags</span>
+              <input className="ex-input" type="text" value={form.tags} onChange={(e) => setF('tags', e.target.value)} placeholder="viagem, trabalho (separe por vírgula)" aria-label="Tags" />
+            </label>
+            <label className="ex-field"><span>Cartão (fatura)</span>
+              <input className="ex-input" type="text" value={form.card} onChange={(e) => setF('card', e.target.value)} placeholder="Ex.: Nubank" aria-label="Cartão" />
+            </label>
+          </div>
+          <label className="ex-check">
+            <input type="checkbox" checked={form.paid} onChange={(e) => setF('paid', e.target.checked)} />
+            {form.type === 'expense' ? 'Já pago' : 'Já recebido'}
+          </label>
+          {!form.paid && (
+            <label className="ex-field"><span>Vencimento</span>
+              <input className="ex-input" type="date" value={form.dueDate} onChange={(e) => setF('dueDate', e.target.value)} aria-label="Vencimento" />
+            </label>
+          )}
+          {form.type === 'expense' && !editingId && (
+            <label className="ex-field"><span>Parcelar em (2–48x)</span>
+              <input
+                className="ex-input" type="number" min="2" max="48" value={form.installmentCount}
+                onChange={(e) => setF('installmentCount', e.target.value)}
+                placeholder="À vista" aria-label="Número de parcelas"
+              />
+            </label>
+          )}
           <label className="ex-field"><span>Anexos (foto/recibo, máx 300KB)</span>
             <input className="ex-input" type="file" accept="image/*,.pdf" onChange={(e) => { handleAttach(e.target.files?.[0]); e.target.value = ''; }} aria-label="Anexar comprovante" />
           </label>
@@ -589,6 +716,50 @@ export default function Expenses({
           </div>
           {accounts.length === 0 && <div className="ex-hint">Crie uma conta (Wallets) para lançar.</div>}
           </div>
+          </div>
+        </div>
+      )}
+
+      {/* D5 — Transferência entre carteiras */}
+      {showTransfer && (
+        <div className="ex-overlay" onClick={() => setShowTransfer(false)}>
+          <div className="ex-sheet" role="dialog" aria-modal="true" aria-label="Transferir entre carteiras" onClick={(e) => e.stopPropagation()}>
+            <div className="ex-sheet-head">
+              <span className="ex-sheet-title">Transferir</span>
+              <button className="ex-mini" onClick={() => setShowTransfer(false)} aria-label="Fechar">✕</button>
+            </div>
+            <div className="ex-form">
+              <div className="ex-form-row">
+                <label className="ex-field"><span>De</span>
+                  <select className="ex-input" value={transfer.from} onChange={(e) => setTransfer((t) => ({ ...t, from: e.target.value }))} aria-label="Conta de origem">
+                    <option value="">—</option>
+                    {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+                  </select>
+                </label>
+                <label className="ex-field"><span>Para</span>
+                  <select className="ex-input" value={transfer.to} onChange={(e) => setTransfer((t) => ({ ...t, to: e.target.value }))} aria-label="Conta de destino">
+                    <option value="">—</option>
+                    {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+                  </select>
+                </label>
+              </div>
+              <div className="ex-form-row">
+                <label className="ex-field"><span>Valor</span>
+                  <input className="ex-input" type="number" min="0" step="0.01" value={transfer.amount} onChange={(e) => setTransfer((t) => ({ ...t, amount: e.target.value }))} placeholder="0.00" aria-label="Valor da transferência" />
+                </label>
+                <label className="ex-field"><span>Data</span>
+                  <input className="ex-input" type="date" value={transfer.date} onChange={(e) => setTransfer((t) => ({ ...t, date: e.target.value }))} aria-label="Data da transferência" />
+                </label>
+              </div>
+              <label className="ex-field"><span>Nota</span>
+                <input className="ex-input" type="text" value={transfer.note} onChange={(e) => setTransfer((t) => ({ ...t, note: e.target.value }))} placeholder="Ex.: reserva" aria-label="Nota da transferência" />
+              </label>
+              {transfer.from && transfer.to && transfer.from === transfer.to && <div className="ex-hint" role="alert">Origem e destino iguais.</div>}
+              <div className="ex-form-row">
+                <button className="ex-btn ex-btn-primary" onClick={handleTransfer} disabled={!(Number(transfer.amount) > 0) || !transfer.from || !transfer.to || transfer.from === transfer.to}>Transferir</button>
+                <button className="ex-btn ex-btn-ghost" onClick={() => setShowTransfer(false)}>Cancelar</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -677,6 +848,38 @@ export default function Expenses({
         </div>
       </div>
 
+      {/* D4 — onde mais gastei (estabelecimento) */}
+      {typeFilter !== 'income' && merchants.length > 0 && (
+        <div className="ex-section">
+          <div className="ex-section-title">Onde mais gastei</div>
+          <div className="ex-compare">
+            {merchants.map((m) => (
+              <div key={m.name} className="ex-compare-row">
+                <span className="ex-compare-name">{m.name}</span>
+                <span className="ex-compare-vals">{m.count}x</span>
+                <span className="ex-compare-delta ex-neg-t">{fmtMoney(m.total, currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* D2 — fatura por cartão */}
+      {cardTotals.length > 0 && (
+        <div className="ex-section">
+          <div className="ex-section-title">Fatura por cartão (mês)</div>
+          <div className="ex-compare">
+            {cardTotals.map((c) => (
+              <div key={c.card} className="ex-compare-row">
+                <span className="ex-compare-name">{c.card}</span>
+                <span className="ex-compare-vals">no mês</span>
+                <span className="ex-compare-delta ex-neg-t">{fmtMoney(c.total, currency)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* A4 — comparativo com o mês passado + meta de economia */}
       {typeFilter !== 'income' && (
         <div className="ex-section">
@@ -754,8 +957,29 @@ export default function Expenses({
       {/* Gastos agrupados */}
       {typeFilter !== 'income' && (
         <div className="ex-section">
-          <div className="ex-section-title">Lançamentos do mês</div>
-          {listGroups.length === 0 ? (
+          <div className="ex-section-head">
+            <span className="ex-section-title">Lançamentos do mês</span>
+            <span className="ex-typefilter" role="group" aria-label="Agrupar lançamentos">
+              <button className={`ex-chip${groupBy === 'cat' ? ' active' : ''}`} onClick={() => setGroupBy('cat')}>Categoria</button>
+              <button className={`ex-chip${groupBy === 'day' ? ' active' : ''}`} onClick={() => setGroupBy('day')}>Dia</button>
+            </span>
+          </div>
+          {groupBy === 'day' ? (
+            dayGroups.length === 0 ? (
+              <div className="ex-empty" role="status">{q.trim() ? 'Nenhum lançamento encontrado.' : 'Nenhuma despesa neste mês.'}</div>
+            ) : dayGroups.map((d) => (
+              <div key={d.day} className="ex-group">
+                <div className="ex-group-head">
+                  <span className="ex-group-name">{d.day.slice(8, 10)}/{d.day.slice(5, 7)}</span>
+                  <span className="ex-group-sub">{d.items.length} lançamento(s)</span>
+                  <span className={`ex-group-total ${d.total >= 0 ? 'ex-pos-t' : 'ex-neg-t'}`}>{fmtMoney(d.total, currency)}</span>
+                </div>
+                {d.items.map((t) => (
+                  <TxRow key={t.id} t={t} currency={currency} label={t.note || catById.get(categoryOf(t, cats) ?? 'outros')?.name || 'Lançamento'} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
+                ))}
+              </div>
+            ))
+          ) : listGroups.length === 0 ? (
             <div className="ex-empty" role="status">{q.trim() ? 'Nenhum lançamento encontrado.' : 'Nenhuma despesa neste mês.'}</div>
           ) : listGroups.map((g) => {
             const cat = catById.get(g.categoryId) ?? { name: g.categoryId, icon: 'Tag', color: 'gray' };
@@ -769,7 +993,7 @@ export default function Expenses({
                   <span className="ex-group-total ex-neg-t">{fmtMoney(g.total, currency)}</span>
                 </div>
                 {items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} />
+                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
                 ))}
               </div>
             );
@@ -780,13 +1004,22 @@ export default function Expenses({
   );
 }
 
-function TxRow({ t, currency, label, onEdit, onDelete }) {
+function TxRow({ t, currency, label, onEdit = null, onDelete = null, onPay = null }) {
   const files = Object.keys(t.attachments ?? {});
+  const pending = t.paid === false;
   return (
     <div className="ex-item">
       <div className="ex-item-main">
-        <div className="ex-item-cat">{label}</div>
-        <div className="ex-item-note">{t.date ? t.date.slice(0, 10) : ''}</div>
+        <div className="ex-item-cat">
+          {label}
+          {t.installments && <span className="ex-badge">{t.installments.n}/{t.installments.of}</span>}
+          {pending && <span className="ex-badge ex-badge-pending">pendente</span>}
+          {t.card && <span className="ex-badge ex-badge-card">{t.card}</span>}
+        </div>
+        <div className="ex-item-note">
+          {t.date ? t.date.slice(0, 10) : ''}
+          {t.tags?.length ? ` · ${t.tags.join(', ')}` : ''}
+        </div>
         {files.length > 0 && (
           <div className="ex-attach-list">
             {files.map((name) => {
@@ -802,6 +1035,7 @@ function TxRow({ t, currency, label, onEdit, onDelete }) {
       <div className="ex-item-right">
         <div className={`ex-item-amount ${t.amount >= 0 ? 'ex-pos-t' : ''}`}>{fmtMoney(t.amount, currency)}</div>
         <div className="ex-item-actions">
+          {pending && onPay && <button className="ex-mini ex-mini-pay" onClick={onPay} aria-label="Marcar como pago" title="Marcar como pago">✓</button>}
           {onEdit && <button className="ex-mini" onClick={onEdit} aria-label="Editar"><Pencil size={13} /></button>}
           {onDelete && <button className="ex-mini ex-danger" onClick={onDelete} aria-label="Excluir"><Trash2 size={13} /></button>}
         </div>
@@ -980,6 +1214,26 @@ const EX_CSS = `
 .ex-form { border: none; background: transparent; border-radius: 0; padding: 16px 18px 24px; gap: 14px; }
 @media (min-width: 720px) { .ex-overlay { align-items: center; padding: 24px; } .ex-sheet { border-radius: 20px; } }
 @media (max-width: 719px) { .ex-search { max-width: none; flex: 1; } .ex-section { padding: 14px; } }
+
+/* ── D1/D2/D3/D4/D5 ── */
+.ex-section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-badge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 6px; border-radius: 999px; margin-left: 6px; border: 1px solid rgba(255,255,255,0.14); color: var(--muted, #a1a7b3); vertical-align: middle; }
+.ex-badge-pending { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.45); background: rgba(225,177,44,0.1); }
+.ex-badge-card { color: var(--blue, #3498db); border-color: rgba(52,152,219,0.4); background: rgba(52,152,219,0.1); }
+.ex-mini-pay { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.45); }
+
+.ex-bills { background: linear-gradient(180deg, #2e2b12 0%, #1b2010 100%); border: 1px solid #594e19; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.ex-bills-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-bills-sum { display: flex; gap: 10px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.ex-badge-late { color: var(--red, #e74c3c); }
+.ex-bill { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 10px 12px; }
+.ex-bill.late { border-color: rgba(231,76,60,0.4); }
+.ex-bill-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ex-bill-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-bill-due { font-size: 11px; color: var(--muted, #a1a7b3); }
+.ex-bill.late .ex-bill-due { color: var(--red, #e74c3c); }
+.ex-bill-amount { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+@media (max-width: 719px) { .ex-bill { flex-wrap: wrap; } .ex-bill-amount { margin-left: auto; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('ex-styles')) {
   const style = document.createElement('style');

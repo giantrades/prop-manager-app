@@ -504,6 +504,8 @@ export interface FreeCashResult {
  * Free Cash = Income - Expenses. Income = Σ(INCOME_KINDS); Expenses =
  * Σ(expense + tax_reserve + fee + commission + swap + challenge/reset/monthly).
  * Transfer/buy/sell são neutros (movimentação de ativo, não consumo).
+ * D1 — títulos ainda NÃO pagos (`paid === false`) ficam fora do caixa (são "a pagar");
+ * entram quando quitados. Legado sem o campo continua contando (pago).
  */
 export function computeFreeCash(transactions: Transaction[], yearMonth: string): FreeCashResult {
   let income = 0;
@@ -511,10 +513,81 @@ export function computeFreeCash(transactions: Transaction[], yearMonth: string):
   for (const t of transactions) {
     const ym = t.date.slice(0, 7);
     if (ym !== yearMonth) continue;
+    if (t.paid === false) continue;
     if (INCOME_KINDS.has(t.kind)) income += t.amount;
     else if (COST_KINDS.has(t.kind)) expenses += Math.abs(t.amount);
   }
   return { income: r2(income), expenses: r2(expenses), freeCash: r2(income - expenses) };
+}
+
+// ---------------------------------------------------------------------------
+// D1 — Contas a pagar/receber (títulos pendentes)
+// ---------------------------------------------------------------------------
+
+export interface PendingBill {
+  tx: Transaction;
+  dueDate: string;
+  overdue: boolean;
+}
+
+/** D1 — títulos pendentes (expense ou ganho com `paid === false`), por vencimento. */
+export function pendingBills(transactions: Transaction[], refIso?: string): PendingBill[] {
+  const today = (refIso ?? nowIso()).slice(0, 10);
+  return transactions
+    .filter((t) => t.paid === false && (t.kind === 'expense' || INCOME_KINDS.has(t.kind)))
+    .map((t) => {
+      const due = (t.dueDate ?? t.date ?? '').slice(0, 10);
+      return { tx: t, dueDate: due, overdue: due !== '' && due < today };
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+/** D1 — soma a pagar × a receber dos títulos pendentes. */
+export function pendingSummary(
+  transactions: Transaction[],
+  refIso?: string,
+): { payable: number; receivable: number; count: number; overdue: number } {
+  let payable = 0;
+  let receivable = 0;
+  let overdue = 0;
+  for (const b of pendingBills(transactions, refIso)) {
+    if (b.tx.kind === 'expense') payable += Math.abs(b.tx.amount);
+    else receivable += b.tx.amount;
+    if (b.overdue) overdue += 1;
+  }
+  return { payable: r2(payable), receivable: r2(receivable), count: pendingBills(transactions, refIso).length, overdue };
+}
+
+// ---------------------------------------------------------------------------
+// D4 — Ranking por estabelecimento (derivado da note; sem campo novo)
+// ---------------------------------------------------------------------------
+
+export interface MerchantRank {
+  name: string;
+  total: number;
+  count: number;
+}
+
+/** D4 — despesas do mês agrupadas por descrição normalizada (estabelecimento). */
+export function merchantRanking(
+  transactions: Transaction[],
+  yearMonth: string,
+  limit = 8,
+): MerchantRank[] {
+  const acc = new Map<string, MerchantRank>();
+  for (const t of transactions) {
+    if (t.kind !== 'expense') continue;
+    if (t.date.slice(0, 7) !== yearMonth) continue;
+    if (t.paid === false) continue;
+    const name = (t.note ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const cur = acc.get(key) ?? { name, total: 0, count: 0 };
+    cur.total = r2(cur.total + Math.abs(t.amount));
+    cur.count += 1;
+    acc.set(key, cur);
+  }
+  return [...acc.values()].sort((a, b) => b.total - a.total).slice(0, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -1140,6 +1213,11 @@ export class MoneyService {
     recurrence?: { freq: 'monthly'; day: number };
     asset?: { symbol: string; qty: number; price: number };
     attachments?: Record<string, object>;
+    paid?: boolean;
+    dueDate?: string;
+    installments?: { n: number; of: number; groupId: string };
+    card?: string;
+    tags?: string[];
   }): Promise<Transaction> {
     if (input.rate != null && input.rate <= 0) {
       throw new Error(`rate=0 PROIBIDO para ${input.kind} (zera cálculo silenciosamente)`);
@@ -1160,6 +1238,11 @@ export class MoneyService {
       recurrence: input.recurrence,
       asset: input.asset,
       attachments: input.attachments,
+      paid: input.paid,
+      dueDate: input.dueDate,
+      installments: input.installments,
+      card: input.card,
+      tags: input.tags,
       updatedAt: nowIso(),
       deviceId: this.ds.deviceId,
       version: 0,
@@ -1185,6 +1268,11 @@ export class MoneyService {
     note?: string;
     recurrence?: { freq: 'monthly'; day: number };
     attachments?: Record<string, object>;
+    paid?: boolean;
+    dueDate?: string;
+    card?: string;
+    tags?: string[];
+    installments?: { n: number; of: number; groupId: string };
   }): Promise<Transaction> {
     // G1 — categoria em campo estruturado (note fica limpa; legado lia prefixo).
     return this.addTransaction({
@@ -1194,7 +1282,55 @@ export class MoneyService {
       category: input.category,
       recurrence: input.recurrence,
       attachments: input.attachments,
+      paid: input.paid,
+      dueDate: input.dueDate,
+      card: input.card,
+      tags: input.tags,
+      installments: input.installments,
     });
+  }
+
+  /**
+   * D2 — registra uma compra parcelada: cria `count` despesas mensais (a partir de
+   * `firstDate`), cada uma com `installments {n, of, groupId}` e `paid=false` (são
+   * contas a pagar até serem quitadas). O total é dividido; a sobra de arredondamento
+   * vai na última parcela (nunca inventa centavo).
+   */
+  async recordInstallments(input: {
+    accountId: string;
+    currency: string;
+    totalAmount: number;
+    count: number;
+    category?: string;
+    card?: string;
+    firstDate?: string;
+    note?: string;
+  }): Promise<Transaction[]> {
+    const count = Math.max(2, Math.min(48, Math.floor(input.count)));
+    const total = Math.abs(input.totalAmount);
+    if (!(total > 0)) throw new Error('parcelamento precisa de total > 0');
+    const per = r2(total / count);
+    const groupId = `inst-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const base = input.firstDate ? new Date(input.firstDate) : new Date();
+    const out: Transaction[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const isLast = i === count - 1;
+      const amount = isLast ? r2(total - per * (count - 1)) : per;
+      const d = new Date(base.getFullYear(), base.getMonth() + i, base.getDate());
+      out.push(await this.recordExpense({
+        accountId: input.accountId,
+        amount,
+        currency: input.currency,
+        category: input.category,
+        card: input.card,
+        note: input.note,
+        date: d.toISOString(),
+        dueDate: d.toISOString(),
+        paid: false,
+        installments: { n: i + 1, of: count, groupId },
+      }));
+    }
+    return out;
   }
 
   /** G6 — gera a parcela do mês para um template recorrente (cópia SEM recurrence). */
@@ -1296,6 +1432,34 @@ export class MoneyService {
     note?: string;
   }): Promise<Transaction> {
     return this.addTransaction({ ...input, kind: 'transfer' });
+  }
+
+  /**
+   * D5 — transferência entre duas carteiras (dupla entrada): débito na origem +
+   * crédito no destino, ligados por `ref: transfer`. Neutro no cash flow; move saldo
+   * sem perder patrimônio. Retorna [saída, entrada].
+   */
+  async recordTransferBetween(input: {
+    fromAccountId: string;
+    toAccountId: string;
+    amount: number;
+    currency: string;
+    date?: string;
+    note?: string;
+  }): Promise<[Transaction, Transaction]> {
+    const amt = Math.abs(input.amount);
+    if (!(amt > 0)) throw new Error('transferência precisa de valor > 0');
+    if (input.fromAccountId === input.toAccountId) throw new Error('origem e destino iguais');
+    const id = `tr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const out = await this.addTransaction({
+      accountId: input.fromAccountId, kind: 'transfer', amount: -amt,
+      currency: input.currency, date: input.date, note: input.note, ref: { type: 'transfer', id },
+    });
+    const inn = await this.addTransaction({
+      accountId: input.toAccountId, kind: 'transfer', amount: amt,
+      currency: input.currency, date: input.date, note: input.note, ref: { type: 'transfer', id },
+    });
+    return [out, inn];
   }
 
   /** Compra/venda de ativo (kind=buy|sell). `asset` alimenta o FIFO de IR (A4). */
