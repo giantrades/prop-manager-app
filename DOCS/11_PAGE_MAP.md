@@ -39,9 +39,11 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/` | Home | `command/HomePage.jsx` | `HomeCommandCenter.tsx` | `useCommandSnapshot` |
 | `/calendar` | Home | `command/CalendarPage.jsx` | `FinancialCalendar.tsx` | `ds.trades/txs`, `economicCalendar.ts` |
 | `/actions` | Home | `command/ActionCenterPage.jsx` | `ActionCenter.tsx` | `useCommandSnapshot().actions` |
+| `/trading` | Trading | `command/TradingDashboardPage.jsx` | `JournalDashboard.tsx` | `risk.snapshot()`, `ds.trades`, checklist |
 | `/journal` | Trading | `trading/JournalPage.jsx` | `JournalDashboard`, `PnLCalendar`, `HeatmapSection`, `BreakdownSection`, `HistogramR`, `DurationAnalysis`, `WeeklyReview`, `Trades`, `TradeForm`, `NotesEditor` | `ds.trades`, `journalAnalytics.ts` |
 | `/playbook` | Trading | `trading/PlaybookPage.jsx` | `PreTradeChecklist`, `Strategies`, `EmotionalDiary` | `strategies.ts`, `checklist.ts` |
 | `/risk` | Trading | `command/EngineViews.jsx` → `RiskPage()` | `RiskCenter.tsx` | `risk.snapshot()` |
+| `/contas` | Contas | `command/AccountsDashboardPage.jsx` | `RiskCenter` pills (inline) | `risk.snapshot()`, `firmPnlByFirm`, payouts |
 | `/accounts` | Contas | `trading/AccountsPage.jsx` | `Accounts.tsx`, `AccountDetail.tsx` | `ds.accounts`, `accountModel.ts` |
 | `/firms` | Contas | `command/EngineViews.jsx` → `FirmPnlPage()` | `FirmPnl.tsx` | `money.ts` (`firmPnlByFirm`, `firmPnlHistory`) |
 | `/payouts` | Contas | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
@@ -50,9 +52,11 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/wallets` | Dinheiro | `command/EngineViews.jsx` → `WalletsPage()` | `Wallets.tsx` | `money.walletSummary()` |
 | `/expenses` | Dinheiro | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
 | `/tax` | Dinheiro | `command/EngineViews.jsx` → `TaxPage()` | `TaxCockpit.tsx` (+ `AssetSalesSection` local) | `money.taxCockpit()` |
+| `/investimentos` | Investimentos | `command/InvestmentsDashboardPage.jsx` | `NetWorth.tsx` | `wealth.netWorth()`, `portfolio()`, `netWorthSeries()` |
 | `/portfolio` | Investimentos | `command/EngineViews.jsx` → `PortfolioPage()` | `Portfolio.tsx` | `wealth.portfolio()`, `priceService.ts` |
 | `/networth` | Investimentos | `command/EngineViews.jsx` → `NetWorthPage()` | `NetWorth.tsx` | `wealth.netWorth()`, `netWorthSeries()` |
 | `/positions` | Investimentos | `trading/WealthEditors.jsx` → `PositionsManagePage()` | `Positions.tsx` | `ds.positions`, `csvImport.ts` |
+| `/planejamento` | Planejamento | `command/PlanningDashboardPage.jsx` | `Goals.tsx`, `Forecast.tsx` | `wealth.goals()`, `forecast()`, `safeAvailable()` |
 | `/goals` | Planejamento | `trading/WealthEditors.jsx` → `GoalsManagePage()` | `GoalsEditor.tsx`, `Goals.tsx` | `ds.goals`, `wealth.goals()` |
 | `/forecast` | Planejamento | `command/EngineViews.jsx` → `ForecastPage()` | `Forecast.tsx` | `wealth.forecast()`, `safeAvailable()` |
 | `/journal-events` | Planejamento | `command/EngineViews.jsx` → `FinancialJournalPage()` | `FinancialJournal.tsx` | `wealth.suggestJournalEvents()`, `listJournalEvents()` |
@@ -71,14 +75,19 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
   aportes). UI `FinancialCalendar.tsx`.
 - **ActionCenterPage** `command/ActionCenterPage.jsx` — flags dos motores. UI `ActionCenter.tsx`.
 
-### Trading (âncora `trading`) — dashboard `/journal`
+### Trading (âncora `trading`) — dashboard `/trading`
+- **TradingDashboardPage** — PnL hoje, contas em risco, checklist do dia, estratégias +
+  `JournalDashboard`. Abas Resumo|Journal|Playbook|Risk.
 - **JournalPage** — 3 modos internos: `view` Dashboard | Trades | Review. Cadastro/edição
   por `TradeForm.tsx`, notas por `NotesEditor.tsx`. Analytics em `journalAnalytics.ts`
   (testes `journalAnalytics.test.ts`).
 - **PlaybookPage** — checklist do dia + edge por estratégia + diário emocional×R.
 - **RiskCenter** (`EngineViews.jsx → RiskPage`) — drawdown/headroom/live via `risk.ts`.
 
-### Contas (âncora `contas`) — dashboard `/accounts`
+### Contas (âncora `contas`) — dashboard `/contas`
+- **AccountsDashboardPage** — contas prop ativas, equity total, risco (STOP/WARN/SAFE),
+  payouts pendentes, lista de contas com pill + P&L por firm. Abas Resumo|Accounts|Firm
+  P&L|Payouts|Alocar.
 - **AccountsPage** — master-detail (`.ac2-master-detail`): lista + `AccountDetail`
   (equity/DD/payouts). Duplicar/fase via `ds.accounts` + `ds.propExtensions`.
 - **FirmPnlPage** — P&L por firm/conta, histórico 6m, exportar relatório.
@@ -98,13 +107,17 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 - **TaxPage** — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
   **Dívida:** `AssetSalesSection` é local em `EngineViews.jsx` — extrair quando crescer.
 
-### Investimentos (âncora `investimentos`) — dashboard `/portfolio`
+### Investimentos (âncora `investimentos`) — dashboard `/investimentos`
+- **InvestmentsDashboardPage** — patrimônio, investido, PnL, maiores posições + série
+  (`NetWorth`). Abas Resumo|Portfolio|Net Worth|Holdings.
 - **PortfolioPage** — resumo/alloc/DCA/histórico/benchmark CDI + preço live
   (`priceService.ts`) + alertas + proventos. Aba **Configurar** (FX+CDI) no próprio módulo.
 - **NetWorthPage** — patrimônio derivado + snapshots. UI `NetWorth.tsx`.
 - **PositionsManagePage** — holdings (import CSV). UI `Positions.tsx`.
 
-### Planejamento (âncora `planejamento`) — dashboard `/goals`
+### Planejamento (âncora `planejamento`) — dashboard `/planejamento`
+- **PlanningDashboardPage** — metas, safe available, fluxo mensal, projeção 90d + Forecast/
+  Goals. Abas Resumo|Goals|Forecast|Marcos.
 - **GoalsManagePage** — metas (editor + progresso).
 - **ForecastPage** — 30/60/90 + Safe Available + gráfico de projeção.
 - **FinancialJournalPage** ("Marcos") — eventos de vida sugeridos/confirmados.

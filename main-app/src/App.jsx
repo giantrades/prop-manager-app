@@ -13,6 +13,10 @@ import { PALETTE_ROUTES } from "./navConfig";
 // Páginas pesadas (charts) vão para chunks sob demanda.
 const HomePage = lazy(() => import("./pages/command/HomePage.jsx"));
 const MoneyDashboardPage = lazy(() => import("./pages/command/MoneyDashboardPage.jsx"));
+const AccountsDashboardPage = lazy(() => import("./pages/command/AccountsDashboardPage.jsx"));
+const TradingDashboardPage = lazy(() => import("./pages/command/TradingDashboardPage.jsx"));
+const InvestmentsDashboardPage = lazy(() => import("./pages/command/InvestmentsDashboardPage.jsx"));
+const PlanningDashboardPage = lazy(() => import("./pages/command/PlanningDashboardPage.jsx"));
 const CalendarPage = lazy(() => import("./pages/command/CalendarPage.jsx"));
 const ActionCenterPage = lazy(() => import("./pages/command/ActionCenterPage.jsx"));
 const JournalPage = lazy(() => import("./pages/trading/JournalPage.jsx"));
@@ -232,6 +236,10 @@ export default function App() {
             {/* Command Center (novo, motor-driven) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/dinheiro" element={<MoneyDashboardPage />} />
+            <Route path="/contas" element={<AccountsDashboardPage />} />
+            <Route path="/trading" element={<TradingDashboardPage />} />
+            <Route path="/investimentos" element={<InvestmentsDashboardPage />} />
+            <Route path="/planejamento" element={<PlanningDashboardPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/actions" element={<ActionCenterPage />} />
             <Route path="/risk" element={<RiskPage />} />

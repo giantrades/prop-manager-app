@@ -33,41 +33,8 @@ import Forecast from '@apps/ui/Forecast';
 import FirmPnl from '@apps/ui/FirmPnl';
 import Expenses from '@apps/ui/Expenses';
 import ModuleTabs from '../../ModuleTabs';
+import useEngineData from '../../useEngineData';
 import FinancialJournal from '@apps/ui/FinancialJournal';
-
-/** Hook simples pra carregar dados de um motor (loader) e re-renderizar em mudança.
- * O `loader` é lido via ref (evita loop de re-fetch por função inline recriada). */
-function useEngineData(loader) {
-  const finance = useFinance();
-  const [state, setState] = useState({ loading: true, data: null, error: null });
-  const loaderRef = useRef(loader);
-  loaderRef.current = loader;
-
-  const load = useCallback(async () => {
-    if (!finance) return;
-    setState((s) => ({ ...s, loading: true }));
-    try {
-      const data = await loaderRef.current(finance);
-      setState({ loading: false, data, error: null });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[engine] falha ao carregar', err);
-      setState({ loading: false, data: null, error: err });
-    }
-  }, [finance]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!finance) return;
-    const off = finance.ds.bus.on('datastore:change', load);
-    return off;
-  }, [finance, load]);
-
-  return { ...state, finance };
-}
 
 export function RiskPage() {
   // A1 — PnL live (posições abertas) somado ao equity, best-effort: bridge off

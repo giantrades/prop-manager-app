@@ -61,18 +61,25 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
-## Batch G — dashboards de módulo (PENDENTE, próximo)
-Problema: hoje clicar numa âncora leva à **primeira aba** (ex. Dinheiro → `/wallets`),
-não a uma dashboard. A dashboard deve ser a porta de entrada do módulo, com os seus
-próprios indicadores, e as abas navegam para as páginas internas.
-- **G1** rota de dashboard própria por módulo (ex. `/dinheiro`, `/contas`, `/trading`).
-- **G2** Dinheiro: ~~Wallets vira aba; dashboard~~ FEITO (Batch D6): rota `/dinheiro`
-  (`MoneyDashboardPage`) com free cash, a pagar, carteiras, payouts, próximas contas e top
-  categorias; abas Resumo|Wallets|Gastos|Tax.
-- **G3** Contas: dashboard com equity/DD agregado + payouts; abas Accounts|Firms|Payouts|Alocar.
-- **G4** Trading/Investimentos/Planejamento: dashboards reutilizando os componentes
-  `*Dashboard` já existentes; `navConfig.js` ganha `dashboard` apontando p/ a nova rota.
-- Critério: sidebar → dashboard do módulo; abas → páginas internas; zero duplicação de dados.
+## Batch G — dashboards de módulo (EXECUTADO — G1..G4)
+Cada âncora agora tem uma **dashboard como porta de entrada**; a primeira página do
+módulo virou aba ("Resumo" aponta de volta p/ a dashboard). Clique no módulo → dashboard.
+- **G1** rota de dashboard por módulo: `/dinheiro` (D6), `/contas`, `/trading`,
+  `/investimentos`, `/planejamento`. Home já era dashboard (`/`).
+- **G2** Dinheiro `/dinheiro` (D6): free cash, a pagar, carteiras, payouts, próximas
+  contas, top categorias. Abas Resumo|Wallets|Gastos|Tax.
+- **G3** Contas `/contas` (`AccountsDashboardPage`): contas prop ativas, equity total,
+  risco (STOP/WARN/SAFE), payouts pendentes, lista de contas com pill de risco e P&L por
+  firm. Abas Resumo|Accounts|Firm P&L|Payouts|Alocar.
+- **G4** Trading `/trading` (`TradingDashboardPage`): PnL hoje, contas em risco, checklist
+  do dia, estratégias + `JournalDashboard`. Investimentos `/investimentos`
+  (`InvestmentsDashboardPage`): patrimônio, investido, PnL, maiores posições + série.
+  Planejamento `/planejamento` (`PlanningDashboardPage`): metas, safe available, fluxo
+  mensal, projeção 90d + Forecast/Goals.
+- **Infra**: `useEngineData` extraído p/ `main-app/src/useEngineData.js` (reuso nos
+  dashboards). `.cmd-page*` movido p/ `main-app/src/styles.css` (era injetado só pelo
+  HomePage lazy — abrir rota direto perdia o estilo). `.dash-*` globais.
+- Gate: `tsc` 0 + `vite build` verde + 228 testes verdes.
 
 ## Batch F — sidebar por dashboard + abas de módulo + mapa (executado)
 - **F1 sidebar sem acordeão**: clique no módulo vai **direto à dashboard** do módulo

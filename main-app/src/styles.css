@@ -1597,3 +1597,34 @@ select.select option {
 .sidebar:not(.pinned):not(:hover):not(.mobile-open):not(.platform-open) .sb-module-chevron {
   display: none;
 }
+/* -- Classes de página compartilhadas (movidas do HomePage p/ ficarem globais;
+   páginas lazy abrem direto sem depender do HomePage ter montado) -- */
+.cmd-page { display: flex; flex-direction: column; gap: 16px; }
+.cmd-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cmd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cmd-warn { padding: 10px 12px; border-radius: 10px; background: rgba(225,177,44,0.08); border: 1px solid rgba(225,177,44,0.3); color: var(--yellow, #e1b12c); font-size: 13px; }
+.cmd-warn a { color: inherit; font-weight: 700; }
+.cmd-msg { padding: 10px 12px; border-radius: 10px; background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); color: var(--green, #2ecc71); font-size: 13px; }
+.cmd-page-title { font-size: 20px; font-weight: 800; margin: 0; }
+.cmd-refresh { padding: 8px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; cursor: pointer; min-height: 40px; }
+.cmd-refresh:disabled { opacity: 0.5; cursor: default; }
+.cmd-select { padding: 8px 12px; border-radius: 10px; background: #111623; border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; min-height: 40px; max-width: 220px; }
+
+/* -- Dashboards de módulo (Batch G) -- */
+.dash-section { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 10px; }
+.dash-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dash-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.dash-row:last-child { border-bottom: none; }
+.dash-row-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
+.dash-row-val { font-variant-numeric: tabular-nums; font-weight: 700; }
+.dash-neg { color: var(--red, #e74c3c); }
+.dash-pos { color: var(--green, #2ecc71); }
+.dash-link { font-size: 12px; font-weight: 700; color: var(--brand, #7c5cff); }
+.dash-pill { display: inline-flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 0.3px; padding: 3px 8px; border-radius: 999px; border: 1px solid; }
+.dash-pill-safe { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.4); background: rgba(46,204,113,0.1); }
+.dash-pill-warn { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.4); background: rgba(225,177,44,0.1); }
+.dash-pill-stop { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.4); background: rgba(231,76,60,0.1); }
+.dash-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1000px) { .dash-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .dash-cards { grid-template-columns: 1fr; } }

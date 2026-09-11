@@ -79,16 +79,6 @@ export default function HomePage() {
 }
 
 const CMD_PAGE_CSS = `
-.cmd-page { display: flex; flex-direction: column; gap: 16px; }
-.cmd-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.cmd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.cmd-warn { padding: 10px 12px; border-radius: 10px; background: rgba(225,177,44,0.08); border: 1px solid rgba(225,177,44,0.3); color: var(--yellow, #e1b12c); font-size: 13px; }
-.cmd-warn a { color: inherit; font-weight: 700; }
-.cmd-msg { padding: 10px 12px; border-radius: 10px; background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); color: var(--green, #2ecc71); font-size: 13px; }
-.cmd-page-title { font-size: 20px; font-weight: 800; margin: 0; }
-.cmd-refresh { padding: 8px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; cursor: pointer; min-height: 40px; }
-.cmd-refresh:disabled { opacity: 0.5; cursor: default; }
-.cmd-select { padding: 8px 12px; border-radius: 10px; background: #111623; border: 1px solid rgba(255,255,255,0.1); color: var(--text); font-size: 12px; min-height: 40px; max-width: 220px; }
 .hm-custom { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 8px; }
 .hm-custom-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
 .hm-custom-row { display: flex; gap: 10px; align-items: center; font-size: 13px; cursor: pointer; min-height: 40px; }
