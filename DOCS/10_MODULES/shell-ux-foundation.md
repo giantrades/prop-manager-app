@@ -46,6 +46,29 @@
   Chrome DevTools → Lighthouse → Mobile; ou `npx -y lighthouse http://localhost:4173
   --view` após `pnpm preview`)
 
+## Batch V — consolidação visual + IA (audit UX externo, executado)
+- **V1 glass restoration**: `.ws-tabs` + upgrades glass (gradiente+tinta+sombra do CSS antigo)
+  em `packages/ui/styles.css`; `jd-card` com tinta por posição, `pf-total-card` roxo, `hc-quad` glass.
+- **V2 journal em 3 abas**: Dashboard (métricas+calendário+day drill) | Trades | Review
+  (heatmap/breakdown/R/duração/weekly) em `JournalPage.jsx`.
+- **V3 workspaces por rota** (sem duplicação, chunks preservados): Portfolio Overview|Holdings,
+  Accounts Contas|Firms, Payouts Payouts|Alocar (`ws-tabs` com NavLink nas 6 páginas).
+- **V4 nav enxuta**: Trading sem payout-center/positions/quantower/import; Quantower+Importar
+  no Sistema; rotas e palette intactas.
+- **V5 accounts master-detail**: lista + detalhe lado a lado no desktop (`.ac2-master-detail`).
+- **V6 home attention-first**: Action Center logo após Trading Today (`HomeCommandCenter.tsx`).
+- Fora de escopo (churn alto, valor baixo): Goals+Forecast virarem "Planning", fundir os dois
+  calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
+- Gate: `vite build` verde + 220 testes verdes.
+
+## Batch C — backlog do dono (anotado, não executar ainda)
+- **C1 — cada módulo vira um app inteiro**: ex. Gastos ≈ Mobills completo (só precisar dele);
+  mesmo padrão p/ Portfolio, Prop/Firms, Journal. Tudo bem demonstrado nos painéis de
+  comando/dashboards/centrais (Home + Action Center refletem cada módulo).
+- **C2 — Settings centraliza configs editáveis**: taxa USD→BRL editável (hoje só no Portfolio),
+  CDI, sessões de trading, firms/templates, alertas, moeda padrão, densidade, atalhos.
+  Nenhuma config espalhada em páginas avulsas.
+
 ## Batch B — ideias UI/UX futuras (não executar agora)
 - **B1 — Modo claro**: EXCLUÍDO por decisão do dono (dark-only). Registrado para não reabrir.
 - **B2 — Densidade de tela (compacto/confortável)**: toggle que reduz paddings/fontes via classe no root. Afeta todas as telas de uma vez; bom para celular pequeno vs desktop.

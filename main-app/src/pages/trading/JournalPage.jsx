@@ -332,6 +332,7 @@ export default function JournalPage() {
           <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
             <button className={`jd-tab${view === 'dashboard' ? ' active' : ''}`} role="tab" aria-selected={view === 'dashboard'} onClick={() => setView('dashboard')}>Dashboard</button>
             <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
+            <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
           </div>
           {view === 'dashboard' ? (
             <>
@@ -377,6 +378,9 @@ export default function JournalPage() {
                   onEdit={(t) => { setEditing(t); setShowForm(true); }}
                 />
               )}
+            </>
+          ) : view === 'review' ? (
+            <>
               <HeatmapSection trades={dashTrades} sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
               <BreakdownSection trades={dashTrades} loading={loading} />
               <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />

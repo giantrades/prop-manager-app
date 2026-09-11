@@ -2,6 +2,7 @@
 // `DataService` (único writer). Salva Account + PropExtension. Nada de fórmula nova.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import { accountDashboard } from '@apps/lib/db';
 import Accounts from '@apps/ui/Accounts';
@@ -130,8 +131,14 @@ export default function AccountsPage() {
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Accounts</h1>
       </div>
+      <nav className="ws-tabs" aria-label="Workspace de contas">
+        <NavLink to="/accounts" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Contas</NavLink>
+        <NavLink to="/firms" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Firms</NavLink>
+      </nav>
       {selected ? (
-        <>
+        <div className="ac2-master-detail">
+          <Accounts accounts={accounts} props={props} loading={loading} onSave={handleSave} onDelete={handleDelete} onSelect={setSelectedId} />
+          <div>
           <AccountDetail
             account={selected}
             prop={props[selected.id] ?? null}
@@ -162,8 +169,8 @@ export default function AccountsPage() {
               </>
             )}
           </div>
-          <Accounts accounts={accounts} props={props} loading={loading} onSave={handleSave} onDelete={handleDelete} />
-        </>
+          </div>
+        </div>
       ) : (
         <Accounts
           accounts={accounts}

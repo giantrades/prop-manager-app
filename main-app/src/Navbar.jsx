@@ -96,11 +96,7 @@ const MODULES = [
       { to: "/risk", label: "Risk", icon: ShieldAlert },
       { to: "/accounts", label: "Accounts", icon: Wallet },
       { to: "/payouts", label: "Payouts", icon: ArrowDownToLine },
-      { to: "/payout-center", label: "Payout Center", icon: ArrowDownToLine },
-      { to: "/positions", label: "Positions", icon: TrendingUp },
-      { to: "/quantower", label: "Quantower", icon: Zap },
       { to: "/firms", label: "Firm P&L", icon: Building2 },
-      { to: "/import", label: "Importar", icon: Database },
     ],
   },
   {
@@ -134,15 +130,34 @@ const MODULES = [
     dashboard: "/settings",
     children: [
       { to: "/settings", label: "Settings", icon: Settings },
+      { to: "/quantower", label: "Quantower", icon: Zap },
+      { to: "/import", label: "Importar", icon: Database },
     ],
   },
 ];
 
 const NAV_MODULES_KEY = "navModulesOpen";
+const NAV_LAST_ROUTE_KEY = "pm:lastRoute";
+const NAV_MODULE_ROUTE_PREFIX = "pm:moduleRoute:";
+const NAV_SCROLL_KEY = "pm:navScroll";
 
 function isRouteActive(pathname, to, end) {
   if (end) return pathname === to;
   return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+/* Todas as rotas conhecidas (para validar o restore sem navegar p/ lixo) */
+function allKnownRoutes() {
+  return MODULES.flatMap((m) => m.children.map((c) => c.to));
+}
+
+function moduleForRoute(pathname) {
+  return MODULES.find((m) => m.children.some((c) => isRouteActive(pathname, c.to, c.end))) ?? null;
+}
+
+function isKnownRoute(pathname) {
+  if (typeof pathname !== "string" || !pathname.startsWith("/") || pathname.includes("//")) return false;
+  return allKnownRoutes().some((to) => pathname === to || (to !== "/" && pathname.startsWith(`${to}/`)));
 }
 
 function moduleHasActive(mod, pathname) {
@@ -213,6 +228,61 @@ export default function Navbar({ isPinned, onTogglePin }) {
     });
   }, [location.pathname]);
 
+  const navRef = useRef(null);
+  const restoredRouteRef = useRef(false);
+
+  /* Volta no mesmo estado: restaura a última rota ao carregar */
+  useEffect(() => {
+    if (restoredRouteRef.current) return;
+    restoredRouteRef.current = true;
+    try {
+      const last = localStorage.getItem(NAV_LAST_ROUTE_KEY);
+      if (last && last !== location.pathname && isKnownRoute(last)) {
+        navigate(last, { replace: true });
+      }
+    } catch {
+      /* sem storage — segue na rota atual */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* Persiste rota global + última página de cada módulo; mantém item ativo visível */
+  useEffect(() => {
+    try {
+      localStorage.setItem(NAV_LAST_ROUTE_KEY, location.pathname);
+      const mod = moduleForRoute(location.pathname);
+      if (mod) localStorage.setItem(NAV_MODULE_ROUTE_PREFIX + mod.id, location.pathname);
+    } catch {
+      /* offline/storage cheio */
+    }
+    try {
+      navRef.current?.querySelector(".sb-link-child.active")?.scrollIntoView({ block: "nearest" });
+    } catch {
+      /* noop */
+    }
+  }, [location.pathname]);
+
+  /* Persiste + restaura o scroll da sidebar */
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    try {
+      const saved = Number(localStorage.getItem(NAV_SCROLL_KEY));
+      if (Number.isFinite(saved) && saved > 0) el.scrollTop = saved;
+    } catch {
+      /* noop */
+    }
+    let t = null;
+    const onScroll = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        try { localStorage.setItem(NAV_SCROLL_KEY, String(el.scrollTop)); } catch { /* noop */ }
+      }, 150);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => { clearTimeout(t); el.removeEventListener("scroll", onScroll); };
+  }, []);
+
   const toggleModule = (id) => {
     setOpenModules((prev) => {
       const next = { ...prev, [id]: !prev[id] };
@@ -227,8 +297,15 @@ export default function Navbar({ isPinned, onTogglePin }) {
 
   const onModuleHeaderClick = (mod) => {
     if (!isExpanded) {
-      /* Sidebar recolhida: o ícone do módulo leva ao dashboard dele */
-      navigate(mod.dashboard);
+      /* Sidebar recolhida: volta à última página visitada do módulo */
+      let dest = mod.dashboard;
+      try {
+        const last = localStorage.getItem(NAV_MODULE_ROUTE_PREFIX + mod.id);
+        if (last && isKnownRoute(last) && mod.children.some((c) => isRouteActive(last, c.to, c.end))) dest = last;
+      } catch {
+        /* usa o dashboard */
+      }
+      navigate(dest);
       setMobileOpen(false);
     } else {
       toggleModule(mod.id);
@@ -356,7 +433,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
         </div>
 
         {/* Navigation — módulos autocontidos (DOCS/10_MODULES/README.md) */}
-        <div className="sb-nav" aria-label="Navegação principal">
+        <div className="sb-nav" aria-label="Navegação principal" ref={navRef}>
           {MODULES.map((mod) => {
             const ModuleIcon = mod.icon;
             const open = !!openModules[mod.id];

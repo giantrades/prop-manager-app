@@ -125,6 +125,29 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           </div>
         </section>)}
 
+        {/* Action Center — attention-first: logo após Trading Today */}
+        {!hide('actions') && (<section className="hc-quad" aria-label="Action Center">
+          <div className="hc-quad-head">
+            <h3 className="hc-quad-title">Action Center</h3>
+            {actions.length > 0 && <span className="hc-action-count">{actions.length}</span>}
+          </div>
+          <div className="hc-actions">
+            {actions.length === 0 ? (
+              <div className="hc-empty">Sem ações em aberto.</div>
+            ) : (
+              actions.slice(0, 5).map((a) => (
+                <div key={a.id} className={`hc-action hc-action-${a.severity}`}>
+                  <span className="hc-action-dot" aria-hidden="true" />
+                  <div className="hc-action-body">
+                    <div className="hc-action-title">{a.title}</div>
+                    <div className="hc-action-detail">{a.detail}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>)}
+
         {/* Investments */}
         {!hide('investments') && (<section className="hc-quad" aria-label="Investments">
           <div className="hc-quad-head">
@@ -172,28 +195,6 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           </div>
         </section>)}
 
-        {/* Action Center */}
-        {!hide('actions') && (<section className="hc-quad" aria-label="Action Center">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Action Center</h3>
-            {actions.length > 0 && <span className="hc-action-count">{actions.length}</span>}
-          </div>
-          <div className="hc-actions">
-            {actions.length === 0 ? (
-              <div className="hc-empty">Sem ações em aberto.</div>
-            ) : (
-              actions.slice(0, 5).map((a) => (
-                <div key={a.id} className={`hc-action hc-action-${a.severity}`}>
-                  <span className="hc-action-dot" aria-hidden="true" />
-                  <div className="hc-action-body">
-                    <div className="hc-action-title">{a.title}</div>
-                    <div className="hc-action-detail">{a.detail}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>)}
       </div>
 
       {/* AI Insights (leitura-only, fonte citável) */}

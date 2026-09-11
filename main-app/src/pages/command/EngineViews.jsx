@@ -6,6 +6,7 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { nowIso } from '@apps/lib/db';
@@ -391,6 +392,10 @@ export function PortfolioPage() {
           {quotes.status === 'refreshing' ? 'Atualizando…' : 'Atualizar preços'}
         </button>
       </div>
+      <nav className="ws-tabs" aria-label="Workspace do portfolio">
+        <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Overview</NavLink>
+        <NavLink to="/positions" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Holdings</NavLink>
+      </nav>
       <div className="cmd-msg" role="group" aria-label="Taxa USD para BRL" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span>USD→BRL: <b>{data?.fx != null ? data.fx : '—'}</b>{data?.fxAt ? ` (${String(data.fxAt).slice(0, 10)})` : ''}</span>
         <input
@@ -684,6 +689,10 @@ export function FirmPnlPage() {
           <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
       </div>
+      <nav className="ws-tabs no-print" aria-label="Workspace de contas">
+        <NavLink to="/accounts" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Contas</NavLink>
+        <NavLink to="/firms" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Firms</NavLink>
+      </nav>
       <FirmPnl rows={data?.rows ?? []} byAccount={data?.byAccount ?? {}} history={data?.history ?? null} loading={loading} />
     </div>
   );

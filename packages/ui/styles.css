@@ -4876,3 +4876,58 @@ select.payouts-input {
     width: 100%;
   }
 }
+
+/* ============================================================
+   BATCH V — workspace tab bars + glass restoration + master-detail
+   Audit UX: páginas fragmentadas viram workspaces com abas por rota
+   (zero duplicação, chunks preservados); cards planos voltam ao
+   sistema glass antigo: gradiente + borda tintada + sombra.
+   Especificidade acima do CSS embarcado dos componentes.
+   ============================================================ */
+
+/* Workspace tab bar (NavLinks por rota, mesmo feel de abas) */
+.cmd-page .ws-tabs { display: flex; gap: 6px; margin: 0 0 14px; flex-wrap: wrap; }
+.cmd-page .ws-tabs .ws-tab {
+  padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 700;
+  color: var(--muted); background: transparent; border: 1px solid transparent;
+}
+.cmd-page .ws-tabs .ws-tab:hover { background: var(--soft); color: var(--text); }
+.cmd-page .ws-tabs .ws-tab.active {
+  background: linear-gradient(180deg, #1e2740 0%, #161b2b 100%);
+  border-color: #2a3b6a; color: var(--text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Glass restoration — metric cards do journal (tinta por posição) */
+.jd-cards > .jd-card {
+  background: linear-gradient(180deg, #161b25 0%, #131825 100%);
+  border: 1px solid #1a2232; border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+.jd-cards > .jd-card:nth-child(4n+2) { background: linear-gradient(180deg, #1a3a2b 0%, #142428 100%); border-color: #1f5a45; }
+.jd-cards > .jd-card:nth-child(4n+3) { background: linear-gradient(180deg, #221b3a 0%, #171b2b 100%); border-color: #2f2a55; }
+.jd-cards > .jd-card:nth-child(4n+4) { background: linear-gradient(180deg, #1e2740 0%, #161b2b 100%); border-color: #2a3b6a; }
+.jd-root > .jd-chart {
+  background: linear-gradient(180deg, #161b25 0%, #131825 100%);
+  border: 1px solid #1a2232; border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+/* Glass — portfolio hero + stats */
+.pf-root > .pf-total-card {
+  background: linear-gradient(180deg, #221b3a 0%, #171b2b 100%);
+  border: 1px solid #2f2a55; border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+
+/* Glass — home quadrants (attention-first: risk/action com tinta) */
+.hc-quadrants > .hc-quad {
+  background: linear-gradient(180deg, #161b25 0%, #131825 100%);
+  border: 1px solid #1a2232; border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+}
+.hc-quadrants > .hc-quad-risk { background: linear-gradient(180deg, #1a3a2b 0%, #142428 100%); border-color: #1f5a45; }
+
+/* Accounts master-detail — lado a lado no desktop, empilhado no mobile */
+.cmd-page .ac2-master-detail { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1023px) { .cmd-page .ac2-master-detail { grid-template-columns: 1fr; } }

@@ -2,6 +2,7 @@
 // Liga os editores ao `DataService`/`WealthService` (único writer).
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import { csvToPositions } from '@apps/lib/db';
 import { useToast } from '@apps/ui/Toast';
@@ -142,6 +143,10 @@ export function PositionsManagePage() {
         <h1 className="cmd-page-title">Positions</h1>
         <button className="cmd-refresh" onClick={() => csvRef.current?.click()}>Importar CSV</button>
       </div>
+      <nav className="ws-tabs" aria-label="Workspace do portfolio">
+        <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Overview</NavLink>
+        <NavLink to="/positions" className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Holdings</NavLink>
+      </nav>
       <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) handleImportCsv(e.target.files[0]); e.target.value = ''; }} />
       <Positions positions={positions} accounts={accounts} loading={loading} onSave={handleSave} onDelete={handleDelete} />
     </div>
