@@ -26,7 +26,7 @@ export const pageLoaders = {
   '/wallets': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.WalletsPage })),
   '/tax': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.TaxPage })),
   '/forecast': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.ForecastPage })),
-  '/firms': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.FirmPnlPage })),
+  '/firms': () => import('./pages/trading/FirmsPage.jsx'),
   '/expenses': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.ExpensesPage })),
   '/journal-events': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.FinancialJournalPage })),
   '/reports': () => import('./pages/command/ReportsPage.jsx'),

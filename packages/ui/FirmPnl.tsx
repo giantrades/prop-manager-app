@@ -27,7 +27,7 @@ const FIRM_COLORS = [
   'var(--green,#2ecc71)', 'var(--blue,#3498db)', 'var(--yellow,#e1b12c)', 'var(--brand,#7c5cff)',
   'var(--red,#e74c3c)', 'var(--muted,#a1a7b3)',
 ];
-export default function FirmPnl({ rows = [], byAccount = {}, history = null, currency = 'USD', loading = false }) {
+export default function FirmPnl({ rows = [], byAccount = {}, history = null, currency = 'USD', loading = false, colorById = {} }) {
   const [open, setOpen] = useState(null);
   if (loading) {
     return (
@@ -56,7 +56,7 @@ export default function FirmPnl({ rows = [], byAccount = {}, history = null, cur
                 <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} formatter={(v) => fmtMoney(v, currency)} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#a1a7b3' }} />
                 {history.firms.map((f, i) => (
-                  <Bar key={f} dataKey={f} fill={FIRM_COLORS[i % FIRM_COLORS.length]} radius={[3, 3, 0, 0]} />
+                  <Bar key={f} dataKey={f} fill={colorById[f] || FIRM_COLORS[i % FIRM_COLORS.length]} radius={[3, 3, 0, 0]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -75,7 +75,7 @@ export default function FirmPnl({ rows = [], byAccount = {}, history = null, cur
                 <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} formatter={(v) => fmtMoney(v, currency)} />
                 <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
                   {ranked.map((r) => (
-                    <Cell key={r.firmId} fill={r.profit >= 0 ? 'var(--green,#2ecc71)' : 'var(--red,#e74c3c)'} />
+                    <Cell key={r.firmId} fill={colorById[r.firmId] || (r.profit >= 0 ? 'var(--green,#2ecc71)' : 'var(--red,#e74c3c)')} />
                   ))}
                 </Bar>
               </BarChart>

@@ -43,11 +43,11 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/journal` | Trading | `trading/JournalPage.jsx` | `JournalDashboard`, `PnLCalendar`, `HeatmapSection`, `BreakdownSection`, `HistogramR`, `DurationAnalysis`, `WeeklyReview`, `Trades`, `TradeForm`, `NotesEditor` | `ds.trades`, `journalAnalytics.ts` |
 | `/playbook` | Trading | `trading/PlaybookPage.jsx` | `PreTradeChecklist`, `Strategies`, `EmotionalDiary` | `strategies.ts`, `checklist.ts` |
 | `/risk` | Trading | `command/EngineViews.jsx` → `RiskPage()` | `RiskCenter.tsx` | `risk.snapshot()` |
-| `/contas` | Contas | `command/AccountsDashboardPage.jsx` | `RiskCenter` pills (inline) | `risk.snapshot()`, `firmPnlByFirm`, payouts |
-| `/accounts` | Contas | `trading/AccountsPage.jsx` | `Accounts.tsx`, `AccountDetail.tsx` | `ds.accounts`, `accountModel.ts` |
-| `/firms` | Contas | `command/EngineViews.jsx` → `FirmPnlPage()` | `FirmPnl.tsx` | `money.ts` (`firmPnlByFirm`, `firmPnlHistory`) |
-| `/payouts` | Contas | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
-| `/payout-center` | Contas | `trading/PayoutCenterPage.jsx` | `PayoutCenter.tsx` | `money.applyPayoutAllocation` |
+| `/contas` | Contas | `command/AccountsDashboardPage.jsx` | `RiskCenter` pills (inline) | `risk.snapshot()`, `firmPnlByFirm`, `listFirms` |
+| `/accounts` | Contas | `trading/AccountsPage.jsx` | `Accounts.tsx` (reg. de contas), `AccountDetail.tsx` (modal) | `ds.accounts`, `computeAccountBalance`, `propExtensions`, `listFirms` |
+| `/firms` | Contas | `trading/FirmsPage.jsx` | `FirmPnl.tsx` | `listFirms`/`saveFirm`/`deleteFirm`, `firmPnlByFirm`, `firmPnlHistory` |
+| `/payouts` | Dinheiro | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
+| `/payout-center` | Dinheiro | `trading/PayoutCenterPage.jsx` | `PayoutCenter.tsx` | `money.applyPayoutAllocation` |
 | `/dinheiro` | Dinheiro | `command/MoneyDashboardPage.jsx` | `Wallets.tsx` (resumo) | `walletSummary`, `freeCash`, `pendingSummary`, `expensesByCategory` |
 | `/wallets` | Dinheiro | `command/EngineViews.jsx` → `WalletsPage()` | `Wallets.tsx` | `money.walletSummary()` |
 | `/expenses` | Dinheiro | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
@@ -86,8 +86,14 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 
 ### Contas (âncora `contas`) — dashboard `/contas`
 - **AccountsDashboardPage** — contas prop ativas, equity total, risco (STOP/WARN/SAFE),
-  payouts pendentes, lista de contas com pill + P&L por firm. Abas Resumo|Accounts|Firm
-  P&L|Payouts|Alocar.
+  firms/contas, lista de contas com pill + P&L por firm. Abas Resumo|Contas|Firms.
+- **AccountsPage** — **registro unificado de contas** (prop, banco, carteira, investimento,
+  cripto, dinheiro): resumo, busca, filtro por tipo, cards com saldo/nominal e cor da firm,
+  modal criar/editar (regras da prop quando `kind=prop`, firm, plataforma) e modal de painel
+  (`AccountDetail`). UI em `Accounts.tsx`.
+- **FirmsPage** — cadastro de empresas/corretoras (nome, tipo, cor, logo, obs) + P&L por firm
+  (`FirmPnl`); a **cor da firm propaga** para contas, pills e gráficos. Persistido em `meta`
+  via `firms.ts` (`listFirms`/`saveFirm`/`deleteFirm`).
 - **AccountsPage** — master-detail (`.ac2-master-detail`): lista + `AccountDetail`
   (equity/DD/payouts). Duplicar/fase via `ds.accounts` + `ds.propExtensions`.
 - **FirmPnlPage** — P&L por firm/conta, histórico 6m, exportar relatório.
@@ -104,6 +110,8 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
   comparação de meses, contas a pagar/receber com status, parcelamento, cartão/fatura,
   tags, ranking por estabelecimento, busca e visão por dia). UI grande em `Expenses.tsx`;
   testes `expenses.test.ts`, `bankImport.test.ts`.
+- **PayoutsPage / PayoutCenterPage** — payouts (criar/aplicar no ledger) e alocação
+  (Tax→Living→Invest→Cash). Abas do módulo Dinheiro (antes ficavam em Contas).
 - **TaxPage** — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
   **Dívida:** `AssetSalesSection` é local em `EngineViews.jsx` — extrair quando crescer.
 

@@ -4,7 +4,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
-import { firmPnlByFirm } from '@apps/lib/db';
+import { firmPnlByFirm, listFirms } from '@apps/lib/db';
 
 function fmtMoney(value, currency = 'R$') {
   if (value == null || Number.isNaN(value)) return '—';
@@ -18,20 +18,20 @@ const STATUS_CLASS = { SAFE: 'dash-pill-safe', WARN: 'dash-pill-warn', STOP: 'da
 
 export default function AccountsDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {
-    const [risk, payouts, txs] = await Promise.all([
+    const [risk, txs, accounts, firmsReg] = await Promise.all([
       f.risk.snapshot(),
-      f.ds.payouts.list(),
       f.ds.transactions.list(),
+      f.ds.accounts.list(),
+      listFirms(f.ds),
     ]);
     const firms = firmPnlByFirm(txs).slice(0, 5);
-    return { risk, payouts, firms };
+    return { risk, firms, accountCount: accounts.length, firmCount: firmsReg.length };
   });
 
   const risk = data?.risk;
   const rows = risk?.rows ?? [];
   const propRows = rows.filter((r) => r.account.kind === 'prop');
   const equityTotal = propRows.reduce((s, r) => s + (r.metrics.equity ?? 0), 0);
-  const pendingPayouts = (data?.payouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
 
   return (
     <div className="cmd-page">
@@ -61,9 +61,9 @@ export default function AccountsDashboardPage() {
               <div className="muted">PnL hoje {fmtMoney(risk.pnlToday)}</div>
             </div>
             <div className="card accent4">
-              <h3>Payouts pendentes</h3>
-              <div className="stat">{pendingPayouts.length}</div>
-              <div className="muted"><NavLink className="dash-link" to="/payouts">ver payouts →</NavLink></div>
+              <h3>Firms / Contas</h3>
+              <div className="stat">{data.firmCount} · {data.accountCount}</div>
+              <div className="muted"><NavLink className="dash-link" to="/firms">gerenciar firms →</NavLink></div>
             </div>
           </div>
 

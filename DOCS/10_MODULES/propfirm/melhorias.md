@@ -43,3 +43,20 @@
 - Status: [ ] ideia (futura)
 - Contexto: payouts tÃªm data, mas nÃ£o hÃ¡ visÃ£o temporal de "quando recebi / quando espero".
 - Proposta: mini-calendÃ¡rio na Firm P&L com payouts recebidos + prÃ³ximos elegÃ­veis (via `computePayoutEligibility`), por conta. Reuso do `PnLCalendar` como base visual.
+
+## Batch C — Accounts unificado + Firms (executado)
+- **C1 Accounts = registro de TODAS as contas**: a página deixou de ser "só prop firm". Agora
+  cobre `prop | bank | wallet | investment | crypto | cash`, com resumo (contas, capital
+  gerido, líquido), busca, filtro por tipo, cards com saldo (derivado por
+  `computeAccountBalance`) ou nominal (prop), pill de fase/risco e cor da firm. Editar/criar
+  em modal (regras da prop só quando `kind=prop`), painel da conta em modal (`AccountDetail`).
+  Arquivos: `packages/ui/Accounts.tsx` (reescrito), `AccountsPage.jsx` (modal + saldos),
+  `Account.firmId` (aditivo).
+- **C2 Firms vira cadastro de empresas dentro de Contas**: nova página `/firms`
+  (`FirmsPage`) com nome, tipo, cor, logo e observações + P&L por firm. Persistido em `meta`
+  (`packages/lib/db/firms.ts`: `listFirms`/`saveFirm`/`deleteFirm`/`firmColorById`, + testes).
+- **C3 cor da firm propaga**: cards de conta, dot/subtítulo e gráficos (`FirmPnl` aceita
+  `colorById`) usam a cor cadastrada — muda a empresa, muda o app inteiro.
+- **C4 payouts saíram de Contas**: `/payouts` e `/payout-center` agora são abas do módulo
+  **Dinheiro** (payout é dinheiro, não cadastro de conta). Contas = Resumo|Contas|Firms.
+- Gate: `tsc` 0 + build verde + 232 testes verdes (4 novos de firms).

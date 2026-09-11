@@ -57,7 +57,7 @@ export default function PayoutsPage() {
           ))}
         </select>
       </div>
-      <ModuleTabs module="contas" />
+      <ModuleTabs module="dinheiro" />
       <Payouts payouts={visible} accounts={accounts} loading={loading} onCreate={handleCreate} onDelete={handleDelete} />
     </div>
   );

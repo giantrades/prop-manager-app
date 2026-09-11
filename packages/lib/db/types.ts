@@ -62,6 +62,8 @@ export interface Account extends SyncedRecord {
   platformAccountId?: string;
   platformName?: string;
   lastPlatformSync?: string;
+  // Firms — vínculo com uma empresa (cor propaga no app). Aditivo.
+  firmId?: string;
 }
 
 export type PropPhase =

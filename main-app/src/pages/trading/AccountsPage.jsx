@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import { accountDashboard } from '@apps/lib/db';
+import { accountDashboard, computeAccountBalance, listFirms } from '@apps/lib/db';
 import Accounts from '@apps/ui/Accounts';
 import AccountDetail from '@apps/ui/AccountDetail';
 
@@ -14,11 +14,22 @@ const NEXT_PHASE = { challenge1: 'challenge2', challenge2: 'funded', funded: 'fu
 export default function AccountsPage() {
   const finance = useFinance();
   const { loading, data, reload: load } = usePageData('accounts', async (f) => {
-    const [a, p] = await Promise.all([f.ds.accounts.list(), f.ds.propExtensions.list()]);
-    return { accounts: a, props: Object.fromEntries(p.map((x) => [x.accountId, x])) };
+    const [a, p, txs, firms] = await Promise.all([
+      f.ds.accounts.list(), f.ds.propExtensions.list(), f.ds.transactions.list(), listFirms(f.ds),
+    ]);
+    const balances = {};
+    for (const acc of a) balances[acc.id] = computeAccountBalance(txs, acc.id);
+    return {
+      accounts: a,
+      props: Object.fromEntries(p.map((x) => [x.accountId, x])),
+      balances,
+      firms,
+    };
   });
   const accounts = data?.accounts ?? [];
   const props = data?.props ?? {};
+  const balances = data?.balances ?? {};
+  const firms = data?.firms ?? [];
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [payouts, setPayouts] = useState([]);
@@ -110,58 +121,72 @@ export default function AccountsPage() {
   }, [load]);
 
   const selected = accounts.find((a) => a.id === selectedId) || null;
+  const firmById = Object.fromEntries(firms.map((f) => [f.id, f]));
+  const statusById = {};
+  for (const a of accounts) {
+    const p = props[a.id];
+    if (p) statusById[a.id] = p.phase === 'failed' ? 'STOP' : p.phase === 'funded' ? 'SAFE' : 'WARN';
+  }
 
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
-        <h1 className="cmd-page-title">Accounts</h1>
+        <h1 className="cmd-page-title">Contas</h1>
       </div>
       <ModuleTabs module="contas" />
-      {selected ? (
-        <div className="ac2-master-detail">
-          <Accounts accounts={accounts} props={props} loading={loading} onSave={handleSave} onDelete={handleDelete} onSelect={setSelectedId} />
-          <div>
-          <AccountDetail
-            account={selected}
-            prop={props[selected.id] ?? null}
-            dashboard={detail}
-            payouts={payouts}
-            loading={detailLoading}
-            onBack={() => setSelectedId(null)}
-          />
-          <div className="ac2-actions" role="group" aria-label="Gerenciar conta">
-            <button className="ac2-btn ac2-btn-sm" onClick={() => handleDuplicate(selected.id)}>Duplicar</button>
-            {props[selected.id] && (
-              <>
-                <button
-                  className="ac2-btn ac2-btn-sm"
-                  onClick={() => handleSetPhase(selected.id, NEXT_PHASE[props[selected.id].phase] ?? 'funded')}
-                >
-                  Avançar fase
-                </button>
-                <button
-                  className="ac2-btn ac2-btn-sm"
-                  onClick={() => handleSetPhase(selected.id, props[selected.id].phase === 'paused' ? 'funded' : 'paused')}
-                >
-                  {props[selected.id].phase === 'paused' ? 'Retomar' : 'Pausar'}
-                </button>
-                <button className="ac2-btn ac2-btn-sm ac2-btn-danger" onClick={() => handleSetPhase(selected.id, 'failed')}>
-                  Marcar failed
-                </button>
-              </>
-            )}
-          </div>
+
+      <Accounts
+        accounts={accounts}
+        props={props}
+        balances={balances}
+        statusById={statusById}
+        firms={firms}
+        loading={loading}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        onDuplicate={handleDuplicate}
+        onSelect={setSelectedId}
+      />
+
+      {selected && (
+        <div className="ac3-overlay" onClick={() => setSelectedId(null)}>
+          <div
+            className="ac3-sheet"
+            style={{ maxWidth: 860 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Painel da conta ${selected.name}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="ac3-sheet-head">
+              <span className="ac3-sheet-title">
+                {selected.name}
+                {firmById[selected.firmId] && <span style={{ color: firmById[selected.firmId].color, marginLeft: 8, fontSize: 12 }}>● {firmById[selected.firmId].name}</span>}
+              </span>
+              <button className="ac3-icon" onClick={() => setSelectedId(null)} aria-label="Fechar">✕</button>
+            </div>
+            <div style={{ padding: '14px 18px 20px' }}>
+              <AccountDetail
+                account={selected}
+                prop={props[selected.id] ?? null}
+                dashboard={detail}
+                payouts={payouts}
+                loading={detailLoading}
+                onBack={() => setSelectedId(null)}
+              />
+              <div className="ac3-form-actions" role="group" aria-label="Gerenciar conta" style={{ marginTop: 12, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+                <button className="ac3-btn ac3-btn-sm" onClick={() => handleDuplicate(selected.id)}>Duplicar</button>
+                {props[selected.id] && (
+                  <>
+                    <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, NEXT_PHASE[props[selected.id].phase] ?? 'funded')}>Avançar fase</button>
+                    <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, props[selected.id].phase === 'paused' ? 'funded' : 'paused')}>{props[selected.id].phase === 'paused' ? 'Retomar' : 'Pausar'}</button>
+                    <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => handleSetPhase(selected.id, 'failed')}>Marcar failed</button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      ) : (
-        <Accounts
-          accounts={accounts}
-          props={props}
-          loading={loading}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onSelect={setSelectedId}
-        />
       )}
     </div>
   );

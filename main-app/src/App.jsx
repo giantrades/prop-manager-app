@@ -37,8 +37,7 @@ const PortfolioPage = lazy(pageLoaders['/portfolio']);
 const WalletsPage = lazy(pageLoaders['/wallets']);
 const TaxPage = lazy(pageLoaders['/tax']);
 const ForecastPage = lazy(pageLoaders['/forecast']);
-const FirmPnlPage = lazy(pageLoaders['/firms']);
-const ExpensesPage = lazy(pageLoaders['/expenses']);
+const FirmPnlPage = lazy(pageLoaders['/firms']);const ExpensesPage = lazy(pageLoaders['/expenses']);
 const FinancialJournalPage = lazy(pageLoaders['/journal-events']);
 const ReportsPage = lazy(pageLoaders['/reports']);
 

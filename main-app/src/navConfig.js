@@ -50,10 +50,8 @@ export const MODULES = [
     dashboard: "/contas",
     children: [
       { to: "/contas", label: "Resumo", icon: Wallet, end: true, keywords: "contas dashboard resumo" },
-      { to: "/accounts", label: "Accounts", icon: Wallet, keywords: "contas prop firm" },
-      { to: "/firms", label: "Firm P&L", icon: Building2, keywords: "propfirm gasto lucro empresa" },
-      { to: "/payouts", label: "Payouts", icon: ArrowDownToLine, keywords: "saques pagamentos" },
-      { to: "/payout-center", label: "Alocar", icon: ArrowDownToLine, keywords: "alocar saque tax living invest" },
+      { to: "/accounts", label: "Contas", icon: Wallet, keywords: "contas prop banco carteira investimento" },
+      { to: "/firms", label: "Firms", icon: Building2, keywords: "empresas corretoras firm proprfirm cadastro" },
     ],
   },
   {
@@ -78,6 +76,8 @@ export const MODULES = [
       { to: "/wallets", label: "Wallets", icon: Wallet, keywords: "carteiras bancos dinheiro" },
       { to: "/expenses", label: "Gastos", icon: Receipt, keywords: "despesas mobills orçamento" },
       { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
+      { to: "/payouts", label: "Payouts", icon: ArrowDownToLine, keywords: "saques pagamentos" },
+      { to: "/payout-center", label: "Alocar", icon: ArrowDownToLine, keywords: "alocar saque tax living invest" },
     ],
   },
   {

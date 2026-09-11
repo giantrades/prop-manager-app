@@ -44,7 +44,7 @@ export default function PayoutCenterPage() {
     return (
       <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Payout Center</h1></div>
-      <ModuleTabs module="contas" />
+      <ModuleTabs module="dinheiro" />
         <div className="pcc-loading" role="status">Carregando…</div>
       </div>
     );
@@ -53,7 +53,7 @@ export default function PayoutCenterPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Payout Center</h1></div>
-      <ModuleTabs module="contas" />
+      <ModuleTabs module="dinheiro" />
       {done && <div className="pcc-done" role="status">{done}</div>}
 
       {payouts.length === 0 ? (
