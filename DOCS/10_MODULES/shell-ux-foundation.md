@@ -61,6 +61,15 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch L — reaproveitar widgets do app antigo (executado)
+- **Trading dashboard**: cards com **glow** (PnL hoje, Capital nominal, Total payouts, ROI,
+  Winrate, Profit factor) + **gráfico de área** com toggle PnL acumulado × Payouts acumulados
+  (estilo da dashboard antiga) + JournalDashboard. `TradingDashboardPage.jsx`.
+- **Settings**: nova seção **Conexões de plataforma** (reusa `PlatformStatusIndicator`) e
+  **Backup na nuvem** (Google/Proton via `useDrive`), no layout de cards da Settings antiga.
+- Base: `winrate`/`profitFactor` do motor; `fmtMoney` global (moeda).
+- Gate: `tsc` 0 + build verde + 232 testes verdes.
+
 ## Batch K — notificações como gaveta (executado)
 - A notificação da navbar **não navega mais** para `/actions`: abre uma **gaveta**
   (`packages/ui/NotificationsDrawer.tsx`) com a lista de ações em aberto.

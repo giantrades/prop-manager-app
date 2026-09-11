@@ -8,8 +8,85 @@ import { useCurrency } from '@apps/state';
 import { supabase } from '@apps/supabase/client';
 import { importLegacyPayoutsFromStorage, dumpAppDb, restoreAppDb } from '@apps/lib/db';
 import SyncConflicts from '@apps/ui/SyncConflicts';
+import PlatformStatusIndicator from '@apps/ui/PlatformStatusIndicator';
 import { useToast } from '@apps/ui/Toast';
 import { usePush } from '../../usePush';
+import { usePlatform } from '@apps/state';
+import { useDrive } from '@apps/state/DriveContext';
+
+function ConnectionsCard() {
+  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
+  return (
+    <div className="st-card">
+      <div className="st-title">Conexões de plataforma</div>
+      <p className="st-hint">Ponte com Quantower/cTrader para trades e posições ao vivo.</p>
+      <div className="st-row">
+        <PlatformStatusIndicator
+          statuses={statuses}
+          liveCount={liveCount}
+          lastSync={lastSync}
+          isRunning={isRunning}
+          onToggleSync={isRunning ? stopSync : startSync}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CloudBackupCard() {
+  const {
+    logged, login, logout, backup,
+    protonReady, protonLogged, protonLogin, protonLogout, backupToProton, protonSupported,
+  } = useDrive();
+  const { toast } = useToast();
+  const finance = useFinance();
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn, label) => {
+    if (!finance) return;
+    setBusy(true);
+    try {
+      const { dumpAppDb } = await import('@apps/lib/db');
+      const all = await dumpAppDb(finance.ds);
+      await fn(JSON.stringify(all));
+      toast(`Backup salvo — ${label}`);
+    } catch (e) {
+      toast(`Falha no backup: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="st-card">
+      <div className="st-title">Backup na nuvem</div>
+      <div className="st-cloud">
+        <div className="st-cloud-row">
+          <span className="st-cloud-name">Google Drive <span className={logged ? 'st-on' : 'st-off'}>●</span></span>
+          {logged ? (
+            <span className="st-row">
+              <button className="st-btn" disabled={busy} onClick={() => run(backup, 'Google Drive')}>Backup agora</button>
+              <button className="st-btn" onClick={logout}>Desconectar</button>
+            </span>
+          ) : (
+            <button className="st-btn" onClick={login}>Conectar</button>
+          )}
+        </div>
+        <div className="st-cloud-row">
+          <span className="st-cloud-name">Proton Drive <span className={protonLogged ? 'st-on' : 'st-off'}>●</span></span>
+          {protonLogged ? (
+            <span className="st-row">
+              <button className="st-btn" disabled={busy} onClick={() => run(backupToProton, 'Proton Drive')}>Backup agora</button>
+              <button className="st-btn" onClick={protonLogout}>Desconectar</button>
+            </span>
+          ) : protonSupported ? (
+            <button className="st-btn" onClick={protonLogin}>Conectar pasta</button>
+          ) : (
+            <button className="st-btn" disabled={busy} onClick={() => run(backupToProton, 'download')}>Baixar backup</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PushSettingsCard() {
   const { supported, permission, subscribed, busy, subscribe, unsubscribe, hasVapidKey } = usePush();
@@ -143,6 +220,7 @@ export default function SettingsPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
       <ModuleTabs module="system" />
+      <ConnectionsCard />
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">
@@ -163,6 +241,8 @@ export default function SettingsPage() {
           Esse valor é aplicado ao seletor de moeda (USD/BRL) e converte todos os valores do app.
         </p>
       </div>
+
+      <CloudBackupCard />
 
       <div className="st-card">
         <div className="st-title">Dados (app-db v3)</div>
@@ -200,6 +280,12 @@ const ST_CSS = `
 .st-input { background: #111623; border: 1px solid #273044; border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 14px; min-height: 42px; width: 100%; font-family: inherit; font-variant-numeric: tabular-nums; }
 .st-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
 .st-hint { font-size: 12px; color: var(--muted, #a1a7b3); margin: 0; }
+.st-cloud { display: flex; flex-direction: column; gap: 10px; }
+.st-cloud-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.st-cloud-row:last-child { border-bottom: none; }
+.st-cloud-name { font-size: 13px; font-weight: 600; }
+.st-on { color: var(--green, #2ecc71); }
+.st-off { color: var(--red, #e74c3c); }
 .st-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .st-btn { padding: 10px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 40px; }
 .st-btn.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); font-weight: 700; }
