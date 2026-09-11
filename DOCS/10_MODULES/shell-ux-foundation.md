@@ -61,6 +61,18 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch G — dashboards de módulo (PENDENTE, próximo)
+Problema: hoje clicar numa âncora leva à **primeira aba** (ex. Dinheiro → `/wallets`),
+não a uma dashboard. A dashboard deve ser a porta de entrada do módulo, com os seus
+próprios indicadores, e as abas navegam para as páginas internas.
+- **G1** rota de dashboard própria por módulo (ex. `/dinheiro`, `/contas`, `/trading`).
+- **G2** Dinheiro: Wallets vira aba; dashboard mostra resumo de Gastos (mês, orçamento,
+  top categorias), saldo por carteira e payouts pendentes.
+- **G3** Contas: dashboard com equity/DD agregado + payouts; abas Accounts|Firms|Payouts|Alocar.
+- **G4** Trading/Investimentos/Planejamento: dashboards reutilizando os componentes
+  `*Dashboard` já existentes; `navConfig.js` ganha `dashboard` apontando p/ a nova rota.
+- Critério: sidebar → dashboard do módulo; abas → páginas internas; zero duplicação de dados.
+
 ## Batch F — sidebar por dashboard + abas de módulo + mapa (executado)
 - **F1 sidebar sem acordeão**: clique no módulo vai **direto à dashboard** do módulo
   (`Navbar.jsx` → `goToModule`). Removidos `openModules`/`toggleModule`/chevron/children.

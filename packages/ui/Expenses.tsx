@@ -160,6 +160,7 @@ export default function Expenses({
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const [typeFilter, setTypeFilter] = useState('all');
   const [catFilter, setCatFilter] = useState('');
+  const [q, setQ] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -198,15 +199,37 @@ export default function Expenses({
     if (typeFilter === 'income') return [];
     if (catFilter) g = g.filter((x) => x.categoryId === catFilter);
     return g;
-  }, [groups, typeFilter, catFilter]);
-
-  const monthTxs = useMemo(() => {
+  }, [groups, typeFilter, catFilter]);  const monthTxs = useMemo(() => {
     let list = txs.filter((t) => (t.date || '').slice(0, 7) === key);
     if (typeFilter === 'income') list = list.filter((t) => ['payout_in', 'rebate', 'income'].includes(t.kind));
     if (typeFilter === 'expense') list = list.filter((t) => t.kind === 'expense');
     if (catFilter) list = list.filter((t) => (categoryOf(t, cats) ?? 'outros') === catFilter);
+    const ql = q.trim().toLowerCase();
+    if (ql) {
+      list = list.filter((t) =>
+        (t.note ?? '').toLowerCase().includes(ql)
+        || (catById.get(categoryOf(t, cats) ?? 'outros')?.name ?? '').toLowerCase().includes(ql),
+      );
+    }
     return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [txs, key, typeFilter, catFilter, cats]);
+  }, [txs, key, typeFilter, catFilter, cats, q, catById]);
+
+  // Progresso de orçamento consolidado (topo da página).
+  const budgetTotals = useMemo(() => {
+    const budget = bStatus.reduce((s, b) => s + (b.budget || 0), 0);
+    const spent = bStatus.reduce((s, b) => s + (b.spent || 0), 0);
+    return { budget, spent, pct: budget > 0 ? Math.round((spent / budget) * 100) : 0, over: budget > 0 && spent > budget };
+  }, [bStatus]);
+
+  // Com busca ativa, esconde grupos sem lançamento correspondente.
+  const listGroups = useMemo(() => {
+    if (!q.trim()) return filteredGroups;
+    return filteredGroups.filter((g) => monthTxs.some((t) => t.kind === 'expense' && (categoryOf(t, cats) ?? 'outros') === g.categoryId));
+  }, [filteredGroups, monthTxs, q, cats]);
+  const listGains = useMemo(() => {
+    if (!q.trim()) return gains;
+    return gains.filter((g) => monthTxs.some((t) => t.kind === g.kind));
+  }, [gains, monthTxs, q]);
 
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -339,19 +362,30 @@ export default function Expenses({
   return (
     <div className="ex-root">
       {/* Resumo do mês */}
-      <div className="ex-summary">
-        <div className="ex-sum-card ex-sum-in">
-          <span className="ex-sum-label">Receitas</span>
-          <span className="ex-sum-value">{fmtMoney(fc.income, currency)}</span>
+      <div className="ex-hero">
+        <div className="ex-summary">
+          <div className="ex-sum-card ex-sum-in">
+            <span className="ex-sum-label">Receitas</span>
+            <span className="ex-sum-value">{fmtMoney(fc.income, currency)}</span>
+          </div>
+          <div className="ex-sum-card ex-sum-out">
+            <span className="ex-sum-label">Despesas</span>
+            <span className="ex-sum-value">{fmtMoney(fc.expenses, currency)}</span>
+          </div>
+          <div className={`ex-sum-card ${fc.freeCash >= 0 ? 'ex-sum-in' : 'ex-sum-out'}`}>
+            <span className="ex-sum-label">Saldo</span>
+            <span className="ex-sum-value">{fmtMoney(fc.freeCash, currency)}</span>
+          </div>
         </div>
-        <div className="ex-sum-card ex-sum-out">
-          <span className="ex-sum-label">Despesas</span>
-          <span className="ex-sum-value">{fmtMoney(fc.expenses, currency)}</span>
-        </div>
-        <div className={`ex-sum-card ${fc.freeCash >= 0 ? 'ex-sum-in' : 'ex-sum-out'}`}>
-          <span className="ex-sum-label">Saldo</span>
-          <span className="ex-sum-value">{fmtMoney(fc.freeCash, currency)}</span>
-        </div>
+        {budgetTotals.budget > 0 && (
+          <div className={`ex-budget-total${budgetTotals.over ? ' over' : ''}`}>
+            <div className="ex-budget-total-top">
+              <span>Orçamento do mês</span>
+              <span>{fmtMoney(budgetTotals.spent, currency)} / {fmtMoney(budgetTotals.budget, currency)} · {budgetTotals.pct}%</span>
+            </div>
+            <div className="ex-bar-wrap"><span className="ex-bar" style={{ width: `${Math.min(100, budgetTotals.pct)}%` }} /></div>
+          </div>
+        )}
       </div>
 
       {/* Filtros + ações */}
@@ -366,18 +400,27 @@ export default function Expenses({
             <button key={v} className={`ex-chip${typeFilter === v ? ' active' : ''}`} onClick={() => setTypeFilter(v)}>{l}</button>
           ))}
         </div>
+        <span className="ex-toolbar-spacer" />
+        <input
+          className="ex-input ex-search"
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar lançamento…"
+          aria-label="Buscar lançamento por nota ou categoria"
+        />
+        <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
       </div>
-      <div className="ex-toolbar">
-        <select className="ex-input" value={catFilter} onChange={(e) => setCatFilter(e.target.value)} aria-label="Filtrar por categoria">
+      <div className="ex-toolbar ex-toolbar-2">
+        <select className="ex-input ex-catfilter" value={catFilter} onChange={(e) => setCatFilter(e.target.value)} aria-label="Filtrar por categoria">
           <option value="">Todas as categorias</option>
           {cats.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <button className="ex-btn ex-btn-ghost" onClick={() => setShowBudget((s) => !s)}>Orçamento</button>
-        <button className="ex-btn ex-btn-ghost" onClick={() => setShowCats((s) => !s)}>Categorias</button>
+        <button className={`ex-btn ex-btn-ghost${showBudget ? ' ex-btn-on' : ''}`} aria-pressed={showBudget} onClick={() => setShowBudget((s) => !s)}>Orçamento</button>
+        <button className={`ex-btn ex-btn-ghost${showCats ? ' ex-btn-on' : ''}`} aria-pressed={showCats} onClick={() => setShowCats((s) => !s)}>Categorias</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato</button>
-        <button className="ex-btn" onClick={startAdd}><Plus size={15} /> Novo</button>
       </div>
       <input
         ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif" style={{ display: 'none' }}
@@ -426,7 +469,7 @@ export default function Expenses({
                   amount: en.amount,
                   description: en.description,
                   kind: en.amount >= 0 ? 'income' : 'expense',
-                  categoryId: en.categoryId ?? en.suggested ?? null,
+                  categoryId: en.categoryId ?? en.suggestedCategory ?? null,
                 })));
                 setImportPreview(null);
               }}
@@ -471,9 +514,15 @@ export default function Expenses({
         </div>
       )}
 
-      {/* Form add/edit */}
+      {/* Form add/edit — bottom sheet */}
       {showForm && (
-        <div className="ex-form">
+        <div className="ex-overlay" onClick={() => { setShowForm(false); setEditingId(null); }}>
+          <div className="ex-sheet" role="dialog" aria-modal="true" aria-label={editingId ? 'Editar lançamento' : 'Novo lançamento'} onClick={(e) => e.stopPropagation()}>
+          <div className="ex-sheet-head">
+            <span className="ex-sheet-title">{editingId ? 'Editar lançamento' : 'Novo lançamento'}</span>
+            <button className="ex-mini" onClick={() => { setShowForm(false); setEditingId(null); }} aria-label="Fechar">✕</button>
+          </div>
+          <div className="ex-form">
           <div className="ex-typefilter" role="group" aria-label="Tipo de lançamento">
             {[['expense', 'Gasto'], ['income', 'Ganho']].map(([v, l]) => (
               <button key={v} className={`ex-chip${form.type === v ? ' active' : ''}`} onClick={() => setF('type', v)}>{l}</button>
@@ -535,10 +584,12 @@ export default function Expenses({
             </label>
           )}
           <div className="ex-form-row">
-            <button className="ex-btn" onClick={handleSave} disabled={!form.amount || !form.accountId}>{editingId ? 'Salvar' : 'Adicionar'}</button>
+            <button className="ex-btn ex-btn-primary" onClick={handleSave} disabled={!form.amount || !form.accountId}>{editingId ? 'Salvar' : 'Adicionar'}</button>
             <button className="ex-btn ex-btn-ghost" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancelar</button>
           </div>
           {accounts.length === 0 && <div className="ex-hint">Crie uma conta (Wallets) para lançar.</div>}
+          </div>
+          </div>
         </div>
       )}
 
@@ -592,7 +643,7 @@ export default function Expenses({
       {/* Gráficos */}
       {typeFilter !== 'income' && pieData.length > 0 && (
         <div className="ex-section">
-          <div className="ex-section-title">Gastos por categoria</div>
+          <div className="ex-section-title">Distribuição por categoria</div>
           <div className="ex-pie">
             <ResponsiveContainer width="100%" height={210}>
               <PieChart>
@@ -680,7 +731,7 @@ export default function Expenses({
           <div className="ex-section-title">Ganhos</div>
           {gains.length === 0 ? (
             <div className="ex-empty" role="status">Nenhum ganho neste mês.</div>
-          ) : gains.map((g) => {
+          ) : listGains.map((g) => {
             const meta = INCOME_META[g.kind] ?? { label: g.kind, icon: 'Gift', color: 'blue' };
             const items = monthTxs.filter((t) => t.kind === g.kind);
             return (
@@ -703,10 +754,10 @@ export default function Expenses({
       {/* Gastos agrupados */}
       {typeFilter !== 'income' && (
         <div className="ex-section">
-          <div className="ex-section-title">Gastos por categoria</div>
-          {filteredGroups.length === 0 ? (
-            <div className="ex-empty" role="status">Nenhuma despesa neste mês.</div>
-          ) : filteredGroups.map((g) => {
+          <div className="ex-section-title">Lançamentos do mês</div>
+          {listGroups.length === 0 ? (
+            <div className="ex-empty" role="status">{q.trim() ? 'Nenhum lançamento encontrado.' : 'Nenhuma despesa neste mês.'}</div>
+          ) : listGroups.map((g) => {
             const cat = catById.get(g.categoryId) ?? { name: g.categoryId, icon: 'Tag', color: 'gray' };
             const items = monthTxs.filter((t) => t.kind === 'expense' && (categoryOf(t, cats) ?? 'outros') === g.categoryId);
             return (
@@ -887,6 +938,48 @@ const EX_CSS = `
 .ex-pie { display: flex; justify-content: center; }
 @media (max-width: 719px) { .ex-summary { grid-template-columns: 1fr; } .ex-sum-value { font-size: 19px; } .ex-form-row { grid-template-columns: 1fr; } }
 @keyframes ex-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+/* ── v2 polish: glass, espaçamento, botões e sheet (Mobills-like) ── */
+.ex-root { gap: 14px; }
+.ex-hero { display: flex; flex-direction: column; gap: 12px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 18px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.ex-summary { gap: 12px; }
+.ex-sum-card { border-radius: 14px; padding: 16px; }
+.ex-budget-total { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.ex-budget-total-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
+.ex-budget-total.over .ex-budget-total-top span:last-child { color: var(--red, #e74c3c); font-weight: 800; }
+.ex-budget-total.over .ex-bar { background: linear-gradient(90deg, var(--red, #e74c3c), #ff7b6b); }
+
+.ex-toolbar { gap: 10px; }
+.ex-toolbar-2 { padding-top: 2px; }
+.ex-toolbar-spacer { flex: 1; }
+.ex-search { max-width: 240px; }
+.ex-catfilter { max-width: 220px; }
+
+.ex-section { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+
+.ex-btn { border-radius: 12px; padding: 10px 16px; gap: 8px; transition: filter 120ms ease, background 120ms ease; }
+.ex-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); box-shadow: 0 6px 16px rgba(124,92,255,0.28); }
+.ex-btn-ghost { background: rgba(255,255,255,0.03); }
+.ex-btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+.ex-btn-on { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); color: var(--text, #e7eaf0); }
+.ex-chip { border-radius: 12px; }
+
+.ex-item { border-radius: 12px; padding: 12px 14px; background: rgba(255,255,255,0.03); gap: 12px; }
+.ex-item:hover { background: rgba(255,255,255,0.05); }
+.ex-item-amount { font-size: 14px; }
+.ex-mini { min-width: 40px; min-height: 40px; border-radius: 10px; }
+.ex-item-actions { gap: 6px; }
+.ex-group { gap: 8px; padding: 4px 0; }
+.ex-group + .ex-group { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; margin-top: 4px; }
+
+/* Form em bottom sheet (mobile) / modal (desktop) */
+.ex-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(7,9,14,0.72); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; }
+.ex-sheet { width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; background: linear-gradient(180deg, #171c27 0%, #12161f 100%); border: 1px solid #1f2734; border-radius: 20px 20px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,0.5); }
+.ex-sheet-head { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; background: rgba(23,28,39,0.96); backdrop-filter: blur(6px); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.ex-sheet-title { font-size: 15px; font-weight: 800; }
+.ex-form { border: none; background: transparent; border-radius: 0; padding: 16px 18px 24px; gap: 14px; }
+@media (min-width: 720px) { .ex-overlay { align-items: center; padding: 24px; } .ex-sheet { border-radius: 20px; } }
+@media (max-width: 719px) { .ex-search { max-width: none; flex: 1; } .ex-section { padding: 14px; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('ex-styles')) {
   const style = document.createElement('style');

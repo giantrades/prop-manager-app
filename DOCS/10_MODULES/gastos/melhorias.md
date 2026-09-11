@@ -51,3 +51,32 @@
 - Status: [ ] ideia (futura)
 - Contexto: recorrentes + contas com vencimento existem, mas não há visão "o que vence nos próximos 15 dias".
 - Proposta: seção no topo de Gastos com próximos vencimentos (dos templates + metas), ordenados por data, com total. Base: `recurringDue` estendido para N dias à frente.
+
+## Batch C — redesign visual + UX Mobills-like (executado)
+- **C1 Glass + espaçamento + botões**: hero/resumos e seções passam a usar o tema
+  (gradiente + borda + sombra) em vez de `rgba(255,255,255,0.02)`; botão primário real
+  (`.ex-btn-primary`) para "Novo"; chips e ghost coerentes. `Expenses.tsx` (bloco `EX_CSS` v2).
+- **C2 Barra de orçamento no topo**: total gasto/meta do mês com % e estado "estourou",
+  a partir de `budgetStatus` (já existente). Sem cálculo novo.
+- **C3 Busca de lançamentos**: filtro por nota/categoria no mês (`q`), escondendo grupos
+  vazios; estado vazio específico.
+- **C4 Form em bottom sheet**: overlay + `role="dialog" aria-modal` com cabeçalho fixo,
+  em vez do form que empurrava a página; desktop vira modal centrado.
+- **C5 Títulos sem duplicação**: donut = "Distribuição por categoria"; lista = "Lançamentos do mês".
+- **C6 Correções**: alvos de toque ≥40px (`.ex-mini`); bug real na importação —
+  `en.suggested` (inexistente) → `en.suggestedCategory`, então a categoria sugerida pelo
+  extrato agora é aplicada de fato.
+- Gate: `vite build` verde + 220 testes verdes.
+
+## Batch D — paridade Mobills (backlog priorizado)
+- **D1 Contas a pagar/receber com status**: flag paga/pendente por lançamento + badges e
+  filtro "a pagar"; base para "próximas contas" (B2). Mexe em `types.ts` + `MoneyService`
+  (campo aditivo, sem nova fórmula) + UI.
+- **D2 Parcelamento e cartão/fatura**: `installments: { n, of }` e agrupamento por cartão;
+  parcela gera N lançamentos mensais (sugerir, nunca automático).
+- **D3 Visão diária / extrato**: agrupar lançamentos por dia com saldo do dia (hoje só por mês).
+- **D4 Relatório por estabelecimento/tag**: além de categoria, permitir tags livres e
+  ranking de estabelecimentos (ex.: iFood, Uber).
+- **D5 Transferência entre carteiras** na UI de Gastos (o ledger já tem `transfer`).
+- **D6 Dashboard do módulo Dinheiro**: resumo de Gastos (mês, orçamento, top categorias)
+  como porta de entrada, com abas — ver `shell-ux-foundation.md` Batch G.
