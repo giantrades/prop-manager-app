@@ -70,7 +70,7 @@ export default function InvestmentsDashboardPage() {
             <div className="dash-section">
               <div className="dash-title">
                 <span>Maiores posições</span>
-                <NavLink className="dash-link" to="/positions">holdings →</NavLink>
+                <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
               </div>
               {data.top.map((p) => (
                 <div key={p.id} className="dash-row">

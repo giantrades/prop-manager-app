@@ -61,6 +61,24 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch I — reorg de âncoras + Positions live + Payouts rico (executado)
+- **I1 Dinheiro extinto**: módulo `dinheiro` removido. `Tax` → Gastos (aba);
+  `Wallets` removido (info já vive em Contas/Accounts, agora com líquido **por moeda**);
+  `Payouts e Withdrawals` → Investimentos.
+- **I2 Alocar sem aba**: `/payout-center` removido; a alocação (Tax→Living→Invest→Cash)
+  agora é inline em `/payouts` (modal com `PayoutCenter`).
+- **I3 Holdings → Positions live (Trading)**: `/positions` (registro quebrado) saiu;
+  nova `/live-positions` (`LivePositionsPage`) usa `usePlatform().livePositions` e permite
+  editar SL/TP (`modifyPosition`) e fechar (`closePosition`). `quantowerAdapter.getPositions`
+  passou a expor `sl`/`tp`.
+- **I4 Payouts rico (ideia do app antigo)**: `Payouts.tsx` reescrito com cards de Gross/Taxas/
+  Líquido, **líquido por firm com cor**, busca, filtro de status, ordenação, tabela no desktop
+  + cards no mobile, export CSV e form completo (método/status/data, split por peso com
+  preview por conta, comprovante). `PayoutsPage` passa `firms`.
+- Estrutura final da sidebar: Home · Contas · Trading · Gastos · Investimentos · Planejamento ·
+  Relatórios · Sistema.
+- Gate: `tsc` 0 + build verde + 232 testes verdes.
+
 ## Batch H — transição suave entre abas (executado)
 Problema: trocar de aba dentro de um módulo dava "flash" (chunk lazy + Suspense) e
 recarregava tudo (skeleton) porque cada página remontava e refazia o fetch.

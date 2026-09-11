@@ -80,3 +80,8 @@
 - Status: [ ] ideia (futura)
 - Contexto: tags existem (J12) mas n√£o h√° an√°lise por elas.
 - Proposta: winrate/PnL/avgR agrupados por tag + filtro cruzado tag√ós√≠mbolo. Mesma base do breakdown por s√≠mbolo.
+
+## Batch C ó dashboard Trading (reaproveitar app antigo)
+- Ideia: trazer os gr·ficos/cards/estilos da dashboard antiga do journal (calend·rio,
+  heatmap, curvas) para a nova `/trading`, melhorando a UI. Ver `DOCS/11_PAGE_MAP.md`.
+- Status: [ ] ideia (futura) ó aguardando o dono priorizar.

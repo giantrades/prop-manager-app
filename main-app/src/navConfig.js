@@ -24,7 +24,6 @@ import {
   Zap,
   FileText,
   PiggyBank,
-  Banknote,
   Sparkles,
 } from "lucide-react";
 
@@ -64,19 +63,7 @@ export const MODULES = [
       { to: "/journal", label: "Trading Journal", icon: BookOpen, keywords: "trades journal" },
       { to: "/playbook", label: "Playbook", icon: Target, keywords: "estratégias setup checklist" },
       { to: "/risk", label: "Risk", icon: ShieldAlert, keywords: "risco drawdown headroom" },
-    ],
-  },
-  {
-    id: "dinheiro",
-    label: "Dinheiro",
-    icon: Banknote,
-    dashboard: "/dinheiro",
-    children: [
-      { to: "/dinheiro", label: "Resumo", icon: Banknote, end: true, keywords: "dinheiro dashboard resumo" },
-      { to: "/wallets", label: "Wallets", icon: Wallet, keywords: "carteiras bancos dinheiro" },
-      { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
-      { to: "/payouts", label: "Payouts e Withdrawals", icon: ArrowDownToLine, keywords: "saques pagamentos withdrawals" },
-      { to: "/payout-center", label: "Alocar", icon: ArrowDownToLine, keywords: "alocar saque tax living invest" },
+      { to: "/live-positions", label: "Positions", icon: Activity, keywords: "posições abertas live stoploss takeprofit fechar" },
     ],
   },
   {
@@ -87,6 +74,7 @@ export const MODULES = [
     children: [
       { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
       { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills orçamento extratos" },
+      { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
     ],
   },
   {
@@ -98,7 +86,7 @@ export const MODULES = [
       { to: "/investimentos", label: "Resumo", icon: PiggyBank, end: true, keywords: "investimentos dashboard resumo" },
       { to: "/portfolio", label: "Portfolio", icon: TrendingUp, keywords: "investimentos ações cripto" },
       { to: "/networth", label: "Net Worth", icon: Wallet, keywords: "patrimônio total" },
-      { to: "/positions", label: "Holdings", icon: TrendingUp, keywords: "posições abertas investimentos" },
+      { to: "/payouts", label: "Payouts e Withdrawals", icon: ArrowDownToLine, keywords: "saques pagamentos withdrawals alocar" },
     ],
   },
   {
@@ -135,8 +123,7 @@ export const MODULES = [
   },
 ];
 
-/* Rotas de workspace que NÃO viram aba (continuam no Cmd+K). Vazio hoje:
-   `/positions` e `/payout-center` são abas dos seus módulos. */
+/* Rotas de workspace que NÃO viram aba (continuam no Cmd+K). Hoje vazio. */
 export const EXTRA_ROUTES = [];
 
 export const PALETTE_ROUTES = [

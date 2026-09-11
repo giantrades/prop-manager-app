@@ -43,20 +43,17 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/journal` | Trading | `trading/JournalPage.jsx` | `JournalDashboard`, `PnLCalendar`, `HeatmapSection`, `BreakdownSection`, `HistogramR`, `DurationAnalysis`, `WeeklyReview`, `Trades`, `TradeForm`, `NotesEditor` | `ds.trades`, `journalAnalytics.ts` |
 | `/playbook` | Trading | `trading/PlaybookPage.jsx` | `PreTradeChecklist`, `Strategies`, `EmotionalDiary` | `strategies.ts`, `checklist.ts` |
 | `/risk` | Trading | `command/EngineViews.jsx` → `RiskPage()` | `RiskCenter.tsx` | `risk.snapshot()` |
+| `/live-positions` | Trading | `trading/LivePositionsPage.jsx` | (tabela inline) | `usePlatform().livePositions`, `QuantowerAdapter.modifyPosition/closePosition` |
 | `/contas` | Contas | `command/AccountsDashboardPage.jsx` | `RiskCenter` pills (inline) | `risk.snapshot()`, `firmPnlByFirm`, `listFirms` |
 | `/accounts` | Contas | `trading/AccountsPage.jsx` | `Accounts.tsx` (reg. de contas), `AccountDetail.tsx` (modal) | `ds.accounts`, `computeAccountBalance`, `propExtensions`, `listFirms` |
 | `/firms` | Contas | `trading/FirmsPage.jsx` | `FirmPnl.tsx` | `listFirms`/`saveFirm`/`deleteFirm`, `firmPnlByFirm`, `firmPnlHistory` |
-| `/payouts` | Dinheiro | `trading/PayoutsPage.jsx` | `Payouts.tsx` | `ds.payouts`, `chain.applyPayout` |
-| `/payout-center` | Dinheiro | `trading/PayoutCenterPage.jsx` | `PayoutCenter.tsx` | `money.applyPayoutAllocation` |
-| `/dinheiro` | Dinheiro | `command/MoneyDashboardPage.jsx` | `Wallets.tsx` (resumo) | `walletSummary`, `freeCash`, `pendingSummary`, `expensesByCategory` |
 | `/gastos` | Gastos | `command/GastosDashboardPage.jsx` | — | `computeFreeCash`, `budgetStatus`, `expensesByCategory`, `pendingBills` |
-| `/wallets` | Dinheiro | `command/EngineViews.jsx` → `WalletsPage()` | `Wallets.tsx` | `money.walletSummary()` |
-| `/expenses` | Dinheiro | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
-| `/tax` | Dinheiro | `command/EngineViews.jsx` → `TaxPage()` | `TaxCockpit.tsx` (+ `AssetSalesSection` local) | `money.taxCockpit()` |
+| `/expenses` | Gastos | `command/EngineViews.jsx` → `ExpensesPage()` | `Expenses.tsx` | `money.ts` (budget/categorias/recorrentes), `bankImport.ts` |
+| `/tax` | Gastos | `command/EngineViews.jsx` → `TaxPage()` | `TaxCockpit.tsx` (+ `AssetSalesSection` local) | `money.taxCockpit()` |
 | `/investimentos` | Investimentos | `command/InvestmentsDashboardPage.jsx` | `NetWorth.tsx` | `wealth.netWorth()`, `portfolio()`, `netWorthSeries()` |
 | `/portfolio` | Investimentos | `command/EngineViews.jsx` → `PortfolioPage()` | `Portfolio.tsx` | `wealth.portfolio()`, `priceService.ts` |
 | `/networth` | Investimentos | `command/EngineViews.jsx` → `NetWorthPage()` | `NetWorth.tsx` | `wealth.netWorth()`, `netWorthSeries()` |
-| `/positions` | Investimentos | `trading/WealthEditors.jsx` → `PositionsManagePage()` | `Positions.tsx` | `ds.positions`, `csvImport.ts` |
+| `/payouts` | Investimentos | `trading/PayoutsPage.jsx` | `Payouts.tsx`, `PayoutCenter.tsx` (alocar inline) | `ds.payouts`, `chain.applyPayout`, `money.applyPayoutAllocation` |
 | `/planejamento` | Planejamento | `command/PlanningDashboardPage.jsx` | `Goals.tsx`, `Forecast.tsx` | `wealth.goals()`, `forecast()`, `safeAvailable()` |
 | `/goals` | Planejamento | `trading/WealthEditors.jsx` → `GoalsManagePage()` | `GoalsEditor.tsx`, `Goals.tsx` | `ds.goals`, `wealth.goals()` |
 | `/forecast` | Planejamento | `command/EngineViews.jsx` → `ForecastPage()` | `Forecast.tsx` | `wealth.forecast()`, `safeAvailable()` |
@@ -78,55 +75,47 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 
 ### Trading (âncora `trading`) — dashboard `/trading`
 - **TradingDashboardPage** — PnL hoje, contas em risco, checklist do dia, estratégias +
-  `JournalDashboard`. Abas Resumo|Journal|Playbook|Risk.
+  `JournalDashboard`. Abas Resumo|Journal|Playbook|Risk|Positions.
 - **JournalPage** — 3 modos internos: `view` Dashboard | Trades | Review. Cadastro/edição
   por `TradeForm.tsx`, notas por `NotesEditor.tsx`. Analytics em `journalAnalytics.ts`
   (testes `journalAnalytics.test.ts`).
 - **PlaybookPage** — checklist do dia + edge por estratégia + diário emocional×R.
 - **RiskCenter** (`EngineViews.jsx → RiskPage`) — drawdown/headroom/live via `risk.ts`.
+- **LivePositionsPage** (`/live-positions`) — posições **abertas/ao vivo** da plataforma
+  (`usePlatform().livePositions`); edita SL/TP (`modifyPosition`) e fecha (`closePosition`).
+  Fonte é o bridge (Quantower/cTrader) — sem storage próprio.
 
 ### Contas (âncora `contas`) — dashboard `/contas`
 - **AccountsDashboardPage** — contas prop ativas, equity total, risco (STOP/WARN/SAFE),
   firms/contas, lista de contas com pill + P&L por firm. Abas Resumo|Contas|Firms.
 - **AccountsPage** — **registro unificado de contas** (prop, banco, carteira, investimento,
   cripto, dinheiro): resumo, busca, filtro por tipo, cards com saldo/nominal e cor da firm,
-  modal criar/editar (regras da prop quando `kind=prop`, firm, plataforma) e modal de painel
-  (`AccountDetail`). UI em `Accounts.tsx`.
+  modal criar/editar (regras da prop quando `kind=prop`, firm — com "+ Nova empresa" inline
+  — e plataforma) e modal de painel (`AccountDetail`). UI em `Accounts.tsx`.
 - **FirmsPage** — cadastro de empresas/corretoras (nome, tipo, cor, logo, obs) + P&L por firm
   (`FirmPnl`); a **cor da firm propaga** para contas, pills e gráficos. Persistido em `meta`
   via `firms.ts` (`listFirms`/`saveFirm`/`deleteFirm`).
-- **AccountsPage** — master-detail (`.ac2-master-detail`): lista + `AccountDetail`
-  (equity/DD/payouts). Duplicar/fase via `ds.accounts` + `ds.propExtensions`.
-- **FirmPnlPage** — P&L por firm/conta, histórico 6m, exportar relatório.
-- **PayoutsPage** — CRUD de payout + `chain.applyPayout` (ledger).
-- **PayoutCenterPage** — alocação Tax→Living→Invest→Cash; cards de pendentes;
-  `money.applyPayoutAllocation`.
-
-### Dinheiro (âncora `dinheiro`) — dashboard `/dinheiro`
-- **MoneyDashboardPage** — porta de entrada: free cash do mês, a pagar, carteiras, payouts
-  pendentes, próximas contas e top categorias. UI monta de `walletSummary`/`freeCash`/
-  `pendingSummary`/`expensesByCategory` (composição).
-- **WalletsPage** — saldo/in/out por carteira multi-moeda + gráfico de barras.
-- **TaxPage** — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
-- **PayoutsPage / PayoutCenterPage** — "Payouts e Withdrawals" (criar/aplicar no ledger) e
-  alocação (Tax→Living→Invest→Cash). Abas do módulo Dinheiro.
 
 ### Gastos (âncora `gastos`) — dashboard `/gastos`
 - **GastosDashboardPage** — porta de entrada: gasto do mês, orçamento, a pagar, saldo do mês,
-  próximas contas, top categorias e últimos lançamentos.
+  próximas contas, top categorias e últimos lançamentos. Abas Resumo|Lançamentos|Tax.
 - **ExpensesPage** (aba "Lançamentos", `/expenses`) — Gastos estilo Mobills (ícones,
   orçamento, recorrentes, rollover, comparação de meses, contas a pagar/receber com status,
   parcelamento, cartão/fatura, tags, ranking por estabelecimento, busca e visão por dia).
   UI grande em `Expenses.tsx`; testes `expenses.test.ts`, `bankImport.test.ts`.
   **Dívida:** hoje orçamento/categorias são toggles in-page; viram abas do módulo numa próxima rodada.
+- **TaxPage** (`/tax`) — cockpit fiscal (day 20% / swing 15% / carry / DARF) + vendas de ativos.
 
 ### Investimentos (âncora `investimentos`) — dashboard `/investimentos`
 - **InvestmentsDashboardPage** — patrimônio, investido, PnL, maiores posições + série
-  (`NetWorth`). Abas Resumo|Portfolio|Net Worth|Holdings.
+  (`NetWorth`). Abas Resumo|Portfolio|Net Worth|Payouts e Withdrawals.
 - **PortfolioPage** — resumo/alloc/DCA/histórico/benchmark CDI + preço live
   (`priceService.ts`) + alertas + proventos. Aba **Configurar** (FX+CDI) no próprio módulo.
 - **NetWorthPage** — patrimônio derivado + snapshots. UI `NetWorth.tsx`.
-- **PositionsManagePage** — holdings (import CSV). UI `Positions.tsx`.
+- **PayoutsPage** — "Payouts e Withdrawals": CRUD de payout (`chain.applyPayout`) + alocação
+  inline (Tax→Living→Invest→Cash) via `PayoutCenter` em modal. Sem aba separada de "Alocar".
+- **Removido**: "Wallets" (info agora vive em Contas/Accounts) e "Holdings"
+  (`PositionsManagePage` ficou sem rota; a gestão de posições é a aba live no Trading).
 
 ### Planejamento (âncora `planejamento`) — dashboard `/planejamento`
 - **PlanningDashboardPage** — metas, safe available, fluxo mensal, projeção 90d + Forecast/

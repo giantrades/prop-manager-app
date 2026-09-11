@@ -14,7 +14,6 @@ import { PALETTE_ROUTES } from "./navConfig";
 // Páginas pesadas (charts) vão para chunks sob demanda.
 // Chunks por rota (fonte única em routeLoaders.js — usada no lazy e no prefetch).
 const HomePage = lazy(pageLoaders['/']);
-const MoneyDashboardPage = lazy(pageLoaders['/dinheiro']);
 const GastosDashboardPage = lazy(pageLoaders['/gastos']);
 const AccountsDashboardPage = lazy(pageLoaders['/contas']);
 const TradingDashboardPage = lazy(pageLoaders['/trading']);
@@ -26,16 +25,14 @@ const JournalPage = lazy(pageLoaders['/journal']);
 const PlaybookPage = lazy(pageLoaders['/playbook']);
 const AccountsPage = lazy(pageLoaders['/accounts']);
 const PayoutsPage = lazy(pageLoaders['/payouts']);
-const PayoutCenterPage = lazy(pageLoaders['/payout-center']);
 const SettingsPage = lazy(pageLoaders['/settings']);
 const GoalsManagePage = lazy(pageLoaders['/goals']);
-const PositionsManagePage = lazy(pageLoaders['/positions']);
+const LivePositionsPage = lazy(pageLoaders['/live-positions']);
 const DataPage = lazy(pageLoaders['/import']);
 const QuantowerPage = lazy(pageLoaders['/quantower']);
 const RiskPage = lazy(pageLoaders['/risk']);
 const NetWorthPage = lazy(pageLoaders['/networth']);
 const PortfolioPage = lazy(pageLoaders['/portfolio']);
-const WalletsPage = lazy(pageLoaders['/wallets']);
 const TaxPage = lazy(pageLoaders['/tax']);
 const ForecastPage = lazy(pageLoaders['/forecast']);
 const FirmPnlPage = lazy(pageLoaders['/firms']);const ExpensesPage = lazy(pageLoaders['/expenses']);
@@ -237,7 +234,6 @@ export default function App() {
           <Routes>
             {/* Command Center (novo, motor-driven) */}
             <Route path="/" element={<HomePage />} />
-            <Route path="/dinheiro" element={<MoneyDashboardPage />} />
             <Route path="/gastos" element={<GastosDashboardPage />} />
             <Route path="/contas" element={<AccountsDashboardPage />} />
             <Route path="/trading" element={<TradingDashboardPage />} />
@@ -248,9 +244,8 @@ export default function App() {
             <Route path="/risk" element={<RiskPage />} />
             <Route path="/networth" element={<NetWorthPage />} />
             <Route path="/portfolio" element={<PortfolioPage />} />
-            <Route path="/positions" element={<PositionsManagePage />} />
+            <Route path="/live-positions" element={<LivePositionsPage />} />
             <Route path="/goals" element={<GoalsManagePage />} />
-            <Route path="/wallets" element={<WalletsPage />} />
             <Route path="/tax" element={<TaxPage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/firms" element={<FirmPnlPage />} />
@@ -268,7 +263,6 @@ export default function App() {
             {/* Money OS (engine-driven) */}
             <Route path="/accounts" element={<AccountsPage />} />
             <Route path="/payouts" element={<PayoutsPage />} />
-            <Route path="/payout-center" element={<PayoutCenterPage />} />
 
             {/* Legado */}
             <Route path="/settings" element={<SettingsPage />} />

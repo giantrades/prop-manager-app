@@ -60,3 +60,13 @@
 - **C4 payouts saíram de Contas**: `/payouts` e `/payout-center` agora são abas do módulo
   **Dinheiro** (payout é dinheiro, não cadastro de conta). Contas = Resumo|Contas|Firms.
 - Gate: `tsc` 0 + build verde + 232 testes verdes (4 novos de firms).
+
+## Batch D — página Payouts/Withdrawals rica (executado)
+- Reaproveitada a UX do app antigo: cards Gross solicitado / Total de taxas / Líquido
+  recebido, **líquido por firm** (com a cor da firm), busca, filtro de status, ordenação,
+  tabela (desktop) + cards (mobile), export CSV e form completo (método/status/data,
+  split por peso com preview do net por conta, comprovante).
+- Alocação inline (Tax?Living?Invest?Cash) via modal `PayoutCenter` — sem aba "Alocar".
+- Arquivos: `packages/ui/Payouts.tsx` (reescrito), `PayoutsPage.jsx` (passa firms), rota
+  `/payout-center` removida. Gate: `tsc` 0 + build verde + 232 testes.
+- Próximo: filtro por período (date range) e gráfico de payouts por mês/firm.

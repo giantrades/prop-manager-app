@@ -589,7 +589,7 @@ export function TaxPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Tax Cockpit</h1></div>
-      <ModuleTabs module="dinheiro" />
+      <ModuleTabs module="gastos" />
       <TaxCockpit cockpit={data} yearMonth={ym} loading={loading} onExportCSV={handleExportCSV} />
       <AssetSalesSection finance={finance} />
     </div>

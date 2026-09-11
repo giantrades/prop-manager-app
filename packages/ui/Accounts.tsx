@@ -51,6 +51,9 @@ function fmtMoney(v, cur = '$') {
   if (abs >= 1000) return `${sign}${cur}${(abs / 1000).toFixed(1)}k`;
   return `${sign}${cur}${abs.toFixed(2)}`;
 }
+function curSymbol(c) {
+  return c === 'BRL' ? 'R$' : c === 'USD' ? '$' : (c || '');
+}
 
 /**
  * @param {object} props
@@ -117,11 +120,13 @@ export default function Accounts({
   const summary = useMemo(() => {
     const prop = accounts.filter((a) => a.kind === 'prop');
     const nominal = prop.reduce((s, a) => s + (props[a.id]?.nominalSize ?? 0), 0);
-    const liquid = accounts
-      .filter((a) => ['bank', 'wallet', 'cash', 'crypto'].includes(a.kind))
-      .reduce((s, a) => s + (balances[a.id] ?? 0), 0);
+    const liquidByCurrency: Record<string, number> = {};
+    for (const a of accounts) {
+      if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
+      liquidByCurrency[a.currency] = (liquidByCurrency[a.currency] ?? 0) + (balances[a.id] ?? 0);
+    }
     const activeProp = prop.filter((a) => ['challenge1', 'challenge2', 'funded'].includes(props[a.id]?.phase));
-    return { total: accounts.length, propCount: prop.length, nominal, liquid, activeProp: activeProp.length };
+    return { total: accounts.length, propCount: prop.length, nominal, liquidByCurrency, activeProp: activeProp.length };
   }, [accounts, props, balances]);
 
   // ---- Form (modal) ----
@@ -293,7 +298,16 @@ export default function Accounts({
       <div className="ac3-summary">
         <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Capital gerido</span><span className="ac3-sum-value">{fmtMoney(summary.nominal)}</span><span className="ac3-sum-sub">nominal prop</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Líquido (carteiras)</span><span className={`ac3-sum-value ${summary.liquid >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtMoney(summary.liquid)}</span><span className="ac3-sum-sub">banco/carteira/cash/cripto</span></div>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Líquido (por moeda)</span>
+          <span className="ac3-sum-value">
+            {Object.keys(summary.liquidByCurrency).length === 0
+              ? '—'
+              : Object.entries(summary.liquidByCurrency).map(([cur, val]) => (
+                <span key={cur} style={{ marginRight: 10, color: val >= 0 ? 'var(--green, #2ecc71)' : 'var(--red, #e74c3c)' }}>{fmtMoney(val, cur)}</span>
+              ))}
+          </span>
+          <span className="ac3-sum-sub">banco/carteira/cash/cripto</span>
+        </div>
         <div className="ac3-sum-card ac3-sum-add">
           <button className="ac3-btn ac3-btn-primary" onClick={startNew}><Plus size={16} /> Nova conta</button>
         </div>
@@ -353,7 +367,7 @@ export default function Accounts({
                 <div className="ac3-card-metrics">
                   <div className="ac3-metric">
                     <span className="ac3-metric-label">{a.kind === 'prop' ? 'Nominal' : 'Saldo'}</span>
-                    <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize ?? 0) : (balances[a.id] ?? 0))}</span>
+                    <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize ?? 0) : (balances[a.id] ?? 0), curSymbol(a.currency))}</span>
                   </div>
                   {a.kind === 'prop' && (
                     <div className="ac3-metric">

@@ -264,6 +264,8 @@ export class QuantowerAdapter extends BaseAdapter {
         grossPnl: p.grossPnl ?? 0,
         netPnl: p.netPnl ?? 0,
         fee: p.fee ?? 0,
+        sl: p.sl ?? p.stopLoss ?? null,
+        tp: p.tp ?? p.takeProfit ?? null,
         platformAccountId: p.accountId || '',
         accountName: p.accountName || '',
         connectionId: p.connectionId || '',
