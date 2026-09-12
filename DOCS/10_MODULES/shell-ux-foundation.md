@@ -61,6 +61,19 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch P — Portfolio como workspace completo (executado)
+- **Abas próprias** (estado, não toggle): **Visão Geral | Posições | Proventos | Alertas |
+  Configurar**. Resolve o "clicar 2x no Configurar".
+- **Posições (CRUD)**: aba dedicada reusando `Positions.tsx` — adicionar/editar/excluir
+  posição com conta, símbolo, qty, preço médio, marca, moeda e renda fixa (taxa/indexação);
+  lista mostra valor e **PnL** com moeda. Handlers no container (`ds.positions.put/remove`,
+  `wealth.markPosition`). É aqui que se cadastra o que alimenta as % e o acompanhamento.
+- **Proventos** e **Alertas**: abas focadas (o componente `Portfolio` ganhou `only` para
+  renderizar seções específicas) + a tabela de posições p/ ações.
+- **Configurar**: câmbio USD→BRL, CDI mensal e explicação de como a alocação/% é derivada
+  do cadastro (cards próprios `.cfg-card`).
+- Gate: `tsc` 0 + build verde + 237 testes verdes.
+
 ## Batch O — 4 pontos de acabamento (executado)
 - **O1 Trades estilo app antigo** (`Trades.tsx`): tabela com colunas ordenáveis, paginação
   (15/página), busca, tags, badge de firm (ícone/cor) e lado; cards no mobile; replay

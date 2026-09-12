@@ -121,10 +121,17 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
           {positions.map((p) => {
             const mark = p.lastMarkPrice != null ? p.lastMarkPrice : p.avgPrice;
             const value = (mark ?? 0) * p.qty;
+            const pnl = (mark - (p.avgPrice ?? 0)) * p.qty;
+            const pnlPct = p.avgPrice > 0 ? (mark - p.avgPrice) / p.avgPrice : 0;
             return (
               <div key={p.id} className="ps-item">
                 <div className="ps-item-head">
-                  <div className="ps-item-name">{p.symbol} <span className="ps-account">{(accounts.find((a) => a.id === p.accountId)?.name) || p.accountId}</span></div>
+                  <div className="ps-item-name">
+                    {p.symbol}
+                    <span className="ps-account">{(accounts.find((a) => a.id === p.accountId)?.name) || p.accountId}</span>
+                    <span className="ps-cur">{p.currency || 'BRL'}</span>
+                    {p.assetKind === 'fixed' && <span className="ps-tag">RF</span>}
+                  </div>
                   <div className="ps-item-actions">
                     <button className="ps-btn ps-btn-sm" onClick={() => startEdit(p)}>Editar</button>
                     {onDelete && <button className="ps-btn ps-btn-sm ps-btn-danger" onClick={() => onDelete(p.id)}>Excluir</button>}
@@ -132,9 +139,10 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
                 </div>
                 <div className="ps-item-grid">
                   <div className="ps-cell"><span className="ps-label">Qty</span><span>{p.qty}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Médio</span><span>{fmtMoney(p.avgPrice)}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Marca</span><span>{p.lastMarkPrice != null ? fmtMoney(p.lastMarkPrice) : 'velha'}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Valor</span><span style={{ color: 'var(--green)' }}>{fmtMoney(value)}</span></div>
+                  <div className="ps-cell"><span className="ps-label">Médio</span><span>{fmtMoney(p.avgPrice, p.currency === 'USD' ? '$' : 'R$')}</span></div>
+                  <div className="ps-cell"><span className="ps-label">Marca</span><span>{p.lastMarkPrice != null ? fmtMoney(p.lastMarkPrice, p.currency === 'USD' ? '$' : 'R$') : 'velha'}</span></div>
+                  <div className="ps-cell"><span className="ps-label">Valor</span><span>{fmtMoney(value, p.currency === 'USD' ? '$' : 'R$')}</span></div>
+                  <div className="ps-cell"><span className="ps-label">PnL</span><span style={{ color: pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(pnl, p.currency === 'USD' ? '$' : 'R$')} <small>{(pnlPct * 100).toFixed(1)}%</small></span></div>
                 </div>
               </div>
             );
@@ -168,7 +176,9 @@ const PS_CSS = `
 .ps-item-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .ps-item-name { font-size: 14px; font-weight: 700; }
 .ps-account { font-size: 11px; color: var(--muted, #a1a7b3); margin-left: 6px; }
-.ps-item-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+.ps-item-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px; }
+.ps-cur { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(52,152,219,0.15); color: var(--blue, #3498db); margin-left: 6px; }
+.ps-tag { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(124,92,255,0.15); color: var(--brand, #7c5cff); margin-left: 6px; }
 .ps-cell { display: flex; flex-direction: column; gap: 2px; }
 .ps-cell span:last-child { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ps-empty { padding: 24px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }

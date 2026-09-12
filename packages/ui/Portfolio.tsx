@@ -39,7 +39,8 @@ function fmtPct(value) {
  * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
  * @param {boolean} [props.loading]
  */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false }) {
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
+  const show = (k) => !only || only.includes(k);
   const benchByAt = React.useMemo(() => new Map((benchmark || []).map((b) => [b.at, b.index])), [benchmark]);
   const [divRow, setDivRow] = React.useState(null);
   const [divAmount, setDivAmount] = React.useState('');
@@ -82,7 +83,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
   return (
     <div className="pf-root">
       {/* Summary */}
-      <div className="pf-total-card">
+      {show('summary') && (<div className="pf-total-card">
         <div className="pf-total-row">
           <div className="pf-stat">
             <div className="pf-stat-label">Investido (cost basis)</div>
@@ -109,10 +110,10 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
             ⚠️ {s.staleCount} posição(ões) com marcação antiga — valor usa o custo (proveniência).
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* DCA mensal */}
-      {dca.length > 0 && (
+      {show('dca') && dca.length > 0 && (
         <div className="pf-section">
           <div className="pf-section-title">DCA mensal (aportes)</div>
           <div className="pf-dca">
@@ -130,7 +131,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       )}
 
       {/* Alocação / concentração */}
-      {allocation && allocation.bySymbol.length > 0 && (
+      {show('allocation') && allocation && allocation.bySymbol.length > 0 && (
         <div className="pf-section">
           <div className="pf-section-title">
             Alocação
@@ -166,7 +167,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       )}
 
       {/* P5 — Evolução do valor vs custo (R$, eixo esq.) + A3 benchmark CDI (base 100, eixo dir.) */}
-      {history.length > 1 && (
+      {show('history') && history.length > 1 && (
         <div className="pf-section">
           <div className="pf-section-title">Evolução (valor vs custo{benchByAt.size > 0 ? ' vs CDI' : ''})</div>
           <div style={{ width: '100%', height: 220 }}>
@@ -199,7 +200,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       )}
 
       {/* A2 — alertas de preço ativos */}
-      {allAlerts.length > 0 && (
+      {show('alerts') && allAlerts.length > 0 && (
         <div className="pf-section">
           <div className="pf-section-title">Alertas de preço ({allAlerts.length})</div>
           {allAlerts.map((a) => (
@@ -223,7 +224,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       )}
 
       {/* B1 — proventos anunciados (data-com) */}
-      {(onSaveDividendEvent || announced.length > 0) && (
+      {show('income') && (onSaveDividendEvent || announced.length > 0) && (
         <div className="pf-section">
           <div className="pf-section-title">Próximos proventos ({announced.length})</div>
           {announced.length === 0 ? (
@@ -288,6 +289,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       )}
 
       {/* Posições: tabela (desktop) / cards (mobile) */}
+      {show('positions') && (
       <div className="pf-table-wrap">
         <table className="pf-table">
           <thead>
@@ -494,7 +496,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
             <div className="pf-empty" role="status">Nenhuma posição cadastrada.</div>
           )}
         </div>
-      </div>
+      </div>)}
     </div>
   );
 }

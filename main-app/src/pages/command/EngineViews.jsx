@@ -27,6 +27,7 @@ import {
 import RiskCenter from '@apps/ui/RiskCenter';
 import NetWorth from '@apps/ui/NetWorth';
 import Portfolio from '@apps/ui/Portfolio';
+import Positions from '@apps/ui/Positions';
 import Goals from '@apps/ui/Goals';
 import Wallets from '@apps/ui/Wallets';
 import TaxCockpit from '@apps/ui/TaxCockpit';
@@ -105,9 +106,9 @@ const PRICE_REFRESH_MS = 5 * 60 * 1000;
 export function PortfolioPage() {
   // A5 — taxa USD→BRL (manual, com data). Sem taxa, posições USD ficam fora dos totais.
   const [fxInput, setFxInput] = useState('');
-  const { loading, data, finance } = useEngineData(async (f) => {
+  const { loading, data, finance, reload } = useEngineData(async (f) => {
     const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends } = await import('@apps/lib/db');
-    const [fxRec, allocation, txs, histRec, cdi, announced, positions] = await Promise.all([
+    const [fxRec, allocation, txs, histRec, cdi, announced, positions, accounts] = await Promise.all([
       f.ds.meta.getKey('fx:USDBRL'),
       f.wealth.allocation(),
       f.ds.transactions.list(),
@@ -115,11 +116,16 @@ export function PortfolioPage() {
       getCdiSeries(f.ds),
       getAnnouncedDividends(f.ds),
       f.ds.positions.list(),
+      f.ds.accounts.list(),
     ]);
     const fx = fxRec?.value?.rate > 0 ? fxRec.value.rate : null;
     const portfolio = await f.wealth.portfolio(fx != null ? { fxUSD: fx } : {});
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
-    return { portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi, benchmark: applyBenchmark(history, cdi), announced: upcomingDividends(announced), positions };
+    return {
+      portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi,
+      benchmark: applyBenchmark(history, cdi), announced: upcomingDividends(announced), positions,
+      accounts: accounts.filter((a) => a.kind === 'investment' || a.kind === 'crypto' || a.kind === 'wallet'),
+    };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -221,8 +227,8 @@ export function PortfolioPage() {
   // A3 — CDI manual mensal (série para o benchmark).
   const [cdiYm, setCdiYm] = useState('');
   const [cdiPct, setCdiPct] = useState('');
-  // C2 — Configurar (FX+CDI) vive no módulo, em aba própria.
-  const [showConfig, setShowConfig] = useState(false);
+  // Abas internas do Portfolio: Visão Geral | Posições | Proventos | Alertas | Configurar.
+  const [ptab, setPtab] = useState('overview');
   const handleSaveCdi = useCallback(async () => {
     const f = financeRef.current;
     if (!f || !/^\d{4}-\d{2}$/.test(cdiYm) || !(Number(cdiPct) >= 0)) return;
@@ -348,14 +354,35 @@ export function PortfolioPage() {
     });
   }, []);
 
-  const handleSaveFx = useCallback(async () => {
-    const f = financeRef.current;
+  const handleSaveFx = useCallback(async () => {    const f = financeRef.current;
     const rate = Number(String(fxInput).replace(',', '.'));
     if (!f || !(rate > 0)) return;
     const { saveFxUSD } = await import('@apps/lib/db');
     await saveFxUSD(f.ds, rate);
     setFxInput('');
   }, [fxInput]);
+
+  // Posições — CRUD (único writer DataService) + marcação manual + remoção.
+  const handlePositionSave = useCallback(async (position) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const rec = { ...position, id: position.id || `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` };
+    if (rec.lastMarkPrice != null) rec.lastMarkAt = new Date().toISOString();
+    await f.ds.positions.put(rec, { source: 'local' });
+    reload();
+  }, [reload]);
+  const handlePositionDelete = useCallback(async (id) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.ds.positions.remove(id);
+    reload();
+  }, [reload]);
+  const handlePositionMark = useCallback(async (id, price) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.wealth.markPosition(id, price);
+    reload();
+  }, [reload]);
 
   return (
     <div className="cmd-page">
@@ -366,79 +393,144 @@ export function PortfolioPage() {
         </button>
       </div>
       <ModuleTabs module="investimentos" />
-      <nav className="ws-tabs" aria-label="Visão do portfolio">
-        <NavLink to="/portfolio" end className={({ isActive }) => `ws-tab${isActive ? ' active' : ''}`}>Resumo</NavLink>
-        <button
-          type="button"
-          className={`ws-tab${showConfig ? ' active' : ''}`}
-          aria-pressed={showConfig}
-          onClick={() => setShowConfig((v) => !v)}
-        >
-          Configurar
-        </button>
+      <nav className="ws-tabs" aria-label="Seções do portfolio">
+        {[['overview', 'Visão Geral'], ['positions', 'Posições'], ['income', 'Proventos'], ['alerts', 'Alertas'], ['config', 'Configurar']].map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            className={`ws-tab${ptab === k ? ' active' : ''}`}
+            aria-pressed={ptab === k}
+            onClick={() => setPtab(k)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
-      {showConfig ? (
-      <>
-      <div className="cmd-msg" role="group" aria-label="Taxa USD para BRL" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span>USD→BRL: <b>{data?.fx != null ? data.fx : '—'}</b>{data?.fxAt ? ` (${String(data.fxAt).slice(0, 10)})` : ''}</span>
-        <input
-          className="cmd-select" style={{ maxWidth: 110 }}
-          type="number" min="0" step="0.0001" value={fxInput}
-          onChange={(e) => setFxInput(e.target.value)}
-          placeholder="ex.: 5.42" aria-label="Nova taxa USD para BRL"
-        />
-        <button className="cmd-refresh" onClick={handleSaveFx} disabled={!(Number(fxInput) > 0)}>Salvar taxa</button>
-      </div>
-      {quotes.at && (
-        <div className="cmd-msg" role="status">
-          ao vivo {ageMin === 0 ? 'agora' : `há ${ageMin} min`} • {quotes.count} posições
-          {quotes.fromCache.length > 0 && ` • ${quotes.fromCache.length} do cache`}
-          {quotes.failed.length > 0 && ` • sem preço: ${quotes.failed.join(', ')}`}
-          {quotes.noFx > 0 && ` • ${quotes.noFx} USD sem taxa`}
-        </div>
+
+      {ptab === 'overview' && (
+        <>
+          {quotes.at && (
+            <div className="cmd-msg" role="status">
+              ao vivo {ageMin === 0 ? 'agora' : `há ${ageMin} min`} • {quotes.count} posições
+              {quotes.fromCache.length > 0 && ` • ${quotes.fromCache.length} do cache`}
+              {quotes.failed.length > 0 && ` • sem preço: ${quotes.failed.join(', ')}`}
+              {quotes.noFx > 0 && ` • ${quotes.noFx} USD sem taxa`}
+            </div>
+          )}
+          {data?.portfolio?.unconverted > 0 && (
+            <div className="cmd-warn" role="note">
+              ⚠️ {data.portfolio.unconverted} posição(ões) USD fora dos totais — informe a taxa em Configurar.
+            </div>
+          )}
+          <Portfolio
+            rows={data?.portfolio?.rows ?? []}
+            summary={data?.portfolio ?? null}
+            dca={data?.dca ?? []}
+            allocation={data?.allocation ?? null}
+            history={data?.history ?? []}
+            benchmark={data?.benchmark ?? []}
+            loading={loading}
+            onDividend={handleDividend}
+            onSaveAlert={handleSaveAlert}
+            onDeleteAlert={handleDeleteAlert}
+            onRearmAlert={handleRearmAlert}
+            firedAlertIds={firedIds}
+            announced={data?.announced ?? []}
+            positions={data?.positions ?? []}
+            onSaveDividendEvent={handleSaveDividendEvent}
+            onRemoveDividendEvent={handleRemoveDividendEvent}
+            onReceiveDividend={handleReceiveDividend}
+          />
+        </>
       )}
-      {data?.portfolio?.unconverted > 0 && (
-        <div className="cmd-warn" role="note">
-          ⚠️ {data.portfolio.unconverted} posição(ões) USD fora dos totais — informe a taxa acima.
-        </div>
+
+      {ptab === 'positions' && (
+        <Positions
+          positions={data?.positions ?? []}
+          accounts={data?.accounts ?? []}
+          loading={loading}
+          onSave={handlePositionSave}
+          onMark={handlePositionMark}
+          onDelete={handlePositionDelete}
+        />
       )}
-      <div className="cmd-msg" role="group" aria-label="CDI mensal manual" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span>CDI mensal {(data?.cdi ?? []).length > 0 ? `(${(data.cdi).length} meses)` : '(sem série)'}</span>
-        <input
-          className="cmd-select" style={{ maxWidth: 100 }}
-          value={cdiYm} onChange={(e) => setCdiYm(e.target.value)}
-          placeholder="AAAA-MM" aria-label="Mês do CDI (AAAA-MM)"
+
+      {ptab === 'income' && (
+        <Portfolio
+          rows={data?.portfolio?.rows ?? []}
+          summary={data?.portfolio ?? null}
+          allocation={null}
+          history={[]}
+          benchmark={[]}
+          loading={loading}
+          announced={data?.announced ?? []}
+          positions={data?.positions ?? []}
+          onReceiveDividend={handleReceiveDividend}
+          onSaveDividendEvent={handleSaveDividendEvent}
+          onRemoveDividendEvent={handleRemoveDividendEvent}
+          onDividend={handleDividend}
+          only={['income', 'positions']}
         />
-        <input
-          className="cmd-select" style={{ maxWidth: 90 }}
-          type="number" min="0" step="0.0001" value={cdiPct}
-          onChange={(e) => setCdiPct(e.target.value)}
-          placeholder="ex.: 0.0087" aria-label="CDI mensal (decimal)"
+      )}
+
+      {ptab === 'alerts' && (
+        <Portfolio
+          rows={data?.portfolio?.rows ?? []}
+          summary={null}
+          allocation={null}
+          history={[]}
+          benchmark={[]}
+          loading={loading}
+          onSaveAlert={handleSaveAlert}
+          onDeleteAlert={handleDeleteAlert}
+          onRearmAlert={handleRearmAlert}
+          firedAlertIds={firedIds}
+          only={['alerts', 'positions']}
         />
-        <button className="cmd-refresh" onClick={handleSaveCdi}>Salvar CDI</button>
-      </div>
-      </>
-      ) : null}
-      {!showConfig && (
-      <Portfolio
-        rows={data?.portfolio?.rows ?? []}
-        summary={data?.portfolio ?? null}
-        dca={data?.dca ?? []}
-        allocation={data?.allocation ?? null}
-        history={data?.history ?? []}
-        benchmark={data?.benchmark ?? []}
-        loading={loading}
-        onDividend={handleDividend}
-        onSaveAlert={handleSaveAlert}
-        onDeleteAlert={handleDeleteAlert}
-        onRearmAlert={handleRearmAlert}
-        firedAlertIds={firedIds}
-        announced={data?.announced ?? []}
-        positions={data?.positions ?? []}
-        onSaveDividendEvent={handleSaveDividendEvent}
-        onRemoveDividendEvent={handleRemoveDividendEvent}
-        onReceiveDividend={handleReceiveDividend}
-      />
+      )}
+
+      {ptab === 'config' && (
+        <div className="pf-config">
+          <div className="cfg-card">
+            <div className="cfg-title">Câmbio USD → BRL</div>
+            <p className="cfg-hint">Usado para trazer posições em dólar para os totais (ações US, cripto).</p>
+            <div className="cfg-row">
+              <span>Atual: <b>{data?.fx != null ? data.fx : '—'}</b>{data?.fxAt ? ` (${String(data.fxAt).slice(0, 10)})` : ''}</span>
+              <input
+                className="cmd-select" style={{ maxWidth: 120 }}
+                type="number" min="0" step="0.0001" value={fxInput}
+                onChange={(e) => setFxInput(e.target.value)}
+                placeholder="ex.: 5.42" aria-label="Nova taxa USD para BRL"
+              />
+              <button className="cmd-refresh" onClick={handleSaveFx} disabled={!(Number(fxInput) > 0)}>Salvar taxa</button>
+            </div>
+          </div>
+
+          <div className="cfg-card">
+            <div className="cfg-title">CDI mensal (benchmark)</div>
+            <p className="cfg-hint">Série para comparar a evolução do portfolio com o CDI ({(data?.cdi ?? []).length} meses).</p>
+            <div className="cfg-row">
+              <input
+                className="cmd-select" style={{ maxWidth: 120 }}
+                value={cdiYm} onChange={(e) => setCdiYm(e.target.value)}
+                placeholder="AAAA-MM" aria-label="Mês do CDI (AAAA-MM)"
+              />
+              <input
+                className="cmd-select" style={{ maxWidth: 110 }}
+                type="number" min="0" step="0.0001" value={cdiPct}
+                onChange={(e) => setCdiPct(e.target.value)}
+                placeholder="ex.: 0.0087" aria-label="CDI mensal (decimal)"
+              />
+              <button className="cmd-refresh" onClick={handleSaveCdi}>Adicionar CDI</button>
+            </div>
+          </div>
+
+          <div className="cfg-card">
+            <div className="cfg-title">Acompanhamento</div>
+            <p className="cfg-hint">Cadastre as posições em <b>Posições</b> (ativo, quantidade, preço médio, moeda, renda fixa). Alocação e % são derivadas automaticamente do que você cadastra.</p>
+            <button className="cmd-refresh" onClick={() => setPtab('positions')}>Ir para Posições</button>
+          </div>
+        </div>
       )}
     </div>
   );
