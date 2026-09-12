@@ -371,31 +371,28 @@ Achado central confirmado: o padrÃ£o `ws-tabs` (Payouts|Alocar) jÃ¡ Ã© o drill-d
 - **B2 â€” Densidade de tela (compacto/confortÃ¡vel)**: toggle que reduz paddings/fontes via classe no root. Afeta todas as telas de uma vez; bom para celular pequeno vs desktop.
 - **B3 â€” Atalhos customizÃ¡veis**: remapear Ctrl+K/N// em Settings (persistido em `localStorage`). Hoje sÃ£o fixos no `App.jsx`.
 
-## Batch X — demo seed + conexões demo + SL/TP no bridge (executado)
-- **Seed de teste** (`seedDemo.ts`): agora cria **firms** (FTMO/E8/XP com cor+ícone), vincula
-  `firmId` (E8/XP), **2 contas prop** com `platformAccountId` (vínculo demo), trades com
-  **stopPrice/resultR** reais e posições de **renda fixa** e **outros** (Imóvel).
-- **Demo mode ligado**: `FinanceProvider` roda `seedDemoData` na 1ª abertura quando
-  `VITE_DEMO_MODE=1` e a base está vazia (antes nunca era chamado).
-- **ConnectionsManager demo**: com `VITE_DEMO_MODE=1` e bridge offline, mostra 2 conexões
+## Batch X ï¿½ demo seed + conexï¿½es demo + SL/TP no bridge (executado)
+- **Seed de teste** (`seedDemo.ts`): agora cria **firms** (FTMO/E8/XP com cor+ï¿½cone), vincula
+  `firmId` (E8/XP), **2 contas prop** com `platformAccountId` (vï¿½nculo demo), trades com
+  **stopPrice/resultR** reais e posiï¿½ï¿½es de **renda fixa** e **outros** (Imï¿½vel).
+- **Demo mode ligado**: `FinanceProvider` roda `seedDemoData` na 1ï¿½ abertura quando
+  `VITE_DEMO_MODE=1` e a base estï¿½ vazia (antes nunca era chamado).
+- **ConnectionsManager demo**: com `VITE_DEMO_MODE=1` e bridge offline, mostra 2 conexï¿½es
   mock + 3 contas, permitindo ver a estrutura sem o Quantower.
-- **QuantowerBridge.cs**: `/positions` agora devolve `sl`/`tp` (antes não vinha — a UI não
+- **QuantowerBridge.cs**: `/positions` agora devolve `sl`/`tp` (antes nï¿½o vinha ï¿½ a UI nï¿½o
   conseguia mostrar os valores atuais).
 - Gate: `tsc` 0 + build verde + 238 testes.
 
-## Batch Y — Orders + SL/TP no fechamento (executado)
-- **Positions & Orders**: `/live-positions` (label nav "Positions & Orders") ganhou seção **Ordens**:
-  lista ordens pendentes do bridge (tipo/qtd/preço/status), **cancelar** (`cancelOrder`) e
-  **nova ordem** limit/stop (`placeOrder`); posições seguem com SL/TP + fechar. Refresh manual
-  recarrega posições e ordens; ordens re-poll a cada 60s.
+## Batch Y ï¿½ Orders + SL/TP no fechamento (executado)
+- **Positions & Orders**: `/live-positions` (label nav "Positions & Orders") ganhou seï¿½ï¿½o **Ordens**:
+  lista ordens pendentes do bridge (tipo/qtd/preï¿½o/status), **cancelar** (`cancelOrder`) e
+  **nova ordem** limit/stop (`placeOrder`); posiï¿½ï¿½es seguem com SL/TP + fechar. Refresh manual
+  recarrega posiï¿½ï¿½es e ordens; ordens re-poll a cada 60s.
 - **Adapter**: `getOrders` passou a expor `type` (`orderTypeId`); `getTrades` mapeia
   `stopPrice`/`takePrice`/`multiplier`.
 - **Ingest**: `quantowerToTrade` agora usa `stopPrice` do bridge e calcula `resultR` pela
-  fórmula única (`tradeR` do motor) — antes era sempre `null`. Teste: `quantowerDedup.test.ts`.
-- **Bridge Patch A** (`/positions/modify`): se a posição não tem SL/TP, cria ordem Stop/Limit de
-  fechamento (Quantower não expõe setter de SL/TP em `Position`). Antes retornava erro.
-- **Bridge Patch B** (R correto): `PositionSlTpStore` amostra o SL/TP das posições abertas a cada
-  2s (+ em cada `/positions`); no fechamento o `TradeDto` usa o **último SL/TP ativo** (não o da
-  abertura), então mover o TP/SL durante a operação é refletido no R. Novos campos
-  `stopPrice`/`takePrice` no payload de `/trades`.
+  fï¿½rmula ï¿½nica (`tradeR` do motor) ï¿½ antes era sempre `null`. Teste: `quantowerDedup.test.ts`.
+- **Bridge Patch A** (`/positions/modify`): se a posiï¿½ï¿½o nï¿½o tem SL/TP, cria ordem Stop/Limit de
+  fechamento (Quantower nï¿½o expï¿½e setter de SL/TP em `Position`). Antes retornava erro.
+- **Bridge Patch B** (R correto): `PositionSlTpStore` registra o SL/TP via eventos do Core `PositionAdded`/`PositionRemoved`. No **fechamento** le o bracket ATIVO daquela posicao (mesmo se o SL/TP foi movido durante a operacao) e usa no `stopPrice`/`takePrice` do `TradeDto` -> R correto. Timer de 2s = so rede de seguranca.
 - Gate: `tsc` 0 + build verde + 240 testes.
