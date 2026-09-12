@@ -76,17 +76,12 @@ export default function AuthGate({ children }) {
       />
     );
   }
-  return (
-    <>
-      {children}
-      <button className="auth-logout" onClick={handleLogout} title="Sair">Sair</button>
-    </>
-  );
+  // Logout vive em Configurações (não mais flutuando em todas as páginas).
+  return children;
 }
 
 const AUTH_CSS = `
 .auth-loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--muted, #a1a7b3); }
-.auth-logout { position: fixed; bottom: 16px; right: 16px; z-index: 999; padding: 8px 14px; border-radius: 999px; background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.3); color: var(--red, #e74c3c); font-size: 12px; font-weight: 700; cursor: pointer; }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('auth-gate-styles')) {
   const style = document.createElement('style');
