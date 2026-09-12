@@ -1655,3 +1655,10 @@ select.select option {
 .hm-quick-btn:hover { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); }
 .st-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text, #e7eaf0); min-height: 36px; cursor: pointer; }
 .st-check input { width: 18px; height: 18px; accent-color: var(--brand, #7c5cff); }
+
+/* Gastos — linha com barra (mesma pegada do Contas) */
+.gd-kind-row { display: grid; grid-template-columns: 26px 1fr auto 90px auto; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+.gd-kind-row:last-child { border-bottom: none; }
+.gd-kind-bar-wrap { height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
+.gd-kind-bar { display: block; height: 100%; background: linear-gradient(90deg, #e74c3c, #ff7b6b); border-radius: 999px; }
+@media (max-width: 560px) { .gd-kind-row { grid-template-columns: 26px 1fr auto auto; } .gd-kind-bar-wrap { display: none; } }

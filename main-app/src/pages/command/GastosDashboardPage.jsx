@@ -213,14 +213,18 @@ export default function GastosDashboardPage() {
             {view.merchants.length > 0 && (
               <div className="dash-section" key="merchants">
                 <div className="dash-title"><span>Onde mais gastei</span></div>
-                {view.merchants.map((m) => (
-                  <div key={m.name} className="gd-row">
-                    <Tag size={15} className="gd-row-ico" />
-                    <span className="gd-row-name">{m.name}</span>
-                    <span className="gd-row-sub">{m.count}x</span>
-                    <span className="gd-row-val gd-neg">{fmtMoney(m.total, 'R$')}</span>
-                  </div>
-                ))}
+                {(() => {
+                  const max = Math.max(1, ...view.merchants.map((m) => m.total));
+                  return view.merchants.map((m) => (
+                    <div key={m.name} className="gd-kind-row">
+                      <span className="gd-row-ico"><Tag size={14} /></span>
+                      <span className="gd-row-name">{m.name}</span>
+                      <span className="gd-row-sub">{m.count}x</span>
+                      <span className="gd-kind-bar-wrap"><span className="gd-kind-bar" style={{ width: `${Math.round((m.total / max) * 100)}%` }} /></span>
+                      <span className="gd-row-val gd-neg">{fmtMoney(m.total, 'R$')}</span>
+                    </div>
+                  ));
+                })()}
               </div>
             )}
 
