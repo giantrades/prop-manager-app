@@ -12,8 +12,8 @@ import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import {
-  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase,
-  GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank,
+  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown, Briefcase,
+  GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Activity,
 } from 'lucide-react';
 import {
   listCategories, getBudgets, getSavingsGoal, expensesByCategory, incomeByKind,
@@ -117,16 +117,18 @@ export default function GastosDashboardPage() {
 
           {/* KPIs */}
           <div className="gd-cards">
-            <div className="gd-card gd-in"><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'R$')}</span><span className="gd-sub">{view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span></div>
-            <div className="gd-card gd-out"><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'R$')}</span><span className="gd-sub">{view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span></div>
-            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'R$')}</span><span className="gd-sub">entrou − gastou</span></div>
-            <div className="gd-card gd-warn"><span className="gd-label">A pagar</span><span className="gd-value">{fmtMoney(view.pending.payable, 'R$')}</span><span className="gd-sub">{view.pending.count} título(s){view.pending.overdue ? ` · ${view.pending.overdue} atrasado(s)` : ''}</span></div>
+            <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'R$')}</span><span className="gd-sub">{view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span></div>
+            <div className="gd-card gd-out"><span className="gd-ico-badge gd-neg"><TrendingDown size={15} /></span><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'R$')}</span><span className="gd-sub">{view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span></div>
+            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-ico-badge"><Wallet size={15} /></span><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'R$')}</span><span className="gd-sub">entrou − gastou</span></div>
+            <div className="gd-card gd-warn"><span className="gd-ico-badge gd-warn-t"><Landmark size={15} /></span><span className="gd-label">A pagar</span><span className="gd-value">{fmtMoney(view.pending.payable, 'R$')}</span><span className="gd-sub">{view.pending.count} título(s){view.pending.overdue ? ` · ${view.pending.overdue} atrasado(s)` : ''}</span></div>
             <div className={`gd-card ${view.budget > 0 && view.spentBudget > view.budget ? 'gd-out' : 'gd-budget'}`}>
+              <span className="gd-ico-badge"><PiggyBank size={15} /></span>
               <span className="gd-label">Orçamento</span>
               <span className="gd-value">{view.budget > 0 ? `${Math.round((view.spentBudget / view.budget) * 100)}%` : '—'}</span>
               <span className="gd-sub">{view.budget > 0 ? `${fmtMoney(view.spentBudget, 'R$')} / ${fmtMoney(view.budget, 'R$')}` : 'sem metas'}</span>
             </div>
             <div className="gd-card">
+              <span className="gd-ico-badge"><Activity size={15} /></span>
               <span className="gd-label">{view.worstRise ? 'Maior alta vs mês passado' : 'Maior categoria'}</span>
               <span className="gd-value gd-sm">{view.worstRise ? `${catName(view.worstRise.categoryId)} ▲${view.worstRise.deltaPct}%` : (view.groups[0] ? catName(view.groups[0].categoryId) : '—')}</span>
               <span className="gd-sub">{view.worstRise ? 'subiu vs mês passado' : (view.groups[0] ? fmtMoney(view.groups[0].total, 'R$') : '')}</span>

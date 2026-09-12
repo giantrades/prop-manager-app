@@ -1662,3 +1662,7 @@ select.select option {
 .gd-kind-bar-wrap { height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
 .gd-kind-bar { display: block; height: 100%; background: linear-gradient(90deg, #e74c3c, #ff7b6b); border-radius: 999px; }
 @media (max-width: 560px) { .gd-kind-row { grid-template-columns: 26px 1fr auto auto; } .gd-kind-bar-wrap { display: none; } }
+
+/* Gastos (resumo) — cards KPI com ícone */
+.gd-ico-badge { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.06); margin-bottom: 6px; }
+.gd-warn-t { color: var(--yellow, #e1b12c); }

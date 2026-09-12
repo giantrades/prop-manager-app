@@ -9,7 +9,7 @@ import { fmtMoney as fmtMoneyShared } from './currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo, useState } from 'react';
 import {
-  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
+  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown,
   Briefcase, GraduationCap, Tag, Wallet, Pencil, Trash2, Plus, Coins, Gift,
   Receipt,
 } from 'lucide-react';
@@ -431,16 +431,22 @@ export default function Expenses({
       <div className="ex-hero">
         <div className="ex-summary">
           <div className="ex-sum-card ex-sum-in">
+            <span className="ex-sum-ico"><TrendingUp size={16} /></span>
             <span className="ex-sum-label">Receitas</span>
             <span className="ex-sum-value">{fmtMoney(fc.income, currency)}</span>
+            <span className="ex-sum-sub">{gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span>
           </div>
           <div className="ex-sum-card ex-sum-out">
+            <span className="ex-sum-ico"><TrendingDown size={16} /></span>
             <span className="ex-sum-label">Despesas</span>
             <span className="ex-sum-value">{fmtMoney(fc.expenses, currency)}</span>
+            <span className="ex-sum-sub">{groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span>
           </div>
           <div className={`ex-sum-card ${fc.freeCash >= 0 ? 'ex-sum-in' : 'ex-sum-out'}`}>
-            <span className="ex-sum-label">Saldo</span>
+            <span className="ex-sum-ico"><Wallet size={16} /></span>
+            <span className="ex-sum-label">Saldo do mês</span>
             <span className="ex-sum-value">{fmtMoney(fc.freeCash, currency)}</span>
+            <span className="ex-sum-sub">entrou − gastou</span>
           </div>
         </div>
         {budgetTotals.budget > 0 && (

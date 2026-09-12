@@ -5006,3 +5006,10 @@ body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 .recharts-default-tooltip .recharts-tooltip-label { color: #e7eaf0 !important; font-weight: 700 !important; }
 .recharts-default-tooltip .recharts-tooltip-item { color: #e7eaf0 !important; }
 .recharts-tooltip-cursor { fill: rgba(255, 255, 255, 0.05) !important; }
+
+/* Gastos (página) — cards do resumo com ícone */
+body .ex-sum-card { position: relative; gap: 2px; border-radius: 16px; }
+.ex-sum-ico { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.06); margin-bottom: 6px; }
+.ex-sum-in .ex-sum-ico { color: var(--green, #2ecc71); }
+.ex-sum-out .ex-sum-ico { color: var(--red, #e74c3c); }
+.ex-sum-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
