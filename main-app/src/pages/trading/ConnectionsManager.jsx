@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlatform, useFinance, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { listFirms } from '@apps/lib/db';
+import { listFirms, getDemoIds, isDemoDisabled } from '@apps/lib/db';
 import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw } from 'lucide-react';
 
 const KIND_OPTIONS = [
@@ -17,7 +17,8 @@ const KIND_OPTIONS = [
 ];
 
 // Demo (VITE_DEMO_MODE=1): estrutura de conexões p/ ver a UI sem o Quantower aberto.
-const DEMO = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEMO_MODE === '1';
+// Só aparece ENQUANTO o usuário não tiver conta própria (aí o modo demo se desliga).
+const DEMO_CAPABLE = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEMO_MODE === '1';
 const DEMO_CONNECTIONS = [
   { id: 'conn-e8', name: 'E8-Live' },
   { id: 'conn-ftmo', name: 'FTMO-Live' },
@@ -35,6 +36,8 @@ export default function ConnectionsManager() {
   const [bridgeAccounts, setBridgeAccounts] = useState([]);
   const [appAccounts, setAppAccounts] = useState([]);
   const [firms, setFirms] = useState([]);
+  const [demoAccountIds, setDemoAccountIds] = useState(new Set());
+  const [demoDisabled, setDemoDisabled] = useState(false);
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [newKind, setNewKind] = useState('prop');
@@ -52,14 +55,18 @@ export default function ConnectionsManager() {
     if (!f) return;
     setBusy(true);
     try {
-      const [accts, app, firmList] = await Promise.all([
+      const [accts, app, firmList, ids, disabled] = await Promise.all([
         adapterRef.current.getAccounts().catch(() => []),
         f.ds.accounts.list(),
         listFirms(f.ds),
+        getDemoIds(f.ds),
+        isDemoDisabled(f.ds),
       ]);
       setBridgeAccounts(accts ?? []);
       setAppAccounts(app ?? []);
       setFirms(firmList ?? []);
+      setDemoAccountIds(new Set(ids?.accounts ?? []));
+      setDemoDisabled(disabled);
     } finally {
       setBusy(false);
     }
@@ -70,9 +77,12 @@ export default function ConnectionsManager() {
   }, [finance, load]);
 
   const quantower = statuses.find((s) => s.platformId === 'quantower');
-  const online = !!quantower?.online || DEMO;
-  const connections = (quantower?.connections?.length ? quantower.connections : (DEMO ? DEMO_CONNECTIONS : []));
-  const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (DEMO ? DEMO_BRIDGE : []);
+  // Demo só entra enquanto não há conta própria nem contas reais da ponte.
+  const userAccounts = appAccounts.filter((a) => !demoAccountIds.has(a.id));
+  const showDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
+  const online = !!quantower?.online || showDemo;
+  const connections = (quantower?.connections?.length ? quantower.connections : (showDemo ? DEMO_CONNECTIONS : []));
+  const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (showDemo ? DEMO_BRIDGE : []);
 
   const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
   const byConn = useMemo(() => {
@@ -184,6 +194,12 @@ export default function ConnectionsManager() {
         <div className="cx-offline" role="status">
           <span className="cx-dot off" /> Bridge offline — abra o Quantower e a ponte para ver as conexões.
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }}><RefreshCw size={13} /> Atualizar</button>
+        </div>
+      )}
+
+      {showDemo && (
+        <div className="cx-offline" role="status">
+          <span className="cx-dot on" /> Exemplo (demo) — some quando você cadastrar sua primeira conta.
         </div>
       )}
 

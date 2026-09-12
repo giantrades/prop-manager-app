@@ -58,13 +58,19 @@ export function FinanceProvider({ children, adapter = null }) {
       const wealth = new WealthService(ds);
       const risk = new RiskService(ds, chain);
 
-      // Demo mode: popula a base na primeira abertura (nunca em produção).
+      // Demo mode (VITE_DEMO_MODE=1):
+      //  - banco vazio e demo ainda ativo => popula com o seed;
+      //  - usuário já cadastrou conta própria => remove os dados demo e desliga o modo.
       if (import.meta.env?.VITE_DEMO_MODE === '1') {
         try {
-          const existing = await ds.accounts.list();
-          if (existing.length === 0) {
-            const { seedDemoData } = await import('@apps/lib/db');
-            await seedDemoData(ds, chain);
+          const { seedDemoData, isDemoDisabled, hasUserData, clearDemoData } = await import('@apps/lib/db');
+          if (!(await isDemoDisabled(ds))) {
+            const existingAccounts = await ds.accounts.list();
+            if (existingAccounts.length === 0) {
+              await seedDemoData(ds, chain);
+            } else if (await hasUserData(ds)) {
+              await clearDemoData(ds);
+            }
           }
         } catch (e) {
           // eslint-disable-next-line no-console

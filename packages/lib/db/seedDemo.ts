@@ -6,6 +6,7 @@ import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
 import { nowIso } from './dateUtils';
 import { saveFirm, listFirms } from './firms';
+import { setDemoIds } from './demoMode';
 import type { Account, Goal, Payout, Position, PropExtension, Trade } from './types';
 
 const now = () => nowIso();
@@ -93,6 +94,19 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
     { id: 'pos-apto', accountId: 'acct-xp', symbol: 'Apartamento', qty: 1, avgPrice: 350000, lastMarkPrice: 420000, lastMarkAt: now(), assetKind: 'other', updatedAt: now(), deviceId: 'demo', version: 0 },
   ];
   await Promise.all(positions.map((p) => ds.positions.put(p, { source: 'restore' })));
+
+  // Marca tudo que é demo: quando o usuário criar a 1ª conta própria, isso é limpo.
+  const seedFirmNames = ['FTMO', 'E8 Markets', 'XP'];
+  await setDemoIds(ds, {
+    accounts: accounts.map((a) => a.id),
+    transactions: (await ds.transactions.list()).map((t) => t.id),
+    trades: trades.map((t) => t.id),
+    payouts: [payout.id],
+    goals: goals.map((g) => g.id),
+    positions: positions.map((p) => p.id),
+    propExtensions: props.map((p) => p.accountId),
+    firms: firms.filter((f) => seedFirmNames.includes(f.name)).map((f) => f.id),
+  });
 
   return trades.length;
 }

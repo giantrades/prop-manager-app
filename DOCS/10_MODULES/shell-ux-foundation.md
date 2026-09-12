@@ -396,3 +396,13 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   fechamento (Quantower n�o exp�e setter de SL/TP em `Position`). Antes retornava erro.
 - **Bridge Patch B** (R correto): `PositionSlTpStore` registra o SL/TP via eventos do Core `PositionAdded`/`PositionRemoved`. No **fechamento** le o bracket ATIVO daquela posicao (mesmo se o SL/TP foi movido durante a operacao) e usa no `stopPrice`/`takePrice` do `TradeDto` -> R correto. Timer de 2s = so rede de seguranca.
 - Gate: `tsc` 0 + build verde + 240 testes.
+
+## Batch Z � demo auto-expiravel (executado)
+- `packages/lib/db/demoMode.ts`: o seed grava os ids que criou (`demo:ids`). `hasUserData()`
+  detecta a 1a conta propria; `clearDemoData()` remove SO os registros demo (contas, trades,
+  payouts, goals, positions, propExt, firms do seed + transacoes) e liga `demo:disabled`.
+- `FinanceProvider`: com `VITE_DEMO_MODE=1` -> banco vazio = seed; ja existe conta do usuario =
+  limpa o demo e desliga (nao volta mais, nem com banco vazio).
+- `ConnectionsManager`: os cards mock so aparecem enquanto `showDemo` (sem conta propria e sem
+  contas reais da ponte) + aviso "Exemplo (demo) - some quando cadastrar sua 1a conta".
+- Testes em `seedDemo.test.ts` (seed + expiracao). Gate: tsc 0 + build verde + 242 testes.

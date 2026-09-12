@@ -7,6 +7,7 @@ import { DataChainEngine } from '../DataChainEngine';
 import { EventBus } from '../events';
 import { seedDemoData } from '../seedDemo';
 import { listFirms } from '../firms';
+import { hasUserData, clearDemoData, isDemoDisabled } from '../demoMode';
 
 function makeEngine() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -37,5 +38,23 @@ describe('seedDemoData', () => {
     const positions = await ds.positions.list();
     expect(positions.find((p) => p.assetKind === 'other')).toBeTruthy();
     expect(positions.find((p) => p.assetKind === 'fixed')).toBeTruthy();
+  });
+
+  it('conta própria liga hasUserData; clearDemoData remove só o demo e desliga', async () => {
+    const { ds, chain } = makeEngine();
+    await seedDemoData(ds, chain);
+    expect(await hasUserData(ds)).toBe(false);
+
+    await ds.accounts.put(
+      { id: 'acct-user', kind: 'bank', name: 'Meu Banco', currency: 'BRL', hidden: false, defaultWeight: 1, updatedAt: new Date().toISOString(), deviceId: 'x', version: 0 },
+      { source: 'local' },
+    );
+    expect(await hasUserData(ds)).toBe(true);
+
+    await clearDemoData(ds);
+    const accounts = await ds.accounts.list();
+    expect(accounts.map((a) => a.id)).toEqual(['acct-user']);
+    expect(await ds.trades.list()).toHaveLength(0);
+    expect(await isDemoDisabled(ds)).toBe(true);
   });
 });

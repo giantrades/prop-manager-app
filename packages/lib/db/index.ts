@@ -31,6 +31,7 @@ export * from './financialIntelligence';
 export * from './economicCalendar';
 export * from './supabaseSync';
 export * from './seedDemo';
+export * from './demoMode';
 export * from './quantowerIngest';
 export * from './ctraderIngest';
 export * from './firmTemplates';
