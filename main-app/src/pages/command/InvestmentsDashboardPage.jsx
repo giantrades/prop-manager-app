@@ -1,43 +1,63 @@
-// Batch G4 — Dashboard do módulo Investimentos (porta de entrada).
-// Composição pura: patrimônio (NetWorth + série) e carteira (portfolio).
+// Dashboard do módulo Investimentos (porta de entrada = visão geral do portfolio).
+// KPIs + pies (por classe e por ativo) + evolução do patrimônio + payouts por mês +
+// maiores posições. O gerenciamento fica na página Portfolio (abas). Composição pura.
 import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
+import AllocationPie from '@apps/ui/AllocationPie';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
+const CLASS_META = {
+  equity: { label: 'Renda variável', color: '#7c5cff' },
+  fixed: { label: 'Renda fixa', color: '#3498db' },
+  crypto: { label: 'Cripto', color: '#f7931a' },
+  other: { label: 'Imóveis/Outros', color: '#e1b12c' },
+};
+
 export default function InvestmentsDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {
-    const [nw, snapshots, portfolio, positions] = await Promise.all([
+    const [nw, snapshots, portfolio, positions, allocation, accounts, payouts] = await Promise.all([
       f.wealth.netWorth(),
       f.wealth.netWorthSeries(),
       f.wealth.portfolio(),
       f.ds.positions.list(),
+      f.wealth.allocation(),
+      f.ds.accounts.list(),
+      f.ds.payouts.list(),
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
-    const allocation = await f.wealth.allocation();
-    const payouts = await f.ds.payouts.list();
-    return { nw, snapshots, portfolio, positions, top, payouts, allocation };
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts };
   });
 
   const pf = data?.portfolio;
 
-  const byClass = useMemo(() => {
+  const classData = useMemo(() => {
     const rows = data?.portfolio?.rows ?? [];
-    const map = { equity: 0, fixed: 0, other: 0 };
-    for (const r of rows) map[r.assetKind || 'equity'] = (map[r.assetKind || 'equity'] ?? 0) + (r.marketValue ?? 0);
-    const total = Object.values(map).reduce((s, v) => s + v, 0) || 1;
-    const label = { equity: 'Variável', fixed: 'Renda fixa', other: 'Outros ativos' };
-    return Object.entries(map).filter(([, v]) => v > 0).map(([k, v]) => ({ k, label: label[k] ?? k, value: v, pct: v / total }));
+    const acctKind = new Map((data?.accounts ?? []).map((a) => [a.id, a.kind]));
+    const map = { equity: 0, fixed: 0, crypto: 0, other: 0 };
+    for (const r of rows) {
+      const kind = acctKind.get(r.accountId);
+      if (kind === 'crypto') map.crypto += r.marketValue ?? 0;
+      else if (r.assetKind === 'fixed') map.fixed += r.marketValue ?? 0;
+      else if (r.assetKind === 'other') map.other += r.marketValue ?? 0;
+      else map.equity += r.marketValue ?? 0;
+    }
+    return Object.entries(map).filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ label: CLASS_META[k]?.label ?? k, value: v, color: CLASS_META[k]?.color }));
   }, [data]);
+
+  const symbolData = useMemo(() => (
+    (data?.allocation?.bySymbol ?? []).slice(0, 8).map((a) => ({ label: a.label, value: a.value }))
+  ), [data]);
 
   const payoutSeries = useMemo(() => {
     const payouts = data?.payouts ?? [];
@@ -48,8 +68,7 @@ export default function InvestmentsDashboardPage() {
       byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
     }
     const months = [...byMonth.keys()].sort().slice(-12);
-    let cum = 0;
-    return months.map((ym) => { cum += byMonth.get(ym); return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number(cum.toFixed(2)) }; });
+    return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
   }, [data]);
 
   return (
@@ -86,45 +105,22 @@ export default function InvestmentsDashboardPage() {
             </div>
           </div>
 
-          <div className="inv-widgets">
-            {data.top.length > 0 && (
-              <div className="dash-section">
-                <div className="dash-title">
-                  <span>Alocação</span>
-                  <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
-                </div>
-                <div className="inv-alloc">
-                  <ResponsiveContainer width={150} height={150}>
-                    <PieChart>
-                      <Pie
-                        data={(data.allocation?.bySymbol ?? []).slice(0, 7).map((a, i) => ({ ...a, color: ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'][i % 7] }))}
-                        dataKey="value" nameKey="label" innerRadius={42} outerRadius={68} paddingAngle={2}
-                      >
-                        {(data.allocation?.bySymbol ?? []).slice(0, 7).map((a, i) => <Cell key={a.label} fill={['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'][i % 7]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="inv-legend">
-                    {(data.allocation?.bySymbol ?? []).slice(0, 6).map((a, i) => (
-                      <div key={a.label} className="dash-row">
-                        <span className="inv-dot" style={{ background: ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7'][i % 6] }} />
-                        <span className="dash-row-name">{a.label}</span>
-                        <span className="dash-row-sub">{Math.round((a.pct ?? 0) * 100)}%</span>
-                        <span className="dash-row-val">{fmtMoney(a.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="inv-pies">
+            <div className="dash-section">
+              <AllocationPie title="Por classe" data={classData} emptyLabel="Cadastre posições para ver a alocação por classe." />
+            </div>
+            <div className="dash-section">
+              <AllocationPie title="Por ativo" data={symbolData} emptyLabel="Sem posições." />
+            </div>
+          </div>
 
+          <div className="inv-widgets">
             <div className="dash-section">
               <div className="dash-title">
                 <span>Maiores posições</span>
-                <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
+                <NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink>
               </div>
-              {data.top.map((p) => (
+              {data.top.length === 0 ? <div className="muted">Sem posições.</div> : data.top.map((p) => (
                 <div key={p.id} className="dash-row">
                   <span className="dash-row-name">{p.symbol}</span>
                   <span className="dash-row-sub">{p.qty} un.</span>
@@ -136,50 +132,26 @@ export default function InvestmentsDashboardPage() {
 
             <div className="dash-section">
               <div className="dash-title">
-                <span>Payouts acumulados</span>
+                <span>Payouts por mês</span>
                 <NavLink className="dash-link" to="/payouts">payouts →</NavLink>
               </div>
               {payoutSeries.length > 1 ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="inv-grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
+                  <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                     <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
                     <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
-                    <Area type="monotone" dataKey="payout" stroke="#10b981" strokeWidth={2} fill="url(#inv-grad)" />
-                  </AreaChart>
+                    <Bar dataKey="payout" name="Payouts" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="muted">Sem payouts ainda.</div>
-              )}
+              ) : <div className="muted">Sem payouts ainda.</div>}
             </div>
 
             <div className="dash-section inv-span2">
-              <div className="dash-title">
-                <span>Evolução do patrimônio</span>
-              </div>
+              <div className="dash-title"><span>Evolução do patrimônio</span></div>
               <NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} />
             </div>
-
-            {byClass.length > 0 && (
-              <div className="dash-section inv-span2">
-                <div className="dash-title"><span>Composição por classe</span></div>
-                {byClass.map((c) => (
-                  <div key={c.k} className="dash-row">
-                    <span className="dash-row-name">{c.label}</span>
-                    <span className="inv-bar-wrap"><span className="inv-bar" style={{ width: `${Math.round(c.pct * 100)}%` }} /></span>
-                    <span className="dash-row-sub">{Math.round(c.pct * 100)}%</span>
-                    <span className="dash-row-val">{fmtMoney(c.value)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </>
       )}
@@ -188,14 +160,10 @@ export default function InvestmentsDashboardPage() {
 }
 
 const INV_CSS = `
-.inv-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.inv-pies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.inv-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 .inv-span2 { grid-column: 1 / -1; }
-.inv-bar-wrap { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
-.inv-bar { display: block; height: 100%; background: linear-gradient(90deg, #7c5cff, #a78bfa); border-radius: 999px; }
-.inv-alloc { display: flex; align-items: center; gap: 12px; }
-.inv-legend { flex: 1; min-width: 0; }
-.inv-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-@media (max-width: 900px) { .inv-widgets { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .inv-pies, .inv-widgets { grid-template-columns: 1fr; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('inv-styles')) {
   const style = document.createElement('style');

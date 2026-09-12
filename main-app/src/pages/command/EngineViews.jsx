@@ -228,7 +228,7 @@ export function PortfolioPage() {
   const [cdiYm, setCdiYm] = useState('');
   const [cdiPct, setCdiPct] = useState('');
   // Abas internas do Portfolio: Visão Geral | Posições | Proventos | Alertas | Configurar.
-  const [ptab, setPtab] = useState('overview');
+  const [ptab, setPtab] = useState('positions');
   const handleSaveCdi = useCallback(async () => {
     const f = financeRef.current;
     if (!f || !/^\d{4}-\d{2}$/.test(cdiYm) || !(Number(cdiPct) >= 0)) return;
@@ -394,7 +394,7 @@ export function PortfolioPage() {
       </div>
       <ModuleTabs module="investimentos" />
       <nav className="ws-tabs" aria-label="Seções do portfolio">
-        {[['overview', 'Visão Geral'], ['positions', 'Posições'], ['income', 'Proventos'], ['alerts', 'Alertas'], ['config', 'Configurar']].map(([k, label]) => (
+        {[['positions', 'Posições'], ['income', 'Proventos'], ['alerts', 'Alertas'], ['config', 'Configurar']].map(([k, label]) => (
           <button
             key={k}
             type="button"
@@ -407,41 +407,17 @@ export function PortfolioPage() {
         ))}
       </nav>
 
-      {ptab === 'overview' && (
-        <>
-          {quotes.at && (
-            <div className="cmd-msg" role="status">
-              ao vivo {ageMin === 0 ? 'agora' : `há ${ageMin} min`} • {quotes.count} posições
-              {quotes.fromCache.length > 0 && ` • ${quotes.fromCache.length} do cache`}
-              {quotes.failed.length > 0 && ` • sem preço: ${quotes.failed.join(', ')}`}
-              {quotes.noFx > 0 && ` • ${quotes.noFx} USD sem taxa`}
-            </div>
-          )}
-          {data?.portfolio?.unconverted > 0 && (
-            <div className="cmd-warn" role="note">
-              ⚠️ {data.portfolio.unconverted} posição(ões) USD fora dos totais — informe a taxa em Configurar.
-            </div>
-          )}
-          <Portfolio
-            rows={data?.portfolio?.rows ?? []}
-            summary={data?.portfolio ?? null}
-            dca={data?.dca ?? []}
-            allocation={data?.allocation ?? null}
-            history={data?.history ?? []}
-            benchmark={data?.benchmark ?? []}
-            loading={loading}
-            onDividend={handleDividend}
-            onSaveAlert={handleSaveAlert}
-            onDeleteAlert={handleDeleteAlert}
-            onRearmAlert={handleRearmAlert}
-            firedAlertIds={firedIds}
-            announced={data?.announced ?? []}
-            positions={data?.positions ?? []}
-            onSaveDividendEvent={handleSaveDividendEvent}
-            onRemoveDividendEvent={handleRemoveDividendEvent}
-            onReceiveDividend={handleReceiveDividend}
-          />
-        </>
+      {quotes.at && (
+        <div className="cmd-msg" role="status">
+          preços ao vivo {ageMin === 0 ? 'agora' : `há ${ageMin} min`} • {quotes.count} posições
+          {quotes.fromCache.length > 0 && ` • ${quotes.fromCache.length} do cache`}
+          {quotes.failed.length > 0 && ` • sem preço: ${quotes.failed.join(', ')}`}
+        </div>
+      )}
+      {data?.portfolio?.unconverted > 0 && (
+        <div className="cmd-warn" role="note">
+          ⚠️ {data.portfolio.unconverted} posição(ões) USD fora dos totais — informe a taxa em Configurar.
+        </div>
       )}
 
       {ptab === 'positions' && (

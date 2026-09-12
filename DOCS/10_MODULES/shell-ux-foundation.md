@@ -61,6 +61,19 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch T — Investimentos unificado + pies (executado)
+- **Resumo = visão geral do Portfolio**: `InvestimentosDashboardPage` agora traz KPIs +
+  **pies por classe** (Renda variável, Renda fixa, Cripto, Imóveis/Outros) e **por ativo**,
+  evolução do patrimônio e payouts por mês. Gerenciamento fica no Portfolio.
+- **Portfolio** perdeu a aba **Visão Geral** (redundante) — ficou Posições | Proventos |
+  Alertas | Configurar. A alocação do Portfolio agora usa dois pies (por ativo / por conta).
+- **`AllocationPie`** (novo, `packages/ui`): donut + **legenda legível** (cor, label, %, valor)
+  reusado em ambos; corrige legendas bugadas e padroniza a qualidade dos pies.
+- **Home** (commit anterior): widgets com **altura igual** (`stretch` + min-height), pie por
+  classe (net worth), Trading **sem “Risco”**, e **Ações manuais + config de regras**
+  (`packages/lib/db/actions.ts`, gaveta cria/exclui, Settings alterna regras).
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch S — Home refinada + visualizações (executado)
 - **Home · Contas**: widget com **PnL por conta** (trading + investimentos), ordenado por
   tamanho — o valor "que vai crescendo". Snapshot ganhou `accountPnl`.
