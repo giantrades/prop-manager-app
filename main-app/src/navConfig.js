@@ -38,8 +38,6 @@ export const MODULES = [
     dashboard: "/",
     children: [
       { to: "/", label: "Home", icon: LayoutDashboard, end: true, keywords: "command dashboard início" },
-      { to: "/calendar", label: "Calendar", icon: CalendarDays, keywords: "calendário financeiro" },
-      { to: "/actions", label: "Actions", icon: Bell, keywords: "alertas ações pendentes" },
     ],
   },
   {

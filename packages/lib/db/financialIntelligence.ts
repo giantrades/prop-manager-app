@@ -21,7 +21,7 @@ import type {
 import type { FirmPnlResult, FreeCashResult, TaxCockpitResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
-import { computeFirmPnl } from './money';
+import { computeFirmPnl, monthlySeries } from './money';
 import { nowIso } from './dateUtils';
 import type { Payout, Trade, Transaction } from './types';
 
@@ -55,6 +55,10 @@ export interface CommandSnapshot {
   taxCockpit: TaxCockpitResult;
   strategies: StrategyMetrics[];
   tradesToday: { win: number; loss: number };
+  /** Home — séries principais dos módulos (composição pura, sem número novo). */
+  cashflowSeries: Array<{ ym: string; income: number; expenses: number; balance: number }>;
+  portfolioHistory: Array<{ at: string; value: number; cost: number }>;
+  tradingSeries: Array<{ ym: string; pnl: number }>;
   generatedAt: string;
 }
 
@@ -94,6 +98,21 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
   // Estratégias: métricas derivadas pelo engine (n<20 => "sem amostra").
   const strategies = allStrategyMetrics(trades);
 
+  // Home — séries p/ os gráficos principais de cada módulo.
+  const cashflowSeries = monthlySeries(transactions, 6, ym);
+  const histRec = await ds.meta.getKey('portfolio:history');
+  const portfolioHistory = Array.isArray(histRec?.value) ? (histRec.value as Array<{ at: string; value: number; cost: number }>).slice(-12) : [];
+  const byMonth = new Map<string, number>();
+  for (const t of trades) {
+    if (t.exitPrice == null) continue;
+    const stamp = t.exitDatetime || t.entryDatetime;
+    if (!stamp) continue;
+    const key = stamp.slice(0, 7);
+    byMonth.set(key, (byMonth.get(key) ?? 0) + (Number(t.resultNet) || 0));
+  }
+  let cum = 0;
+  const tradingSeries = [...byMonth.keys()].sort().slice(-12).map((k) => { cum += byMonth.get(k) ?? 0; return { ym: k, pnl: Number(cum.toFixed(2)) }; });
+
   return {
     netWorth,
     risk: riskSnap,
@@ -108,6 +127,9 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
     taxCockpit,
     strategies,
     tradesToday: riskSnap.tradesToday,
+    cashflowSeries,
+    portfolioHistory,
+    tradingSeries,
     generatedAt: nowIso(),
     priceAlerts: await getFiredPriceAlerts(ds),
   };

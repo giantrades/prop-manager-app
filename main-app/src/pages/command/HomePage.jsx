@@ -1,26 +1,34 @@
 // STAGE 6 — HomePage. Container do Command Center. Só chama o hook de snapshot
-// (useCommandSnapshot → selectors dos motores) e renderiza o HomeCommandCenter
-// (composição). Nenhuma lógica financeira própria aqui.
+// (useCommandSnapshot → selectors dos motores) + calendário econômico/feriados e
+// renderiza o HomeCommandCenter (composição). Nenhuma lógica financeira própria.
 //
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md (T6.1).
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { BookOpen, Receipt, ArrowDownToLine, TrendingUp, Wallet } from 'lucide-react';
 import HomeCommandCenter from '@apps/ui/HomeCommandCenter';
-import ModuleTabs from '../../ModuleTabs';
-import { useCommandSnapshot } from '@apps/state';
+import { useCommandSnapshot, useFinance } from '@apps/state';
+import { fetchEconomicEvents, usMarketHolidays, nowIso } from '@apps/lib/db';
 
 const WIDGETS = [
-  { id: 'risk', label: 'Trading Today' },
-  { id: 'actions', label: 'Action Center' },
-  { id: 'money', label: 'Money' },
-  { id: 'investments', label: 'Investments' },
-  { id: 'goals', label: 'Goals' },
+  { id: 'risk', label: 'Trading' },
+  { id: 'money', label: 'Gastos' },
+  { id: 'investments', label: 'Investimentos' },
+  { id: 'payouts', label: 'Contas & Payouts' },
+  { id: 'goals', label: 'Metas' },
+  { id: 'actions', label: 'Ações' },
+  { id: 'calendar', label: 'Calendário' },
   { id: 'insights', label: 'Insights' },
 ];
 
 const HOME_WIDGETS_KEY = 'homeWidgetsHidden';
+
+function addDays(iso, days) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 function loadHidden() {
   try {
@@ -34,8 +42,10 @@ function loadHidden() {
 
 export default function HomePage() {
   const { loading, snapshot, actions, insights, refresh } = useCommandSnapshot();
+  const finance = useFinance();
   const [hidden, setHidden] = useState(loadHidden);
   const [customizing, setCustomizing] = useState(false);
+  const [calendar, setCalendar] = useState({ events: [], holidays: [] });
 
   const toggleWidget = (id) => {
     setHidden((prev) => {
@@ -48,6 +58,27 @@ export default function HomePage() {
       return next;
     });
   };
+
+  // Calendário econômico (MyForexCalendar-like via API free) + feriados dos EUA.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const today = nowIso().slice(0, 10);
+      const to = addDays(today, 45);
+      const year = new Date().getUTCFullYear();
+      const holidays = [...usMarketHolidays(year), ...usMarketHolidays(year + 1)]
+        .filter((h) => h.date >= today && h.date <= to)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      let events = [];
+      try {
+        events = (await fetchEconomicEvents(today, to)).slice(0, 8);
+      } catch {
+        events = [];
+      }
+      if (alive) setCalendar({ events, holidays });
+    })();
+    return () => { alive = false; };
+  }, [finance]);
 
   return (
     <div className="cmd-page">
@@ -62,7 +93,6 @@ export default function HomePage() {
           </button>
         </div>
       </div>
-      <ModuleTabs module="home" />
       <nav className="hm-quick" aria-label="Ações rápidas">
         <NavLink to="/journal?new=1" className="hm-quick-btn"><BookOpen size={16} /> Novo trade</NavLink>
         <NavLink to="/expenses" className="hm-quick-btn"><Receipt size={16} /> Novo lançamento</NavLink>
@@ -82,20 +112,14 @@ export default function HomePage() {
           <button className="cmd-refresh" onClick={() => setCustomizing(false)}>Pronto</button>
         </div>
       )}
-      <HomeCommandCenter snapshot={snapshot} actions={actions} insights={insights} loading={loading} hidden={hidden} />
+      <HomeCommandCenter
+        snapshot={snapshot}
+        actions={actions}
+        insights={insights}
+        calendar={calendar}
+        loading={loading}
+        hidden={hidden}
+      />
     </div>
   );
-}
-
-const CMD_PAGE_CSS = `
-.hm-custom { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 8px; }
-.hm-custom-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
-.hm-custom-row { display: flex; gap: 10px; align-items: center; font-size: 13px; cursor: pointer; min-height: 40px; }
-.hm-custom-row input { width: 18px; height: 18px; accent-color: var(--brand, #7c5cff); }
-`;
-if (typeof document !== 'undefined' && !document.getElementById('cmd-page-styles')) {
-  const style = document.createElement('style');
-  style.id = 'cmd-page-styles';
-  style.textContent = CMD_PAGE_CSS;
-  document.head.appendChild(style);
 }

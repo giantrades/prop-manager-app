@@ -20,8 +20,7 @@ const AccountsDashboardPage = lazy(pageLoaders['/contas']);
 const TradingDashboardPage = lazy(pageLoaders['/trading']);
 const InvestmentsDashboardPage = lazy(pageLoaders['/investimentos']);
 const PlanningDashboardPage = lazy(pageLoaders['/planejamento']);
-const CalendarPage = lazy(pageLoaders['/calendar']);
-const ActionCenterPage = lazy(pageLoaders['/actions']);
+
 const JournalPage = lazy(pageLoaders['/journal']);
 const PlaybookPage = lazy(pageLoaders['/playbook']);
 const AccountsPage = lazy(pageLoaders['/accounts']);
@@ -234,8 +233,6 @@ export default function App() {
             <Route path="/trading" element={<TradingDashboardPage />} />
             <Route path="/investimentos" element={<InvestmentsDashboardPage />} />
             <Route path="/planejamento" element={<PlanningDashboardPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/actions" element={<ActionCenterPage />} />
             <Route path="/risk" element={<RiskPage />} />
             <Route path="/networth" element={<NetWorthPage />} />
             <Route path="/portfolio" element={<PortfolioPage />} />

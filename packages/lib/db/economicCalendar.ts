@@ -111,3 +111,52 @@ export function monthRange(yearMonth: string): { from: string; to: string } {
   const end = new Date(Date.UTC(y, m, 0));
   return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
 }
+
+// ---------------------------------------------------------------------------
+// Feriados do mercado americano (US) — cálculo local, sem API.
+// ---------------------------------------------------------------------------
+export interface UsHoliday { date: string; name: string }
+
+function nthWeekday(year: number, month: number, weekday: number, n: number): string {
+  const d = new Date(Date.UTC(year, month, 1));
+  const offset = (weekday - d.getUTCDay() + 7) % 7;
+  return new Date(Date.UTC(year, month, 1 + offset + (n - 1) * 7)).toISOString().slice(0, 10);
+}
+function lastWeekday(year: number, month: number, weekday: number): string {
+  const d = new Date(Date.UTC(year, month + 1, 0));
+  const offset = (d.getUTCDay() - weekday + 7) % 7;
+  return new Date(Date.UTC(year, month, d.getUTCDate() - offset)).toISOString().slice(0, 10);
+}
+function easterSunday(year: number): string {
+  const a = year % 19; const b = Math.floor(year / 100); const c = year % 100;
+  const d = Math.floor(b / 4); const e = b % 4; const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3); const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4); const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Feriados do mercado americano do ano (data + nome). Best-effort local. */
+export function usMarketHolidays(year: number): UsHoliday[] {
+  const easter = easterSunday(year);
+  return [
+    { date: `${year}-01-01`, name: "New Year's Day" },
+    { date: nthWeekday(year, 0, 1, 3), name: 'Martin Luther King Jr. Day' },
+    { date: nthWeekday(year, 1, 1, 3), name: "Presidents' Day" },
+    { date: addDays(easter, -2), name: 'Good Friday' },
+    { date: lastWeekday(year, 4, 1), name: 'Memorial Day' },
+    { date: `${year}-06-19`, name: 'Juneteenth' },
+    { date: `${year}-07-04`, name: 'Independence Day' },
+    { date: nthWeekday(year, 8, 1, 1), name: 'Labor Day' },
+    { date: nthWeekday(year, 10, 4, 4), name: 'Thanksgiving Day' },
+    { date: `${year}-12-25`, name: 'Christmas Day' },
+  ];
+}

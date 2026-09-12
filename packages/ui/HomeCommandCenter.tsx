@@ -1,54 +1,41 @@
-// STAGE 6 — HomeCommandCenter. COMPOSIÇÃO PURA. NÃO tem lógica financeira própria:
-// só agrega os números que os motores das fases 2/3/4 expõem (via `useCommandSnapshot`).
-// Header patrimonial + 5 quadrants (Trading Today / Action Center / Investments / Goals / Money)
-// + camada de Insights (AI leitura-only, com fonte citável).
-//
-// Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md (T6.1).
-//
-// Regra dura: se precisar de dado novo, volta ao stage dono. Nada de calcular aqui.
-
+// HomeCommandCenter — cockpit (COMPOSIÇÃO PURA). Mostra o gráfico principal de cada
+// módulo (Trading, Gastos, Investimentos, Contas/Payouts, Metas) + Ações + Calendário.
+// Nenhum cálculo financeiro aqui: só lê o snapshot do Command Center.
+import React from 'react';
+import {
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts';
 import { fmtMoney as fmtMoneyShared } from './currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
-import React from 'react';
-
 
 function fmtPct(value) {
   if (value == null || Number.isNaN(value)) return '—';
-  return `${(value * 100).toFixed(1)}%`;
+  const v = value * 100;
+  return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 }
+const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
+const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
+const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
 
-const RISK_META = {
-  SAFE: { label: 'SAFE', emoji: '🟢', color: 'var(--green, #2ecc71)' },
-  WARN: { label: 'WARN', emoji: '🟡', color: 'var(--yellow, #e1b12c)' },
-  STOP: { label: 'STOP', emoji: '🔴', color: 'var(--red, #e74c3c)' },
-};
-
-function RiskPill({ status }) {
-  const meta = RISK_META[status] || RISK_META.SAFE;
+function Widget({ id, title, to = null, hide, children }) {
+  if (hide(id)) return null;
   return (
-    <span className="hc-pill" style={{ color: meta.color, borderColor: meta.color }}>
-      <span aria-hidden="true">{meta.emoji}</span>
-      <span>{meta.label}</span>
-    </span>
+    <section className="hc-widget" aria-label={title}>
+      <div className="hc-widget-head">
+        <h3 className="hc-widget-title">{title}</h3>
+        {to && <a className="hc-widget-link" href={to}>abrir</a>}
+      </div>
+      {children}
+    </section>
   );
 }
 
-/**
- * @param {object} props
- * @param {import('../lib/db/financialIntelligence').CommandSnapshot} [props.snapshot]
- * @param {import('../lib/db/financialIntelligence').ActionItem[]} [props.actions]
- * @param {import('../lib/db/financialIntelligence').Insight[]} [props.insights]
- * @param {boolean} [props.loading]
- * @param {Array<string>} [props.hidden] ids de seção ocultas (risk|money|investments|goals|actions|insights)
- */
-export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], loading = false, hidden = [] }) {
+export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }) {
   const hide = (id) => (hidden || []).includes(id);
   if (loading || !snapshot) {
     return (
       <div className="hc-root hc-loading" role="status" aria-live="polite">
-        <div className="hc-skeleton" />
-        <div className="hc-skeleton" />
-        <div className="hc-skeleton" />
+        <div className="hc-skeleton" /><div className="hc-skeleton" /><div className="hc-skeleton" />
         <span className="hc-screen-reader">Carregando Command Center…</span>
       </div>
     );
@@ -57,33 +44,29 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const nw = snapshot.netWorth;
   const risk = snapshot.risk;
   const portfolio = snapshot.portfolio;
-  const goals = snapshot.goals;
-  const othersValue = (portfolio.rows ?? []).filter((r) => r.assetKind === 'other').reduce((s, r) => s + (r.marketValue ?? 0), 0);
-  const moneyWallets = snapshot.walletSummary ?? [];
-  const moneyFreeCash = snapshot.freeCash ?? null;
-  const pendingPayouts = (snapshot.pendingPayouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
-  const riskStatus = risk.rows.some((r) => r.status.status === 'STOP')
-    ? 'STOP'
-    : risk.rows.some((r) => r.status.status === 'WARN')
-      ? 'WARN'
-      : 'SAFE';
+  const goals = snapshot.goals ?? [];
+  const cashflow = snapshot.cashflowSeries ?? [];
+  const trading = snapshot.tradingSeries ?? [];
+  const history = snapshot.portfolioHistory ?? [];
+  const pending = snapshot.pendingPayouts ?? [];
+  const firms = (snapshot.firmPnl ?? []).filter((f) => f.profit !== 0).slice(0, 4);
+  const rc = risk?.counts ?? { SAFE: 0, WARN: 0, STOP: 0 };
 
   const header = [
-    { label: 'Net Worth', value: fmtMoney(nw.netWorth), cls: '' },
-    { label: 'Cash', value: fmtMoney(nw.components.cash), cls: '' },
-    { label: 'Invest', value: fmtMoney(nw.components.investments), cls: '' },
-    { label: 'Pendente', value: fmtMoney(nw.components.receivables), cls: '' },
+    { label: 'Net Worth', value: fmtMoney(nw.netWorth) },
+    { label: 'Cash', value: fmtMoney(nw.components.cash) },
+    { label: 'Invest', value: fmtMoney(nw.components.investments) },
+    { label: 'Pendente', value: fmtMoney(nw.components.receivables) },
   ];
 
   return (
     <div className="hc-root">
-      {/* Header patrimonial */}
       <div className="hc-hero">
         <div className="hc-hero-label">Patrimônio líquido (derivado)</div>
         <div className="hc-hero-value">{fmtMoney(nw.netWorth)}</div>
         <div className="hc-hero-grid">
           {header.map((h) => (
-            <div key={h.label} className={`hc-hero-cell ${h.cls}`}>
+            <div key={h.label} className="hc-hero-cell">
               <div className="hc-hero-cell-label">{h.label}</div>
               <div className="hc-hero-cell-value">{h.value}</div>
             </div>
@@ -91,141 +74,134 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
         </div>
       </div>
 
-      {/* Quadrants */}
-      <div className="hc-quadrants">
-        {/* Trading Today */}
-        {!hide('risk') && (<section className="hc-quad hc-quad-risk" aria-label="Trading Today">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Trading Today</h3>
-            <RiskPill status={riskStatus} />
+      <div className="hc-widgets">
+        <Widget id="risk" title="Trading" to="/trading" hide={hide}>
+          <div className="hc-stats">
+            <div className="hc-stat"><span className="hc-stat-label">PnL hoje</span><span className="hc-stat-value" style={{ color: risk.pnlToday >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(risk.pnlToday, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Hoje</span><span className="hc-stat-value">{risk.tradesToday.win}W / {risk.tradesToday.loss}L</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Risco</span><span className="hc-stat-value">{rc.STOP} STOP · {rc.WARN} WARN</span></div>
           </div>
-          <div className="hc-quad-stats">
-            <div className="hc-stat">
-              <span className="hc-stat-label">PnL hoje</span>
-              <span className="hc-stat-value" style={{ color: risk.pnlToday >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {fmtMoney(risk.pnlToday, 'USD')}
-              </span>
-            </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">Trades</span>
-              <span className="hc-stat-value">{risk.tradesToday.win}W / {risk.tradesToday.loss}L</span>
-            </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">Nominal</span>
-              <span className="hc-stat-value">
-                {fmtMoney(risk.rows.reduce((s, r) => s + (r.metrics.nominalSize ?? 0), 0), 'USD')}
-              </span>
-            </div>
-          </div>
-          <div className="hc-quad-counts">
-            <span>{risk.counts.SAFE} SAFE</span>
-            <span>{risk.counts.WARN} WARN</span>
-            <span>{risk.counts.STOP} STOP</span>
-          </div>
-        </section>)}
+          {trading.length > 1 && (
+            <ResponsiveContainer width="100%" height={150}>
+              <AreaChart data={trading.map((t) => ({ ...t, label: shortYm(t.ym) }))} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="hc-tr" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7c5cff" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#7c5cff" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
+                <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'USD')} />
+                <Area type="monotone" dataKey="pnl" stroke="#7c5cff" fill="url(#hc-tr)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </Widget>
 
-        {/* Action Center — attention-first: logo após Trading Today */}
-        {!hide('actions') && (<section className="hc-quad" aria-label="Action Center">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Action Center</h3>
-            {actions.length > 0 && <span className="hc-action-count">{actions.length}</span>}
+        <Widget id="money" title="Gastos" to="/gastos" hide={hide}>
+          <div className="hc-stats">
+            <div className="hc-stat"><span className="hc-stat-label">Entrou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--green)' }}>{fmtMoney(snapshot.freeCash?.income, 'BRL')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'BRL')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'BRL')}</span></div>
           </div>
-          <div className="hc-actions">
-            {actions.length === 0 ? (
-              <div className="hc-empty">Sem ações em aberto.</div>
-            ) : (
-              actions.slice(0, 5).map((a) => (
-                <div key={a.id} className={`hc-action hc-action-${a.severity}`}>
-                  <span className="hc-action-dot" aria-hidden="true" />
-                  <div className="hc-action-body">
-                    <div className="hc-action-title">{a.title}</div>
-                    <div className="hc-action-detail">{a.detail}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>)}
+          {cashflow.length > 1 && (
+            <ResponsiveContainer width="100%" height={150}>
+              <BarChart data={cashflow.map((c) => ({ ...c, label: shortYm(c.ym) }))} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
+                <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
+                <Bar dataKey="income" name="Entradas" fill="#2ecc71" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="expenses" name="Gastos" fill="#e74c3c" radius={[3, 3, 0, 0]} />
+                <Line type="monotone" dataKey="balance" name="Saldo" stroke="#7c5cff" strokeWidth={2} dot={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Widget>
 
-        {/* Investments */}
-        {!hide('investments') && (<section className="hc-quad" aria-label="Investments">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Investments</h3>
+        <Widget id="investments" title="Investimentos" to="/investimentos" hide={hide}>
+          <div className="hc-stats">
+            <div className="hc-stat"><span className="hc-stat-label">Atual</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl)} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Posições</span><span className="hc-stat-value">{(portfolio.rows ?? []).length}</span></div>
           </div>
-          <div className="hc-quad-stats">
-            <div className="hc-stat">
-              <span className="hc-stat-label">Total</span>
-              <span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span>
-            </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">PnL</span>
-              <span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {fmtPct(portfolio.pnlPercent)}
-              </span>
-            </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">Marcas velhas</span>
-              <span className="hc-stat-value">{portfolio.staleCount}</span>
-            </div>
-            {othersValue > 0 && (
-              <div className="hc-stat">
-                <span className="hc-stat-label">Outros ativos</span>
-                <span className="hc-stat-value">{fmtMoney(othersValue)}</span>
-              </div>
-            )}
-          </div>
-        </section>)}
+          {history.length > 1 ? (
+            <ResponsiveContainer width="100%" height={150}>
+              <AreaChart data={history.map((h) => ({ at: String(h.at).slice(5, 10), value: h.value, cost: h.cost }))} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="at" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={24} />
+                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
+                <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v)} />
+                <Area type="monotone" dataKey="value" name="Valor" stroke="#2ecc71" fill="rgba(46,204,113,0.15)" strokeWidth={2} />
+                <Area type="monotone" dataKey="cost" name="Custo" stroke="#7c5cff" fill="transparent" strokeDasharray="4 4" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="hc-empty">Sem histórico — abra Investimentos para registrar preços.</div>
+          )}
+        </Widget>
 
-        {/* Goals */}
-        {!hide('goals') && (<section className="hc-quad" aria-label="Goals">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Goals</h3>
+        <Widget id="payouts" title="Contas & Payouts" to="/contas" hide={hide}>
+          <div className="hc-stats">
+            <div className="hc-stat"><span className="hc-stat-label">Payouts pendentes</span><span className="hc-stat-value">{pending.length}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Firms</span><span className="hc-stat-value">{firms.length}</span></div>
           </div>
-          <div className="hc-goals">
-            {goals.length === 0 ? (
-              <div className="hc-empty">Nenhum goal definido.</div>
-            ) : (
-              goals.slice(0, 4).map((g) => (
+          {firms.length > 0 ? firms.map((f) => (
+            <div key={f.firmId} className="hc-row">
+              <span className="hc-row-name">{f.firmId}</span>
+              <span className="hc-row-sub">payouts {fmtMoney(f.payouts, 'USD')}</span>
+              <span className={`hc-row-val ${f.profit >= 0 ? 'hc-pos' : 'hc-neg'}`}>{fmtMoney(f.profit, 'USD')}</span>
+            </div>
+          )) : <div className="hc-empty">Sem P&L de firm ainda.</div>}
+        </Widget>
+
+        <Widget id="goals" title="Metas" to="/planejamento" hide={hide}>
+          {goals.length === 0 ? (
+            <div className="hc-empty">Nenhuma meta definida.</div>
+          ) : (
+            <div className="hc-goals">
+              {goals.slice(0, 5).map((g) => (
                 <div key={g.goal.id} className="hc-goal">
-                  <div className="hc-goal-row">
-                    <span className="hc-goal-name">{g.goal.kind}</span>
-                    <span className="hc-goal-pct">{g.pct.toFixed(0)}%</span>
-                  </div>
-                  <div className="hc-goal-bar">
-                    <div className="hc-goal-fill" style={{ width: `${Math.min(100, g.pct)}%` }} />
-                  </div>
+                  <div className="hc-goal-row"><span className="hc-goal-name">{g.goal.kind}</span><span className="hc-goal-pct">{g.pct.toFixed(0)}%</span></div>
+                  <div className="hc-goal-bar"><div className="hc-goal-fill" style={{ width: `${Math.min(100, g.pct)}%` }} /></div>
                 </div>
-              ))
-            )}
-          </div>
-        </section>)}
+              ))}
+            </div>
+          )}
+        </Widget>
 
-        {/* Money — carteiras + free cash do mês + payouts pendentes (C1) */}
-        {!hide('money') && (<section className="hc-quad" aria-label="Money">
-          <div className="hc-quad-head">
-            <h3 className="hc-quad-title">Money</h3>
-          </div>
-          <div className="hc-quad-stats">
-            <div className="hc-stat">
-              <span className="hc-stat-label">Carteiras</span>
-              <span className="hc-stat-value">{moneyWallets.length}</span>
+        <Widget id="actions" title="Ações" hide={hide}>
+          {actions.length === 0 ? (
+            <div className="hc-empty">Sem ações em aberto.</div>
+          ) : actions.slice(0, 6).map((a) => (
+            <div key={a.id} className={`hc-row hc-action-${a.severity}`}>
+              <span className="hc-action-dot" aria-hidden="true" />
+              <span className="hc-row-name">{a.title}</span>
+              <span className="hc-row-sub">{a.detail}</span>
             </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">Free cash (mês)</span>
-              <span className="hc-stat-value" style={{ color: (moneyFreeCash?.freeCash ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                {fmtMoney(moneyFreeCash?.freeCash)}
-              </span>
-            </div>
-            <div className="hc-stat">
-              <span className="hc-stat-label">Payouts pendentes</span>
-              <span className="hc-stat-value">{pendingPayouts.length}</span>
-            </div>
-          </div>
-        </section>)}
+          ))}
+        </Widget>
 
+        <Widget id="calendar" title="Calendário (45 dias)" hide={hide}>
+          {calendar.holidays?.length > 0 && calendar.holidays.slice(0, 3).map((h) => (
+            <div key={h.date} className="hc-row">
+              <span className="hc-row-name">EUA · {h.name}</span>
+              <span className="hc-row-sub">feriado</span>
+              <span className="hc-row-val">{String(h.date).slice(5).replace('-', '/')}</span>
+            </div>
+          ))}
+          {calendar.events?.length > 0 ? calendar.events.slice(0, 6).map((e) => (
+            <div key={e.id} className="hc-row">
+              <span className={`hc-imp hc-imp-${e.importance}`} />
+              <span className="hc-row-name">{e.eventName}</span>
+              <span className="hc-row-sub">{String(e.scheduledAt).slice(5, 10).replace('-', '/')} {String(e.scheduledAt).slice(11, 16)}</span>
+            </div>
+          )) : <div className="hc-empty">Sem eventos econômicos (offline ou API indisponível).</div>}
+        </Widget>
       </div>
 
-      {/* AI Insights (leitura-only, fonte citável) */}
       {insights.length > 0 && !hide('insights') && (
         <section className="hc-insights" aria-label="Insights">
           <div className="hc-insights-title">Insights (leitura-only)</div>
@@ -248,28 +224,40 @@ const HC_CSS = `
 .hc-screen-reader { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 .hc-loading { gap: 8px; }
 .hc-skeleton { height: 14px; border-radius: 8px; background: rgba(255,255,255,0.06); animation: hc-pulse 1.4s ease-in-out infinite; }
-.hc-skeleton:nth-child(2) { width: 80%; }
-.hc-skeleton:nth-child(3) { width: 60%; }
 
-.hc-hero { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; }
+.hc-hero { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
 .hc-hero-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
 .hc-hero-value { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 4px 0 14px; }
 .hc-hero-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .hc-hero-cell-label { font-size: 11px; color: var(--muted, #a1a7b3); }
 .hc-hero-cell-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.hc-quadrants { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.hc-quad { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.hc-quad-risk { border-color: rgba(46,204,113,0.2); }
-.hc-quad-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.hc-quad-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin: 0; }
-.hc-quad-stats { display: flex; flex-wrap: wrap; gap: 16px; }
+.hc-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.hc-widget { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.hc-widget-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hc-widget-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin: 0; }
+.hc-widget-link { font-size: 11px; font-weight: 700; color: var(--brand, #7c5cff); }
+.hc-widget-link:hover { text-decoration: underline; }
+
+.hc-stats { display: flex; flex-wrap: wrap; gap: 16px; }
 .hc-stat { display: flex; flex-direction: column; gap: 2px; }
 .hc-stat-label { font-size: 11px; color: var(--muted, #a1a7b3); }
 .hc-stat-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.hc-quad-counts { display: flex; gap: 10px; font-size: 11px; color: var(--muted, #a1a7b3); }
+.hc-stat-value small { font-size: 11px; color: var(--muted, #a1a7b3); }
 
-.hc-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid; background: rgba(255,255,255,0.02); }
+.hc-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.hc-row:last-child { border-bottom: none; }
+.hc-row-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-row-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
+.hc-row-val { font-variant-numeric: tabular-nums; font-weight: 700; }
+.hc-pos { color: var(--green, #2ecc71); }
+.hc-neg { color: var(--red, #e74c3c); }
+.hc-action-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow, #e1b12c); flex-shrink: 0; }
+.hc-action-warn .hc-action-dot { background: var(--red, #e74c3c); }
+.hc-action-good .hc-action-dot { background: var(--green, #2ecc71); }
+.hc-imp { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--muted, #a1a7b3); }
+.hc-imp-high { background: var(--red, #e74c3c); }
+.hc-imp-med { background: var(--yellow, #e1b12c); }
 
 .hc-goals { display: flex; flex-direction: column; gap: 10px; }
 .hc-goal-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
@@ -278,15 +266,6 @@ const HC_CSS = `
 .hc-goal-bar { height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
 .hc-goal-fill { height: 100%; background: linear-gradient(90deg, var(--brand, #7c5cff), #a78bfa); border-radius: 999px; }
 
-.hc-action-count { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(231,76,60,0.15); color: var(--red, #e74c3c); font-weight: 700; }
-.hc-actions { display: flex; flex-direction: column; gap: 8px; }
-.hc-action { display: flex; gap: 8px; align-items: flex-start; }
-.hc-action-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow, #e1b12c); margin-top: 4px; flex-shrink: 0; }
-.hc-action-warn .hc-action-dot { background: var(--red, #e74c3c); }
-.hc-action-good .hc-action-dot { background: var(--green, #2ecc71); }
-.hc-action-title { font-size: 12px; font-weight: 700; }
-.hc-action-detail { font-size: 11px; color: var(--muted, #a1a7b3); }
-
 .hc-insights { background: rgba(124,92,255,0.04); border: 1px solid rgba(124,92,255,0.18); border-radius: 14px; padding: 16px; }
 .hc-insights-title { font-size: 12px; font-weight: 700; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
 .hc-insights-list { display: flex; flex-direction: column; gap: 12px; }
@@ -294,11 +273,8 @@ const HC_CSS = `
 .hc-insight-source { font-size: 10px; color: var(--muted, #a1a7b3); font-family: monospace; margin-top: 2px; }
 
 .hc-empty { font-size: 12px; color: var(--muted, #a1a7b3); }
-
-@media (max-width: 719px) {
-  .hc-hero-grid { grid-template-columns: repeat(2, 1fr); }
-  .hc-quadrants { grid-template-columns: 1fr; }
-}
+@media (max-width: 900px) { .hc-widgets { grid-template-columns: 1fr; } }
+@media (max-width: 719px) { .hc-hero-grid { grid-template-columns: repeat(2, 1fr); } }
 @keyframes hc-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('hc-styles')) {

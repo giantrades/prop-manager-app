@@ -61,6 +61,24 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch R — Home como cockpit (executado)
+- **Actions/Calendar deixam de ser abas**: nav do Home tem só Home; rotas `/actions` e
+  `/calendar` removidas. Viram **widgets** na Home.
+- **Home = cockpit com o gráfico principal de cada módulo** (`HomeCommandCenter`):
+  - Trading: PnL acumulado (área) + PnL hoje/W-L/risco.
+  - Gastos: Entrou × Gastou (barras 6m) + saldo do mês.
+  - Investimentos: evolução valor × custo (área) + PnL%.
+  - Contas & Payouts: payouts pendentes + P&L por firm.
+  - Metas: barras de progresso.
+  - Ações: lista de notificações (era a aba Actions).
+  - Calendário: **eventos econômicos** (`fetchEconomicEvents`) + **feriados do mercado
+    americano** (`usMarketHolidays` — cálculo local) dos próximos 45 dias.
+  - Insights.
+- **Snapshot estendido** (`buildCommandSnapshot`): `cashflowSeries`, `portfolioHistory`,
+  `tradingSeries` (composição; sem número novo).
+- Widgets configuráveis (Personalizar) continuam.
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch Q — moeda única, ativos "outros", forms e Home (executado)
 - **Q1 Moeda única**: "Saldo em contas" (Gastos) e "Líquido" (Contas) agora mostram **um
   valor convertido** para a moeda do app (`convertMoney` + `fmtDisplay`), em vez de quebrar
