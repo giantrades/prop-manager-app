@@ -11,6 +11,8 @@ import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import Portfolio from '@apps/ui/Portfolio';
+import { applyBenchmark, getCdiSeries, computeDcaFromTransactions } from '@apps/lib/db';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -26,7 +28,7 @@ const CLASS_META = {
 
 export default function InvestmentsDashboardPage() {
   const { loading, data } = useEngineData(async (f) => {
-    const [nw, snapshots, portfolio, positions, allocation, accounts, payouts] = await Promise.all([
+    const [nw, snapshots, portfolio, positions, allocation, accounts, payouts, txs, histRec, cdi] = await Promise.all([
       f.wealth.netWorth(),
       f.wealth.netWorthSeries(),
       f.wealth.portfolio(),
@@ -34,9 +36,13 @@ export default function InvestmentsDashboardPage() {
       f.wealth.allocation(),
       f.ds.accounts.list(),
       f.ds.payouts.list(),
+      f.ds.transactions.list(),
+      f.ds.meta.getKey('portfolio:history'),
+      getCdiSeries(f.ds),
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
-    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts };
+    const history = Array.isArray(histRec?.value) ? histRec.value : [];
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), dca: computeDcaFromTransactions(txs) };
   });
 
   const pf = data?.portfolio;
@@ -146,6 +152,7 @@ export default function InvestmentsDashboardPage() {
                   </div>
                 ),
               },
+              { id: 'valuecost', node: (<div className="dash-section"><Portfolio only={['history', 'dca']} history={data.history ?? []} benchmark={data.benchmark ?? []} dca={data.dca ?? []} loading={false} /></div>) },
               { id: 'evolution', defaultSpan: 2, node: (<div className="dash-section"><div className="dash-title"><span>Evolução do patrimônio</span></div><NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} /></div>) },
             ]}
           />

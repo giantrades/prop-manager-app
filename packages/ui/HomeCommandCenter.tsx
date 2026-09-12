@@ -7,6 +7,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { fmtMoney as fmtMoneyShared } from './currency';
+import WidgetGrid from './WidgetGrid';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 
 function fmtPct(value) {
@@ -90,8 +91,8 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
         </div>
       </div>
 
-      <div className="hc-widgets">
-        <Widget id="risk" title="Trading" to="/trading" hide={hide}>
+      <WidgetGrid storageKey="home">
+        {!hide('risk') && (<Widget key="risk" id="risk" title="Trading" to="/trading" hide={hide}>
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">PnL hoje</span><span className="hc-stat-value" style={{ color: risk.pnlToday >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(risk.pnlToday, 'USD')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Hoje</span><span className="hc-stat-value">{risk.tradesToday.win}W / {risk.tradesToday.loss}L</span></div>
@@ -117,9 +118,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               </AreaChart>
             </ResponsiveContainer>
           )}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="money" title="Gastos" to="/gastos" hide={hide}>
+        {!hide('money') && (<Widget key="money" id="money" title="Gastos" to="/gastos" hide={hide}>
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">Entrou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--green)' }}>{fmtMoney(snapshot.freeCash?.income, 'BRL')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'BRL')}</span></div>
@@ -142,9 +143,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               </div>
             </div>
           ) : <div className="hc-empty">Sem despesas neste mês.</div>}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="investments" title="Patrimônio por classe" to="/investimentos" hide={hide}>
+        {!hide('investments') && (<Widget key="investments" id="investments" title="Patrimônio por classe" to="/investimentos" hide={hide}>
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth)}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span></div>
@@ -167,9 +168,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               </div>
             </div>
           ) : <div className="hc-empty">Cadastre posições/contas para ver a alocação.</div>}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="payouts" title="Contas (PnL por conta)" to="/contas" hide={hide}>
+        {!hide('payouts') && (<Widget key="payouts" id="payouts" title="Contas (PnL por conta)" to="/contas" hide={hide}>
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">Contas com PnL</span><span className="hc-stat-value">{acctPnl.length}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Payouts pendentes</span><span className="hc-stat-value">{pending.length}</span></div>
@@ -181,9 +182,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               <span className={`hc-row-val ${a.total >= 0 ? 'hc-pos' : 'hc-neg'}`}>{fmtMoney(a.total, 'USD')}</span>
             </div>
           )) : <div className="hc-empty">Sem PnL por conta ainda.</div>}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="goals" title="Metas" to="/planejamento" hide={hide}>
+        {!hide('goals') && (<Widget key="goals" id="goals" title="Metas" to="/planejamento" hide={hide}>
           {goals.length === 0 ? (
             <div className="hc-empty">Nenhuma meta definida.</div>
           ) : (
@@ -196,9 +197,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               ))}
             </div>
           )}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="actions" title="Ações" hide={hide}>
+        {!hide('actions') && (<Widget key="actions" id="actions" title="Ações" hide={hide}>
           {actions.length === 0 ? (
             <div className="hc-empty">Sem ações em aberto.</div>
           ) : actions.slice(0, 6).map((a) => (
@@ -208,9 +209,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               <span className="hc-row-sub">{a.detail}</span>
             </div>
           ))}
-        </Widget>
+        </Widget>)}
 
-        <Widget id="calendar" title="Calendário (45 dias)" hide={hide}>
+        {!hide('calendar') && (<Widget key="calendar" id="calendar" title="Calendário (45 dias)" hide={hide}>
           {calendar.holidays?.length > 0 && calendar.holidays.slice(0, 3).map((h) => (
             <div key={h.date} className="hc-row">
               <span className="hc-row-name">EUA · {h.name}</span>
@@ -225,8 +226,8 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               <span className="hc-row-sub">{String(e.scheduledAt).slice(5, 10).replace('-', '/')} {String(e.scheduledAt).slice(11, 16)}</span>
             </div>
           )) : <div className="hc-empty">Sem eventos econômicos (offline ou API indisponível).</div>}
-        </Widget>
-      </div>
+        </Widget>)}
+      </WidgetGrid>
 
       {insights.length > 0 && !hide('insights') && (
         <section className="hc-insights" aria-label="Insights">

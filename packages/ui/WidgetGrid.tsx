@@ -22,7 +22,7 @@ function readDefaultSpan(child) {
   return Number(raw) === 2 ? 2 : 1;
 }
 
-export default function WidgetGrid({ storageKey, items, children, columns = 2 }) {
+export default function WidgetGrid({ storageKey, items = null, children = null, columns = 2 }) {
   const list = useMemo(() => {
     if (items) return items;
     return React.Children.toArray(children).map((child) => ({

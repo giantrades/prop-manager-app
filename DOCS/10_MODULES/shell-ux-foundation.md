@@ -61,6 +61,13 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch V — paridade do Resumo de Investimentos + Home reordenável (executado)
+- **Resumo de Investimentos** ganhou **valor × custo × CDI** e **DCA** (reusa o `Portfolio`
+  com `only={['history','dca']}`) — fecha a paridade com a antiga "Visão Geral".
+- **Home reordenável/redimensionável**: os widgets agora usam `WidgetGrid` (arrastar + 1x/2x,
+  persistido em `widgetLayout:home`), somando ao "Personalizar" (mostrar/ocultar).
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch U — reordenar/redimensionar widgets (executado)
 - **`WidgetGrid`** (`packages/ui`): grade de 2 colunas com **arrastar para reordenar** e
   **largura 1x/2x** por widget, persistido por página (`widgetLayout:<key>`). Aceita `items`
