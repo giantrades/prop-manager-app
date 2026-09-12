@@ -1054,6 +1054,9 @@ namespace QuantowerBridge
                     accountName,
                     connectionId = pos.ConnectionId ?? "",
                     connectionName = connName,
+                    // SL/TP atuais (usados pela tela de posições ao vivo). Null se não houver.
+                    sl = pos.StopLoss != null ? (double?)pos.StopLoss.Price : null,
+                    tp = pos.TakeProfit != null ? (double?)pos.TakeProfit.Price : null,
                     isLive = true
                 });
             }

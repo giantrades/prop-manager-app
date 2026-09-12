@@ -58,6 +58,20 @@ export function FinanceProvider({ children, adapter = null }) {
       const wealth = new WealthService(ds);
       const risk = new RiskService(ds, chain);
 
+      // Demo mode: popula a base na primeira abertura (nunca em produção).
+      if (import.meta.env?.VITE_DEMO_MODE === '1') {
+        try {
+          const existing = await ds.accounts.list();
+          if (existing.length === 0) {
+            const { seedDemoData } = await import('@apps/lib/db');
+            await seedDemoData(ds, chain);
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('[demo] seed falhou', e);
+        }
+      }
+
       // Sync Supabase (T7.8/T13): só sincroniza se houver usuário logado; senão no-op.
       const getUserId = async () => {
         try {

@@ -16,6 +16,18 @@ const KIND_OPTIONS = [
   { v: 'cash', label: 'Dinheiro' },
 ];
 
+// Demo (VITE_DEMO_MODE=1): estrutura de conexões p/ ver a UI sem o Quantower aberto.
+const DEMO = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEMO_MODE === '1';
+const DEMO_CONNECTIONS = [
+  { id: 'conn-e8', name: 'E8-Live' },
+  { id: 'conn-ftmo', name: 'FTMO-Live' },
+];
+const DEMO_BRIDGE = [
+  { platformAccountId: 'qt_demo_1', name: 'E8 100k', currency: 'USD', balance: 102340, connectionId: 'conn-e8', connectionName: 'E8-Live' },
+  { platformAccountId: 'qt_demo_2', name: 'FTMO 50k', currency: 'USD', balance: 51220, connectionId: 'conn-ftmo', connectionName: 'FTMO-Live' },
+  { platformAccountId: 'qt_demo_3', name: 'FTMO 50k B', currency: 'USD', balance: 49800, connectionId: 'conn-ftmo', connectionName: 'FTMO-Live' },
+];
+
 export default function ConnectionsManager() {
   const { statuses, refreshStatuses } = usePlatform();
   const finance = useFinance();
@@ -58,14 +70,15 @@ export default function ConnectionsManager() {
   }, [finance, load]);
 
   const quantower = statuses.find((s) => s.platformId === 'quantower');
-  const online = !!quantower?.online;
-  const connections = quantower?.connections ?? [];
+  const online = !!quantower?.online || DEMO;
+  const connections = (quantower?.connections?.length ? quantower.connections : (DEMO ? DEMO_CONNECTIONS : []));
+  const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (DEMO ? DEMO_BRIDGE : []);
 
   const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
   const byConn = useMemo(() => {
     const m = new Map();
     for (const c of connections) m.set(c.id, { id: c.id, name: c.name, bridge: [], mapped: [] });
-    for (const a of bridgeAccounts) {
+    for (const a of effectiveBridge) {
       if (!m.has(a.connectionId)) m.set(a.connectionId, { id: a.connectionId || '—', name: a.connectionName || a.connectionId || 'Sem conexão', bridge: [], mapped: [] });
       m.get(a.connectionId).bridge.push(a);
     }
@@ -81,7 +94,7 @@ export default function ConnectionsManager() {
       entry.color = firm?.color || '#7c5cff';
     }
     return [...m.values()];
-  }, [connections, bridgeAccounts, appAccounts, firmById]);
+  }, [connections, effectiveBridge, appAccounts, firmById]);
 
   const appByPlatformId = useMemo(() => {
     const m = new Map();
@@ -139,7 +152,7 @@ export default function ConnectionsManager() {
     const f = financeRef.current;
     if (!f) return;
     let n = 0;
-    for (const b of bridgeAccounts) {
+    for (const b of effectiveBridge) {
       if (appByPlatformId.has(b.platformAccountId)) continue;
       const match = appAccounts.find((a) => !a.platformAccountId && a.name.trim().toLowerCase() === (b.name || '').trim().toLowerCase());
       if (!match) continue;
@@ -148,19 +161,19 @@ export default function ConnectionsManager() {
     }
     toast(n > 0 ? `${n} conta(s) associadas por nome.` : 'Nada para auto-associar por nome.', { type: n > 0 ? 'ok' : 'warn' });
     load();
-  }, [bridgeAccounts, appAccounts, appByPlatformId, load, toast]);
+  }, [effectiveBridge, appAccounts, appByPlatformId, load, toast]);
 
   const createAllMissing = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
     let n = 0;
-    for (const b of bridgeAccounts) {
+    for (const b of effectiveBridge) {
       if (appByPlatformId.has(b.platformAccountId)) continue;
       await createFor(b);
       n += 1;
     }
     if (n === 0) toast('Nenhuma conta faltando.', { type: 'warn' });
-  }, [bridgeAccounts, appByPlatformId, createFor, toast]);
+  }, [effectiveBridge, appByPlatformId, createFor, toast]);
 
   return (
     <div className="st-card">
@@ -231,7 +244,7 @@ export default function ConnectionsManager() {
         </div>
       )}
 
-      {online && bridgeAccounts.length > 0 && (
+      {online && effectiveBridge.length > 0 && (
         <div className="cx-actions">
           <label className="cx-kind">
             <span>Criar como</span>

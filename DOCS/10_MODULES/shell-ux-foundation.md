@@ -370,3 +370,15 @@ Achado central confirmado: o padr√£o `ws-tabs` (Payouts|Alocar) j√° √© o drill-d
 - **B1 ‚Äî Modo claro**: EXCLU√çDO por decis√£o do dono (dark-only). Registrado para n√£o reabrir.
 - **B2 ‚Äî Densidade de tela (compacto/confort√°vel)**: toggle que reduz paddings/fontes via classe no root. Afeta todas as telas de uma vez; bom para celular pequeno vs desktop.
 - **B3 ‚Äî Atalhos customiz√°veis**: remapear Ctrl+K/N// em Settings (persistido em `localStorage`). Hoje s√£o fixos no `App.jsx`.
+
+## Batch X ó demo seed + conexıes demo + SL/TP no bridge (executado)
+- **Seed de teste** (`seedDemo.ts`): agora cria **firms** (FTMO/E8/XP com cor+Ìcone), vincula
+  `firmId` (E8/XP), **2 contas prop** com `platformAccountId` (vÌnculo demo), trades com
+  **stopPrice/resultR** reais e posiÁıes de **renda fixa** e **outros** (ImÛvel).
+- **Demo mode ligado**: `FinanceProvider` roda `seedDemoData` na 1™ abertura quando
+  `VITE_DEMO_MODE=1` e a base est· vazia (antes nunca era chamado).
+- **ConnectionsManager demo**: com `VITE_DEMO_MODE=1` e bridge offline, mostra 2 conexıes
+  mock + 3 contas, permitindo ver a estrutura sem o Quantower.
+- **QuantowerBridge.cs**: `/positions` agora devolve `sl`/`tp` (antes n„o vinha ó a UI n„o
+  conseguia mostrar os valores atuais).
+- Gate: `tsc` 0 + build verde + 238 testes.
