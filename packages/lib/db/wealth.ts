@@ -244,7 +244,7 @@ export interface PortfolioRow {
   yieldOnCost: number;
   // A8 — juros acumulados (renda fixa pré; 0 nos demais).
   accruedInterest: number;
-  assetKind: 'equity' | 'fixed';
+  assetKind: 'equity' | 'fixed' | 'other';
   // A2 — alertas da posição (para UI gerenciar; avaliação no priceService).
   alerts: Array<{ id: string; dir: 'above' | 'below'; price: number }>;
 }
@@ -492,7 +492,7 @@ export function computePortfolio(positions: Position[], opts: PortfolioOptions =
       dividends: div,
       yieldOnCost: allIn,
       accruedInterest,
-      assetKind: p.assetKind === 'fixed' ? 'fixed' : 'equity',
+      assetKind: p.assetKind === 'fixed' ? 'fixed' : p.assetKind === 'other' ? 'other' : 'equity',
       alerts: Array.isArray(p.alerts) ? p.alerts : [],
     };
   });

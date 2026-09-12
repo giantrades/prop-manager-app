@@ -29,6 +29,15 @@ export default function InvestmentsDashboardPage() {
 
   const pf = data?.portfolio;
 
+  const byClass = useMemo(() => {
+    const rows = data?.portfolio?.rows ?? [];
+    const map = { equity: 0, fixed: 0, other: 0 };
+    for (const r of rows) map[r.assetKind || 'equity'] = (map[r.assetKind || 'equity'] ?? 0) + (r.marketValue ?? 0);
+    const total = Object.values(map).reduce((s, v) => s + v, 0) || 1;
+    const label = { equity: 'Variável', fixed: 'Renda fixa', other: 'Outros ativos' };
+    return Object.entries(map).filter(([, v]) => v > 0).map(([k, v]) => ({ k, label: label[k] ?? k, value: v, pct: v / total }));
+  }, [data]);
+
   const payoutSeries = useMemo(() => {
     const payouts = data?.payouts ?? [];
     const byMonth = new Map();
@@ -126,6 +135,20 @@ export default function InvestmentsDashboardPage() {
               </div>
               <NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} />
             </div>
+
+            {byClass.length > 0 && (
+              <div className="dash-section inv-span2">
+                <div className="dash-title"><span>Composição por classe</span></div>
+                {byClass.map((c) => (
+                  <div key={c.k} className="dash-row">
+                    <span className="dash-row-name">{c.label}</span>
+                    <span className="inv-bar-wrap"><span className="inv-bar" style={{ width: `${Math.round(c.pct * 100)}%` }} /></span>
+                    <span className="dash-row-sub">{Math.round(c.pct * 100)}%</span>
+                    <span className="dash-row-val">{fmtMoney(c.value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -136,6 +159,8 @@ export default function InvestmentsDashboardPage() {
 const INV_CSS = `
 .inv-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .inv-span2 { grid-column: 1 / -1; }
+.inv-bar-wrap { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
+.inv-bar { display: block; height: 100%; background: linear-gradient(90deg, #7c5cff, #a78bfa); border-radius: 999px; }
 @media (max-width: 900px) { .inv-widgets { grid-template-columns: 1fr; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('inv-styles')) {

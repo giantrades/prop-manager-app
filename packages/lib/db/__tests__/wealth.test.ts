@@ -475,3 +475,19 @@ describe('wealth — marcos (JournalEvent)', () => {
     expect(list.map((e) => e.id)).not.toContain(ev.id);
   });
 });
+
+describe('wealth — ativo "other" (valor manual)', () => {
+  it('portfolio inclui other e calcula valorização (PnL)', async () => {
+    const { ds, wealth } = makeService();
+    await ds.accounts.put(investAccount());
+    await ds.positions.put(position({
+      id: 'pos-other', symbol: 'APTO', qty: 1, avgPrice: 300000,
+      lastMarkPrice: 350000, lastMarkAt: '2026-07-01T12:00:00Z', assetKind: 'other',
+    }));
+    const p = await wealth.portfolio();
+    const row = p.rows.find((r) => r.symbol === 'APTO');
+    expect(row.assetKind).toBe('other');
+    expect(row.marketValue).toBe(350000);
+    expect(row.pnl).toBe(50000);
+  });
+});

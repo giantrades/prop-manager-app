@@ -5,6 +5,8 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Home = composição) + 01-tasks.md (T6.1).
 
 import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { BookOpen, Receipt, ArrowDownToLine, TrendingUp, Wallet } from 'lucide-react';
 import HomeCommandCenter from '@apps/ui/HomeCommandCenter';
 import ModuleTabs from '../../ModuleTabs';
 import { useCommandSnapshot } from '@apps/state';
@@ -61,6 +63,13 @@ export default function HomePage() {
         </div>
       </div>
       <ModuleTabs module="home" />
+      <nav className="hm-quick" aria-label="Ações rápidas">
+        <NavLink to="/journal?new=1" className="hm-quick-btn"><BookOpen size={16} /> Novo trade</NavLink>
+        <NavLink to="/expenses" className="hm-quick-btn"><Receipt size={16} /> Novo lançamento</NavLink>
+        <NavLink to="/payouts" className="hm-quick-btn"><ArrowDownToLine size={16} /> Payouts</NavLink>
+        <NavLink to="/portfolio" className="hm-quick-btn"><TrendingUp size={16} /> Investimentos</NavLink>
+        <NavLink to="/accounts" className="hm-quick-btn"><Wallet size={16} /> Contas</NavLink>
+      </nav>
       {customizing && (
         <div className="hm-custom" role="group" aria-label="Mostrar ou ocultar widgets">
           <div className="hm-custom-title">Widgets visíveis</div>

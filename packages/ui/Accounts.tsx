@@ -5,7 +5,7 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/00-DOMAIN_MODEL.md + DOCS/04_STAGE3_TRADING_OS.
 // Ver DOCS/11_PAGE_MAP.md.
 
-import { fmtMoney } from './currency';
+import { fmtMoney, convertMoney, fmtDisplay } from './currency';
 import React, { useMemo, useState } from 'react';
 import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
@@ -115,13 +115,13 @@ export default function Accounts({
   const summary = useMemo(() => {
     const prop = accounts.filter((a) => a.kind === 'prop');
     const nominal = prop.reduce((s, a) => s + (props[a.id]?.nominalSize ?? 0), 0);
-    const liquidByCurrency: Record<string, number> = {};
+    let liquidTotal = 0;
     for (const a of accounts) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
-      liquidByCurrency[a.currency] = (liquidByCurrency[a.currency] ?? 0) + (balances[a.id] ?? 0);
+      liquidTotal += convertMoney(balances[a.id] ?? 0, a.currency);
     }
     const activeProp = prop.filter((a) => ['challenge1', 'challenge2', 'funded'].includes(props[a.id]?.phase));
-    return { total: accounts.length, propCount: prop.length, nominal, liquidByCurrency, activeProp: activeProp.length };
+    return { total: accounts.length, propCount: prop.length, nominal, liquidTotal, activeProp: activeProp.length };
   }, [accounts, props, balances]);
 
   // ---- Form (modal) ----
@@ -132,7 +132,7 @@ export default function Accounts({
       <div className="ac3-overlay" onClick={() => { setEditing(null); setIsNew(false); }}>
         <div className="ac3-sheet" role="dialog" aria-modal="true" aria-label={isNew ? 'Nova conta' : 'Editar conta'} onClick={(e) => e.stopPropagation()}>
           <div className="ac3-sheet-head">
-            <span className="ac3-sheet-title">{isNew ? 'Nova conta' : 'Editar conta'}</span>
+            <span className="ac3-sheet-title"><Wallet size={16} /> {isNew ? 'Nova conta' : 'Editar conta'}</span>
             <button className="ac3-icon" onClick={() => { setEditing(null); setIsNew(false); }} aria-label="Fechar"><X size={16} /></button>
           </div>
           <div className="ac3-form-body">
@@ -293,15 +293,9 @@ export default function Accounts({
       <div className="ac3-summary">
         <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Capital gerido</span><span className="ac3-sum-value">{fmtMoney(summary.nominal)}</span><span className="ac3-sum-sub">nominal prop</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Líquido (por moeda)</span>
-          <span className="ac3-sum-value">
-            {Object.keys(summary.liquidByCurrency).length === 0
-              ? '—'
-              : Object.entries(summary.liquidByCurrency).map(([cur, val]) => (
-                <span key={cur} style={{ marginRight: 10, color: val >= 0 ? 'var(--green, #2ecc71)' : 'var(--red, #e74c3c)' }}>{fmtMoney(val, cur)}</span>
-              ))}
-          </span>
-          <span className="ac3-sum-sub">banco/carteira/cash/cripto</span>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Líquido</span>
+          <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtDisplay(summary.liquidTotal)}</span>
+          <span className="ac3-sum-sub">banco · carteira · cash · cripto</span>
         </div>
         <div className="ac3-sum-card ac3-sum-add">
           <button className="ac3-btn ac3-btn-primary" onClick={startNew}><Plus size={16} /> Nova conta</button>

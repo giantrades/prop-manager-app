@@ -1648,3 +1648,8 @@ select.select option {
 .cfg-title { font-size: 13px; font-weight: 800; }
 .cfg-hint { font-size: 12px; color: var(--muted, #a1a7b3); margin: 0; }
 .cfg-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+
+/* Home — ações rápidas */
+.hm-quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.hm-quick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 700; min-height: 40px; }
+.hm-quick-btn:hover { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); }

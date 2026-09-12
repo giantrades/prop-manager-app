@@ -164,7 +164,7 @@ export interface Position {
   currency?: 'BRL' | 'USD'; // default BRL
   // A8 — renda fixa: accrual automático (só 'pre' com yieldRate; 'pos'/'ipca'
   // precisam de índice externo e caem no marco manual).
-  assetKind?: 'equity' | 'fixed';
+  assetKind?: 'equity' | 'fixed' | 'other'; // 'other' = imóvel/obra/bem (valor manual)
   yieldRate?: number; // a.a. decimal (ex.: 0.12). Juros compostos 365d (aproximação).
   yieldType?: 'pre' | 'pos' | 'ipca';
   // A2 — alertas de preço (dispara 1x até rearmar; ver priceService).

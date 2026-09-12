@@ -4979,3 +4979,6 @@ body .payouts-page .card:not([class*="accent"]) {
 .ex-dot-paid { background: var(--green, #2ecc71); }
 .ex-dot-pending { background: var(--yellow, #e1b12c); }
 body .ex-item-main { flex: 1 1 auto; min-width: 0; }
+
+/* Forms — títulos com ícone */
+.ex-sheet-title, .ac3-sheet-title, .py-sheet-title { display: inline-flex; align-items: center; gap: 6px; }

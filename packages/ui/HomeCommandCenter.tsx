@@ -58,6 +58,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const risk = snapshot.risk;
   const portfolio = snapshot.portfolio;
   const goals = snapshot.goals;
+  const othersValue = (portfolio.rows ?? []).filter((r) => r.assetKind === 'other').reduce((s, r) => s + (r.marketValue ?? 0), 0);
   const moneyWallets = snapshot.walletSummary ?? [];
   const moneyFreeCash = snapshot.freeCash ?? null;
   const pendingPayouts = (snapshot.pendingPayouts ?? []).filter((p) => (p.status ?? 'pending') !== 'allocated');
@@ -166,6 +167,12 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               <span className="hc-stat-label">Marcas velhas</span>
               <span className="hc-stat-value">{portfolio.staleCount}</span>
             </div>
+            {othersValue > 0 && (
+              <div className="hc-stat">
+                <span className="hc-stat-label">Outros ativos</span>
+                <span className="hc-stat-value">{fmtMoney(othersValue)}</span>
+              </div>
+            )}
           </div>
         </section>)}
 

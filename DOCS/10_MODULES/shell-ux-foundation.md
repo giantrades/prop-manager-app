@@ -61,6 +61,20 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch Q — moeda única, ativos "outros", forms e Home (executado)
+- **Q1 Moeda única**: "Saldo em contas" (Gastos) e "Líquido" (Contas) agora mostram **um
+  valor convertido** para a moeda do app (`convertMoney` + `fmtDisplay`), em vez de quebrar
+  por moeda — já que o seletor global converte tudo.
+- **Q2 Ativos "outros"** no Portfolio: `assetKind: 'other'` (imóvel/bem/participação) com
+  valor investido + valor atual → PnL de valorização/desvalorização. Engine preserva
+  `assetKind` no `PortfolioRow` (+ teste). Resumo de Investimentos ganhou **Composição por
+  classe** (Variável / Renda fixa / Outros) e a Home mostra "Outros ativos" no quadrante.
+- **Q3 Forms mais agradáveis**: títulos com ícone; form de Posição com segmento de tipo
+  (Variável/Renda fixa/Outro) e campos específicos; hints.
+- **Q4 Home**: barra de **ações rápidas** (Novo trade, Novo lançamento, Payouts,
+  Investimentos, Contas).
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch P — Portfolio como workspace completo (executado)
 - **Abas próprias** (estado, não toggle): **Visão Geral | Posições | Proventos | Alertas |
   Configurar**. Resolve o "clicar 2x no Configurar".

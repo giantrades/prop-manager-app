@@ -615,7 +615,7 @@ export default function Expenses({
         <div className="ex-overlay" onClick={() => { setShowForm(false); setEditingId(null); }}>
           <div className="ex-sheet" role="dialog" aria-modal="true" aria-label={editingId ? 'Editar lançamento' : 'Novo lançamento'} onClick={(e) => e.stopPropagation()}>
           <div className="ex-sheet-head">
-            <span className="ex-sheet-title">{editingId ? 'Editar lançamento' : 'Novo lançamento'}</span>
+            <span className="ex-sheet-title"><Receipt size={16} /> {editingId ? 'Editar lançamento' : 'Novo lançamento'}</span>
             <button className="ex-mini" onClick={() => { setShowForm(false); setEditingId(null); }} aria-label="Fechar">✕</button>
           </div>
           <div className="ex-form">

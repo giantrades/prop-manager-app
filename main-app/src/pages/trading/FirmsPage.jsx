@@ -106,7 +106,7 @@ export default function FirmsPage() {
         <div className="ac3-overlay" onClick={() => setForm(null)}>
           <div className="ac3-sheet" style={{ maxWidth: 560 }} role="dialog" aria-modal="true" aria-label="Empresa" onClick={(e) => e.stopPropagation()}>
             <div className="ac3-sheet-head">
-              <span className="ac3-sheet-title">{form.id ? 'Editar empresa' : 'Nova empresa'}</span>
+              <span className="ac3-sheet-title"><Building2 size={16} /> {form.id ? 'Editar empresa' : 'Nova empresa'}</span>
               <button className="ac3-icon" onClick={() => setForm(null)} aria-label="Fechar"><X size={16} /></button>
             </div>
             <div className="ac3-form-body">

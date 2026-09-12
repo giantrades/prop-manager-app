@@ -64,3 +64,19 @@ export function fmtMoney(value: unknown, from?: string, decimals = 2): string {
 export function displaySymbol(): string {
   return SYMBOL[state.currency];
 }
+
+/** Formata um valor que JÁ está na moeda de exibição (não converte de novo). */
+export function fmtDisplay(value: number | null | undefined, decimals = 2): string {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const symbol = SYMBOL[state.currency];
+  const v = Number(value);
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `${sign}${symbol}${(abs / 1000).toFixed(decimals)}k`;
+  return `${sign}${symbol}${abs.toFixed(decimals)}`;
+}
+
+/** Converte vários [valor, moedaDeOrigem] e soma na moeda de exibição. */
+export function sumConverted(items: Array<[number, string | undefined]>): number {
+  return items.reduce((s, [v, from]) => s + convertMoney(Number(v) || 0, from), 0);
+}

@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
-import { fmtMoney } from '@apps/ui/currency';
+import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase,
   GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank,
@@ -62,11 +62,11 @@ export default function GastosDashboardPage() {
     const recent = txs
       .filter((t) => (t.date || '').slice(0, 7) === ym && (t.kind === 'expense' || ['payout_in', 'rebate', 'income'].includes(t.kind)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 6);
-    // Saldo em contas (por moeda) — visão Mobills no topo.
-    const balancesByCurrency = {};
+    // Saldo em contas (valor único, convertido para a moeda de exibição).
+    let balanceTotal = 0;
     for (const w of (data.wallets ?? [])) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind)) continue;
-      balancesByCurrency[w.currency] = (balancesByCurrency[w.currency] ?? 0) + (w.balance ?? 0);
+      balanceTotal += convertMoney(w.balance ?? 0, w.currency);
     }
     // Cartões de crédito: fatura do mês, em aberto (não pagas) × fechadas.
     const cardMap = new Map();
@@ -82,7 +82,7 @@ export default function GastosDashboardPage() {
     return {
       ym, catById, groups, gains, budget, spentBudget, fc, series,
       pending: pendingSummary(txs), bills: pendingBills(txs).slice(0, 5),
-      merchants: merchantRanking(txs, ym, 6), recent, worstRise, goal, balancesByCurrency, cards,
+      merchants: merchantRanking(txs, ym, 6), recent, worstRise, goal, balanceTotal, cards,
     };
   }, [data]);
 
@@ -110,12 +110,8 @@ export default function GastosDashboardPage() {
           {/* Saldo em contas (topo, estilo Mobills) */}
           <div className="gd-balance">
             <span className="gd-label">Saldo em contas</span>
-            <span className="gd-balance-value">
-              {Object.keys(view.balancesByCurrency).length === 0
-                ? '—'
-                : Object.entries(view.balancesByCurrency).map(([cur, v]) => <span key={cur} className={v >= 0 ? 'gd-pos' : 'gd-neg'}>{fmtMoney(v, cur === 'USD' ? '$' : 'R$')}</span>)}
-            </span>
-            <span className="gd-sub">soma das carteiras/contas</span>
+            <span className={`gd-balance-value ${view.balanceTotal >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtDisplay(view.balanceTotal)}</span>
+            <span className="gd-sub">soma das carteiras/contas (na moeda do app)</span>
           </div>
 
           {/* KPIs */}

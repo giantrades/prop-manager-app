@@ -272,7 +272,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
         <div className="py-overlay" onClick={() => setShowForm(false)}>
           <div className="py-sheet" role="dialog" aria-modal="true" aria-label="Novo payout" onClick={(e) => e.stopPropagation()}>
             <div className="py-sheet-head">
-              <span className="py-sheet-title">Novo payout</span>
+              <span className="py-sheet-title"><Plus size={16} /> Novo payout</span>
               <button className="py-icon-btn" onClick={() => setShowForm(false)} aria-label="Fechar"><X size={16} /></button>
             </div>
             <div className="py-form">
