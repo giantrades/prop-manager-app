@@ -3,7 +3,8 @@
 // Nenhum cálculo financeiro aqui: só lê o snapshot do Command Center.
 import React from 'react';
 import {
-  ResponsiveContainer, AreaChart, Area, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceDot,
+  XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 import { fmtMoney as fmtMoneyShared } from './currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
@@ -16,6 +17,8 @@ function fmtPct(value) {
 const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
 const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
 const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
+const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'];
+const CAT_COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
 
 function Widget({ id, title, to = null, hide, children }) {
   if (hide(id)) return null;
@@ -51,6 +54,19 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const pending = snapshot.pendingPayouts ?? [];
   const firms = (snapshot.firmPnl ?? []).filter((f) => f.profit !== 0).slice(0, 4);
   const rc = risk?.counts ?? { SAFE: 0, WARN: 0, STOP: 0 };
+
+  const catList = (snapshot.categories ?? []) as Array<{ id: string; name: string; color?: string }>;
+  const catById = new Map<string, { name: string; color?: string }>(catList.map((c) => [c.id, c]));
+  const expensePie = (snapshot.expensesByCategory ?? []).slice(0, 7).map((g, i) => {
+    const c = catById.get(g.categoryId);
+    return { name: c?.name ?? g.categoryId, value: g.total, color: CAT_COLORS[c?.color] || PALETTE[i % PALETTE.length] };
+  });
+  const allocPie = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 7)
+    .map((r, i) => ({ name: r.symbol, value: r.marketValue, color: PALETTE[i % PALETTE.length] }));
+  const payoutMonths = [...new Set((snapshot.payoutEvents ?? []).map((p) => String(p.date).slice(0, 7)))]
+    .map((ym) => ({ label: shortYm(ym), value: (trading.find((t) => t.ym === ym) ?? {}).pnl }))
+    .filter((m) => m.value != null);
+  const acctPnl = snapshot.accountPnl ?? [];
 
   const header = [
     { label: 'Net Worth', value: fmtMoney(nw.netWorth) },
@@ -95,6 +111,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                 <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
                 <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'USD')} />
                 <Area type="monotone" dataKey="pnl" stroke="#7c5cff" fill="url(#hc-tr)" strokeWidth={2} />
+                {payoutMonths.map((m) => (
+                  <ReferenceDot key={m.label} x={m.label} y={m.value} r={4} fill="#10b981" stroke="#0f1218" strokeWidth={2} />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -106,19 +125,23 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
             <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'BRL')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'BRL')}</span></div>
           </div>
-          {cashflow.length > 1 && (
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={cashflow.map((c) => ({ ...c, label: shortYm(c.ym) }))} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
-                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
-                <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
-                <Bar dataKey="income" name="Entradas" fill="#2ecc71" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="expenses" name="Gastos" fill="#e74c3c" radius={[3, 3, 0, 0]} />
-                <Line type="monotone" dataKey="balance" name="Saldo" stroke="#7c5cff" strokeWidth={2} dot={false} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          {expensePie.length > 0 ? (
+            <div className="hc-pie">
+              <ResponsiveContainer width={140} height={140}>
+                <PieChart>
+                  <Pie data={expensePie} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64} paddingAngle={2}>
+                    {expensePie.map((d) => <Cell key={d.name} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="hc-legend">
+                {expensePie.slice(0, 5).map((d) => (
+                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{fmtMoney(d.value, 'BRL')}</span></div>
+                ))}
+              </div>
+            </div>
+          ) : <div className="hc-empty">Sem despesas neste mês.</div>}
         </Widget>
 
         <Widget id="investments" title="Investimentos" to="/investimentos" hide={hide}>
@@ -127,34 +150,37 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
             <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl)} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
             <div className="hc-stat"><span className="hc-stat-label">Posições</span><span className="hc-stat-value">{(portfolio.rows ?? []).length}</span></div>
           </div>
-          {history.length > 1 ? (
-            <ResponsiveContainer width="100%" height={150}>
-              <AreaChart data={history.map((h) => ({ at: String(h.at).slice(5, 10), value: h.value, cost: h.cost }))} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="at" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} tickFormatter={kfmt} />
-                <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v)} />
-                <Area type="monotone" dataKey="value" name="Valor" stroke="#2ecc71" fill="rgba(46,204,113,0.15)" strokeWidth={2} />
-                <Area type="monotone" dataKey="cost" name="Custo" stroke="#7c5cff" fill="transparent" strokeDasharray="4 4" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="hc-empty">Sem histórico — abra Investimentos para registrar preços.</div>
-          )}
+          {allocPie.length > 0 ? (
+            <div className="hc-pie">
+              <ResponsiveContainer width={140} height={140}>
+                <PieChart>
+                  <Pie data={allocPie} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64} paddingAngle={2}>
+                    {allocPie.map((d) => <Cell key={d.name} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="hc-legend">
+                {allocPie.slice(0, 5).map((d) => (
+                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{fmtMoney(d.value)}</span></div>
+                ))}
+              </div>
+            </div>
+          ) : <div className="hc-empty">Nenhuma posição cadastrada.</div>}
         </Widget>
 
-        <Widget id="payouts" title="Contas & Payouts" to="/contas" hide={hide}>
+        <Widget id="payouts" title="Contas (PnL por conta)" to="/contas" hide={hide}>
           <div className="hc-stats">
+            <div className="hc-stat"><span className="hc-stat-label">Contas com PnL</span><span className="hc-stat-value">{acctPnl.length}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Payouts pendentes</span><span className="hc-stat-value">{pending.length}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Firms</span><span className="hc-stat-value">{firms.length}</span></div>
           </div>
-          {firms.length > 0 ? firms.map((f) => (
-            <div key={f.firmId} className="hc-row">
-              <span className="hc-row-name">{f.firmId}</span>
-              <span className="hc-row-sub">payouts {fmtMoney(f.payouts, 'USD')}</span>
-              <span className={`hc-row-val ${f.profit >= 0 ? 'hc-pos' : 'hc-neg'}`}>{fmtMoney(f.profit, 'USD')}</span>
+          {acctPnl.length > 0 ? acctPnl.slice(0, 6).map((a) => (
+            <div key={a.accountId} className="hc-row">
+              <span className="hc-row-name">{a.name}</span>
+              <span className="hc-row-sub">trad {fmtMoney(a.trading, 'USD')} · inv {fmtMoney(a.invest)}</span>
+              <span className={`hc-row-val ${a.total >= 0 ? 'hc-pos' : 'hc-neg'}`}>{fmtMoney(a.total, 'USD')}</span>
             </div>
-          )) : <div className="hc-empty">Sem P&L de firm ainda.</div>}
+          )) : <div className="hc-empty">Sem PnL por conta ainda.</div>}
         </Widget>
 
         <Widget id="goals" title="Metas" to="/planejamento" hide={hide}>
@@ -273,6 +299,11 @@ const HC_CSS = `
 .hc-insight-source { font-size: 10px; color: var(--muted, #a1a7b3); font-family: monospace; margin-top: 2px; }
 
 .hc-empty { font-size: 12px; color: var(--muted, #a1a7b3); }
+.hc-pie { display: flex; align-items: center; gap: 10px; }
+.hc-legend { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.hc-legend-row { display: flex; align-items: center; gap: 6px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hc-legend-val { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted, #a1a7b3); }
+.hc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 @media (max-width: 900px) { .hc-widgets { grid-template-columns: 1fr; } }
 @media (max-width: 719px) { .hc-hero-grid { grid-template-columns: repeat(2, 1fr); } }
 @keyframes hc-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }

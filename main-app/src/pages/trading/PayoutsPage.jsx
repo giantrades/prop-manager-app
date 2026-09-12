@@ -4,7 +4,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
 import Payouts from '@apps/ui/Payouts';
@@ -79,8 +79,7 @@ export default function PayoutsPage() {
       byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
     }
     const months = [...byMonth.keys()].sort().slice(-12);
-    let cum = 0;
-    return months.map((ym) => { cum += byMonth.get(ym); return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number(cum.toFixed(2)) }; });
+    return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
   }, [visible]);
 
   return (
@@ -104,21 +103,15 @@ export default function PayoutsPage() {
 
       {payoutSeries.length > 1 && (
         <div className="dash-section">
-          <div className="dash-title"><span>Payouts acumulados</span></div>
+          <div className="dash-title"><span>Payouts por mês</span></div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-              <defs>
-                <linearGradient id="pay-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.5} />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
+            <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.06)" />
               <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
               <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
               <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
-              <Area type="monotone" dataKey="payout" stroke="#10b981" strokeWidth={2} fill="url(#pay-grad)" />
-            </AreaChart>
+              <Bar dataKey="payout" name="Payouts" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       )}

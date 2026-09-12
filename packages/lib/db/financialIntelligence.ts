@@ -21,7 +21,7 @@ import type {
 import type { FirmPnlResult, FreeCashResult, TaxCockpitResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
-import { computeFirmPnl, monthlySeries } from './money';
+import { computeFirmPnl, monthlySeries, expensesByCategory, listCategories } from './money';
 import { nowIso } from './dateUtils';
 import type { Payout, Trade, Transaction } from './types';
 
@@ -59,6 +59,14 @@ export interface CommandSnapshot {
   cashflowSeries: Array<{ ym: string; income: number; expenses: number; balance: number }>;
   portfolioHistory: Array<{ at: string; value: number; cost: number }>;
   tradingSeries: Array<{ ym: string; pnl: number }>;
+  /** Eventos de payout/withdrawal (pontos no gráfico de PnL). */
+  payoutEvents: Array<{ date: string; net: number }>;
+  /** Gastos por categoria no mês corrente. */
+  expensesByCategory: Array<{ categoryId: string; total: number; count: number }>;
+  /** Categorias (id/name/icon/color) para a Home pintar os gráficos. */
+  categories: Array<{ id: string; name: string; icon: string; color: string }>;
+  /** PnL por conta (trading + investimentos), ordenado por total. */
+  accountPnl: Array<{ accountId: string; name: string; trading: number; invest: number; total: number }>;
   generatedAt: string;
 }
 
@@ -113,6 +121,28 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
   let cum = 0;
   const tradingSeries = [...byMonth.keys()].sort().slice(-12).map((k) => { cum += byMonth.get(k) ?? 0; return { ym: k, pnl: Number(cum.toFixed(2)) }; });
 
+  // Home — payout events, gastos por categoria e PnL por conta.
+  const payoutEvents = [...pendingPayouts]
+    .map((p) => ({ date: p.date || p.updatedAt, net: Number(p.net) || 0 }))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const [accountsList, categories] = await Promise.all([ds.accounts.list(), listCategories(ds)]);
+  const expenseGroups = expensesByCategory(transactions, ym, categories);
+  const investByAccount = new Map<string, number>();
+  for (const row of portfolio.rows ?? []) investByAccount.set(row.accountId, (investByAccount.get(row.accountId) ?? 0) + (row.pnl ?? 0));
+  const tradeByAccount = new Map<string, number>();
+  for (const t of trades) {
+    if (t.exitPrice == null) continue;
+    tradeByAccount.set(t.accountId, (tradeByAccount.get(t.accountId) ?? 0) + (Number(t.resultNet) || 0));
+  }
+  const accountPnl = accountsList
+    .map((a) => {
+      const tradingPnl = Number((tradeByAccount.get(a.id) ?? 0).toFixed(2));
+      const investPnl = Number((investByAccount.get(a.id) ?? 0).toFixed(2));
+      return { accountId: a.id, name: a.name, trading: tradingPnl, invest: investPnl, total: Number((tradingPnl + investPnl).toFixed(2)) };
+    })
+    .filter((r) => r.trading !== 0 || r.invest !== 0)
+    .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+
   return {
     netWorth,
     risk: riskSnap,
@@ -130,6 +160,10 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
     cashflowSeries,
     portfolioHistory,
     tradingSeries,
+    payoutEvents,
+    expensesByCategory: expenseGroups,
+    categories,
+    accountPnl,
     generatedAt: nowIso(),
     priceAlerts: await getFiredPriceAlerts(ds),
   };

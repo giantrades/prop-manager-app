@@ -61,6 +61,24 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch S — Home refinada + visualizações (executado)
+- **Home · Contas**: widget com **PnL por conta** (trading + investimentos), ordenado por
+  tamanho — o valor "que vai crescendo". Snapshot ganhou `accountPnl`.
+- **Home · Trading**: área de **PnL acumulado com marcadores de payout/withdrawal**
+  (`payoutEvents` no snapshot).
+- **Home · Investimentos**: **pie chart** de alocação (top símbolos). Snapshot ganhou
+  `expensesByCategory` + `categories` (para pintar).
+- **Home · Gastos**: **donut por categoria** (substitui as barras Entrou×Gastou).
+- **Gastos (page)**: "6 meses" agora é **ComposedChart** (áreas de entradas/gastos + linha
+  de saldo), diferente das barras.
+- **Payouts**: gráfico virou **barras por mês** (page), não mais linha acumulada.
+- **Investimentos Resumo**: novo widget **Alocação** (pie) além da composição por classe.
+- **Actions (explicação)**: são **derivadas** dos flags dos motores — `ActionKind =
+  risk | goal | payout | tax | price` (`buildActions` no `financialIntelligence.ts`). Não são
+  criadas/editadas pelo usuário; hoje dá para **marcar como lida** (gaveta). Criar/editar/
+  silenciar regras vira batch futuro (C-ish).
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch R — Home como cockpit (executado)
 - **Actions/Calendar deixam de ser abas**: nav do Home tem só Home; rotas `/actions` e
   `/calendar` removidas. Viram **widgets** na Home.

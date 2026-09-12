@@ -4,7 +4,7 @@ import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
@@ -23,8 +23,9 @@ export default function InvestmentsDashboardPage() {
       f.ds.positions.list(),
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
+    const allocation = await f.wealth.allocation();
     const payouts = await f.ds.payouts.list();
-    return { nw, snapshots, portfolio, positions, top, payouts };
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation };
   });
 
   const pf = data?.portfolio;
@@ -89,19 +90,49 @@ export default function InvestmentsDashboardPage() {
             {data.top.length > 0 && (
               <div className="dash-section">
                 <div className="dash-title">
-                  <span>Maiores posições</span>
+                  <span>Alocação</span>
                   <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
                 </div>
-                {data.top.map((p) => (
-                  <div key={p.id} className="dash-row">
-                    <span className="dash-row-name">{p.symbol}</span>
-                    <span className="dash-row-sub">{p.qty} un.</span>
-                    <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
-                    <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
+                <div className="inv-alloc">
+                  <ResponsiveContainer width={150} height={150}>
+                    <PieChart>
+                      <Pie
+                        data={(data.allocation?.bySymbol ?? []).slice(0, 7).map((a, i) => ({ ...a, color: ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'][i % 7] }))}
+                        dataKey="value" nameKey="label" innerRadius={42} outerRadius={68} paddingAngle={2}
+                      >
+                        {(data.allocation?.bySymbol ?? []).slice(0, 7).map((a, i) => <Cell key={a.label} fill={['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee'][i % 7]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="inv-legend">
+                    {(data.allocation?.bySymbol ?? []).slice(0, 6).map((a, i) => (
+                      <div key={a.label} className="dash-row">
+                        <span className="inv-dot" style={{ background: ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7'][i % 6] }} />
+                        <span className="dash-row-name">{a.label}</span>
+                        <span className="dash-row-sub">{Math.round((a.pct ?? 0) * 100)}%</span>
+                        <span className="dash-row-val">{fmtMoney(a.value)}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             )}
+
+            <div className="dash-section">
+              <div className="dash-title">
+                <span>Maiores posições</span>
+                <NavLink className="dash-link" to="/portfolio">portfolio →</NavLink>
+              </div>
+              {data.top.map((p) => (
+                <div key={p.id} className="dash-row">
+                  <span className="dash-row-name">{p.symbol}</span>
+                  <span className="dash-row-sub">{p.qty} un.</span>
+                  <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
+                  <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
+                </div>
+              ))}
+            </div>
 
             <div className="dash-section">
               <div className="dash-title">
@@ -161,6 +192,9 @@ const INV_CSS = `
 .inv-span2 { grid-column: 1 / -1; }
 .inv-bar-wrap { flex: 1; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
 .inv-bar { display: block; height: 100%; background: linear-gradient(90deg, #7c5cff, #a78bfa); border-radius: 999px; }
+.inv-alloc { display: flex; align-items: center; gap: 12px; }
+.inv-legend { flex: 1; min-width: 0; }
+.inv-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 @media (max-width: 900px) { .inv-widgets { grid-template-columns: 1fr; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('inv-styles')) {

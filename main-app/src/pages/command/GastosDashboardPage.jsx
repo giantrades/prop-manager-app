@@ -5,7 +5,7 @@
 import React, { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
@@ -172,16 +172,26 @@ export default function GastosDashboardPage() {
             <div className="dash-section">
               <div className="dash-title"><span>Entrou × Gastou (6 meses)</span></div>
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={view.series} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                <ComposedChart data={view.series} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                  <defs>
+                    <linearGradient id="gd-in" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2ecc71" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#2ecc71" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gd-out" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#e74c3c" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#e74c3c" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={52} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
                   <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'R$')} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Entradas" fill="#2ecc71" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Gastos" fill="#e74c3c" radius={[4, 4, 0, 0]} />
+                  <Area type="monotone" dataKey="Entradas" stroke="#2ecc71" fill="url(#gd-in)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Gastos" stroke="#e74c3c" fill="url(#gd-out)" strokeWidth={2} />
                   <Line type="monotone" dataKey="Saldo" stroke="#7c5cff" strokeWidth={2} dot={false} />
-                </BarChart>
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
