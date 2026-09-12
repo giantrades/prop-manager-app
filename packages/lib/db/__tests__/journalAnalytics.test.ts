@@ -13,6 +13,7 @@ import {
   maeMfe,
   weeklyReview,
   tradeReplay,
+  drawdownAnalysis,
 } from '../journalAnalytics';
 import type { Trade } from '../types';
 
@@ -304,3 +305,41 @@ describe('B1 â€” tradeReplay (sequÃªncia temporal)', () => {
   });
 });
 
+
+describe('journalAnalytics — drawdownAnalysis', () => {
+  const t = (id: string, net: number, at: string) => trade({ id, resultNet: net, exitDatetime: at, entryDatetime: at });
+
+  it('detecta drawdown peak->trough e marca não recuperado', () => {
+    const r = drawdownAnalysis([
+      t('d1', 1000, '2026-09-01T12:00:00Z'),
+      t('d2', -3000, '2026-09-05T12:00:00Z'),
+      t('d3', 500, '2026-09-10T12:00:00Z'),
+    ], 10000);
+    // equity: 11000, 8000, 8500
+    expect(r.series.map((s) => s.equity)).toEqual([11000, 8000, 8500]);
+    expect(r.drawdowns).toHaveLength(1);
+    expect(r.drawdowns[0].recovered).toBe(false);
+    expect(r.drawdowns[0].drawdownAbs).toBe(3000);
+    expect(r.drawdowns[0].drawdownPct).toBeCloseTo(27.27, 1);
+    expect(r.maxDD.drawdownAbs).toBe(3000);
+    expect(r.atPeak).toBe(false);
+  });
+
+  it('recuperação fecha o drawdown e volta ao pico', () => {
+    const r = drawdownAnalysis([
+      t('r1', 1000, '2026-09-01T12:00:00Z'),
+      t('r2', -2000, '2026-09-03T12:00:00Z'),
+      t('r3', 2500, '2026-09-08T12:00:00Z'),
+    ], 10000);
+    // equity: 11000, 9000, 11500 -> DD recuperado no 3º
+    expect(r.drawdowns[0].recovered).toBe(true);
+    expect(r.recoveryRate).toBe(100);
+    expect(r.atPeak).toBe(true);
+  });
+
+  it('sem trades retorna série vazia e máximos zerados', () => {
+    const r = drawdownAnalysis([], 5000);
+    expect(r.series).toHaveLength(0);
+    expect(r.maxDD.drawdownPct).toBe(0);
+  });
+});

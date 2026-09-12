@@ -61,6 +61,15 @@ export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay,
     cells.push({ day, info: byDate.get(key) ?? null, isToday: key === today, key });
   }
 
+  // Heat por intensidade (|pnl| relativo ao maior dia do mês), como no app antigo.
+  const maxAbs = Math.max(1, ...data.days.map((d) => Math.abs(d.pnl || 0)));
+  const heatStyle = (info) => {
+    if (!info || !info.pnl) return undefined;
+    const t = Math.min(1, Math.abs(info.pnl) / maxAbs);
+    const alpha = 0.12 + t * 0.5;
+    return { background: info.pnl > 0 ? `rgba(46,204,113,${alpha})` : `rgba(231,76,60,${alpha})` };
+  };
+
   return (
     <div className="pnlcal-root" aria-label={`Calendário de PnL — ${MONTHS_PT[ym.month - 1]} de ${ym.year}`}>
       <div className="pnlcal-head">
@@ -84,6 +93,7 @@ export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay,
           const selected = selectedDay === c.key;
           const cls = `pnlcal-cell${info ? (info.pnl > 0 ? ' pnlcal-pos' : info.pnl < 0 ? ' pnlcal-neg' : ' pnlcal-flat') : ''}${isToday ? ' pnlcal-today' : ''}${selected ? ' pnlcal-selected' : ''}`;
           const tip = info ? `${info.trades} trades • ${info.wins}W/${info.losses}L • ${fmtMoney(info.pnl, currency)}` : 'Sem trades';
+          const style = heatStyle(info);
           const inner = (
             <>
               <span className="pnlcal-day">{day}</span>
@@ -97,6 +107,7 @@ export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay,
                 key={c.key}
                 type="button"
                 className={cls}
+                style={style}
                 title={`${tip} — ver trades`}
                 aria-label={`Ver trades do dia ${c.key}`}
                 aria-pressed={selected}
@@ -107,7 +118,7 @@ export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay,
             );
           }
           return (
-            <div key={c.key} className={cls} title={tip}>
+            <div key={c.key} className={cls} style={style} title={tip}>
               {inner}
             </div>
           );

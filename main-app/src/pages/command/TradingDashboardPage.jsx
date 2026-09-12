@@ -10,8 +10,9 @@ import useEngineData from '../../useEngineData';
 import { fmtMoney } from '@apps/ui/currency';
 import PnLCalendar from '@apps/ui/PnLCalendar';
 import HistogramR from '@apps/ui/HistogramR';
+import DrawdownSection from '@apps/ui/DrawdownSection';
 import {
-  winrate, profitFactor, computeMaxDrawdown, computeTrailingDrawdown,
+  winrate, profitFactor,
 } from '@apps/lib/db';
 
 function fmtPct(v) {
@@ -53,16 +54,7 @@ export default function TradingDashboardPage() {
     const pnlTotal = closed.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
     const roi = capital > 0 ? netPayouts / capital : 0;
     const pf = profitFactor(trades);
-    // Drawdown a partir da curva de equity (fórmula única do motor).
-    const initial = capital > 0 ? capital : 1;
-    let eq = initial;
-    const series = closed
-      .slice()
-      .sort((a, b) => String(a.exitDatetime).localeCompare(String(b.exitDatetime)))
-      .map((t) => { eq += Number(t.resultNet) || 0; return { at: t.exitDatetime, equity: eq }; });
-    const maxDD = computeMaxDrawdown(series, initial);
-    const trailDD = computeTrailingDrawdown(series, initial);
-    return { trades, netPayouts, capital, roi, wr: winrate(trades), pf, pnlTotal, maxDD, trailDD, payoutsCount: payouts.length };
+    return { trades, netPayouts, capital, roi, wr: winrate(trades), pf, pnlTotal, payoutsCount: payouts.length };
   }, [data]);
 
   const series = useMemo(() => {
@@ -149,16 +141,11 @@ export default function TradingDashboardPage() {
           <PnLCalendar trades={data.trades ?? []} loading={false} />
         </div>
         <div className="td-widget">
-          <div className="td-chart-title">Drawdown</div>
-          <div className="td-dd-grid">
-            <div className="td-dd-cell"><span className="td-dd-label">Max DD</span><span className="td-dd-value td-neg">{fmtPct(stats.maxDD)}</span></div>
-            <div className="td-dd-cell"><span className="td-dd-label">DD atual (trailing)</span><span className="td-dd-value td-warn">{fmtPct(stats.trailDD)}</span></div>
-          </div>
-          <div className="td-dd-hint">Drawdown calculado pela curva de equity (fórmula única do motor).</div>
-        </div>
-        <div className="td-widget td-span2">
           <div className="td-chart-title">Histograma de R</div>
           <HistogramR trades={data.trades ?? []} bucketSize={0.5} loading={false} />
+        </div>
+        <div className="td-widget td-span2">
+          <DrawdownSection trades={data.trades ?? []} initialFunding={stats.capital} currency="USD" />
         </div>
       </div>
     </div>

@@ -436,3 +436,106 @@ export function durationStats(trades: Trade[]): DurationStats {
     byDirection: { long: forDir('long'), short: forDir('short') },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Drawdown (análise) — curva de equity dos trades + detecção de drawdowns.
+// Fórmula de risco vem do motor; aqui é agregação/série. Nunca calculado na UI.
+// ---------------------------------------------------------------------------
+
+export interface EquityPointLite { at: string; equity: number }
+export interface DrawdownInfo {
+  id: number;
+  startDate: string;
+  troughDate: string;
+  recoveryDate: string | null;
+  drawdownAbs: number;
+  drawdownPct: number;
+  durationDays: number;
+  recoveryDays: number | null;
+  recovered: boolean;
+}
+export interface DrawdownAnalysis {
+  series: Array<{ at: string; label: string; equity: number }>;
+  underwater: Array<{ label: string; dd: number }>;
+  drawdowns: DrawdownInfo[];
+  maxDD: { drawdownAbs: number; drawdownPct: number };
+  avgDD: number;
+  avgRecoveryDays: number | null;
+  recoveryRate: number;
+  significant: number;
+  atPeak: boolean;
+}
+
+const r2dd = (n: number) => Math.round(n * 100) / 100;
+const daysBetween = (a: string, b: string) => Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
+
+/** Série de equity a partir dos trades fechados + capital inicial. */
+export function drawdownAnalysis(trades: Trade[], initialFunding: number): DrawdownAnalysis {
+  const start = initialFunding > 0 ? initialFunding : 0;
+  const sorted = trades
+    .filter((t) => t.exitDatetime || t.entryDatetime)
+    .slice()
+    .sort((a, b) => String(a.exitDatetime || a.entryDatetime).localeCompare(String(b.exitDatetime || b.entryDatetime)));
+  let eq = start;
+  const series = sorted.map((t) => {
+    eq += Number(t.resultNet) || 0;
+    const at = (t.exitDatetime || t.entryDatetime) as string;
+    const d = new Date(at);
+    const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return { at, label, equity: r2dd(eq) };
+  });
+
+  const drawdowns: DrawdownInfo[] = [];
+  if (series.length > 0) {
+    let peak = series[0].equity; let peakIdx = 0; let troughIdx = 0; let inDD = false;
+    const push = (endIdx: number, recovered: boolean) => {
+      const s = series[peakIdx]; const tr = series[troughIdx];
+      const abs = r2dd(s.equity - tr.equity);
+      const pct = s.equity > 0 ? r2dd((abs / s.equity) * 100) : 0;
+      const end = series[endIdx];
+      drawdowns.push({
+        id: drawdowns.length + 1,
+        startDate: s.label, troughDate: tr.label, recoveryDate: recovered ? end.label : null,
+        drawdownAbs: abs, drawdownPct: pct,
+        durationDays: daysBetween(s.at, end.at),
+        recoveryDays: recovered ? daysBetween(tr.at, end.at) : null,
+        recovered,
+      });
+    };
+    for (let i = 1; i < series.length; i++) {
+      const val = series[i].equity;
+      if (val >= peak) {
+        if (inDD) push(i, true);
+        peak = val; peakIdx = i; inDD = false;
+      } else if (!inDD || val < series[troughIdx].equity) {
+        inDD = true; troughIdx = i;
+      }
+    }
+    if (inDD) push(series.length - 1, false);
+  }
+
+  const drawdownsSorted = drawdowns.slice().sort((a, b) => b.drawdownPct - a.drawdownPct);
+  const maxDD = drawdownsSorted[0] ?? { drawdownAbs: 0, drawdownPct: 0 };
+  const avgDD = drawdowns.length ? r2dd(drawdowns.reduce((s, d) => s + d.drawdownAbs, 0) / drawdowns.length) : 0;
+  const recovered = drawdowns.filter((d) => d.recovered);
+  const avgRecoveryDays = recovered.length ? Math.round(recovered.reduce((s, d) => s + (d.recoveryDays || 0), 0) / recovered.length) : null;
+
+  let peak = -Infinity;
+  const underwater = series.map((p) => {
+    peak = Math.max(peak, p.equity);
+    return { label: p.label, dd: peak > 0 ? r2dd(((p.equity - peak) / peak) * 100) : 0 };
+  });
+
+  const last = series.at(-1)?.equity ?? 0;
+  return {
+    series,
+    underwater,
+    drawdowns: drawdownsSorted,
+    maxDD: { drawdownAbs: maxDD.drawdownAbs ?? 0, drawdownPct: maxDD.drawdownPct ?? 0 },
+    avgDD,
+    avgRecoveryDays,
+    recoveryRate: drawdowns.length ? Math.round((recovered.length / drawdowns.length) * 100) : 0,
+    significant: drawdowns.filter((d) => d.drawdownPct >= 5).length,
+    atPeak: Math.abs(last - Math.max(...series.map((s) => s.equity), start)) < 1e-6,
+  };
+}
