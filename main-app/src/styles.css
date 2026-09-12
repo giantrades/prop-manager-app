@@ -1635,3 +1635,9 @@ select.select option {
 .mj-new-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 2fr auto; gap: 8px; align-items: center; }
 .mj-new-grid .cmd-select { max-width: none; }
 @media (max-width: 900px) { .mj-new-grid { grid-template-columns: 1fr; } }
+
+/* Forecast — parâmetros mensais editáveis */
+.fc-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end; }
+.fc-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted, #a1a7b3); }
+.fc-field .cmd-select { max-width: none; }
+@media (max-width: 700px) { .fc-inputs { grid-template-columns: 1fr; } }

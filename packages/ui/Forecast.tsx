@@ -45,12 +45,20 @@ export default function Forecast({ forecast = null, safeAvailable = null, curren
     <div className="fc-root">
       {/* Forecast 30/60/90 */}
       <div className="fc-horizons">
-        {horizons.map((h) => (
-          <div key={h.label} className="fc-horizon">
-            <div className="fc-horizon-label">{h.label}</div>
-            <div className={`fc-horizon-value ${h.value >= 0 ? 'fc-pos' : 'fc-neg'}`}>{fmtMoney(h.value, currency)}</div>
-          </div>
-        ))}
+        {horizons.map((h, i) => {
+          const delta = i === 0 ? null : h.value - horizons[i - 1].value;
+          return (
+            <div key={h.label} className="fc-horizon">
+              <div className="fc-horizon-label">{h.label}</div>
+              <div className={`fc-horizon-value ${h.value >= 0 ? 'fc-pos' : 'fc-neg'}`}>{fmtMoney(h.value, currency)}</div>
+              {delta != null && (
+                <div className={`fc-horizon-delta ${delta >= 0 ? 'fc-pos' : 'fc-neg'}`}>
+                  {delta >= 0 ? '+' : ''}{fmtMoney(delta, currency)}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="fc-net">Fluxo mensal líquido: <strong>{fmtMoney(forecast.netMonthly, currency)}</strong></div>
@@ -99,6 +107,7 @@ const FC_CSS = `
 .fc-horizon { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; }
 .fc-horizon-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
 .fc-horizon-value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.fc-horizon-delta { font-size: 11px; font-variant-numeric: tabular-nums; margin-top: 2px; opacity: 0.85; }
 .fc-pos { color: var(--green, #2ecc71); }
 .fc-neg { color: var(--red, #e74c3c); }
 

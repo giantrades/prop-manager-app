@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
+import { fmtMoney } from '@apps/ui/currency';
 import { nowIso } from '@apps/lib/db';
 import {
   firmPnlByFirm,
@@ -597,15 +598,84 @@ export function TaxPage() {
 }
 
 export function ForecastPage() {
-  const { loading, data } = useEngineData(async (f) => {
-    const [forecast, safeAvailable] = await Promise.all([f.wealth.forecast(), f.wealth.safeAvailable()]);
-    return { forecast, safeAvailable };
+  const { loading, data, finance, reload } = useEngineData(async (f) => {
+    const [forecast, safeAvailable, inputs, nw] = await Promise.all([
+      f.wealth.forecast(),
+      f.wealth.safeAvailable(),
+      f.wealth.monthlyInputs(),
+      f.wealth.netWorth(),
+    ]);
+    return { forecast, safeAvailable, inputs, cash: nw.components.cash };
   });
+  const financeRef = useRef(finance);
+  financeRef.current = finance;
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data?.inputs && form === null) setForm(data.inputs);
+  }, [data, form]);
+
+  const setF = (k, v) => setForm((f) => ({ ...(f ?? {}), [k]: Number(v) || 0 }));
+  const onSave = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f || !form) return;
+    setSaving(true);
+    try {
+      await f.wealth.setMonthlyInputs(form);
+      reload();
+    } finally {
+      setSaving(false);
+    }
+  }, [form, reload]);
+
+  const forecast = data?.forecast;
+  const net = forecast?.netMonthly ?? 0;
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Forecast</h1></div>
       <ModuleTabs module="gastos" />
-      <Forecast forecast={data?.forecast} safeAvailable={data?.safeAvailable} loading={loading} />
+
+      <div className="dash-cards">
+        <div className="card accent3">
+          <h3>Caixa hoje</h3>
+          <div className="stat">{fmtMoney(data?.cash ?? forecast?.today, 'BRL')}</div>
+          <div className="muted">cash derivado</div>
+        </div>
+        <div className={`card ${net >= 0 ? 'accent1' : 'accent2'}`}>
+          <h3>Fluxo mensal</h3>
+          <div className="stat">{fmtMoney(net, 'BRL')}</div>
+          <div className="muted">líquido/mês</div>
+        </div>
+        <div className="card accent4">
+          <h3>Safe Available</h3>
+          <div className="stat">{fmtMoney(data?.safeAvailable, 'BRL')}</div>
+          <div className="muted">posso comprar isso?</div>
+        </div>
+        <div className="card accent5">
+          <h3>Em 90 dias</h3>
+          <div className="stat">{fmtMoney(forecast?.d90, 'BRL')}</div>
+          <div className="muted">projeção</div>
+        </div>
+      </div>
+
+      <div className="dash-section">
+        <div className="dash-title"><span>Parâmetros mensais</span></div>
+        {form && (
+          <div className="fc-inputs">
+            <label className="fc-field"><span>Renda mensal</span><input className="cmd-select" type="number" value={form.monthlyIncome} onChange={(e) => setF('monthlyIncome', e.target.value)} /></label>
+            <label className="fc-field"><span>Contas fixas</span><input className="cmd-select" type="number" value={form.monthlyBills} onChange={(e) => setF('monthlyBills', e.target.value)} /></label>
+            <label className="fc-field"><span>Reserva de imposto/mês</span><input className="cmd-select" type="number" value={form.monthlyTaxReserve} onChange={(e) => setF('monthlyTaxReserve', e.target.value)} /></label>
+            <label className="fc-field"><span>Aportes/mês</span><input className="cmd-select" type="number" value={form.monthlyContributions} onChange={(e) => setF('monthlyContributions', e.target.value)} /></label>
+            <label className="fc-field"><span>Contas 30d</span><input className="cmd-select" type="number" value={form.next30dBills} onChange={(e) => setF('next30dBills', e.target.value)} /></label>
+            <label className="fc-field"><span>Reserva imposto</span><input className="cmd-select" type="number" value={form.taxReserve} onChange={(e) => setF('taxReserve', e.target.value)} /></label>
+            <button className="cmd-refresh" onClick={onSave} disabled={saving}>{saving ? 'Salvando…' : 'Salvar e recalcular'}</button>
+          </div>
+        )}
+      </div>
+
+      <Forecast forecast={forecast} safeAvailable={data?.safeAvailable} loading={loading} />
     </div>
   );
 }
