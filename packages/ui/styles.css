@@ -4982,3 +4982,15 @@ body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 
 /* Forms — títulos com ícone */
 .ex-sheet-title, .ac3-sheet-title, .py-sheet-title { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Notificações — item com ação manual + criar lembrete */
+.nb-item { display: flex; align-items: center; gap: 4px; }
+.nb-item-main { display: flex; gap: 10px; align-items: flex-start; flex: 1; background: transparent; border: none; color: inherit; text-align: left; cursor: pointer; padding: 6px; border-radius: 10px; }
+.nb-item-main:hover { background: rgba(255,255,255,0.04); }
+.nb-item-del { width: 30px; height: 30px; color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.3); }
+.nb-create { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); }
+.nb-input { flex: 1; background: #111623; border: 1px solid #273044; border-radius: 9px; padding: 8px 10px; color: var(--text, #e7eaf0); font-size: 12px; min-height: 38px; font-family: inherit; }
+.nb-create-row { display: flex; gap: 6px; align-items: center; }
+.nb-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border: none; color: #fff; }
+.pf-alloc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 800px) { .pf-alloc-grid { grid-template-columns: 1fr; } }

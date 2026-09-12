@@ -88,7 +88,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const { currency, setCurrency, rate } = useCurrency();
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
     usePlatform();
-  const { actions } = useCommandSnapshot();
+  const { actions, addManualAction, removeManualAction } = useCommandSnapshot();
   const { unread, markRead, markAllRead } = useReadNotifications(actions);
   const alertCount = unread.length;
   const navigate = useNavigate();
@@ -477,7 +477,9 @@ export default function Navbar({ isPinned, onTogglePin }) {
         items={unread}
         onRead={markRead}
         onReadAll={markAllRead}
-        onGoActions={() => { setNotifOpen(false); navigate('/actions'); }}
+        onGoActions={() => { setNotifOpen(false); navigate('/settings'); }}
+        onCreate={(title, severity) => { addManualAction({ title, severity }); markAllRead(); }}
+        onDelete={(id) => removeManualAction(id)}
       />
     </>
   );

@@ -25,12 +25,14 @@ import { computeFirmPnl, monthlySeries, expensesByCategory, listCategories } fro
 import { nowIso } from './dateUtils';
 import type { Payout, Trade, Transaction } from './types';
 
+/** Arredonda 2 casas (helper local de composição). */
+const r2fi = (n: number): number => Math.round(n * 100) / 100;
+
 // ---------------------------------------------------------------------------
 // FinanceServices — contratos dos motores consumidos (injetados, não criados aqui)
 // ---------------------------------------------------------------------------
 
-export interface FinanceServices {
-  ds: DataService;
+export interface FinanceServices {  ds: DataService;
   money: MoneyService;
   wealth: WealthService;
   risk: RiskService;
@@ -67,6 +69,8 @@ export interface CommandSnapshot {
   categories: Array<{ id: string; name: string; icon: string; color: string }>;
   /** PnL por conta (trading + investimentos), ordenado por total. */
   accountPnl: Array<{ accountId: string; name: string; trading: number; invest: number; total: number }>;
+  /** Alocação do patrimônio por classe (Renda variável, Cripto, Renda fixa, Imóveis/Outros, Dinheiro). */
+  assetClasses: Array<{ key: string; label: string; value: number }>;
   generatedAt: string;
 }
 
@@ -143,6 +147,25 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
     .filter((r) => r.trading !== 0 || r.invest !== 0)
     .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 
+  // Alocação por classe (patrimônio): classe do ativo + dinheiro das carteiras.
+  const acctKind = new Map(accountsList.map((a) => [a.id, a.kind]));
+  const cls = { equity: 0, crypto: 0, fixed: 0, other: 0, cash: 0 };
+  for (const row of portfolio.rows ?? []) {
+    const kind = acctKind.get(row.accountId);
+    if (kind === 'crypto') cls.crypto += row.marketValue ?? 0;
+    else if (row.assetKind === 'fixed') cls.fixed += row.marketValue ?? 0;
+    else if (row.assetKind === 'other') cls.other += row.marketValue ?? 0;
+    else cls.equity += row.marketValue ?? 0;
+  }
+  for (const w of walletSummary) cls.cash += w.balance ?? 0;
+  const assetClasses = [
+    { key: 'equity', label: 'Renda variável', value: r2fi(cls.equity) },
+    { key: 'crypto', label: 'Cripto', value: r2fi(cls.crypto) },
+    { key: 'fixed', label: 'Renda fixa', value: r2fi(cls.fixed) },
+    { key: 'other', label: 'Imóveis/Outros', value: r2fi(cls.other) },
+    { key: 'cash', label: 'Dinheiro', value: r2fi(cls.cash) },
+  ].filter((c) => c.value > 0);
+
   return {
     netWorth,
     risk: riskSnap,
@@ -164,6 +187,7 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
     expensesByCategory: expenseGroups,
     categories,
     accountPnl,
+    assetClasses,
     generatedAt: nowIso(),
     priceAlerts: await getFiredPriceAlerts(ds),
   };
@@ -323,7 +347,7 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
 // Action Center — flags de ações (só leitura de booleans expostos pelos motores)
 // ---------------------------------------------------------------------------
 
-export type ActionKind = 'risk' | 'goal' | 'payout' | 'tax' | 'price';
+export type ActionKind = 'risk' | 'goal' | 'payout' | 'tax' | 'price' | 'manual';
 export type ActionSeverity = 'warn' | 'info' | 'good';
 
 export interface ActionItem {

@@ -8,7 +8,10 @@
 import { fmtMoney as fmtMoneyShared } from './currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import AllocationPie from './AllocationPie';
+
+const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#f7931a', '#e74c3c', '#a855f7', '#22d3ee'];
 
 
 function fmtPct(value) {
@@ -130,38 +133,26 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
         </div>
       )}
 
-      {/* Alocação / concentração */}
-      {show('allocation') && allocation && allocation.bySymbol.length > 0 && (
+      {/* Alocação / concentração — pies por ativo e por conta */}
+      {show('allocation') && allocation && (allocation.bySymbol.length > 0 || (allocation.byAccount ?? []).length > 0) && (
         <div className="pf-section">
           <div className="pf-section-title">
             Alocação
-            {allocation.topPct >= 0.5 && (
-              <span className="pf-conc-badge">alta concentração</span>
+            {allocation.topPct >= 0.5 && <span className="pf-conc-badge">alta concentração</span>}
+          </div>
+          <div className="pf-alloc-grid">
+            <AllocationPie
+              title="Por ativo"
+              currency={currency}
+              data={(allocation.bySymbol ?? []).slice(0, 8).map((a, i) => ({ label: a.label, value: a.value, color: PALETTE[i % PALETTE.length] }))}
+            />
+            {(allocation.byAccount ?? []).length > 0 && (
+              <AllocationPie
+                title="Por conta"
+                currency={currency}
+                data={(allocation.byAccount ?? []).slice(0, 8).map((a, i) => ({ label: a.label, value: a.value, color: PALETTE[i % PALETTE.length] }))}
+              />
             )}
-          </div>
-          <div className="pf-pie">
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={allocation.bySymbol.slice(0, 8)} dataKey="value" nameKey="label" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                  {allocation.bySymbol.slice(0, 8).map((a, i) => (
-                    <Cell key={a.label} fill={['var(--brand, #7c5cff)', 'var(--green, #2ecc71)', 'var(--blue, #3498db)', 'var(--yellow, #e1b12c)', 'var(--red, #e74c3c)', '#a78bfa', '#82e0aa', '#f39c12'][i % 8]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#a1a7b3' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="pf-alloc">
-            {allocation.bySymbol.slice(0, 6).map((a) => (
-              <div key={a.label} className="pf-alloc-row">
-                <span className="pf-alloc-label">{a.label}</span>
-                <span className="pf-alloc-bar-wrap">
-                  <span className="pf-alloc-bar" style={{ width: `${(a.pct * 100).toFixed(1)}%` }} />
-                </span>
-                <span className="pf-alloc-pct">{fmtPct(a.pct)}</span>
-              </div>
-            ))}
           </div>
         </div>
       )}

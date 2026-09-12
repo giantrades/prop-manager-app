@@ -18,6 +18,7 @@ const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
 const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
 const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
 const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'];
+const CLASS_COLORS = { equity: '#7c5cff', crypto: '#f7931a', fixed: '#3498db', other: '#e1b12c', cash: '#2ecc71' };
 const CAT_COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
 
 function Widget({ id, title, to = null, hide, children }) {
@@ -53,16 +54,15 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const history = snapshot.portfolioHistory ?? [];
   const pending = snapshot.pendingPayouts ?? [];
   const firms = (snapshot.firmPnl ?? []).filter((f) => f.profit !== 0).slice(0, 4);
-  const rc = risk?.counts ?? { SAFE: 0, WARN: 0, STOP: 0 };
-
   const catList = (snapshot.categories ?? []) as Array<{ id: string; name: string; color?: string }>;
   const catById = new Map<string, { name: string; color?: string }>(catList.map((c) => [c.id, c]));
   const expensePie = (snapshot.expensesByCategory ?? []).slice(0, 7).map((g, i) => {
     const c = catById.get(g.categoryId);
     return { name: c?.name ?? g.categoryId, value: g.total, color: CAT_COLORS[c?.color] || PALETTE[i % PALETTE.length] };
   });
-  const allocPie = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 7)
-    .map((r, i) => ({ name: r.symbol, value: r.marketValue, color: PALETTE[i % PALETTE.length] }));
+  const assetClasses = (snapshot.assetClasses ?? []) as Array<{ key: string; label: string; value: number }>;
+  const classTotal = assetClasses.reduce((s, c) => s + (c.value || 0), 0);
+  const classPie = assetClasses.map((c, i) => ({ name: c.label, value: c.value, color: CLASS_COLORS[c.key] || PALETTE[i % PALETTE.length] }));
   const payoutMonths = [...new Set((snapshot.payoutEvents ?? []).map((p) => String(p.date).slice(0, 7)))]
     .map((ym) => ({ label: shortYm(ym), value: (trading.find((t) => t.ym === ym) ?? {}).pnl }))
     .filter((m) => m.value != null);
@@ -95,7 +95,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">PnL hoje</span><span className="hc-stat-value" style={{ color: risk.pnlToday >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(risk.pnlToday, 'USD')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Hoje</span><span className="hc-stat-value">{risk.tradesToday.win}W / {risk.tradesToday.loss}L</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Risco</span><span className="hc-stat-value">{rc.STOP} STOP · {rc.WARN} WARN</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Acumulado</span><span className="hc-stat-value">{fmtMoney(trading.length ? trading[trading.length - 1].pnl : 0, 'USD')}</span></div>
           </div>
           {trading.length > 1 && (
             <ResponsiveContainer width="100%" height={150}>
@@ -144,29 +144,29 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           ) : <div className="hc-empty">Sem despesas neste mês.</div>}
         </Widget>
 
-        <Widget id="investments" title="Investimentos" to="/investimentos" hide={hide}>
+        <Widget id="investments" title="Patrimônio por classe" to="/investimentos" hide={hide}>
           <div className="hc-stats">
-            <div className="hc-stat"><span className="hc-stat-label">Atual</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth)}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl)} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Posições</span><span className="hc-stat-value">{(portfolio.rows ?? []).length}</span></div>
           </div>
-          {allocPie.length > 0 ? (
+          {classPie.length > 0 ? (
             <div className="hc-pie">
-              <ResponsiveContainer width={140} height={140}>
+              <ResponsiveContainer width={150} height={150}>
                 <PieChart>
-                  <Pie data={allocPie} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64} paddingAngle={2}>
-                    {allocPie.map((d) => <Cell key={d.name} fill={d.color} />)}
+                  <Pie data={classPie} dataKey="value" nameKey="name" innerRadius={46} outerRadius={70} paddingAngle={2}>
+                    {classPie.map((d) => <Cell key={d.name} fill={d.color} />)}
                   </Pie>
                   <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v)} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="hc-legend">
-                {allocPie.slice(0, 5).map((d) => (
-                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{fmtMoney(d.value)}</span></div>
+                {classPie.map((d) => (
+                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{classTotal > 0 ? Math.round((d.value / classTotal) * 100) : 0}%</span></div>
                 ))}
               </div>
             </div>
-          ) : <div className="hc-empty">Nenhuma posição cadastrada.</div>}
+          ) : <div className="hc-empty">Cadastre posições/contas para ver a alocação.</div>}
         </Widget>
 
         <Widget id="payouts" title="Contas (PnL por conta)" to="/contas" hide={hide}>
@@ -258,8 +258,11 @@ const HC_CSS = `
 .hc-hero-cell-label { font-size: 11px; color: var(--muted, #a1a7b3); }
 .hc-hero-cell-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.hc-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
-.hc-widget { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.hc-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.hc-widget { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); min-height: 260px; }
+.hc-widget > .hc-pie { flex: 1; align-items: center; }
+.hc-widget > .hc-goals { flex: 1; }
+.hc-widget > .hc-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
 .hc-widget-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .hc-widget-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin: 0; }
 .hc-widget-link { font-size: 11px; font-weight: 700; color: var(--brand, #7c5cff); }

@@ -1,7 +1,7 @@
 // Gaveta de notificações (ações em aberto). Abre pela navbar; ao ler, o item sai e o
 // sinal some. COMPOSIÇÃO — os itens vêm prontos do Command Center (nenhum cálculo aqui).
-import React from 'react';
-import { X, Bell, CheckCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Bell, CheckCheck, Plus, Trash2 } from 'lucide-react';
 
 const SEVERITY_META = {
   warn: { label: 'Atenção', color: 'var(--red, #e74c3c)', dot: '#e74c3c' },
@@ -18,7 +18,10 @@ const SEVERITY_META = {
  * @param {()=>void} [props.onReadAll]
  * @param {()=>void} [props.onGoActions] — abrir o Action Center completo
  */
-export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions }) {
+export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions, onCreate, onDelete }) {
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [severity, setSeverity] = useState('info');
   if (!open) return null;
   const order = { warn: 0, info: 1, good: 2 };
   const sorted = [...items].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
@@ -43,21 +46,47 @@ export default function NotificationsDrawer({ open, onClose, items = [], onRead,
           ) : sorted.map((a) => {
             const meta = SEVERITY_META[a.severity] || SEVERITY_META.info;
             return (
-              <button key={a.id} type="button" className={`nb-item nb-${a.severity}`} onClick={() => onRead?.(a.id)} title="Marcar como lida">
-                <span className="nb-dot" style={{ background: meta.dot }} aria-hidden="true" />
-                <span className="nb-item-body">
-                  <span className="nb-item-title">{a.title}</span>
-                  <span className="nb-item-detail">{a.detail}</span>
-                  <span className="nb-item-source">fonte: {a.source}</span>
-                </span>
-              </button>
+              <div key={a.id} className={`nb-item nb-${a.severity}`}>
+                <button type="button" className="nb-item-main" onClick={() => onRead?.(a.id)} title="Marcar como lida">
+                  <span className="nb-dot" style={{ background: meta.dot }} aria-hidden="true" />
+                  <span className="nb-item-body">
+                    <span className="nb-item-title">{a.title}</span>
+                    <span className="nb-item-detail">{a.detail}</span>
+                    <span className="nb-item-source">{a.kind === 'manual' ? 'lembrete' : `fonte: ${a.source}`}</span>
+                  </span>
+                </button>
+                {a.kind === 'manual' && onDelete && (
+                  <button type="button" className="nb-icon nb-item-del" onClick={() => onDelete(a.id)} aria-label={`Excluir ${a.title}`}><Trash2 size={13} /></button>
+                )}
+              </div>
             );
           })}
+
+          {onCreate && (
+            <div className="nb-create">
+              {showForm ? (
+                <>
+                  <input className="nb-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Novo lembrete (ex.: pagar DARF)" aria-label="Título do lembrete" />
+                  <div className="nb-create-row">
+                    <select className="nb-input" value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Severidade">
+                      <option value="warn">Atenção</option>
+                      <option value="info">Info</option>
+                      <option value="good">Ok</option>
+                    </select>
+                    <button className="nb-btn nb-btn-primary" disabled={!title.trim()} onClick={() => { onCreate(title.trim(), severity); setTitle(''); setShowForm(false); }}>Adicionar</button>
+                    <button className="nb-btn nb-btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
+                  </div>
+                </>
+              ) : (
+                <button className="nb-btn nb-btn-ghost" onClick={() => setShowForm(true)}><Plus size={14} /> Nova ação / lembrete</button>
+              )}
+            </div>
+          )}
         </div>
 
         {onGoActions && (
           <div className="nb-foot">
-            <button className="nb-btn nb-btn-ghost" onClick={onGoActions}>Abrir Action Center</button>
+            <button className="nb-btn nb-btn-ghost" onClick={onGoActions}>Configurar ações</button>
           </div>
         )}
       </aside>

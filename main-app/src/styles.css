@@ -1653,3 +1653,5 @@ select.select option {
 .hm-quick { display: flex; gap: 8px; flex-wrap: wrap; }
 .hm-quick-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 700; min-height: 40px; }
 .hm-quick-btn:hover { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); }
+.st-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text, #e7eaf0); min-height: 36px; cursor: pointer; }
+.st-check input { width: 18px; height: 18px; accent-color: var(--brand, #7c5cff); }

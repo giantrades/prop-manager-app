@@ -12,7 +12,40 @@ import PlatformStatusIndicator from '@apps/ui/PlatformStatusIndicator';
 import { useToast } from '@apps/ui/Toast';
 import { usePush } from '../../usePush';
 import { usePlatform } from '@apps/state';
+import { useCommandSnapshot } from '@apps/state';
 import { useDrive } from '@apps/state/DriveContext';
+import { ALL_ACTION_KINDS, ACTION_KIND_LABEL, getActionRules } from '@apps/lib/db';
+
+function ActionRulesCard() {
+  const finance = useFinance();
+  const { updateActionRules } = useCommandSnapshot();
+  const [enabled, setEnabled] = useState(null);
+  useEffect(() => {
+    if (!finance) return;
+    let alive = true;
+    getActionRules(finance.ds).then((r) => { if (alive) setEnabled(r.enabled); }).catch(() => setEnabled(ALL_ACTION_KINDS));
+    return () => { alive = false; };
+  }, [finance]);
+
+  const toggle = (k) => {
+    const next = (enabled ?? []).includes(k) ? (enabled ?? []).filter((x) => x !== k) : [...(enabled ?? []), k];
+    setEnabled(next);
+    updateActionRules({ enabled: next });
+  };
+
+  return (
+    <div className="st-card">
+      <div className="st-title">Ações / notificações</div>
+      <p className="st-hint">Escolha quais regras geram notificação na Home e na gaveta da navbar.</p>
+      {ALL_ACTION_KINDS.map((k) => (
+        <label key={k} className="st-check">
+          <input type="checkbox" checked={(enabled ?? ALL_ACTION_KINDS).includes(k)} onChange={() => toggle(k)} />
+          {ACTION_KIND_LABEL[k] ?? k}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 function ConnectionsCard() {
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
@@ -221,6 +254,7 @@ export default function SettingsPage() {
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
       <ModuleTabs module="system" />
       <ConnectionsCard />
+      <ActionRulesCard />
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">

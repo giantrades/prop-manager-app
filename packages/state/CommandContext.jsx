@@ -9,7 +9,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFinance } from './FinanceContext';
-import { buildCommandSnapshot, buildActions, generateInsights } from '@apps/lib/db';
+import { buildCommandSnapshot, buildActions, generateInsights, getActionRules, listManualActions, saveManualAction, deleteManualAction, setActionRules } from '@apps/lib/db';
 
 const CommandContext = createContext({
   loading: true,
@@ -41,7 +41,12 @@ export function CommandProvider({ children }) {
     setState((s) => ({ ...s, loading: true }));
     try {
       const snapshot = await buildCommandSnapshot(f);
-      const actions = buildActions(snapshot);
+      const [rules, manual] = await Promise.all([getActionRules(f.ds), listManualActions(f.ds)]);
+      const derived = buildActions(snapshot).filter((a) => rules.enabled.includes(a.kind));
+      const manualItems = manual.map((m) => ({
+        id: m.id, kind: 'manual', severity: m.severity, title: m.title, detail: m.detail ?? '', source: 'manual',
+      }));
+      const actions = [...manualItems, ...derived];
       const insights = generateInsights(snapshot);
       setState({ loading: false, snapshot, actions, insights, error: null });
     } catch (err) {
@@ -65,7 +70,28 @@ export function CommandProvider({ children }) {
     return off;
   }, [finance, refresh]);
 
-  const value = useMemo(() => ({ ...state, refresh }), [state, refresh]);
+  const value = useMemo(() => ({
+    ...state,
+    refresh,
+    addManualAction: async (action) => {
+      const f = financeRef.current;
+      if (!f) return;
+      await saveManualAction(f.ds, action);
+      refresh();
+    },
+    removeManualAction: async (id) => {
+      const f = financeRef.current;
+      if (!f) return;
+      await deleteManualAction(f.ds, id);
+      refresh();
+    },
+    updateActionRules: async (rules) => {
+      const f = financeRef.current;
+      if (!f) return;
+      await setActionRules(f.ds, rules);
+      refresh();
+    },
+  }), [state, refresh]);
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;
 }
