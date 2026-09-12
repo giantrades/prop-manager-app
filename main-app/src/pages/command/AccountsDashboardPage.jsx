@@ -6,6 +6,7 @@ import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import FirmPnl from '@apps/ui/FirmPnl';
+import WidgetGrid from '@apps/ui/WidgetGrid';
 import { fmtMoney } from '@apps/ui/currency';
 import { firmPnlByFirm, firmPnlHistory, listFirms, computeAccountBalance } from '@apps/lib/db';
 
@@ -83,8 +84,8 @@ export default function AccountsDashboardPage() {
             <StatCard label="Firms" value={String((data.firms ?? []).length)} sub="empresas cadastradas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
           </div>
 
-          <div className="ad-widgets">
-            <div className="dash-section">
+          <WidgetGrid storageKey="contas">
+            <div className="dash-section" key="bykind">
               <div className="dash-title">
                 <span>Contas por tipo</span>
                 <NavLink className="dash-link" to="/accounts">gerenciar →</NavLink>
@@ -100,7 +101,7 @@ export default function AccountsDashboardPage() {
             </div>
 
             {data.firmsPnl.length > 0 && (
-              <div className="dash-section">
+              <div className="dash-section" key="firms">
                 <div className="dash-title">
                   <span>P&L por firm</span>
                   <NavLink className="dash-link" to="/firms">firms →</NavLink>
@@ -108,7 +109,7 @@ export default function AccountsDashboardPage() {
                 <FirmPnl rows={data.firmsPnl} history={data.history} colorById={Object.fromEntries((data.firms ?? []).map((f) => [f.id, f.color]))} loading={false} />
               </div>
             )}
-          </div>
+          </WidgetGrid>
         </>
       )}
     </div>

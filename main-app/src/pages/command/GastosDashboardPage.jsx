@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
+import WidgetGrid from '@apps/ui/WidgetGrid';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase,
@@ -133,8 +134,8 @@ export default function GastosDashboardPage() {
           </div>
 
           {/* Gráficos */}
-          <div className="gd-charts">
-            <div className="dash-section">
+          <WidgetGrid storageKey="gastos">
+            <div className="dash-section" key="donut">
               <div className="dash-title"><span>Gastos por categoria</span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>limpar filtro</button>}</div>
               {donut.length === 0 ? (
                 <div className="gd-empty">Sem despesas neste mês.</div>
@@ -169,7 +170,7 @@ export default function GastosDashboardPage() {
               )}
             </div>
 
-            <div className="dash-section">
+            <div className="dash-section" key="cashflow">
               <div className="dash-title"><span>Entrou × Gastou (6 meses)</span></div>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={view.series} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
@@ -194,12 +195,9 @@ export default function GastosDashboardPage() {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-          </div>
 
-          {/* Listas */}
-          <div className="gd-lists">
             {view.bills.length > 0 && (
-              <div className="dash-section">
+              <div className="dash-section" key="bills">
                 <div className="dash-title"><span>Próximas contas</span><NavLink className="dash-link" to="/expenses">gerenciar →</NavLink></div>
                 {view.bills.map((b) => (
                   <div key={b.tx.id} className={`gd-row${b.overdue ? ' gd-row-late' : ''}`}>
@@ -213,7 +211,7 @@ export default function GastosDashboardPage() {
             )}
 
             {view.merchants.length > 0 && (
-              <div className="dash-section">
+              <div className="dash-section" key="merchants">
                 <div className="dash-title"><span>Onde mais gastei</span></div>
                 {view.merchants.map((m) => (
                   <div key={m.name} className="gd-row">
@@ -226,7 +224,7 @@ export default function GastosDashboardPage() {
               </div>
             )}
 
-            <div className="dash-section">
+            <div className="dash-section" key="recent">
               <div className="dash-title"><span>Últimos lançamentos</span><NavLink className="dash-link" to="/expenses">ver todos →</NavLink></div>
               {view.recent.length === 0 ? (
                 <div className="gd-empty">Nada lançado neste mês.</div>
@@ -244,7 +242,7 @@ export default function GastosDashboardPage() {
             </div>
 
             {view.cards.length > 0 && (
-              <div className="dash-section">
+              <div className="dash-section" key="cards">
                 <div className="dash-title"><span>Cartões de crédito</span></div>
                 {view.cards.map((c) => (
                   <div key={c.card} className="gd-card-row">
@@ -261,7 +259,7 @@ export default function GastosDashboardPage() {
                 ))}
               </div>
             )}
-          </div>
+          </WidgetGrid>
         </>
       )}
     </div>

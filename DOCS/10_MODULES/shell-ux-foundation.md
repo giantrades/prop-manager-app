@@ -61,6 +61,16 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch U — reordenar/redimensionar widgets (executado)
+- **`WidgetGrid`** (`packages/ui`): grade de 2 colunas com **arrastar para reordenar** e
+  **largura 1x/2x** por widget, persistido por página (`widgetLayout:<key>`). Aceita `items`
+  ou `children` com `key` (+ `data-span={2}`).
+- Aplicado nos resumos: **Trading** (calendário/histograma/drawdown), **Investimentos**
+  (classe/ativo/posições/payouts/evolução), **Gastos** (donut/cashflow/contas/cartões/…),
+  **Contas** (por tipo/P&L por firm), **Planejamento** (marcos/metas).
+- Home mantém o "Personalizar" (mostrar/ocultar); reorder na Home fica como próximo passo.
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch T — Investimentos unificado + pies (executado)
 - **Resumo = visão geral do Portfolio**: `InvestimentosDashboardPage` agora traz KPIs +
   **pies por classe** (Renda variável, Renda fixa, Cripto, Imóveis/Outros) e **por ativo**,

@@ -10,6 +10,7 @@ import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
+import WidgetGrid from '@apps/ui/WidgetGrid';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -105,54 +106,49 @@ export default function InvestmentsDashboardPage() {
             </div>
           </div>
 
-          <div className="inv-pies">
-            <div className="dash-section">
-              <AllocationPie title="Por classe" data={classData} emptyLabel="Cadastre posições para ver a alocação por classe." />
-            </div>
-            <div className="dash-section">
-              <AllocationPie title="Por ativo" data={symbolData} emptyLabel="Sem posições." />
-            </div>
-          </div>
-
-          <div className="inv-widgets">
-            <div className="dash-section">
-              <div className="dash-title">
-                <span>Maiores posições</span>
-                <NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink>
-              </div>
-              {data.top.length === 0 ? <div className="muted">Sem posições.</div> : data.top.map((p) => (
-                <div key={p.id} className="dash-row">
-                  <span className="dash-row-name">{p.symbol}</span>
-                  <span className="dash-row-sub">{p.qty} un.</span>
-                  <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
-                  <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="dash-section">
-              <div className="dash-title">
-                <span>Payouts por mês</span>
-                <NavLink className="dash-link" to="/payouts">payouts →</NavLink>
-              </div>
-              {payoutSeries.length > 1 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
-                    <Bar dataKey="payout" name="Payouts" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <div className="muted">Sem payouts ainda.</div>}
-            </div>
-
-            <div className="dash-section inv-span2">
-              <div className="dash-title"><span>Evolução do patrimônio</span></div>
-              <NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} />
-            </div>
-          </div>
+          <WidgetGrid
+            storageKey="investimentos"
+            items={[
+              { id: 'class', node: (<div className="dash-section"><AllocationPie title="Por classe" data={classData} emptyLabel="Cadastre posições para ver a alocação por classe." /></div>) },
+              { id: 'symbol', node: (<div className="dash-section"><AllocationPie title="Por ativo" data={symbolData} emptyLabel="Sem posições." /></div>) },
+              {
+                id: 'top',
+                node: (
+                  <div className="dash-section">
+                    <div className="dash-title"><span>Maiores posições</span><NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink></div>
+                    {data.top.length === 0 ? <div className="muted">Sem posições.</div> : data.top.map((p) => (
+                      <div key={p.id} className="dash-row">
+                        <span className="dash-row-name">{p.symbol}</span>
+                        <span className="dash-row-sub">{p.qty} un.</span>
+                        <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
+                        <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                id: 'payouts',
+                node: (
+                  <div className="dash-section">
+                    <div className="dash-title"><span>Payouts por mês</span><NavLink className="dash-link" to="/payouts">payouts →</NavLink></div>
+                    {payoutSeries.length > 1 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                          <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                          <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                          <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
+                          <Bar dataKey="payout" name="Payouts" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : <div className="muted">Sem payouts ainda.</div>}
+                  </div>
+                ),
+              },
+              { id: 'evolution', defaultSpan: 2, node: (<div className="dash-section"><div className="dash-title"><span>Evolução do patrimônio</span></div><NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} /></div>) },
+            ]}
+          />
         </>
       )}
     </div>

@@ -7,6 +7,7 @@ import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
+import WidgetGrid from '@apps/ui/WidgetGrid';
 
 
 export default function PlanningDashboardPage() {
@@ -52,7 +53,8 @@ export default function PlanningDashboardPage() {
             </div>
           </div>
 
-          <div className="dash-section">
+          <WidgetGrid storageKey="planejamento">
+          <div className="dash-section" key="marcos">
             <div className="dash-title">
               <span>Marcos recentes</span>
               <NavLink className="dash-link" to="/journal-events">ver todos →</NavLink>
@@ -68,13 +70,14 @@ export default function PlanningDashboardPage() {
             ))}
           </div>
 
-          <div className="dash-section">
+          <div className="dash-section" key="metas">
             <div className="dash-title">
               <span>Metas</span>
               <NavLink className="dash-link" to="/goals">gerenciar →</NavLink>
             </div>
             <Goals goals={goals} loading={false} />
           </div>
+          </WidgetGrid>
         </>
       )}
     </div>
