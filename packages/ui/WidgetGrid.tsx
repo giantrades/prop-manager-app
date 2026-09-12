@@ -98,7 +98,7 @@ const WG_CSS = `
 .wg-handle { cursor: grab; }
 .wg-handle:active { cursor: grabbing; }
 .wg-size { font-size: 11px; font-weight: 800; }
-@media (max-width: 900px) { .wg { grid-template-columns: 1fr; } .wg-span2 { grid-column: auto; } }
+@media (max-width: 900px) { .wg { grid-template-columns: 1fr; } .wg-span2 { grid-column: auto; } .wg-tools { display: none; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('wg-styles')) {
   const style = document.createElement('style');
