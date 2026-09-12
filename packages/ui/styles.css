@@ -4931,3 +4931,44 @@ select.payouts-input {
 /* Accounts master-detail â€” lado a lado no desktop, empilhado no mobile */
 .cmd-page .ac2-master-detail { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 1023px) { .cmd-page .ac2-master-detail { grid-template-columns: 1fr; } }
+
+/* ============================================================
+   GLASS GLOBAL — padroniza os "surfaces" neutros do app com o
+   mesmo glassmorphism (gradiente + borda + sombra + blur) dos
+   cards do Trading/Contas. Seletor com `body` p/ vencer o CSS
+   embarcado dos componentes. NÃO toca superfícies semânticas
+   (accent1..17, hc-quad-risk, ex-bills, py-sum-fee, etc.).
+   ============================================================ */
+body .jd-chart,
+body .jd-cards > .jd-card,
+body .ex-section,
+body .gl-card,
+body .fj-card,
+body .wl-card,
+body .wl-total-card,
+body .tx-detail,
+body .fc-chart,
+body .fc-horizon,
+body .ac-item,
+body .tr-item,
+body .tr-table-wrap,
+body .tr-card,
+body .lp-list,
+body .go-sum-card,
+body .st-card,
+body .pcc-card,
+body .firm-card,
+body .dash-section,
+body .mj-new,
+body .rp-widgets .dash-section,
+body .ad-widgets .dash-section,
+body .inv-widgets .dash-section,
+body .td-widget,
+body .payouts-page .card:not([class*="accent"]) {
+  background: linear-gradient(180deg, #161b25 0%, #131825 100%);
+  border: 1px solid #1a2232;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}

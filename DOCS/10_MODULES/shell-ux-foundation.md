@@ -61,6 +61,22 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch O — 4 pontos de acabamento (executado)
+- **O1 Trades estilo app antigo** (`Trades.tsx`): tabela com colunas ordenáveis, paginação
+  (15/página), busca, tags, badge de firm (ícone/cor) e lado; cards no mobile; replay
+  expansível. Stats (Trades/Winrate/Avg R/PnL) no topo. `JournalPage` passa `firms`.
+- **O2 Forecast útil** (`ForecastPage`): cards (caixa hoje, fluxo mensal, safe available,
+  90d) + **parâmetros mensais editáveis** (renda, contas, imposto, aportes, contas 30d,
+  reserve) salvos no motor (`setMonthlyInputs`) e recalculados; deltas 30/60/90 no gráfico.
+- **O3 Widgets antigos** (`DrawdownSection.tsx`): métricas (Max/Avg/Recovery/Status), gráfico
+  **underwater**, piores drawdowns com paginação e insights. Lógica no motor
+  (`drawdownAnalysis` em `journalAnalytics.ts` + teste). Calendário de PnL ganhou **heat por
+  intensidade**. Widgets no Resumo do Trading, lado a lado.
+- **O4 Glass global**: bloco em `packages/ui/styles.css` (seletor `body ...`) padroniza os
+  "surfaces" neutros (sections/cards de todos os módulos) com o mesmo glassmorphism
+  (gradiente + borda + sombra + blur), sem tocar superfícies semânticas/acentos.
+- Gate: `tsc` 0 + build verde + 237 testes verdes.
+
 ## Batch N — reestruturação de abas + widgets (executado)
 - **Trading**: abas Resumo | Journal | Positions (Risk removido). Resumo enxuto: cards glass
   (PnL, winrate, PF, capital, payouts, ROI) + gráfico **PnL acumulado com marcadores de
