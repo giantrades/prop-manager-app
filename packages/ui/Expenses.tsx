@@ -941,7 +941,7 @@ export default function Expenses({
                   <span className="ex-group-total ex-pos-t">{fmtMoney(g.total, currency)}</span>
                 </div>
                 {items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={meta.label} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} />
+                  <TxRow key={t.id} t={t} currency={currency} label={meta.label} icon={meta.icon} color={meta.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} />
                 ))}
               </div>
             );
@@ -969,9 +969,12 @@ export default function Expenses({
                   <span className="ex-group-sub">{d.items.length} lançamento(s)</span>
                   <span className={`ex-group-total ${d.total >= 0 ? 'ex-pos-t' : 'ex-neg-t'}`}>{fmtMoney(d.total, currency)}</span>
                 </div>
-                {d.items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={t.note || catById.get(categoryOf(t, cats) ?? 'outros')?.name || 'Lançamento'} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
-                ))}
+                {d.items.map((t) => {
+                  const c = catById.get(categoryOf(t, cats) ?? 'outros') ?? { name: 'Lançamento', icon: 'Tag', color: 'gray' };
+                  return (
+                    <TxRow key={t.id} t={t} currency={currency} label={t.note || c.name} icon={c.icon} color={c.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
+                  );
+                })}
               </div>
             ))
           ) : listGroups.length === 0 ? (
@@ -988,7 +991,7 @@ export default function Expenses({
                   <span className="ex-group-total ex-neg-t">{fmtMoney(g.total, currency)}</span>
                 </div>
                 {items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
+                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} icon={cat.icon} color={cat.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
                 ))}
               </div>
             );
@@ -999,20 +1002,22 @@ export default function Expenses({
   );
 }
 
-function TxRow({ t, currency, label, onEdit = null, onDelete = null, onPay = null }) {
+function TxRow({ t, currency, label, icon = 'Tag', color = 'gray', accountName, onEdit = null, onDelete = null, onPay = null }) {
   const files = Object.keys(t.attachments ?? {});
   const pending = t.paid === false;
   return (
     <div className="ex-item">
+      <span className="ex-item-ico" style={{ color: COLORS[color] || COLORS.gray, borderColor: COLORS[color] || COLORS.gray }}>
+        {(() => { const Cmp = ICONS[icon] || Tag; return <Cmp size={16} strokeWidth={2} />; })()}
+      </span>
       <div className="ex-item-main">
         <div className="ex-item-cat">
           {label}
           {t.installments && <span className="ex-badge">{t.installments.n}/{t.installments.of}</span>}
-          {pending && <span className="ex-badge ex-badge-pending">pendente</span>}
           {t.card && <span className="ex-badge ex-badge-card">{t.card}</span>}
         </div>
         <div className="ex-item-note">
-          {t.date ? t.date.slice(0, 10) : ''}
+          {accountName ? `${accountName} · ` : ''}{t.date ? t.date.slice(0, 10) : ''}
           {t.tags?.length ? ` · ${t.tags.join(', ')}` : ''}
         </div>
         {files.length > 0 && (
@@ -1030,6 +1035,7 @@ function TxRow({ t, currency, label, onEdit = null, onDelete = null, onPay = nul
       <div className="ex-item-right">
         <div className={`ex-item-amount ${t.amount >= 0 ? 'ex-pos-t' : ''}`}>{fmtMoney(t.amount, currency)}</div>
         <div className="ex-item-actions">
+          <span className={`ex-status-dot ${pending ? 'ex-dot-pending' : 'ex-dot-paid'}`} title={pending ? 'Pendente' : 'Pago'} />
           {pending && onPay && <button className="ex-mini ex-mini-pay" onClick={onPay} aria-label="Marcar como pago" title="Marcar como pago">✓</button>}
           {onEdit && <button className="ex-mini" onClick={onEdit} aria-label="Editar"><Pencil size={13} /></button>}
           {onDelete && <button className="ex-mini ex-danger" onClick={onDelete} aria-label="Excluir"><Trash2 size={13} /></button>}

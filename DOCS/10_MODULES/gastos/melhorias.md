@@ -113,3 +113,17 @@
   "+ Nova empresa" (cria e já vincula à conta) — `onSaveFirm`.
 - Próximo (profundidade): separar orçamento/categorias/contas-a-pagar em abas próprias do
   módulo Gastos (hoje são toggles in-page), e dashboard com gráficos.
+
+## Batch F — Resumo completo + UX estilo Mobills (executado)
+- **F1 Resumo reforçado** (`GastosDashboardPage`): "Saldo em contas" (por moeda) no topo;
+  KPIs Entrou / Gastou / Saldo / A pagar / Orçamento (uso %) / Maior alta vs mês passado.
+- **F2 Gráficos interativos**: donut "Gastos por categoria" clicável (filtra e destaca) com
+  **legenda mostrando % e valor**; barras "Entrou × Gastou (6 meses)" + linha de saldo.
+- **F3 Cartões de crédito**: seção com fatura do mês por cartão, valor e "em aberto".
+- **F4 Lançamentos estilo Mobills**: cada linha com **ícone circular colorido** da categoria,
+  "categoria · conta", valor e **status (pago/pendente)** em dot; botão pagar inline.
+- **F5 Listas**: próximas contas, onde mais gastei (estabelecimento) e últimos lançamentos
+  com ícones; tudo lado a lado no desktop.
+- Gate: `tsc` 0 + build verde + 237 testes.
+- Próximo (Mobills): **subcategorias**, gestão de **cartão de crédito** (fatura fechada/paga,
+  pagamento parcial), projeção de saldo e dashboard cards reordenáveis.

@@ -4972,3 +4972,10 @@ body .payouts-page .card:not([class*="accent"]) {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+
+/* Gastos — linhas de lançamento estilo Mobills (ícone circular + status) */
+.ex-item-ico { width: 34px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid; background: rgba(255,255,255,0.03); }
+.ex-status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.ex-dot-paid { background: var(--green, #2ecc71); }
+.ex-dot-pending { background: var(--yellow, #e1b12c); }
+body .ex-item-main { flex: 1 1 auto; min-width: 0; }
