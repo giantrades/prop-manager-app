@@ -92,7 +92,7 @@ const WG_CSS = `
 .wg-body > * { flex: 1; min-width: 0; }
 .wg-span2 { grid-column: 1 / -1; }
 .wg-dragging { opacity: 0.5; }
-.wg-tools { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; gap: 4px; opacity: 0; transition: opacity 120ms ease; }
+.wg-tools { position: absolute; bottom: 8px; right: 8px; z-index: 3; display: flex; gap: 4px; opacity: 0; transition: opacity 120ms ease; }
 .wg-item:hover .wg-tools, .wg-item:focus-within .wg-tools { opacity: 1; }
 .wg-handle, .wg-size { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(15,18,24,0.75); border: 1px solid rgba(255,255,255,0.14); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; }
 .wg-handle { cursor: grab; }
