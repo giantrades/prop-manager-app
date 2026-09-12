@@ -78,6 +78,9 @@ namespace QuantowerBridge
         private Thread _serverThread;
         // [PATCH B] Amostra SL/TP das posições abertas para saber o stop ativo no fechamento.
         private System.Threading.Timer _slTpTimer;
+        // [PATCH B] Handlers do Core para capturar SL/TP na abertura e no fechamento.
+        private static Action<Position> _onPositionAdded;
+        private static Action<Position> _onPositionRemoved;
 
         // ── Bridge v2: autenticação + idempotência ─────────────────────────
         // X-Bridge-Token em TODAS as rotas (04-BRIDGE_V2_SPEC.md). Token gerado
@@ -177,9 +180,20 @@ namespace QuantowerBridge
                 };
                 _serverThread.Start();
 
-                // [PATCH B] Amostra o SL/TP das posições abertas a cada 2s. Como o SL/TP
-                // pode mudar durante a operação, guardamos o último valor visto para usar
-                // no fechamento (StopPrice/TakePrice do TradeDto → R correto).
+                // [PATCH B] Captura SL/TP no ciclo de vida da posição:
+                //  - PositionAdded: registra o bracket inicial;
+                //  - PositionRemoved: registra o bracket ATIVO no fechamento (o que importa p/ R).
+                // O timer de 2s é só rede de segurança caso algum evento não dispare.
+                if (_onPositionAdded == null)
+                {
+                    _onPositionAdded = pos => { try { PositionSlTpStore.Upsert(pos, false); } catch { /* noop */ } };
+                    Core.Instance.PositionAdded += _onPositionAdded;
+                }
+                if (_onPositionRemoved == null)
+                {
+                    _onPositionRemoved = pos => { try { PositionSlTpStore.Upsert(pos, true); } catch { /* noop */ } };
+                    Core.Instance.PositionRemoved += _onPositionRemoved;
+                }
                 _slTpTimer = new System.Threading.Timer(
                     _ => { try { PositionSlTpStore.Capture(); } catch { /* noop */ } },
                     null, 2000, 2000);
@@ -251,6 +265,10 @@ namespace QuantowerBridge
                 _cts?.Cancel();
                 _listener?.Stop();
                 _listener?.Close();
+                _slTpTimer?.Dispose();
+                // [PATCH B] Desassina os eventos do Core (evita handler duplicado em restart).
+                if (_onPositionAdded != null) { Core.Instance.PositionAdded -= _onPositionAdded; _onPositionAdded = null; }
+                if (_onPositionRemoved != null) { Core.Instance.PositionRemoved -= _onPositionRemoved; _onPositionRemoved = null; }
                 string m = "🛑 QuantowerBridge stopped";
                 Log(m, StrategyLoggingLevel.Trading);
                 FileLog(m);
@@ -1280,17 +1298,7 @@ namespace QuantowerBridge
             var now = DateTime.UtcNow;
             foreach (var pos in Core.Instance.Positions)
             {
-                if (string.IsNullOrEmpty(pos.Id)) continue;
-                try
-                {
-                    decimal? sl = pos.StopLoss != null ? (decimal)pos.StopLoss.Price : null;
-                    decimal? tp = pos.TakeProfit != null ? (decimal)pos.TakeProfit.Price : null;
-                    lock (_lock)
-                    {
-                        _map[pos.Id] = new Entry { Sl = sl, Tp = tp, SeenAt = now };
-                    }
-                }
-                catch { /* posição/servidor instável — mantém o último valor */ }
+                Upsert(pos, false);
             }
 
             if (_map.Count > 500)
@@ -1302,6 +1310,32 @@ namespace QuantowerBridge
                     foreach (var id in stale) _map.Remove(id);
                 }
             }
+        }
+
+        /**
+         * Grava o SL/TP de UMA posição. Usado no evento PositionRemoved (fechamento):
+         * assim o R usa o stop que estava ativo no fechamento, mesmo que o SL/TP tenha
+         * sido movido durante a operação. `preserveOnNull` evita apagar um valor bom
+         * quando a posição removida já vem sem os brackets.
+         */
+        internal static void Upsert(Position pos, bool preserveOnNull)
+        {
+            if (pos == null || string.IsNullOrEmpty(pos.Id)) return;
+            try
+            {
+                decimal? sl = pos.StopLoss != null ? (decimal)pos.StopLoss.Price : null;
+                decimal? tp = pos.TakeProfit != null ? (decimal)pos.TakeProfit.Price : null;
+                lock (_lock)
+                {
+                    if (preserveOnNull && _map.TryGetValue(pos.Id, out var prev))
+                    {
+                        sl = sl ?? prev.Sl;
+                        tp = tp ?? prev.Tp;
+                    }
+                    _map[pos.Id] = new Entry { Sl = sl, Tp = tp, SeenAt = DateTime.UtcNow };
+                }
+            }
+            catch { /* posição/servidor instável — mantém o último valor */ }
         }
 
         internal static bool TryGet(string positionId, out decimal? sl, out decimal? tp)
