@@ -6,6 +6,8 @@ import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
 import { fmtMoney } from '@apps/ui/currency';
+import StatRow from '@apps/ui/StatRow';
+import { Activity, LineChart, CalendarDays } from 'lucide-react';
 import { monthlySeries, computeFreeCash } from '@apps/lib/db';
 import {
   ResponsiveContainer, BarChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -93,7 +95,7 @@ export default function ReportsPage() {
 
           <div className="rp-widgets">
             <div className="dash-section">
-              <div className="dash-title"><span>Entradas × Gastos (12 meses)</span></div>
+              <div className="dash-title"><span><Activity size={14} /> Entradas × Gastos (12 meses)</span></div>
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={months} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" />
@@ -109,7 +111,7 @@ export default function ReportsPage() {
             </div>
 
             <div className="dash-section">
-              <div className="dash-title"><span>Evolução do patrimônio</span></div>
+              <div className="dash-title"><span><LineChart size={14} /> Evolução do patrimônio</span></div>
               {nwSeries.length > 1 ? (
                 <ResponsiveContainer width="100%" height={240}>
                   <AreaChart data={nwSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
@@ -133,24 +135,22 @@ export default function ReportsPage() {
           </div>
 
           <div className="dash-section">
-            <div className="dash-title"><span>Mês a mês (12 meses)</span></div>
-            <div className="dash-table-wrap">
-              <table className="dash-table">
-                <thead>
-                  <tr><th scope="col">Mês</th><th scope="col">Entradas</th><th scope="col">Gastos</th><th scope="col">Saldo</th></tr>
-                </thead>
-                <tbody>
-                  {months.slice().reverse().map((m) => (
-                    <tr key={m.ym}>
-                      <th scope="row">{String(m.ym).slice(5, 7)}/{String(m.ym).slice(2, 4)}</th>
-                      <td className="dash-pos">{fmtMoney(m.income, 'BRL')}</td>
-                      <td className="dash-neg">{fmtMoney(m.expenses, 'BRL')}</td>
-                      <td className={m.balance >= 0 ? 'dash-pos' : 'dash-neg'}>{fmtMoney(m.balance, 'BRL')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="dash-title"><span><CalendarDays size={14} /> Mês a mês (12 meses)</span></div>
+            {(() => {
+              const max = Math.max(1, ...months.map((m) => Math.abs(m.balance)));
+              return months.slice().reverse().map((m) => (
+                <StatRow
+                  key={m.ym}
+                  icon={<CalendarDays size={14} />}
+                  color={m.balance >= 0 ? '#2ecc71' : '#e74c3c'}
+                  label={`${String(m.ym).slice(5, 7)}/${String(m.ym).slice(2, 4)}`}
+                  sub={`entrou ${fmtMoney(m.income, 'BRL')} · gastou ${fmtMoney(m.expenses, 'BRL')}`}
+                  barPct={(Math.abs(m.balance) / max) * 100}
+                  value={fmtMoney(m.balance, 'BRL')}
+                  valueClass={m.balance >= 0 ? 'dash-pos' : 'dash-neg'}
+                />
+              ));
+            })()}
           </div>
         </>
       )}

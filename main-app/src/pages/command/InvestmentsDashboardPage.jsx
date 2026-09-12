@@ -12,7 +12,7 @@ import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, CalendarDays, LineChart, Store } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
 import { applyBenchmark, getCdiSeries, computeDcaFromTransactions } from '@apps/lib/db';
 
@@ -123,7 +123,7 @@ export default function InvestmentsDashboardPage() {
                 id: 'top',
                 node: (
                   <div className="dash-section">
-                    <div className="dash-title"><span>Maiores posições</span><NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink></div>
+                    <div className="dash-title"><span><TrendingUp size={14} /> Maiores posições</span><NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink></div>
                     {data.top.length === 0 ? <div className="muted">Sem posições.</div> : (() => {
                       const max = Math.max(1, ...data.top.map((p) => p.marketValue ?? 0));
                       return data.top.map((p) => (
@@ -145,7 +145,7 @@ export default function InvestmentsDashboardPage() {
                 id: 'payouts',
                 node: (
                   <div className="dash-section">
-                    <div className="dash-title"><span>Payouts por mês</span><NavLink className="dash-link" to="/payouts">payouts →</NavLink></div>
+                    <div className="dash-title"><span><CalendarDays size={14} /> Payouts por mês</span><NavLink className="dash-link" to="/payouts">payouts →</NavLink></div>
                     {payoutSeries.length > 1 ? (
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
@@ -161,7 +161,7 @@ export default function InvestmentsDashboardPage() {
                 ),
               },
               { id: 'valuecost', node: (<div className="dash-section"><Portfolio only={['history', 'dca']} history={data.history ?? []} benchmark={data.benchmark ?? []} dca={data.dca ?? []} loading={false} /></div>) },
-              { id: 'evolution', defaultSpan: 2, node: (<div className="dash-section"><div className="dash-title"><span>Evolução do patrimônio</span></div><NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} /></div>) },
+              { id: 'evolution', defaultSpan: 2, node: (<div className="dash-section"><div className="dash-title"><span><LineChart size={14} /> Evolução do patrimônio</span></div><NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} /></div>) },
             ]}
           />
         </>

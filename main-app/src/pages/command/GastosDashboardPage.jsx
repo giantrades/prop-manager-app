@@ -14,6 +14,7 @@ import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown, Briefcase,
   GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Activity,
+  PieChart as PieChartIcon, CalendarClock, Store, List, CreditCard,
 } from 'lucide-react';
 import {
   listCategories, getBudgets, getSavingsGoal, expensesByCategory, incomeByKind,
@@ -138,7 +139,7 @@ export default function GastosDashboardPage() {
           {/* Gráficos */}
           <WidgetGrid storageKey="gastos">
             <div className="dash-section" key="donut">
-              <div className="dash-title"><span>Gastos por categoria</span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>limpar filtro</button>}</div>
+              <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria</span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>limpar filtro</button>}</div>
               {donut.length === 0 ? (
                 <div className="gd-empty">Sem despesas neste mês.</div>
               ) : (
@@ -173,7 +174,7 @@ export default function GastosDashboardPage() {
             </div>
 
             <div className="dash-section" key="cashflow">
-              <div className="dash-title"><span>Entrou × Gastou (6 meses)</span></div>
+              <div className="dash-title"><span><Activity size={14} /> Entrou × Gastou (6 meses)</span></div>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={view.series} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
                   <defs>
@@ -200,7 +201,7 @@ export default function GastosDashboardPage() {
 
             {view.bills.length > 0 && (
               <div className="dash-section" key="bills">
-                <div className="dash-title"><span>Próximas contas</span><NavLink className="dash-link" to="/expenses">gerenciar →</NavLink></div>
+                <div className="dash-title"><span><CalendarClock size={14} /> Próximas contas</span><NavLink className="dash-link" to="/expenses">gerenciar →</NavLink></div>
                 {view.bills.map((b) => (
                   <div key={b.tx.id} className={`gd-row${b.overdue ? ' gd-row-late' : ''}`}>
                     <CatIcon name={catMeta(categoryOf(b.tx, data.categories) ?? 'outros').icon} color={catMeta(categoryOf(b.tx, data.categories) ?? 'outros').color} />
@@ -214,7 +215,7 @@ export default function GastosDashboardPage() {
 
             {view.merchants.length > 0 && (
               <div className="dash-section" key="merchants">
-                <div className="dash-title"><span>Onde mais gastei</span></div>
+                <div className="dash-title"><span><Store size={14} /> Onde mais gastei</span></div>
                 {(() => {
                   const max = Math.max(1, ...view.merchants.map((m) => m.total));
                   return view.merchants.map((m) => (
@@ -231,7 +232,7 @@ export default function GastosDashboardPage() {
             )}
 
             <div className="dash-section" key="recent">
-              <div className="dash-title"><span>Últimos lançamentos</span><NavLink className="dash-link" to="/expenses">ver todos →</NavLink></div>
+              <div className="dash-title"><span><List size={14} /> Últimos lançamentos</span><NavLink className="dash-link" to="/expenses">ver todos →</NavLink></div>
               {view.recent.length === 0 ? (
                 <div className="gd-empty">Nada lançado neste mês.</div>
               ) : view.recent.map((t) => {
@@ -249,7 +250,7 @@ export default function GastosDashboardPage() {
 
             {view.cards.length > 0 && (
               <div className="dash-section" key="cards">
-                <div className="dash-title"><span>Cartões de crédito</span></div>
+                <div className="dash-title"><span><CreditCard size={14} /> Cartões de crédito</span></div>
                 {view.cards.map((c) => (
                   <div key={c.card} className="gd-card-row">
                     <span className="gd-card-badge"><Landmark size={14} /></span>

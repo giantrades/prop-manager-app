@@ -3,6 +3,7 @@
 // vem de `drawdownAnalysis` (motor). A UI só renderiza.
 import React, { useMemo, useState } from 'react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { TrendingDown } from 'lucide-react';
 import { drawdownAnalysis } from '@apps/lib/db';
 import { fmtMoney } from './currency';
 
@@ -15,7 +16,7 @@ export default function DrawdownSection({ trades = [], initialFunding = 0, curre
 
   return (
     <div className="dd-root">
-      <div className="dd-title">Drawdown</div>
+      <div className="dd-title"><TrendingDown size={14} /> Drawdown</div>
 
       <div className="dd-metrics">
         <div className="dd-cell"><span className="dd-label">Max drawdown</span><span className="dd-value dd-neg">{fmtMoney(-analysis.maxDD.drawdownAbs, currency)}</span><span className="dd-sub">-{analysis.maxDD.drawdownPct}%</span></div>

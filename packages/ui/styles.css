@@ -5013,3 +5013,27 @@ body .ex-sum-card { position: relative; gap: 2px; border-radius: 16px; }
 .ex-sum-in .ex-sum-ico { color: var(--green, #2ecc71); }
 .ex-sum-out .ex-sum-ico { color: var(--red, #e74c3c); }
 .ex-sum-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
+
+/* Cards que ainda eram chapados — glass SUTIL (um pouco, sem exagerar) */
+body .tx-stat,
+body .ps-item,
+body .py-item,
+body .ac-item,
+body .ex-item,
+body .nb-item,
+body .tr-replay,
+body .pf-alert-row,
+body .ex-recur,
+body .ex-recur-row {
+  background: linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.02) 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Títulos de seção com ícone */
+body .dash-title > span:first-child,
+body .hc-widget-title,
+body .td-chart-title,
+body .pf-section-title { display: inline-flex; align-items: center; gap: 6px; }

@@ -12,6 +12,7 @@ import PnLCalendar from '@apps/ui/PnLCalendar';
 import HistogramR from '@apps/ui/HistogramR';
 import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import { CalendarDays, BarChart3 } from 'lucide-react';
 import {
   winrate, profitFactor,
 } from '@apps/lib/db';
@@ -139,8 +140,8 @@ export default function TradingDashboardPage() {
       <WidgetGrid
         storageKey="trading"
         items={[
-          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title">Calendário de PnL</div><PnLCalendar trades={data.trades ?? []} loading={false} /></div>) },
-          { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title">Histograma de R</div><HistogramR trades={data.trades ?? []} bucketSize={0.5} loading={false} /></div>) },
+          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={data.trades ?? []} loading={false} /></div>) },
+          { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={data.trades ?? []} bucketSize={0.5} loading={false} /></div>) },
           { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={data.trades ?? []} initialFunding={stats.capital} currency="USD" /></div>) },
         ]}
       />
