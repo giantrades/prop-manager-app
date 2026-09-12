@@ -382,3 +382,20 @@ Achado central confirmado: o padrÃ£o `ws-tabs` (Payouts|Alocar) jÃ¡ Ã© o drill-d
 - **QuantowerBridge.cs**: `/positions` agora devolve `sl`/`tp` (antes não vinha — a UI não
   conseguia mostrar os valores atuais).
 - Gate: `tsc` 0 + build verde + 238 testes.
+
+## Batch Y — Orders + SL/TP no fechamento (executado)
+- **Positions & Orders**: `/live-positions` (label nav "Positions & Orders") ganhou seção **Ordens**:
+  lista ordens pendentes do bridge (tipo/qtd/preço/status), **cancelar** (`cancelOrder`) e
+  **nova ordem** limit/stop (`placeOrder`); posições seguem com SL/TP + fechar. Refresh manual
+  recarrega posições e ordens; ordens re-poll a cada 60s.
+- **Adapter**: `getOrders` passou a expor `type` (`orderTypeId`); `getTrades` mapeia
+  `stopPrice`/`takePrice`/`multiplier`.
+- **Ingest**: `quantowerToTrade` agora usa `stopPrice` do bridge e calcula `resultR` pela
+  fórmula única (`tradeR` do motor) — antes era sempre `null`. Teste: `quantowerDedup.test.ts`.
+- **Bridge Patch A** (`/positions/modify`): se a posição não tem SL/TP, cria ordem Stop/Limit de
+  fechamento (Quantower não expõe setter de SL/TP em `Position`). Antes retornava erro.
+- **Bridge Patch B** (R correto): `PositionSlTpStore` amostra o SL/TP das posições abertas a cada
+  2s (+ em cada `/positions`); no fechamento o `TradeDto` usa o **último SL/TP ativo** (não o da
+  abertura), então mover o TP/SL durante a operação é refletido no R. Novos campos
+  `stopPrice`/`takePrice` no payload de `/trades`.
+- Gate: `tsc` 0 + build verde + 240 testes.

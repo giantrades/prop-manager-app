@@ -4,7 +4,7 @@ import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { DataChainEngine } from '../DataChainEngine';
 import { EventBus } from '../events';
-import { ingestQuantowerTrades } from '../quantowerIngest';
+import { ingestQuantowerTrades, quantowerToTrade } from '../quantowerIngest';
 
 function makeEngine() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -44,5 +44,25 @@ describe('A8 — dedup no re-sync', () => {
     const r = await ingestQuantowerTrades(ds, chain, [{ ...BATCH[0], platformTradeId: '' }]);
     expect(r).toMatchObject({ created: 0, skipped: 1 });
     expect(await ds.trades.list()).toHaveLength(0);
+  });
+});
+
+describe('B — stopPrice vindo do bridge gera R', () => {
+  it('com stopPrice + multiplier calcula resultR', () => {
+    const t = quantowerToTrade({
+      platformTradeId: 'qt_r', symbol: 'EURUSD', side: 'Long', quantity: 1,
+      entryPrice: 1.1, exitPrice: 1.11, stopPrice: 1.099, multiplier: 100000, netPnl: 1000,
+    });
+    expect(t.stopPrice).toBe(1.099);
+    // risk = |1.1 - 1.099| * 1 * 100000 = 100; pnl = 0.01*100000 = 1000 => R = 10
+    expect(t.resultR).toBe(10);
+  });
+
+  it('sem stopPrice => resultR null (nunca 0)', () => {
+    const t = quantowerToTrade({
+      platformTradeId: 'qt_nr', symbol: 'EURUSD', side: 'Long', quantity: 1,
+      entryPrice: 1.1, exitPrice: 1.11, netPnl: 1000,
+    });
+    expect(t.resultR).toBeNull();
   });
 });

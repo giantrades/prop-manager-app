@@ -76,6 +76,8 @@ namespace QuantowerBridge
         private HttpListener _listener;
         private CancellationTokenSource _cts;
         private Thread _serverThread;
+        // [PATCH B] Amostra SL/TP das posições abertas para saber o stop ativo no fechamento.
+        private System.Threading.Timer _slTpTimer;
 
         // ── Bridge v2: autenticação + idempotência ─────────────────────────
         // X-Bridge-Token em TODAS as rotas (04-BRIDGE_V2_SPEC.md). Token gerado
@@ -174,6 +176,13 @@ namespace QuantowerBridge
                     Name = "QuantowerBridge-HTTP"
                 };
                 _serverThread.Start();
+
+                // [PATCH B] Amostra o SL/TP das posições abertas a cada 2s. Como o SL/TP
+                // pode mudar durante a operação, guardamos o último valor visto para usar
+                // no fechamento (StopPrice/TakePrice do TradeDto → R correto).
+                _slTpTimer = new System.Threading.Timer(
+                    _ => { try { PositionSlTpStore.Capture(); } catch { /* noop */ } },
+                    null, 2000, 2000);
 
                 // Block OnRun until server stops (prevents strategy from auto-stopping)
                 _serverThread.Join();
@@ -634,17 +643,51 @@ namespace QuantowerBridge
 
                 if (req.Sl.HasValue)
                 {
-                    if (position.StopLoss == null)
-                        return ErrorJson("position_not_found", "Posição não tem Stop Loss para modificar", false);
-                    var res = Core.Instance.ModifyOrder(position.StopLoss, price: req.Sl.Value);
-                    if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar SL", true);
+                    if (position.StopLoss != null)
+                    {
+                        var res = Core.Instance.ModifyOrder(position.StopLoss, price: req.Sl.Value);
+                        if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar SL", true);
+                    }
+                    else
+                    {
+                        // [PATCH A] A posição não tinha SL: o Quantower não expõe setter de
+                        // SL/TP em Position, então criamos uma ordem Stop de fechamento
+                        // (lado oposto, quantidade da posição) que atua como Stop Loss.
+                        var res = Core.Instance.PlaceOrder(new PlaceOrderRequestParameters
+                        {
+                            Account = position.Account,
+                            Symbol = position.Symbol,
+                            Side = position.Side == Side.Buy ? Side.Sell : Side.Buy,
+                            Quantity = position.Quantity,
+                            OrderTypeId = OrderType.Stop,
+                            TriggerPrice = req.Sl.Value,
+                            TimeInForce = TimeInForce.GTC
+                        });
+                        if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao criar SL", true);
+                    }
                 }
                 if (req.Tp.HasValue)
                 {
-                    if (position.TakeProfit == null)
-                        return ErrorJson("position_not_found", "Posição não tem Take Profit para modificar", false);
-                    var res = Core.Instance.ModifyOrder(position.TakeProfit, price: req.Tp.Value);
-                    if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar TP", true);
+                    if (position.TakeProfit != null)
+                    {
+                        var res = Core.Instance.ModifyOrder(position.TakeProfit, price: req.Tp.Value);
+                        if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar TP", true);
+                    }
+                    else
+                    {
+                        // [PATCH A] Idem SL: cria ordem Limit de fechamento como Take Profit.
+                        var res = Core.Instance.PlaceOrder(new PlaceOrderRequestParameters
+                        {
+                            Account = position.Account,
+                            Symbol = position.Symbol,
+                            Side = position.Side == Side.Buy ? Side.Sell : Side.Buy,
+                            Quantity = position.Quantity,
+                            OrderTypeId = OrderType.Limit,
+                            Price = req.Tp.Value,
+                            TimeInForce = TimeInForce.GTC
+                        });
+                        if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao criar TP", true);
+                    }
                 }
 
                 string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = req.PlatformPositionId }, JsonOptions);
@@ -978,6 +1021,8 @@ namespace QuantowerBridge
                 averageExit = t.AverageExit,
                 risk = t.Risk,
                 reward = t.Reward,
+                stopPrice = t.StopPrice,
+                takePrice = t.TakePrice,
                 holdingSeconds = t.HoldingSeconds,
                 maxScaleIn = t.MaxScaleIn,
                 firstOrderId = t.FirstOrderId,
@@ -996,6 +1041,9 @@ namespace QuantowerBridge
 
         private static string BuildPositionsJson()
         {
+            // [PATCH B] Atualiza o registro de SL/TP a cada leitura de /positions.
+            try { PositionSlTpStore.Capture(); } catch { /* noop */ }
+
             var positions = new List<object>();
 
             foreach (Position pos in Core.Instance.Positions)
@@ -1160,6 +1208,11 @@ namespace QuantowerBridge
         public int FillSequence = 0;
         public bool HasEntries => Entries.Count > 0;
         public string FirstOrderId, LastOrderId, FirstTradeId, LastTradeId;
+
+        // [PATCH B] SL/TP capturados na abertura da posição (a Position pode não
+        // existir mais quando a trade é reconstruída). Alimentam stopPrice/takePrice
+        // do TradeDto para o app calcular R.
+        public decimal? StopPrice, TakePrice;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1199,6 +1252,68 @@ namespace QuantowerBridge
             using var sha1 = SHA1.Create();
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
             return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // [PATCH B] POSITION SL/TP STORE
+    // Guarda o último SL/TP visto de cada posição aberta. Como o SL/TP pode
+    // ser alterado durante a operação, o valor é amostrado continuamente
+    // (timer de 2s + a cada /positions) e lido quando a trade fecha — assim o
+    // R usa o stop realmente ativo no fechamento, e não o da abertura.
+    // ═══════════════════════════════════════════════════════════════
+
+    internal static class PositionSlTpStore
+    {
+        private sealed class Entry
+        {
+            public decimal? Sl, Tp;
+            public DateTime SeenAt;
+        }
+
+        private static readonly object _lock = new();
+        private static readonly Dictionary<string, Entry> _map = new();
+
+        /** Amostra SL/TP das posições abertas. Limpa entradas não vistas há > 24h. */
+        internal static void Capture()
+        {
+            var now = DateTime.UtcNow;
+            foreach (var pos in Core.Instance.Positions)
+            {
+                if (string.IsNullOrEmpty(pos.Id)) continue;
+                try
+                {
+                    decimal? sl = pos.StopLoss != null ? (decimal)pos.StopLoss.Price : null;
+                    decimal? tp = pos.TakeProfit != null ? (decimal)pos.TakeProfit.Price : null;
+                    lock (_lock)
+                    {
+                        _map[pos.Id] = new Entry { Sl = sl, Tp = tp, SeenAt = now };
+                    }
+                }
+                catch { /* posição/servidor instável — mantém o último valor */ }
+            }
+
+            if (_map.Count > 500)
+            {
+                lock (_lock)
+                {
+                    var stale = _map.Where(kv => (now - kv.Value.SeenAt).TotalHours > 24)
+                                    .Select(kv => kv.Key).ToList();
+                    foreach (var id in stale) _map.Remove(id);
+                }
+            }
+        }
+
+        internal static bool TryGet(string positionId, out decimal? sl, out decimal? tp)
+        {
+            sl = null;
+            tp = null;
+            if (string.IsNullOrEmpty(positionId)) return false;
+            lock (_lock)
+            {
+                if (_map.TryGetValue(positionId, out var e)) { sl = e.Sl; tp = e.Tp; return true; }
+            }
+            return false;
         }
     }
 
@@ -1348,6 +1463,19 @@ namespace QuantowerBridge
         private static PositionState StartNewPosition(Trade fill, DateTime tradingDay)
         {
             var isBuy = fill.Side == Side.Buy;
+
+            // [PATCH B] Captura SL/TP vivos. Fallback: o valor autoritativo é lido
+            // do PositionSlTpStore no fechamento (SL/TP podem mudar durante o trade).
+            decimal? stopPrice = null;
+            decimal? takePrice = null;
+            try
+            {
+                var livePos = Core.Instance.Positions.FirstOrDefault(p => p.Id == fill.PositionId);
+                if (livePos?.StopLoss != null) stopPrice = (decimal)livePos.StopLoss.Price;
+                if (livePos?.TakeProfit != null) takePrice = (decimal)livePos.TakeProfit.Price;
+            }
+            catch { /* posição já encerrada — R fica n/a */ }
+
             return new PositionState
             {
                 Direction = isBuy ? "LONG" : "SHORT",
@@ -1362,7 +1490,9 @@ namespace QuantowerBridge
                 FirstOrderId = fill.OrderId,
                 LastOrderId = fill.OrderId,
                 FirstTradeId = fill.Id,
-                LastTradeId = fill.Id
+                LastTradeId = fill.Id,
+                StopPrice = stopPrice,
+                TakePrice = takePrice
             };
         }
 
@@ -1429,6 +1559,9 @@ namespace QuantowerBridge
         public decimal AverageExit { get; set; }
         public decimal Risk { get; set; }
         public decimal Reward { get; set; }
+        // [PATCH B] Stop/take por unidade (preço). O app usa stopPrice para calcular R.
+        public decimal? StopPrice { get; set; }
+        public decimal? TakePrice { get; set; }
         public double HoldingSeconds { get; set; }
         public int MaxScaleIn { get; set; }
         public string FirstOrderId { get; set; }
@@ -1472,6 +1605,16 @@ namespace QuantowerBridge
                 ? (closedState.ExitTime.Value - closedState.OpenTime).TotalSeconds
                 : 0;
 
+            // [PATCH B] SL/TP ativos no fechamento (registro contínuo). Sobrepõe o
+            // valor capturado na abertura, pois o usuário pode ter movido o SL/TP.
+            decimal? stopPrice = closedState.StopPrice;
+            decimal? takePrice = closedState.TakePrice;
+            if (PositionSlTpStore.TryGet(closedState.PositionId, out var regSl, out var regTp))
+            {
+                stopPrice = regSl;
+                takePrice = regTp;
+            }
+
             return new TradeDto
             {
                 Id = closedState.PositionId,
@@ -1503,6 +1646,8 @@ namespace QuantowerBridge
                 AverageExit = Math.Round(avgExit, 6),
                 Risk = 0,
                 Reward = 0,
+                StopPrice = stopPrice,
+                TakePrice = takePrice,
                 HoldingSeconds = holdingSeconds,
                 MaxScaleIn = Math.Max(0, entries.Count - 1),
                 FirstOrderId = closedState.FirstOrderId,

@@ -5,7 +5,7 @@
 import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
 import { nowIso } from './dateUtils';
-import { tradePnl } from './financialFormulas';
+import { tradePnl, tradeR } from './financialFormulas';
 import type { Trade, TradeDirection } from './types';
 
 /** Trade normalizado pelo QuantowerAdapter (bridge v2). */
@@ -18,6 +18,9 @@ export interface QuantowerTrade {
   exitPrice?: number;
   entryDateTime?: string | null;
   exitDateTime?: string | null;
+  stopPrice?: number | null;
+  takePrice?: number | null;
+  multiplier?: number | null;
   grossPnl?: number;
   netPnl?: number;
   fee?: number;
@@ -42,6 +45,7 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   const direction: TradeDirection = (q.side || '').toLowerCase() === 'short' ? 'short' : 'long';
   const entryDatetime = q.entryDateTime ?? nowIso();
   const exitPrice = q.exitPrice && q.exitPrice !== 0 ? q.exitPrice : undefined;
+  const stopPrice = q.stopPrice != null && q.stopPrice !== 0 ? q.stopPrice : undefined;
   const resultNet = q.netPnl ?? 0;
   const trade = {
     id: `qt_${q.platformTradeId}`,
@@ -53,6 +57,8 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     qty: q.quantity ?? 0,
     entryPrice: q.entryPrice ?? 0,
     exitPrice,
+    stopPrice,
+    multiplier: q.multiplier ?? undefined,
     commission: 0,
     swap: 0,
     rebate: 0,
@@ -60,12 +66,17 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     source: 'quantower' as const,
     quantowerId: q.platformTradeId,
     resultNet,
-    resultR: null,
+    resultR: null as number | null,
   };
   // Se o bridge não trouxe netPnl, deriva via fórmula única (para Equity funcionar).
   if (!resultNet && exitPrice != null) {
     const computed = tradePnl(trade as Trade);
     if (computed !== 0) trade.resultNet = Number(computed.toFixed(2));
+  }
+  // R via fórmula única quando o bridge expôs o stop (PATCH B no bridge).
+  if (stopPrice != null && exitPrice != null) {
+    const r = tradeR(trade as Trade, { stopPrice });
+    if (r != null) trade.resultR = r;
   }
   return trade;
 }

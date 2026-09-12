@@ -59,7 +59,7 @@ export const MODULES = [
     children: [
       { to: "/trading", label: "Resumo", icon: Activity, end: true, keywords: "trading dashboard resumo" },
       { to: "/journal", label: "Journal", icon: BookOpen, keywords: "trades journal review playbook" },
-      { to: "/live-positions", label: "Positions", icon: TrendingUp, keywords: "posições abertas live stoploss takeprofit fechar" },
+      { to: "/live-positions", label: "Positions & Orders", icon: TrendingUp, keywords: "posições abertas ordens live stoploss takeprofit fechar cancelar" },
     ],
   },
   {
