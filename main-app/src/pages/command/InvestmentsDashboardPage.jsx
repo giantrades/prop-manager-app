@@ -11,6 +11,8 @@ import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import StatRow from '@apps/ui/StatRow';
+import { TrendingUp } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
 import { applyBenchmark, getCdiSeries, computeDcaFromTransactions } from '@apps/lib/db';
 
@@ -122,14 +124,20 @@ export default function InvestmentsDashboardPage() {
                 node: (
                   <div className="dash-section">
                     <div className="dash-title"><span>Maiores posições</span><NavLink className="dash-link" to="/portfolio">gerenciar →</NavLink></div>
-                    {data.top.length === 0 ? <div className="muted">Sem posições.</div> : data.top.map((p) => (
-                      <div key={p.id} className="dash-row">
-                        <span className="dash-row-name">{p.symbol}</span>
-                        <span className="dash-row-sub">{p.qty} un.</span>
-                        <span className="dash-row-val">{fmtMoney(p.marketValue)}</span>
-                        <span className={`dash-row-val ${(p.pnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtPct(p.pnlPercent)}</span>
-                      </div>
-                    ))}
+                    {data.top.length === 0 ? <div className="muted">Sem posições.</div> : (() => {
+                      const max = Math.max(1, ...data.top.map((p) => p.marketValue ?? 0));
+                      return data.top.map((p) => (
+                        <StatRow
+                          key={p.id}
+                          icon={<TrendingUp size={14} />}
+                          color={(p.pnl ?? 0) >= 0 ? '#2ecc71' : '#e74c3c'}
+                          label={p.symbol}
+                          sub={`${p.qty} un. · ${fmtPct(p.pnlPercent)}`}
+                          barPct={((p.marketValue ?? 0) / max) * 100}
+                          value={fmtMoney(p.marketValue)}
+                        />
+                      ));
+                    })()}
                   </div>
                 ),
               },

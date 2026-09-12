@@ -8,6 +8,8 @@ import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import StatRow from '@apps/ui/StatRow';
+import { Sparkles } from 'lucide-react';
 
 
 export default function PlanningDashboardPage() {
@@ -62,11 +64,14 @@ export default function PlanningDashboardPage() {
             {marcos.length === 0 ? (
               <div className="muted">Nenhum marco ainda — crie em Marcos.</div>
             ) : marcos.slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 5).map((m) => (
-              <div key={m.id} className="dash-row">
-                <span className="dash-row-name">{m.title}</span>
-                <span className="dash-row-sub">{String(m.date).slice(0, 10)}</span>
-                {m.amount != null && <span className="dash-row-val">{fmtMoney(m.amount)}</span>}
-              </div>
+              <StatRow
+                key={m.id}
+                icon={<Sparkles size={14} />}
+                color="#7c5cff"
+                label={m.title}
+                sub={String(m.date).slice(0, 10)}
+                value={m.amount != null ? fmtMoney(m.amount) : ''}
+              />
             ))}
           </div>
 

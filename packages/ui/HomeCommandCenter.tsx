@@ -9,6 +9,7 @@ import {
 import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays } from 'lucide-react';
 import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
+import StatRow from './StatRow';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 
 const WIDGET_ICONS = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
@@ -179,13 +180,20 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
             <div className="hc-stat"><span className="hc-stat-label">Contas com PnL</span><span className="hc-stat-value">{acctPnl.length}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Payouts pendentes</span><span className="hc-stat-value">{pending.length}</span></div>
           </div>
-          {acctPnl.length > 0 ? acctPnl.slice(0, 6).map((a) => (
-            <div key={a.accountId} className="hc-row">
-              <span className="hc-row-name">{a.name}</span>
-              <span className="hc-row-sub">trad {fmtMoney(a.trading, 'USD')} · inv {fmtMoney(a.invest)}</span>
-              <span className={`hc-row-val ${a.total >= 0 ? 'hc-pos' : 'hc-neg'}`}>{fmtMoney(a.total, 'USD')}</span>
-            </div>
-          )) : <div className="hc-empty">Sem PnL por conta ainda.</div>}
+          {acctPnl.length > 0 ? (() => {
+            const max = Math.max(1, ...acctPnl.map((a) => Math.abs(a.total)));
+            return acctPnl.slice(0, 6).map((a) => (
+              <StatRow
+                key={a.accountId}
+                icon={<Wallet size={14} />}
+                color={a.total >= 0 ? '#2ecc71' : '#e74c3c'}
+                label={a.name}
+                sub={`trad ${fmtMoney(a.trading, 'USD')} · inv ${fmtMoney(a.invest)}`}
+                barPct={(Math.abs(a.total) / max) * 100}
+                value={fmtMoney(a.total, 'USD')}
+              />
+            ));
+          })() : <div className="hc-empty">Sem PnL por conta ainda.</div>}
         </Widget>)}
 
         {!hide('goals') && (<Widget key="goals" id="goals" title="Metas" to="/planejamento" hide={hide}>
