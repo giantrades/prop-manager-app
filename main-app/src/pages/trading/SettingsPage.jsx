@@ -8,7 +8,7 @@ import { useCurrency } from '@apps/state';
 import { supabase } from '@apps/supabase/client';
 import { importLegacyPayoutsFromStorage, dumpAppDb, restoreAppDb } from '@apps/lib/db';
 import SyncConflicts from '@apps/ui/SyncConflicts';
-import PlatformStatusIndicator from '@apps/ui/PlatformStatusIndicator';
+import ConnectionsManager from './ConnectionsManager';
 import { useToast } from '@apps/ui/Toast';
 import { usePush } from '../../usePush';
 import { usePlatform } from '@apps/state';
@@ -48,22 +48,7 @@ function ActionRulesCard() {
 }
 
 function ConnectionsCard() {
-  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } = usePlatform();
-  return (
-    <div className="st-card">
-      <div className="st-title">Conexões de plataforma</div>
-      <p className="st-hint">Ponte com Quantower/cTrader para trades e posições ao vivo.</p>
-      <div className="st-row">
-        <PlatformStatusIndicator
-          statuses={statuses}
-          liveCount={liveCount}
-          lastSync={lastSync}
-          isRunning={isRunning}
-          onToggleSync={isRunning ? stopSync : startSync}
-        />
-      </div>
-    </div>
-  );
+  return <ConnectionsManager />;
 }
 
 function CloudBackupCard() {

@@ -61,6 +61,18 @@
   calendários, status unificado texto+ícone+cor em tudo, IA ler+agir (contratos Fase 5 proíbem).
 - Gate: `vite build` verde + 220 testes verdes.
 
+## Batch W — conexões de plataforma em cards + associação de contas (executado)
+- **Substituído o dropdown** (`PlatformStatusIndicator`) do Settings por **cards por conexão**
+  (`main-app/src/pages/trading/ConnectionsManager.jsx`): nome, status (conectada/offline) e
+  **X/Y contas associadas**, glass + **cor da firm** vinculada à conexão (firm mais comum
+  entre as contas associadas).
+- **Associar/criar contas da ponte**: lista as contas do bridge por conexão e permite
+  **associar** a uma conta do app (`Account.platformAccountId`), **desassociar**, **criar
+  conta** (com tipo: Prop/Banco/Cripto-Carteira/Investimento/Dinheiro), **auto-associar por
+  nome** e **criar todas as faltantes**. Resolve o gap do app antigo (vínculo conexão↔conta)
+  já adaptado aos vários tipos de conta novos.
+- Gate: `tsc` 0 + build verde + 238 testes.
+
 ## Batch V — paridade do Resumo de Investimentos + Home reordenável (executado)
 - **Resumo de Investimentos** ganhou **valor × custo × CDI** e **DCA** (reusa o `Portfolio`
   com `only={['history','dca']}`) — fecha a paridade com a antiga "Visão Geral".
