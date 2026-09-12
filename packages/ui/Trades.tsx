@@ -1,59 +1,105 @@
-// STAGE 7 — Trades (Journal engine-driven). Lista de trades + edit/delete + link pro
-// TradeForm. COMPOSIÇÃO: recebe `trades` já lidos do motor e callbacks; o container
-// persiste via `DataChainEngine.syncTrade`/`deleteTrade`.
-//
-// Fonte: DOCS/04_STAGE3_TRADING_OS/00-produto.md (Journal) + 01-tasks.md (T3.5).
-
+// Trades — lista estilo tabela (app antigo): busca, ordenação, paginação, badges de
+// firm/lado e cards no mobile. Mantém replay + tags. COMPOSIÇÃO (sem cálculo financeiro
+// novo: só agrega resultNet/resultR já calculados pelo motor).
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradeReplay } from '@apps/lib/db';
-
 
 function fmtR(v) {
   if (v == null || Number.isNaN(v)) return 'n/a';
   return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`;
 }
-
 function fmtDate(iso) {
   if (!iso) return '—';
   return iso.slice(0, 16).replace('T', ' ');
+}
+function fmtDateShort(iso) {
+  if (!iso) return '—';
+  return iso.slice(0, 10);
+}
+
+function FirmBadge({ firm }) {
+  if (!firm) return null;
+  if (firm.icon) return <span className="tr-firm-badge" title={firm.name}>{firm.icon}</span>;
+  return (
+    <span className="tr-firm-badge" title={firm.name} style={{ background: firm.color, color: '#fff' }}>
+      {(firm.name || '?').charAt(0).toUpperCase()}
+    </span>
+  );
 }
 
 /**
  * @param {object} props
  * @param {Array<object>} [props.trades]
- * @param {Array<{id:string;name:string}>} [props.accounts]
+ * @param {Array<{id:string;name:string;firmId?:string}>} [props.accounts]
+ * @param {Array<{id:string;name:string;color:string;icon?:string}>} [props.firms]
  * @param {(trade:object)=>void} [props.onEdit]
  * @param {(tradeId:string)=>void} [props.onDelete]
  * @param {()=>void} [props.onNew]
  * @param {boolean} [props.loading]
  */
-export default function Trades({ trades = [], accounts = [], onEdit, onDelete, onNew, loading = false }) {
-  const [filter, setFilter] = useState('');
-  const [replayId, setReplayId] = useState(null);
+export default function Trades({ trades = [], accounts = [], firms = [], onEdit, onDelete, onNew, loading = false }) {
+  const [query, setQuery] = useState('');
   const [tag, setTag] = useState('');
-  const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
+  const [sortKey, setSortKey] = useState('entryDatetime');
+  const [sortDir, setSortDir] = useState('desc');
+  const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState(null);
+  const perPage = 15;
 
-  // J12 — tags livres por trade (array de strings). Helper tipado para o filtro.
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
   const tagsOf = (t) => (Array.isArray(t?.tags) ? t.tags : []);
   const allTags = useMemo(() => {
-    const tagSet: Set<string> = new Set();
-    for (const t of trades) for (const g of tagsOf(t)) if (typeof g === 'string' && g) tagSet.add(g);
-    return [...tagSet].sort((a, b) => String(a).localeCompare(String(b)));
+    const s = new Set<string>();
+    for (const t of trades) for (const g of tagsOf(t)) if (typeof g === 'string' && g) s.add(g);
+    return [...s].sort((a, b) => String(a).localeCompare(String(b)));
   }, [trades]);
 
+  const accountLabel = (t) => {
+    if (t.accounts?.length) return t.accounts.map((a) => accountById.get(a.accountId)?.name || a.accountId).join(', ');
+    return accountById.get(t.accountId)?.name || t.accountId || '—';
+  };
+  const firmOf = (t) => {
+    const accId = t.accountId || t.accounts?.[0]?.accountId;
+    const acc = accId ? accountById.get(accId) : null;
+    return acc?.firmId ? firmById.get(acc.firmId) : null;
+  };
+
   const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return trades.filter((t) => {
+    const q = query.trim().toLowerCase();
+    let list = trades.filter((t) => {
       if (tag && !tagsOf(t).includes(tag)) return false;
       if (!q) return true;
-      return (
-        (t.symbol || '').toLowerCase().includes(q) ||
-        (t.strategyId || '').toLowerCase().includes(q) ||
-        tagsOf(t).join(' ').toLowerCase().includes(q)
-      );
+      return `${t.symbol} ${t.strategyId || ''} ${accountLabel(t)} ${tagsOf(t).join(' ')}`.toLowerCase().includes(q);
     });
-  }, [trades, filter, tag]);
+    list = list.slice().sort((a, b) => {
+      let av = a[sortKey];
+      let bv = b[sortKey];
+      if (sortKey === 'entryDatetime') { av = new Date(a.entryDatetime || 0).getTime(); bv = new Date(b.entryDatetime || 0).getTime(); }
+      else { av = Number(av) || 0; bv = Number(bv) || 0; }
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+    return list;
+  }, [trades, query, tag, sortKey, sortDir, accountById]);
+
+  const stats = useMemo(() => {
+    const total = filtered.length;
+    const wins = filtered.filter((t) => (t.resultNet ?? 0) > 0).length;
+    const pnl = filtered.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const avgR = total > 0 ? filtered.reduce((s, t) => s + (Number(t.resultR) || 0), 0) / total : 0;
+    return { total, wr: total > 0 ? (wins / total) * 100 : 0, pnl, avgR };
+  }, [filtered]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const pageClamped = Math.min(page, totalPages);
+  const pageRows = filtered.slice((pageClamped - 1) * perPage, pageClamped * perPage);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+  const sortMark = (key) => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
 
   if (loading) {
     return (
@@ -66,68 +112,122 @@ export default function Trades({ trades = [], accounts = [], onEdit, onDelete, o
 
   return (
     <div className="tr-root">
+      {/* Stats */}
+      <div className="tr-stats">
+        <div className="td-stat" style={{ borderColor: 'rgba(124,92,255,0.25)' }}><div className="td-stat-label">Trades</div><div className="td-stat-value" style={{ color: '#7c5cff' }}>{stats.total}</div></div>
+        <div className="td-stat" style={{ borderColor: 'rgba(245,158,11,0.25)' }}><div className="td-stat-label">Winrate</div><div className="td-stat-value" style={{ color: '#f59e0b' }}>{stats.wr.toFixed(1)}%</div></div>
+        <div className="td-stat" style={{ borderColor: 'rgba(34,211,238,0.25)' }}><div className="td-stat-label">Avg R</div><div className="td-stat-value" style={{ color: '#22d3ee' }}>{stats.avgR.toFixed(2)}R</div></div>
+        <div className="td-stat" style={{ borderColor: stats.pnl >= 0 ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)' }}><div className="td-stat-label">PnL</div><div className="td-stat-value" style={{ color: stats.pnl >= 0 ? '#10b981' : '#ef4444' }}>{fmtMoney(stats.pnl)}</div></div>
+      </div>
+
+      {/* Toolbar */}
       <div className="tr-head">
-        <input className="tr-search" placeholder="Buscar símbolo/estratégia/tag…" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Buscar trades" />
+        <input className="tr-search" placeholder="Buscar símbolo/estratégia/conta/tag…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Buscar trades" />
         {allTags.length > 0 && (
           <select className="tr-tagfilter" value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Filtrar por tag">
             <option value="">Todas as tags</option>
-            {allTags.map((g) => (
-              <option key={g} value={g}>#{g}</option>
-            ))}
+            {allTags.map((g) => (<option key={g} value={g}>#{g}</option>))}
           </select>
         )}
         {onNew && <button className="tr-btn tr-btn-primary" onClick={onNew}>+ Novo trade</button>}
       </div>
 
       {filtered.length === 0 ? (
-        <div className="tr-empty" role="status">Nenhum trade registrado.</div>
+        <div className="tr-empty" role="status">Nenhum trade encontrado.</div>
       ) : (
-        <div className="tr-list">
-          {filtered.map((t) => {
-            const acct = t.accounts?.length ? t.accounts.map((a) => accountName.get(a.accountId) || a.accountId).join(', ') : (accountName.get(t.accountId) || t.accountId || '—');
-            return (
-              <div key={t.id} className="tr-item">
-                <div className="tr-item-head">
-                  <div className="tr-symbol">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></div>
-                  <div className="tr-item-actions">
-                    <button
-                      className="tr-btn tr-btn-sm tr-btn-ghost"
-                      aria-expanded={replayId === t.id}
-                      onClick={() => setReplayId((id) => (id === t.id ? null : t.id))}
-                    >
-                      {replayId === t.id ? 'Ocultar replay' : '▶ Replay'}
-                    </button>
+        <>
+          <div className="tr-table-wrap">
+            <table className="tr-table">
+              <thead>
+                <tr>
+                  <th scope="col" onClick={() => toggleSort('entryDatetime')} className="tr-sortable">Data{sortMark('entryDatetime')}</th>
+                  <th scope="col">Ativo</th>
+                  <th scope="col">Lado</th>
+                  <th scope="col" onClick={() => toggleSort('qty')} className="tr-sortable">Qtd{sortMark('qty')}</th>
+                  <th scope="col">Entrada</th>
+                  <th scope="col">Saída</th>
+                  <th scope="col" onClick={() => toggleSort('resultNet')} className="tr-sortable">PnL{sortMark('resultNet')}</th>
+                  <th scope="col" onClick={() => toggleSort('resultR')} className="tr-sortable">R{sortMark('resultR')}</th>
+                  <th scope="col">Conta</th>
+                  <th scope="col">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((t) => {
+                  const acct = accountLabel(t);
+                  const isOpen = expanded === t.id;
+                  return (
+                    <React.Fragment key={t.id}>
+                      <tr>
+                        <td>{fmtDateShort(t.entryDatetime)}</td>
+                        <td className="tr-sym">{t.symbol}</td>
+                        <td><span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></td>
+                        <td className="tr-num">{t.qty}</td>
+                        <td className="tr-num">{fmtMoney(t.entryPrice)}</td>
+                        <td className="tr-num">{t.exitPrice != null ? fmtMoney(t.exitPrice) : '—'}</td>
+                        <td className={`tr-num ${(t.resultNet ?? 0) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(t.resultNet)}</td>
+                        <td className="tr-num">{fmtR(t.resultR)}</td>
+                        <td className="tr-acct"><FirmBadge firm={firmOf(t)} /> {acct}</td>
+                        <td className="tr-actions">
+                          <button className="tr-btn tr-btn-sm tr-btn-ghost" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : t.id)}>{isOpen ? 'Ocultar' : 'Replay'}</button>
+                          {onEdit && <button className="tr-btn tr-btn-sm" onClick={() => onEdit(t)} aria-label="Editar">✎</button>}
+                          {onDelete && <button className="tr-btn tr-btn-sm tr-btn-danger" onClick={() => onDelete(t.id)} aria-label="Excluir">🗑</button>}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="tr-expand">
+                          <td colSpan={10}>
+                            <TradeReplayView trade={t} />
+                            {tagsOf(t).length > 0 && (
+                              <div className="tr-tags" style={{ marginTop: 8 }}>
+                                {tagsOf(t).map((g) => (<button key={g} type="button" className="tr-tag" onClick={() => setTag(g)}>#{g}</button>))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Cards mobile */}
+          <div className="tr-cards">
+            {pageRows.map((t) => {
+              const isOpen = expanded === t.id;
+              return (
+                <div key={t.id} className="tr-card">
+                  <div className="tr-card-head">
+                    <span className="tr-symbol">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
+                    <span className={`tr-num ${(t.resultNet ?? 0) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(t.resultNet)}</span>
+                  </div>
+                  <div className="tr-card-meta">{fmtDateShort(t.entryDatetime)} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}</div>
+                  <div className="tr-card-actions">
+                    <button className="tr-btn tr-btn-sm tr-btn-ghost" onClick={() => setExpanded(isOpen ? null : t.id)}>{isOpen ? 'Ocultar' : 'Replay'}</button>
                     {onEdit && <button className="tr-btn tr-btn-sm" onClick={() => onEdit(t)}>Editar</button>}
                     {onDelete && <button className="tr-btn tr-btn-sm tr-btn-danger" onClick={() => onDelete(t.id)}>Excluir</button>}
                   </div>
+                  {isOpen && <TradeReplayView trade={t} />}
                 </div>
-                <div className="tr-item-grid">
-                  <div className="tr-cell"><span className="tr-cell-label">Qty</span><span>{t.qty}</span></div>
-                  <div className="tr-cell"><span className="tr-cell-label">Entrada</span><span>{fmtMoney(t.entryPrice)}</span></div>
-                  <div className="tr-cell"><span className="tr-cell-label">Saída</span><span>{t.exitPrice != null ? fmtMoney(t.exitPrice) : '—'}</span></div>
-                  <div className="tr-cell"><span className="tr-cell-label">PnL</span><span style={{ color: (t.resultNet ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(t.resultNet)}</span></div>
-                  <div className="tr-cell"><span className="tr-cell-label">R</span><span>{fmtR(t.resultR)}</span></div>
-                  <div className="tr-cell"><span className="tr-cell-label">Conta</span><span className="tr-acct">{acct}</span></div>
-                </div>
-                <div className="tr-item-meta">{fmtDate(t.entryDatetime)} · {t.strategyId || 'sem estratégia'}</div>
-                {replayId === t.id && <TradeReplayView trade={t} />}
-                {tagsOf(t).length > 0 && (
-                  <div className="tr-tags">
-                    {tagsOf(t).map((g) => (
-                      <button key={g} type="button" className="tr-tag" onClick={() => setTag(g)} title={`Filtrar por #${g}`}>#{g}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="tr-pagination">
+              <button className="tr-btn tr-btn-sm" disabled={pageClamped === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Anterior</button>
+              <span className="tr-page">Página {pageClamped} / {totalPages}</span>
+              <button className="tr-btn tr-btn-sm" disabled={pageClamped >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Próxima ›</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// B1 — replay expansível: sequência temporal entrada → fills → saída + MAE/MFE + notas.
 function TradeReplayView({ trade }) {
   const replay = useMemo(() => tradeReplay(trade), [trade]);
   const maxAbs = Math.max(1, ...replay.points.map((p) => Math.abs(p.price - trade.entryPrice)));
@@ -136,10 +236,7 @@ function TradeReplayView({ trade }) {
       <div className="tr-replay-track">
         {replay.points.map((p, i) => (
           <div key={`${p.at}-${i}`} className={`tr-replay-pt tr-replay-${p.kind}`} title={`${p.label} — ${p.price} @ ${fmtDate(p.at)}`}>
-            <span
-              className="tr-replay-dot"
-              style={{ opacity: 0.35 + (0.65 * Math.abs(p.price - trade.entryPrice)) / maxAbs }}
-            />
+            <span className="tr-replay-dot" style={{ opacity: 0.35 + (0.65 * Math.abs(p.price - trade.entryPrice)) / maxAbs }} />
             <span className="tr-replay-label">{p.label}</span>
             <span className="tr-replay-price">{fmtMoney(p.price)}</span>
           </div>
@@ -161,30 +258,45 @@ const TR_CSS = `
 .tr-skeleton { height: 14px; border-radius: 8px; background: rgba(255,255,255,0.06); animation: tr-pulse 1.4s ease-in-out infinite; }
 .tr-skeleton:nth-child(2) { width: 80%; }
 
-.tr-head { display: flex; gap: 10px; align-items: center; }
-.tr-search { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 42px; }
-.tr-btn { padding: 10px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 42px; }
-.tr-btn-primary { background: var(--brand, #7c5cff); border-color: var(--brand, #7c5cff); color: #fff; font-weight: 700; }
-.tr-btn-sm { padding: 5px 10px; min-height: 30px; font-size: 11px; border-radius: 8px; }
+.tr-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tr-stats .td-stat { position: relative; background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 14px 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.tr-stats .td-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; color: var(--muted, #a1a7b3); margin-bottom: 6px; }
+.tr-stats .td-stat-value { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.tr-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tr-search { flex: 1; min-width: 200px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 42px; }
+.tr-tagfilter { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 42px; }
+.tr-btn { padding: 10px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 40px; }
+.tr-btn:disabled { opacity: 0.5; cursor: default; }
+.tr-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border-color: transparent; color: #fff; font-weight: 700; }
+.tr-btn-sm { padding: 5px 10px; min-height: 36px; font-size: 11px; border-radius: 8px; }
 .tr-btn-danger { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.3); }
 .tr-btn-ghost { background: transparent; }
 
-.tr-list { display: flex; flex-direction: column; gap: 10px; }
-.tr-item { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-.tr-item-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.tr-symbol { font-size: 15px; font-weight: 800; }
-.tr-dir { font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; text-transform: capitalize; }
+.tr-table-wrap { overflow-x: auto; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.tr-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tr-table th, .tr-table td { padding: 10px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
+.tr-table thead th { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.tr-sortable { cursor: pointer; user-select: none; }
+.tr-sortable:hover { color: var(--text, #e7eaf0); }
+.tr-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.tr-num { text-align: right; }
+.tr-pos { color: var(--green, #2ecc71); }
+.tr-neg { color: var(--red, #e74c3c); }
+.tr-sym { font-weight: 700; }
+.tr-acct { font-size: 11px; }
+.tr-actions { display: flex; gap: 6px; }
+.tr-firm-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 4px; font-size: 9px; font-weight: 700; vertical-align: middle; margin-right: 4px; }
+.tr-expand td { background: rgba(7,16,35,0.5); }
+
+.tr-dir { font-size: 10px; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }
 .tr-long { background: rgba(46,204,113,0.15); color: var(--green, #2ecc71); }
 .tr-short { background: rgba(231,76,60,0.15); color: var(--red, #e74c3c); }
-.tr-item-actions { display: flex; gap: 6px; }
 
-.tr-item-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-.tr-cell { display: flex; flex-direction: column; gap: 2px; }
-.tr-cell-label { font-size: 10px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
-.tr-cell span:last-child { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tr-acct { font-size: 12px !important; }
+.tr-cards { display: none; }
+.tr-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.tr-page { font-size: 12px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 
-.tr-item-meta { font-size: 11px; color: var(--muted, #a1a7b3); }
 .tr-replay { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; }
 .tr-replay-track { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
 .tr-replay-pt { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 76px; }
@@ -195,12 +307,19 @@ const TR_CSS = `
 .tr-replay-price { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tr-replay-meta { display: flex; gap: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .tr-replay-notes { font-size: 12px; color: var(--text, #e7eaf0); background: rgba(255,255,255,0.03); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
-.tr-tagfilter { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 42px; }
 .tr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tr-tag { font-size: 11px; padding: 2px 10px; border-radius: 999px; background: rgba(124,92,255,0.12); border: 1px solid rgba(124,92,255,0.3); color: var(--brand, #7c5cff); cursor: pointer; }
 .tr-empty { padding: 24px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
 
-@media (max-width: 719px) { .tr-item-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) {
+  .tr-table-wrap { display: none; }
+  .tr-cards { display: flex; flex-direction: column; gap: 10px; }
+  .tr-card { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .tr-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .tr-card-meta { font-size: 11px; color: var(--muted, #a1a7b3); }
+  .tr-card-actions { display: flex; gap: 6px; }
+  .tr-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @keyframes tr-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('tr-styles')) {

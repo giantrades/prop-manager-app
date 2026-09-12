@@ -10,7 +10,7 @@ import ModuleTabs from '../../ModuleTabs';
 import { PlaybookPanel } from './PlaybookPage';
 import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
-import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats } from '@apps/lib/db';
+import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats, listFirms } from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
 import TradeForm from '@apps/ui/TradeForm';
 import JournalDashboard from '@apps/ui/JournalDashboard';
@@ -55,22 +55,25 @@ export default function JournalPage() {
   const { toast } = useToast();
   // Cache SWR por rota: voltar p/ a aba não refaz skeleton.
   const { loading, data, reload: load } = usePageData('journal', async (f) => {
-    const [t, a, ok, p] = await Promise.all([
+    const [t, a, ok, p, firms] = await Promise.all([
       f.ds.trades.list(),
       f.ds.accounts.list(),
       isDayComplete(f.ds),
       f.ds.payouts.list(),
+      listFirms(f.ds),
     ]);
     return {
       trades: t.sort((x, y) => (y.entryDatetime || '').localeCompare(x.entryDatetime || '')),
       accounts: a,
       checklistOk: ok,
       payouts: p,
+      firms,
     };
   });
   const trades = data?.trades ?? [];
   const accounts = data?.accounts ?? [];
   const payouts = data?.payouts ?? [];
+  const firms = data?.firms ?? [];
   const [checklistBlocked, setChecklistBlocked] = useState(false);
   const checklistOk = checklistBlocked ? false : (data?.checklistOk ?? null);
   const [showForm, setShowForm] = useState(false);
@@ -351,6 +354,7 @@ export default function JournalPage() {
             <Trades
               trades={trades}
               accounts={accounts}
+              firms={firms}
               loading={loading}
               onNew={() => setShowForm(true)}
               onEdit={(t) => { setEditing(t); setShowForm(true); }}
