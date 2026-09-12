@@ -6,9 +6,12 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceDot,
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
+import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays } from 'lucide-react';
 import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+
+const WIDGET_ICONS = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
 
 function fmtPct(value) {
   if (value == null || Number.isNaN(value)) return '—';
@@ -24,10 +27,11 @@ const CAT_COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: 
 
 function Widget({ id, title, to = null, hide, children }) {
   if (hide(id)) return null;
+  const Icon = WIDGET_ICONS[id];
   return (
     <section className="hc-widget" aria-label={title}>
       <div className="hc-widget-head">
-        <h3 className="hc-widget-title">{title}</h3>
+        <h3 className="hc-widget-title">{Icon && <Icon size={14} strokeWidth={2.2} />} {title}</h3>
         {to && <a className="hc-widget-link" href={to}>abrir</a>}
       </div>
       {children}
@@ -265,7 +269,7 @@ const HC_CSS = `
 .hc-widget > .hc-goals { flex: 1; }
 .hc-widget > .hc-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }
 .hc-widget-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.hc-widget-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin: 0; }
+.hc-widget-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin: 0; display: inline-flex; align-items: center; gap: 6px; }
 .hc-widget-link { font-size: 11px; font-weight: 700; color: var(--brand, #7c5cff); }
 .hc-widget-link:hover { text-decoration: underline; }
 

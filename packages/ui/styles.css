@@ -4994,3 +4994,15 @@ body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 .nb-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border: none; color: #fff; }
 .pf-alloc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 800px) { .pf-alloc-grid { grid-template-columns: 1fr; } }
+
+/* Recharts — tooltips legíveis em todo o app (corrige fonte invisivel) */
+.recharts-default-tooltip {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 10px !important;
+  color: #e7eaf0 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label { color: #e7eaf0 !important; font-weight: 700 !important; }
+.recharts-default-tooltip .recharts-tooltip-item { color: #e7eaf0 !important; }
+.recharts-tooltip-cursor { fill: rgba(255, 255, 255, 0.05) !important; }
