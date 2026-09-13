@@ -5,11 +5,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import { accountDashboard, computeAccountBalance, listFirms, saveFirm } from '@apps/lib/db';
+import { accountDashboard, computeAccountBalance, listFirms, saveFirm, normalizePropPhase } from '@apps/lib/db';
 import Accounts from '@apps/ui/Accounts';
 import AccountDetail from '@apps/ui/AccountDetail';
 
-const NEXT_PHASE = { challenge1: 'challenge2', challenge2: 'funded', funded: 'funded', paused: 'funded', failed: 'challenge1' };
+// Avanço natural do ciclo de vida da conta.
+const NEXT_PHASE = { challenge: 'funded', funded: 'live', live: 'live', standby: 'live' };
 
 export default function AccountsPage() {
   const finance = useFinance();
@@ -78,12 +79,21 @@ export default function AccountsPage() {
       ]);
       setDetail(d);
       setPayouts(p);
+    } catch {
+      // Nunca deixa o painel preso no skeleton: cai num resumo vazio.
+      setDetail({
+        equity: 0, peak: 0,
+        drawdown: { value: 0, fraction: 0 }, headroom: { value: 0 },
+        payouts: { count: 0, totalNet: 0 }, trades: { count: 0, wins: 0, losses: 0 },
+        series: [], eligibility: null,
+      });
     } finally {
       setDetailLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadDetail(selectedId); }, [selectedId, loadDetail]);
+  // Re-tenta quando o finance fica pronto (senão o painel ficava preso no skeleton).
+  useEffect(() => { loadDetail(selectedId); }, [selectedId, loadDetail, finance]);
   useEffect(() => {
     if (!finance || !selectedId) return;
     const off = finance.ds.bus.on('datastore:change', () => loadDetail(selectedId));
@@ -106,7 +116,7 @@ export default function AccountsPage() {
     await f.ds.accounts.put(rec, { source: 'local' });
     if (src.kind === 'prop') {
       const p = await f.ds.propExtensions.byAccountId(accountId);
-      if (p) await f.ds.propExtensions.put({ ...p, accountId: rec.id, phase: 'challenge1' }, { source: 'local' });
+      if (p) await f.ds.propExtensions.put({ ...p, accountId: rec.id, phase: 'challenge' }, { source: 'local' });
     }
     load();
   }, [load]);
@@ -135,7 +145,8 @@ export default function AccountsPage() {
   const statusById = {};
   for (const a of accounts) {
     const p = props[a.id];
-    if (p) statusById[a.id] = p.phase === 'failed' ? 'STOP' : p.phase === 'funded' ? 'SAFE' : 'WARN';
+    const phase = normalizePropPhase(p?.phase);
+    if (phase) statusById[a.id] = phase === 'standby' ? 'STOP' : phase === 'challenge' ? 'WARN' : 'SAFE';
   }
 
   return (
@@ -187,13 +198,15 @@ export default function AccountsPage() {
               />
               <div className="ac3-form-actions" role="group" aria-label="Gerenciar conta" style={{ marginTop: 12, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
                 <button className="ac3-btn ac3-btn-sm" onClick={() => handleDuplicate(selected.id)}>Duplicar</button>
-                {props[selected.id] && (
-                  <>
-                    <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, NEXT_PHASE[props[selected.id].phase] ?? 'funded')}>Avançar fase</button>
-                    <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, props[selected.id].phase === 'paused' ? 'funded' : 'paused')}>{props[selected.id].phase === 'paused' ? 'Retomar' : 'Pausar'}</button>
-                    <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => handleSetPhase(selected.id, 'failed')}>Marcar failed</button>
-                  </>
-                )}
+                {props[selected.id] && (() => {
+                  const phase = normalizePropPhase(props[selected.id].phase);
+                  return (
+                    <>
+                      <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, NEXT_PHASE[phase] ?? 'challenge')}>Avançar status</button>
+                      <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, phase === 'standby' ? 'live' : 'standby')}>{phase === 'standby' ? 'Ativar' : 'Standby'}</button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

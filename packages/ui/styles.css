@@ -4933,10 +4933,10 @@ select.payouts-input {
 @media (max-width: 1023px) { .cmd-page .ac2-master-detail { grid-template-columns: 1fr; } }
 
 /* ============================================================
-   GLASS GLOBAL ó padroniza os "surfaces" neutros do app com o
+   GLASS GLOBAL ÔøΩ padroniza os "surfaces" neutros do app com o
    mesmo glassmorphism (gradiente + borda + sombra + blur) dos
    cards do Trading/Contas. Seletor com `body` p/ vencer o CSS
-   embarcado dos componentes. N√O toca superfÌcies sem‚nticas
+   embarcado dos componentes. NÔøΩO toca superfÔøΩcies semÔøΩnticas
    (accent1..17, hc-quad-risk, ex-bills, py-sum-fee, etc.).
    ============================================================ */
 body .jd-chart,
@@ -4973,17 +4973,17 @@ body .payouts-page .card:not([class*="accent"]) {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Gastos ó linhas de lanÁamento estilo Mobills (Ìcone circular + status) */
+/* Gastos ÔøΩ linhas de lanÔøΩamento estilo Mobills (ÔøΩcone circular + status) */
 .ex-item-ico { width: 34px; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid; background: rgba(255,255,255,0.03); }
 .ex-status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .ex-dot-paid { background: var(--green, #2ecc71); }
 .ex-dot-pending { background: var(--yellow, #e1b12c); }
 body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 
-/* Forms ó tÌtulos com Ìcone */
+/* Forms ÔøΩ tÔøΩtulos com ÔøΩcone */
 .ex-sheet-title, .ac3-sheet-title, .py-sheet-title { display: inline-flex; align-items: center; gap: 6px; }
 
-/* NotificaÁıes ó item com aÁ„o manual + criar lembrete */
+/* NotificaÔøΩÔøΩes ÔøΩ item com aÔøΩÔøΩo manual + criar lembrete */
 .nb-item { display: flex; align-items: center; gap: 4px; }
 .nb-item-main { display: flex; gap: 10px; align-items: flex-start; flex: 1; background: transparent; border: none; color: inherit; text-align: left; cursor: pointer; padding: 6px; border-radius: 10px; }
 .nb-item-main:hover { background: rgba(255,255,255,0.04); }
@@ -4995,7 +4995,7 @@ body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 .pf-alloc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 800px) { .pf-alloc-grid { grid-template-columns: 1fr; } }
 
-/* Recharts ó tooltips legÌveis em todo o app (corrige fonte invisivel) */
+/* Recharts ÔøΩ tooltips legÔøΩveis em todo o app (corrige fonte invisivel) */
 .recharts-default-tooltip {
   background: #0f172a !important;
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
@@ -5007,14 +5007,14 @@ body .ex-item-main { flex: 1 1 auto; min-width: 0; }
 .recharts-default-tooltip .recharts-tooltip-item { color: #e7eaf0 !important; }
 .recharts-tooltip-cursor { fill: rgba(255, 255, 255, 0.05) !important; }
 
-/* Gastos (p·gina) ó cards do resumo com Ìcone */
+/* Gastos (pÔøΩgina) ÔøΩ cards do resumo com ÔøΩcone */
 body .ex-sum-card { position: relative; gap: 2px; border-radius: 16px; }
 .ex-sum-ico { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.06); margin-bottom: 6px; }
 .ex-sum-in .ex-sum-ico { color: var(--green, #2ecc71); }
 .ex-sum-out .ex-sum-ico { color: var(--red, #e74c3c); }
 .ex-sum-sub { font-size: 11px; color: rgba(255,255,255,0.45); }
 
-/* Cards que ainda eram chapados ó glass SUTIL (um pouco, sem exagerar) */
+/* Cards que ainda eram chapados ÔøΩ glass SUTIL (um pouco, sem exagerar) */
 body .tx-stat,
 body .ps-item,
 body .py-item,
@@ -5032,8 +5032,17 @@ body .ex-recur-row {
   -webkit-backdrop-filter: blur(6px);
 }
 
-/* TÌtulos de seÁ„o com Ìcone */
+/* TÔøΩtulos de seÔøΩÔøΩo com ÔøΩcone */
 body .dash-title > span:first-child,
 body .hc-widget-title,
 body .td-chart-title,
 body .pf-section-title { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Dropdowns nativos (select/option): popup SEMPRE escuro + texto claro em todo o app.
+   Os inputs definiam cor do controle mas n√£o do <option>, que ca√≠a no fundo claro
+   padr√£o do browser (texto claro sobre claro = ileg√≠vel). */
+select option,
+select optgroup {
+  background-color: #0f1218;
+  color: #e7eaf0;
+}

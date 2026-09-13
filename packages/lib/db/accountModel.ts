@@ -7,7 +7,7 @@
 //
 // Proibido escrever saldo direto aqui — equity/drawdown são derivados (DataChainEngine).
 
-import type { Account, AccountKind, PropExtension, PropPhase } from './types';
+import type { Account, AccountKind, PropExtension, PropPhase, LegacyPropPhase } from './types';
 import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
 import {
@@ -20,13 +20,33 @@ import {
 import { parseDate, formatDate } from './dateUtils';
 
 // ---------------------------------------------------------------------------
-// Fases ativas (Risk Center só considera estas)
+// Status da conta prop + normalização de valores legados
 // ---------------------------------------------------------------------------
 
-export const ACTIVE_PROP_PHASES: PropPhase[] = ['challenge1', 'challenge2', 'funded'];
+/**
+ * Normaliza o status vindo do banco (pode haver valores antigos):
+ * challenge1/challenge2 -> challenge · paused/failed -> standby.
+ */
+export function normalizePropPhase(phase: string | undefined): PropPhase | undefined {
+  if (!phase) return undefined;
+  if (phase === 'challenge' || phase === 'funded' || phase === 'live' || phase === 'standby') {
+    return phase;
+  }
+  const legacy: Record<LegacyPropPhase, PropPhase> = {
+    challenge1: 'challenge',
+    challenge2: 'challenge',
+    paused: 'standby',
+    failed: 'standby',
+  };
+  return legacy[phase as LegacyPropPhase];
+}
 
-export function isActiveProp(phase: PropPhase | undefined): boolean {
-  return !!phase && ACTIVE_PROP_PHASES.includes(phase);
+/** Fases ativas (Risk Center só considera estas). */
+export const ACTIVE_PROP_PHASES: PropPhase[] = ['challenge', 'funded', 'live'];
+
+export function isActiveProp(phase: PropPhase | string | undefined): boolean {
+  const p = normalizePropPhase(phase);
+  return !!p && ACTIVE_PROP_PHASES.includes(p);
 }
 
 export function isPropAccount(account: Account): boolean {

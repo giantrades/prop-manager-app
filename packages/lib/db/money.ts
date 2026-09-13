@@ -428,7 +428,7 @@ export function challengeEv(
   const payouts = transactions.filter((t) => t.kind === 'payout_in' && inFirm(t));
   const attempts = costs.length;
   const payerIds = new Set(costs.map((t) => t.accountId).filter(Boolean));
-  const fundedIds = new Set(props.filter((p) => p.phase === 'funded').map((p) => p.accountId));
+  const fundedIds = new Set(props.filter((p) => p.phase === 'funded' || p.phase === 'live').map((p) => p.accountId));
   const approved = [...payerIds].filter((id) => fundedIds.has(id)).length;
   const totalCost = r2(allCostKinds.reduce((s, t) => s + Math.abs(t.amount), 0));
   const avgCost = attempts > 0 ? r2(totalCost / attempts) : null;

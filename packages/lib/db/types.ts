@@ -66,12 +66,16 @@ export interface Account extends SyncedRecord {
   firmId?: string;
 }
 
+// Status de vida de uma conta prop (campo `phase` do PropExtension). 4 estados:
+// challenge, funded, live, standby. Persistido em coluna TEXT (sem migration).
 export type PropPhase =
-  | 'challenge1'
-  | 'challenge2'
+  | 'challenge'
   | 'funded'
-  | 'paused'
-  | 'failed';
+  | 'live'
+  | 'standby';
+
+// Legado: valores gravados antes desta simplificação (normalizados no read).
+export type LegacyPropPhase = 'challenge1' | 'challenge2' | 'paused' | 'failed';
 
 export interface PayoutRules {
   minProfit: number;

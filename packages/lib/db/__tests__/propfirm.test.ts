@@ -156,7 +156,7 @@ describe('F7 — challengeEv (cálculo à mão)', () => {
   const props = [
     { accountId: 'a1', phase: 'funded' },
     { accountId: 'a2', phase: 'funded' },
-    { accountId: 'a3', phase: 'challenge1' },
+    { accountId: 'a3', phase: 'challenge' },
   ];
   // 6 challenges $500 (a1,a2,a3) + 2 resets $150 | payouts 2560+1280
   // attempts 6, approved 2, rate 0.3333, custo 3300, avgCusto 550, avgPayout 1920
@@ -208,7 +208,7 @@ describe('A2 — firm templates', () => {
     const applied = applyTemplate('', 'ftmo-challenge-100k');
     expect(applied?.accountPatch).toMatchObject({ kind: 'prop', institution: 'FTMO', name: 'FTMO Challenge 100K' });
     expect(applied?.prop).toMatchObject({
-      phase: 'challenge1', nominalSize: 100000, target: 10000,
+      phase: 'challenge', nominalSize: 100000, target: 10000,
       maxDD: 0.1, dailyDD: 0.05, minDays: 4, profitSplit: 0.8, challengeCost: 540,
     });
     expect(applied?.prop.consistencyPct).toBe(1); // FTMO sem regra
@@ -258,10 +258,10 @@ describe('A4 — firmPnlReport (cálculo à mão, com rate)', () => {
   });
 });
 
-describe('B1 � firmPnlHistory (lucro por firm por m�s)', () => {
+describe('B1 � firmPnlHistory (lucro por firm por m�s)', () => {
   const h = (id, firmId, kind, amount, ym) => ({ id, accountId: 'a1', firmId, kind, amount, currency: 'USD', date: ym + '-15T12:00:00Z', updatedAt: ym + '-15T12:00:00Z', deviceId: 'dev-prop', version: 0 });
 
-  it('agrupa por m�s com zeros preenchidos; ignora kinds neutros e sem firm', () => {
+  it('agrupa por m�s com zeros preenchidos; ignora kinds neutros e sem firm', () => {
     const txs = [
       h('p1', 'E8', 'payout_in', 1000, '2026-08'),
       h('c1', 'E8', 'challenge_cost', -500, '2026-08'),

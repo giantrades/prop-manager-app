@@ -109,7 +109,7 @@ export interface AppliedTemplate {
   prop: {
     nominalSize: number;
     challengeCost: number;
-    phase: 'challenge1';
+    phase: 'challenge';
     target: number;
     maxDD: number;
     trailingDD: number;
@@ -135,7 +135,7 @@ export function applyTemplate(currentName: string, templateId: string): AppliedT
     prop: {
       nominalSize: t.nominalSize,
       challengeCost: t.challengeCost,
-      phase: 'challenge1',
+      phase: 'challenge',
       target: t.target,
       maxDD: t.maxDD,
       trailingDD: t.trailingDD,

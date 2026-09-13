@@ -78,11 +78,11 @@ export default function ConnectionsManager() {
   }, [finance, load]);
 
   const quantower = statuses.find((s) => s.platformId === 'quantower');
-  // Demo entra quando: (a) o usuário ainda não tem conta própria nem contas reais da ponte,
-  // ou (b) o usuário pediu explicitamente pra ver o exemplo (botão).
+  // Demo automático só em build com VITE_DEMO_MODE; o botão "Ver exemplo" funciona em
+  // qualquer build (inclusive produção), pois é uma ação explícita e rotulada.
   const userAccounts = appAccounts.filter((a) => !demoAccountIds.has(a.id));
   const autoDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
-  const showDemo = DEMO_CAPABLE && (forceDemo || autoDemo);
+  const showDemo = forceDemo || autoDemo;
   const online = !!quantower?.online || showDemo;
   const connections = (quantower?.connections?.length ? quantower.connections : (showDemo ? DEMO_CONNECTIONS : []));
   const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (showDemo ? DEMO_BRIDGE : []);
@@ -193,15 +193,10 @@ export default function ConnectionsManager() {
       <div className="st-title"><Link2 size={15} /> Conexões de plataforma</div>
       <div className="cx-head">
         <p className="st-hint">Contas da ponte (Quantower/cTrader). Associe cada conta ao cadastro do app ou crie automaticamente.</p>
-        {DEMO_CAPABLE && !showDemo && (
+        {!showDemo && (
           <button className="cmd-refresh" onClick={() => setForceDemo(true)}><Wand2 size={13} /> Ver exemplo (demo)</button>
         )}
       </div>
-      {!DEMO_CAPABLE && (
-        <p className="st-hint cx-warn">
-          Modo demo desligado neste build (VITE_DEMO_MODE ≠ 1). Adicione a variável no `.env` e reinicie o dev server para ver o exemplo.
-        </p>
-      )}
 
       {!online && (
         <div className="cx-offline" role="status">

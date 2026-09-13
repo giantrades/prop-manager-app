@@ -7,9 +7,13 @@
 
 import { fmtMoney } from './currency';
 import React, { useId } from 'react';
+import { normalizePropPhase } from '@apps/lib/db';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
+
+
+const PHASE_LABEL = { challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby' };
 
 
 function fmtPct(v) {
@@ -64,7 +68,7 @@ export default function AccountDetail({ account, prop = null, dashboard = null, 
         <div>
           <div className="ad-title">{account.name} <span className="ad-kind">{account.kind}</span></div>
           <div className="ad-sub">
-            {prop ? `fase ${prop.phase} · nominal ${fmtMoney(prop.nominalSize)}` : 'sem regras prop'}
+            {prop ? `${PHASE_LABEL[normalizePropPhase(prop.phase)] ?? prop.phase} · balance ${fmtMoney(prop.nominalSize)}` : 'sem regras prop'}
             {account.platformName ? ` · ${account.platformName}` : ''}
           </div>
         </div>

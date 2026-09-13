@@ -406,3 +406,20 @@ Achado central confirmado: o padrÃ£o `ws-tabs` (Payouts|Alocar) jÃ¡ Ã© o drill-d
 - `ConnectionsManager`: os cards mock so aparecem enquanto `showDemo` (sem conta propria e sem
   contas reais da ponte) + aviso "Exemplo (demo) - some quando cadastrar sua 1a conta".
 - Testes em `seedDemo.test.ts` (seed + expiracao). Gate: tsc 0 + build verde + 242 testes.
+
+## Batch AA — Contas: status/simplificacao + dropdowns + demo em prod (executado)
+- **Dropdowns**: regra global `select option { background:#0f1218; color:#e7eaf0 }` em
+  `packages/ui/styles.css` e `main-app/src/styles.css` (varios inputs nao tinham `option`).
+- **Form de conta**: removidos Moeda, "ID na plataforma"/Plataforma (link agora so via
+  Conexoes) e "Peso default (rateio)" (`defaultWeight` e vestigial: nenhum motor le).
+- **Status**: `PropPhase` virou `challenge|funded|live|standby` (coluna TEXT do Supabase,
+  sem migration). `normalizePropPhase` mapeia legado (challenge1/2->challenge, paused/failed
+  ->standby). `ACTIVE_PROP_PHASES = challenge/funded/live`.
+- **Form prop enxuto**: Custo da conta, Balance (nominal), Status, Frequencia payout, Profit
+  split. DD/consistencia/minDays seguem com defaults/template (motor intacto).
+- **Cards**: prop mostra Balance/Custo/Profit split; removidos Target e a metrica Moeda.
+- **Painel da conta**: corrigido (detail re-tenta quando `finance` fica pronto + fallback se
+  `accountDashboard` falhar) — nao fica mais preso no skeleton com so "Duplicar".
+- **Demo em prod**: botao "Ver exemplo (demo)" funciona em qualquer build (acao explicita e
+  rotulada); o demo automatico continua so com VITE_DEMO_MODE.
+- Gate: tsc 0 + build verde + 242 testes.

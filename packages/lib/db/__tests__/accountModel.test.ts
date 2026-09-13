@@ -85,17 +85,20 @@ describe('accountModel — getRiskStatus (Risk genérico)', () => {
 });
 
 describe('accountModel — helpers', () => {
-  it('isActiveProp considera só challenge1/challenge2/funded', () => {
+  it('isActiveProp considera challenge/funded/live (e normaliza legado)', () => {
+    expect(isActiveProp('challenge')).toBe(true);
     expect(isActiveProp('funded')).toBe(true);
-    expect(isActiveProp('paused')).toBe(false);
-    expect(isActiveProp('failed')).toBe(false);
+    expect(isActiveProp('live')).toBe(true);
+    expect(isActiveProp('standby')).toBe(false);
+    expect(isActiveProp('paused')).toBe(false); // legado -> standby
+    expect(isActiveProp('challenge1')).toBe(true); // legado -> challenge
     expect(isActiveProp(undefined)).toBe(false);
   });
 
   it('isRiskTracked exclui contas ocultas e prop inativa', () => {
     expect(isRiskTracked(propAccount(), propExt())).toBe(true);
     expect(isRiskTracked(propAccount({ hidden: true }), propExt())).toBe(false);
-    expect(isRiskTracked(propAccount(), propExt({ phase: 'failed' }))).toBe(false);
+    expect(isRiskTracked(propAccount(), propExt({ phase: 'standby' }))).toBe(false);
     const cash: Account = { id: 'c', kind: 'cash', name: 'Cash', currency: 'USD', hidden: false, defaultWeight: 1 } as Account;
     expect(isRiskTracked(cash)).toBe(true);
   });

@@ -41,7 +41,7 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
       profitSplit: 0.8, payoutFrequency: 'monthly', updatedAt: now(), deviceId: 'demo', version: 0,
     },
     {
-      accountId: 'acct-ftmo', nominalSize: 50000, challengeCost: 89, phase: 'challenge2', target: 50000,
+      accountId: 'acct-ftmo', nominalSize: 50000, challengeCost: 89, phase: 'challenge', target: 50000,
       maxDD: 0.1, trailingDD: 0.08, dailyDD: 0.05, consistencyPct: 0.4, minDays: 4,
       payoutRules: { minProfit: 0, minDaysSincePayout: 1, feePct: 0.2, method: 'Bank' },
       profitSplit: 0.8, payoutFrequency: 'weekly', updatedAt: now(), deviceId: 'demo', version: 0,

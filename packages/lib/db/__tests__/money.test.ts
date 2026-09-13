@@ -368,7 +368,7 @@ describe('Fase 3 — Money OS', () => {
       // Fail a conta.
       const prop = await ds.propExtensions.byAccountId('acct-e8');
       expect(prop).toBeDefined();
-      await ds.propExtensions.put({ ...prop!, phase: 'failed' });
+      await ds.propExtensions.put({ ...prop!, phase: 'standby' });
 
       // Transactions ainda existem (nunca deletadas).
       const txs = await ds.transactions.list();
