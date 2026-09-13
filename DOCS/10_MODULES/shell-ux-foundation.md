@@ -423,3 +423,11 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
 - **Demo em prod**: botao "Ver exemplo (demo)" funciona em qualquer build (acao explicita e
   rotulada); o demo automatico continua so com VITE_DEMO_MODE.
 - Gate: tsc 0 + build verde + 242 testes.
+
+## Batch AB � conexao -> firm + icone (executado)
+- `packages/lib/db/connectionFirms.ts`: metadados `bridge:connectionFirms` (connectionId -> firmId).
+- `ConnectionsManager`: seletor "Firm da conexao" no card; a cor/icone da firm pintam o card
+  (fallback brand) e a firm e' propagada para TODAS as contas da conexao (`Account.firmId`),
+  alimentando a tela Contas e os widgets (firmPnl/cores). Criar/associar conta ja herda a firm.
+- Firms ja suportam icone (emoji/custom) em `FirmsPage`; agora o icone aparece no card da conexao.
+- Gate: tsc 0 + build verde + 242 testes.

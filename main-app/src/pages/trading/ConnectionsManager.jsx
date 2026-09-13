@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlatform, useFinance, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { listFirms, getDemoIds, isDemoDisabled } from '@apps/lib/db';
+import { listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm } from '@apps/lib/db';
 import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw } from 'lucide-react';
 
 const KIND_OPTIONS = [
@@ -36,6 +36,7 @@ export default function ConnectionsManager() {
   const [bridgeAccounts, setBridgeAccounts] = useState([]);
   const [appAccounts, setAppAccounts] = useState([]);
   const [firms, setFirms] = useState([]);
+  const [connFirmById, setConnFirmById] = useState({});
   const [demoAccountIds, setDemoAccountIds] = useState(new Set());
   const [demoDisabled, setDemoDisabled] = useState(false);
   const [forceDemo, setForceDemo] = useState(false);
@@ -56,18 +57,20 @@ export default function ConnectionsManager() {
     if (!f) return;
     setBusy(true);
     try {
-      const [accts, app, firmList, ids, disabled] = await Promise.all([
+      const [accts, app, firmList, ids, disabled, connFirms] = await Promise.all([
         adapterRef.current.getAccounts().catch(() => []),
         f.ds.accounts.list(),
         listFirms(f.ds),
         getDemoIds(f.ds),
         isDemoDisabled(f.ds),
+        listConnectionFirms(f.ds),
       ]);
       setBridgeAccounts(accts ?? []);
       setAppAccounts(app ?? []);
       setFirms(firmList ?? []);
       setDemoAccountIds(new Set(ids?.accounts ?? []));
       setDemoDisabled(disabled);
+      setConnFirmById(connFirms ?? {});
     } finally {
       setBusy(false);
     }
@@ -98,16 +101,17 @@ export default function ConnectionsManager() {
     for (const [, entry] of m) {
       const ids = new Set(entry.bridge.map((b) => b.platformAccountId));
       entry.mapped = appAccounts.filter((a) => a.platformAccountId && ids.has(a.platformAccountId));
-      // Cor da firm: a mais comum entre as contas associadas (fallback: brand).
+      // Firm explícita da conexão tem prioridade; senão, a mais comum entre as contas.
       const counts = new Map();
       for (const a of entry.mapped) if (a.firmId) counts.set(a.firmId, (counts.get(a.firmId) ?? 0) + 1);
-      const topFirmId = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
+      const topFirmId = connFirmById[entry.id] || [...counts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
       const firm = topFirmId ? firmById.get(topFirmId) : null;
+      entry.firmId = firm ? firm.id : '';
       entry.firm = firm ?? null;
       entry.color = firm?.color || '#7c5cff';
     }
     return [...m.values()];
-  }, [connections, effectiveBridge, appAccounts, firmById]);
+  }, [connections, effectiveBridge, appAccounts, firmById, connFirmById]);
 
   const appByPlatformId = useMemo(() => {
     const m = new Map();
@@ -124,12 +128,13 @@ export default function ConnectionsManager() {
       ...app,
       platformAccountId: bridgeAcc.platformAccountId,
       platformName: 'quantower',
+      firmId: connFirmById[bridgeAcc.connectionId] || app.firmId,
       institution: app.institution || bridgeAcc.connectionName || undefined,
       updatedAt: new Date().toISOString(),
     }, { source: 'local' });
     toast(`Conta associada: ${bridgeAcc.name}`);
     load();
-  }, [appAccounts, load, toast]);
+  }, [appAccounts, connFirmById, load, toast]);
 
   const unassociate = useCallback(async (appAccount) => {
     const f = financeRef.current;
@@ -149,6 +154,7 @@ export default function ConnectionsManager() {
       name: bridgeAcc.name || `Conta ${bridgeAcc.platformAccountId}`,
       currency: bridgeAcc.currency || 'USD',
       institution: bridgeAcc.connectionName || undefined,
+      firmId: connFirmById[bridgeAcc.connectionId] || undefined,
       hidden: false,
       defaultWeight: 1,
       platformAccountId: bridgeAcc.platformAccountId,
@@ -159,7 +165,28 @@ export default function ConnectionsManager() {
     }, { source: 'local' });
     toast(`Conta criada: ${bridgeAcc.name}`);
     load();
-  }, [load, newKind, toast]);
+  }, [connFirmById, load, newKind, toast]);
+
+  // Define a firm da conexão e propaga para TODAS as contas vinculadas a ela.
+  const setFirmForConnection = useCallback(async (connId, firmId) => {
+    const f = financeRef.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      await setConnectionFirm(f.ds, connId, firmId || null);
+      const entry = byConn.find((c) => c.id === connId);
+      const pids = new Set((entry?.bridge ?? []).map((b) => b.platformAccountId));
+      for (const a of appAccounts) {
+        if (a.platformAccountId && pids.has(a.platformAccountId) && a.firmId !== (firmId || undefined)) {
+          await f.ds.accounts.put({ ...a, firmId: firmId || undefined, updatedAt: new Date().toISOString() }, { source: 'local' });
+        }
+      }
+      toast(firmId ? 'Firm da conexão aplicada às contas.' : 'Firm da conexão removida.');
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }, [byConn, appAccounts, load, toast]);
 
   const autoByName = useCallback(async () => {
     const f = financeRef.current;
@@ -169,12 +196,12 @@ export default function ConnectionsManager() {
       if (appByPlatformId.has(b.platformAccountId)) continue;
       const match = appAccounts.find((a) => !a.platformAccountId && a.name.trim().toLowerCase() === (b.name || '').trim().toLowerCase());
       if (!match) continue;
-      await f.ds.accounts.put({ ...match, platformAccountId: b.platformAccountId, platformName: 'quantower', updatedAt: new Date().toISOString() }, { source: 'local' });
+      await f.ds.accounts.put({ ...match, platformAccountId: b.platformAccountId, platformName: 'quantower', firmId: connFirmById[b.connectionId] || match.firmId, updatedAt: new Date().toISOString() }, { source: 'local' });
       n += 1;
     }
     toast(n > 0 ? `${n} conta(s) associadas por nome.` : 'Nada para auto-associar por nome.', { type: n > 0 ? 'ok' : 'warn' });
     load();
-  }, [effectiveBridge, appAccounts, appByPlatformId, load, toast]);
+  }, [effectiveBridge, appAccounts, appByPlatformId, connFirmById, load, toast]);
 
   const createAllMissing = useCallback(async () => {
     const f = financeRef.current;
@@ -222,9 +249,11 @@ export default function ConnectionsManager() {
             return (
               <div key={c.id} className={`cx-card${open ? ' open' : ''}`} style={{ borderColor: open ? c.color : undefined, borderTopColor: c.color }}>
                 <button type="button" className="cx-card-head" onClick={() => setOpenId(open ? null : c.id)} aria-expanded={open}>
-                  <span className="cx-ico" style={{ color: c.color, borderColor: c.color, background: `${c.color}22` }}><Landmark size={16} /></span>
+                  <span className="cx-ico" style={{ color: c.color, borderColor: c.color, background: `${c.color}22` }}>
+                    {c.firm?.icon ? <span style={{ fontSize: 15 }}>{c.firm.icon}</span> : <Landmark size={16} />}
+                  </span>
                   <span className="cx-card-body">
-                    <span className="cx-name">{c.name}{c.firm && <span className="cx-firm" style={{ color: c.color }}>● {c.firm.name}</span>}</span>
+                    <span className="cx-name">{c.name}{c.firm && <span className="cx-firm" style={{ color: c.color }}>{c.firm.icon ? `${c.firm.icon} ` : '● '}{c.firm.name}</span>}</span>
                     <span className="cx-sub">
                       <span className={`cx-dot ${online ? 'on' : 'off'}`} /> {online ? 'conectada' : 'offline'} · {c.mapped.length}/{c.bridge.length} contas associadas
                     </span>
@@ -233,6 +262,19 @@ export default function ConnectionsManager() {
 
                 {open && (
                   <div className="cx-panel">
+                    <div className="cx-firm-row">
+                      <span className="cx-firm-label">Firm da conexão</span>
+                      <select
+                        className="cx-select"
+                        value={c.firmId || ''}
+                        onChange={(e) => setFirmForConnection(c.id, e.target.value)}
+                        disabled={busy}
+                        aria-label={`Firm da conexão ${c.name}`}
+                      >
+                        <option value="">— sem firm —</option>
+                        {firms.map((f) => <option key={f.id} value={f.id}>{f.icon ? `${f.icon} ` : ''}{f.name}</option>)}
+                      </select>
+                    </div>
                     {c.bridge.length === 0 ? (
                       <div className="st-hint">Sem contas nesta conexão.</div>
                     ) : c.bridge.map((b) => {
@@ -303,6 +345,8 @@ const CX_CSS = `
 .cx-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 6px rgba(46,204,113,0.6); }
 .cx-dot.off { background: var(--red, #e74c3c); }
 .cx-panel { border-top: 1px solid rgba(255,255,255,0.06); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.cx-firm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 4px; }
+.cx-firm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
 .cx-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .cx-row:last-child { border-bottom: none; }
 .cx-row-info { min-width: 0; display: flex; flex-direction: column; }

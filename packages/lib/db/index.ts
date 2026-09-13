@@ -23,6 +23,7 @@ export * from './strategies';
 export * from './copyTrade';
 export * from './money';
 export * from './firms';
+export * from './connectionFirms';
 export * from './actions';
 export * from './wealth';
 export * from './journalAnalytics';
