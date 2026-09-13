@@ -127,3 +127,11 @@
 - Gate: `tsc` 0 + build verde + 237 testes.
 - Próximo (Mobills): **subcategorias**, gestão de **cartão de crédito** (fatura fechada/paga,
   pagamento parcial), projeção de saldo e dashboard cards reordenáveis.
+
+## Batch G-mes — historico por mes na dashboard (executado)
+- `GastosDashboardPage`: o `ym` saiu do loader (estava fixo no mes atual) e virou estado.
+  Nova **barra de meses** (estilo Mobills): ‹ Mes/Ano › + "Mes atual" + faixa de chips dos
+  ultimos 12 meses (com saldo) — clicar seleciona o mes e TODA a dashboard reflete ele
+  (KPIs, donut, orcamento, ranking, cartoes, ultimos lancamentos, "maior alta vs mes passado").
+- Sem formula nova: tudo reusa `expensesByCategory/incomeByKind/budgetStatus/computeFreeCash/
+  monthlySeries/compareMonths/merchantRanking`.

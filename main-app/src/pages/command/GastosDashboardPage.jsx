@@ -24,6 +24,20 @@ import {
 
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
+const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+const nowYm = () => new Date().toISOString().slice(0, 7);
+
+/** Soma `delta` meses a um `YYYY-MM` (UTC-safe). */
+function shiftYm(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+function ymLabel(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return `${MONTHS_PT[m - 1]}/${y}`;
+}
 
 function CatIcon({ name, color, size = 16 }) {
   const Cmp = ICONS[name] || Tag;
@@ -36,17 +50,23 @@ function CatIcon({ name, color, size = 16 }) {
 
 export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
+  const [ym, setYm] = useState(nowYm);
   const { loading, data } = useEngineData(async (f) => {
-    const ym = new Date().toISOString().slice(0, 7);
     const [txs, categories, budgets, savingsGoal, wallets] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(),
     ]);
-    return { txs, categories, budgets, savingsGoal, wallets, ym };
+    return { txs, categories, budgets, savingsGoal, wallets };
   });
+
+  // Histórico dos últimos 12 meses (mais recente primeiro) — independente do mês selecionado.
+  const history = useMemo(() => {
+    if (!data) return [];
+    return monthlySeries(data.txs, 12, nowYm()).slice().reverse();
+  }, [data]);
 
   const view = useMemo(() => {
     if (!data) return null;
-    const { txs, categories, budgets, savingsGoal, ym } = data;
+    const { txs, categories, budgets, savingsGoal } = data;
     const cats = categories ?? [];
     const catById = new Map(cats.map((c) => [c.id, c]));
     const groups = expensesByCategory(txs, ym, cats);
@@ -86,7 +106,7 @@ export default function GastosDashboardPage() {
       pending: pendingSummary(txs), bills: pendingBills(txs).slice(0, 5),
       merchants: merchantRanking(txs, ym, 6), recent, worstRise, goal, balanceTotal, cards,
     };
-  }, [data]);
+  }, [data, ym]);
 
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
@@ -104,6 +124,33 @@ export default function GastosDashboardPage() {
         <NavLink className="cmd-refresh" to="/expenses" style={{ textDecoration: 'none' }}>Lançamentos →</NavLink>
       </div>
       <ModuleTabs module="gastos" />
+
+      {/* Navegação por mês — histórico estilo Mobills (selecione o mês/ano) */}
+      <div className="gd-monthbar">
+        <div className="gd-monthnav">
+          <button className="gd-mnav" onClick={() => setYm((v) => shiftYm(v, -1))} aria-label="Mês anterior">‹</button>
+          <span className="gd-month-label">{ymLabel(ym)}</span>
+          <button className="gd-mnav" onClick={() => setYm((v) => shiftYm(v, 1))} aria-label="Próximo mês">›</button>
+          {ym !== nowYm() && <button className="gd-today" onClick={() => setYm(nowYm())}>Mês atual</button>}
+        </div>
+        {history.length > 0 && (
+          <div className="gd-months" role="tablist" aria-label="Histórico de meses">
+            {history.map((h) => (
+              <button
+                key={h.ym}
+                role="tab"
+                aria-selected={h.ym === ym}
+                className={`gd-monthchip${h.ym === ym ? ' active' : ''}`}
+                onClick={() => setYm(h.ym)}
+              >
+                <span className="gd-monthchip-m">{MONTHS_PT[Number(h.ym.slice(5, 7)) - 1]}</span>
+                <span className="gd-monthchip-y">'{h.ym.slice(2, 4)}</span>
+                <span className={`gd-monthchip-b ${h.balance >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(h.balance, 'R$')}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {loading || !view ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando gastos…</div>
@@ -274,6 +321,19 @@ export default function GastosDashboardPage() {
 }
 
 const GD_CSS = `
+.gd-monthbar { display: flex; flex-direction: column; gap: 8px; }
+.gd-monthnav { display: flex; align-items: center; gap: 8px; }
+.gd-mnav { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.gd-mnav:hover { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); }
+.gd-month-label { font-size: 15px; font-weight: 800; min-width: 96px; text-align: center; }
+.gd-today { margin-left: 4px; padding: 7px 12px; border-radius: 10px; background: rgba(124,92,255,0.12); border: 1px solid rgba(124,92,255,0.35); color: var(--brand, #7c5cff); font-size: 12px; font-weight: 700; cursor: pointer; }
+.gd-months { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+.gd-monthchip { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 62px; padding: 7px 8px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); cursor: pointer; }
+.gd-monthchip:hover { background: rgba(255,255,255,0.06); }
+.gd-monthchip.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.45); color: var(--text, #e7eaf0); }
+.gd-monthchip-m { font-size: 12px; font-weight: 700; }
+.gd-monthchip-y { font-size: 10px; opacity: 0.7; }
+.gd-monthchip-b { font-size: 10px; font-variant-numeric: tabular-nums; font-weight: 700; }
 .gd-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .gd-card { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 16px; border: 1px solid #1a2232; background: linear-gradient(180deg, #161b25 0%, #131825 100%); box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
 .gd-in { background: linear-gradient(180deg, #1a3a2b 0%, #142428 100%); border-color: rgba(46,204,113,0.25); }

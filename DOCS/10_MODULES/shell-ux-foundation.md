@@ -455,3 +455,8 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   (`ds.meta.list()`) -> sobe para `app_meta` o que ainda nao estava no remoto.
 - Continua tolerante se `app_meta` nao existir (nao derruba os outros stores).
 - Teste de denylist em `supabaseSync.test.ts`. Gate: tsc 0 + build verde + 243 testes.
+
+## Batch AE � "lido" das notificacoes sincronizado (executado)
+- `useReadNotifications` passou a persistir no `meta` (`notifications:read`) alem do cache em
+  localStorage: hidrata do meta e mescla, grava nos dois. Com o meta por denylist, o "lido"
+  agora sincroniza entre devices.
