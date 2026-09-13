@@ -38,6 +38,7 @@ export default function ConnectionsManager() {
   const [firms, setFirms] = useState([]);
   const [demoAccountIds, setDemoAccountIds] = useState(new Set());
   const [demoDisabled, setDemoDisabled] = useState(false);
+  const [forceDemo, setForceDemo] = useState(false);
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [newKind, setNewKind] = useState('prop');
@@ -77,9 +78,11 @@ export default function ConnectionsManager() {
   }, [finance, load]);
 
   const quantower = statuses.find((s) => s.platformId === 'quantower');
-  // Demo só entra enquanto não há conta própria nem contas reais da ponte.
+  // Demo entra quando: (a) o usuário ainda não tem conta própria nem contas reais da ponte,
+  // ou (b) o usuário pediu explicitamente pra ver o exemplo (botão).
   const userAccounts = appAccounts.filter((a) => !demoAccountIds.has(a.id));
-  const showDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
+  const autoDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
+  const showDemo = DEMO_CAPABLE && (forceDemo || autoDemo);
   const online = !!quantower?.online || showDemo;
   const connections = (quantower?.connections?.length ? quantower.connections : (showDemo ? DEMO_CONNECTIONS : []));
   const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (showDemo ? DEMO_BRIDGE : []);
@@ -188,7 +191,17 @@ export default function ConnectionsManager() {
   return (
     <div className="st-card">
       <div className="st-title"><Link2 size={15} /> Conexões de plataforma</div>
-      <p className="st-hint">Contas da ponte (Quantower/cTrader). Associe cada conta ao cadastro do app ou crie automaticamente.</p>
+      <div className="cx-head">
+        <p className="st-hint">Contas da ponte (Quantower/cTrader). Associe cada conta ao cadastro do app ou crie automaticamente.</p>
+        {DEMO_CAPABLE && !showDemo && (
+          <button className="cmd-refresh" onClick={() => setForceDemo(true)}><Wand2 size={13} /> Ver exemplo (demo)</button>
+        )}
+      </div>
+      {!DEMO_CAPABLE && (
+        <p className="st-hint cx-warn">
+          Modo demo desligado neste build (VITE_DEMO_MODE ≠ 1). Adicione a variável no `.env` e reinicie o dev server para ver o exemplo.
+        </p>
+      )}
 
       {!online && (
         <div className="cx-offline" role="status">
@@ -278,6 +291,9 @@ export default function ConnectionsManager() {
 }
 
 const CX_CSS = `
+.cx-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+.cx-head .st-hint { margin: 0; }
+.cx-warn { color: var(--yellow, #f1c40f); }
 .cx-offline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted, #a1a7b3); }
 .cx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .cx-card { background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%); border: 1px solid #1a2232; border-top-width: 3px; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); backdrop-filter: blur(10px); overflow: hidden; }
