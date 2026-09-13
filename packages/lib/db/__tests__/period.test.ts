@@ -7,7 +7,7 @@ const tx = (id, date, amount, kind = 'expense', category = 'moradia') => ({
   updatedAt: date, deviceId: 'd', version: 0,
 });
 
-const TXS = [
+const TXS: any[] = [
   tx('t1', '2026-01-10', -100),
   tx('t2', '2026-02-10', -200),
   tx('t3', '2026-02-15', -50),

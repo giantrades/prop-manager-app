@@ -11,12 +11,13 @@ import React from 'react';
 export default function PeriodPicker({ period, onChange, compact = false }) {
   const mode = period?.mode ?? 'all';
   const set = (patch) => onChange({ ...period, ...patch });
+  const nowYm = new Date().toISOString().slice(0, 7);
 
   return (
     <div className={`pp-root${compact ? ' pp-compact' : ''}`} role="group" aria-label="Selecionar período">
       <div className="pp-modes">
-        <button type="button" className={`pp-mode${mode === 'month' ? ' active' : ''}`} onClick={() => set({ mode: 'month', ym: period?.ym ?? new Date().toISOString().slice(0, 7) })}>Mês</button>
-        <button type="button" className={`pp-mode${mode === 'range' ? ' active' : ''}`} onClick={() => set({ mode: 'range', from: period?.from ?? period?.ym ?? new Date().toISOString().slice(0, 7), to: period?.to ?? new Date().toISOString().slice(0, 7) })}>Intervalo</button>
+        <button type="button" className={`pp-mode${mode === 'month' ? ' active' : ''}`} onClick={() => set({ mode: 'month', ym: nowYm })}>Mês</button>
+        <button type="button" className={`pp-mode${mode === 'range' ? ' active' : ''}`} onClick={() => set({ mode: 'range', from: period?.from ?? nowYm, to: period?.to ?? nowYm })}>Intervalo</button>
         <button type="button" className={`pp-mode${mode === 'all' ? ' active' : ''}`} onClick={() => set({ mode: 'all' })}>Tudo</button>
       </div>
 

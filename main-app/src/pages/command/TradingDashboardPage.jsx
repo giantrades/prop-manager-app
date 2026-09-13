@@ -14,8 +14,10 @@ import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { CalendarDays, BarChart3 } from 'lucide-react';
 import {
-  winrate, profitFactor,
+  winrate, profitFactor, inPeriod,
 } from '@apps/lib/db';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -38,6 +40,7 @@ function StatCard({ label, value, sub, color, glow }) {
 }
 
 export default function TradingDashboardPage() {
+  const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [trades, payouts, propExts] = await Promise.all([
       f.ds.trades.list(),
@@ -47,9 +50,17 @@ export default function TradingDashboardPage() {
     return { trades, payouts, propExts };
   });
 
+  // Trades/payouts escopados ao período selecionado.
+  const trades = useMemo(
+    () => (data?.trades ?? []).filter((t) => inPeriod(t.exitDatetime || t.entryDatetime, period, [])),
+    [data, period],
+  );
+  const payouts = useMemo(
+    () => (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, [])),
+    [data, period],
+  );
+
   const stats = useMemo(() => {
-    const trades = data?.trades ?? [];
-    const payouts = data?.payouts ?? [];
     const capital = (data?.propExts ?? []).reduce((s, p) => s + (p.nominalSize || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const closed = trades.filter((t) => t.exitDatetime);
@@ -57,11 +68,9 @@ export default function TradingDashboardPage() {
     const roi = capital > 0 ? netPayouts / capital : 0;
     const pf = profitFactor(trades);
     return { trades, netPayouts, capital, roi, wr: winrate(trades), pf, pnlTotal, payoutsCount: payouts.length };
-  }, [data]);
+  }, [data, trades, payouts]);
 
   const series = useMemo(() => {
-    const trades = data?.trades ?? [];
-    const payouts = data?.payouts ?? [];
     const byMonth = new Map();
     const touch = (ym) => { if (!byMonth.has(ym)) byMonth.set(ym, { ym, pnl: 0, payout: 0 }); return byMonth.get(ym); };
     for (const t of trades) {
@@ -74,14 +83,14 @@ export default function TradingDashboardPage() {
       if (!ym) continue;
       touch(ym).payout += Number(p.net) || 0;
     }
-    const months = [...byMonth.keys()].sort().slice(-12);
+    const months = [...byMonth.keys()].sort().slice(-24);
     let cp = 0;
     return months.map((ym) => {
       const m = byMonth.get(ym);
       cp += m.pnl;
       return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), pnl: Number(cp.toFixed(2)), payout: Number(m.payout.toFixed(2)) };
     });
-  }, [data]);
+  }, [trades, payouts]);
 
   if (loading || !data) {
     return (
@@ -100,6 +109,7 @@ export default function TradingDashboardPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
       <ModuleTabs module="trading" />
+      <PeriodPicker period={period} onChange={setPeriod} />
 
       <div className="td-cards">
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />
@@ -140,9 +150,9 @@ export default function TradingDashboardPage() {
       <WidgetGrid
         storageKey="trading"
         items={[
-          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={data.trades ?? []} loading={false} /></div>) },
-          { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={data.trades ?? []} bucketSize={0.5} loading={false} /></div>) },
-          { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={data.trades ?? []} initialFunding={stats.capital} currency="USD" /></div>) },
+          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} loading={false} /></div>) },
+          { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={trades} bucketSize={0.5} loading={false} /></div>) },
+          { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={trades} initialFunding={stats.capital} currency="USD" /></div>) },
         ]}
       />
     </div>

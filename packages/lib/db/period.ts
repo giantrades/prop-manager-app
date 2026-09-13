@@ -82,6 +82,18 @@ export function inPeriod(dateIso: string | undefined, period: Period, transactio
   return periodMonths(period, transactions).includes(key);
 }
 
+/**
+ * Recorta uma série temporal (pontos com data) ao período. `all` = série completa;
+ * `month`/`range` = apenas os pontos cujo mês está dentro do período.
+ * Usado nos gráficos acumulados (equity, patrimônio, histórico).
+ */
+export function sliceSeriesByPeriod<T>(points: T[], period: Period, getDate: (p: T) => string | undefined): T[] {
+  if (period.mode === 'all') return points;
+  const months = new Set(periodMonths(period, []));
+  return points.filter((p) => months.has(ymKey(getDate(p) ?? '')));
+}
+
+
 // ---------------------------------------------------------------------------
 // Agregadores por período (somam os resultados mensais do motor)
 // ---------------------------------------------------------------------------

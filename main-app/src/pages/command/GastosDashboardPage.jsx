@@ -26,9 +26,6 @@ import PeriodPicker from '@apps/ui/PeriodPicker';
 
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
-const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-const nowYm = () => new Date().toISOString().slice(0, 7);
 
 function CatIcon({ name, color, size = 16 }) {
   const Cmp = ICONS[name] || Tag;
@@ -49,12 +46,7 @@ export default function GastosDashboardPage() {
     return { txs, categories, budgets, savingsGoal, wallets };
   });
 
-  // Histórico dos últimos 12 meses (mais recente primeiro) — independente do período.
-  const history = useMemo(() => {
-    if (!data) return [];
-    return monthlySeries(data.txs, 12, nowYm()).slice().reverse();
-  }, [data]);
-
+  // Histórico não é mais necessário (atalhos removidos; o período global cobre tudo).
   const view = useMemo(() => {
     if (!data) return null;
     const { txs, categories, budgets, savingsGoal } = data;
@@ -123,26 +115,6 @@ export default function GastosDashboardPage() {
       {/* Período: mês · intervalo X→Y · tudo. Toda a dashboard respeita o selecionado. */}
       <div className="gd-monthbar">
         <PeriodPicker period={period} onChange={setPeriod} />
-        {history.length > 0 && (
-          <div className="gd-months" role="tablist" aria-label="Atalhos de meses">
-            {history.map((h) => {
-              const active = period.mode === 'month' && period.ym === h.ym;
-              return (
-                <button
-                  key={h.ym}
-                  role="tab"
-                  aria-selected={active}
-                  className={`gd-monthchip${active ? ' active' : ''}`}
-                  onClick={() => setPeriod({ mode: 'month', ym: h.ym })}
-                >
-                  <span className="gd-monthchip-m">{MONTHS_PT[Number(h.ym.slice(5, 7)) - 1]}</span>
-                  <span className="gd-monthchip-y">'{h.ym.slice(2, 4)}</span>
-                  <span className={`gd-monthchip-b ${h.balance >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(h.balance, 'R$')}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {loading || !view ? (

@@ -8,8 +8,9 @@ import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { BookOpen, Receipt, ArrowDownToLine, TrendingUp, Wallet } from 'lucide-react';
 import HomeCommandCenter from '@apps/ui/HomeCommandCenter';
-import { useCommandSnapshot, useFinance } from '@apps/state';
+import { useCommandSnapshot, useFinance, usePeriod } from '@apps/state';
 import { fetchEconomicEvents, usMarketHolidays, nowIso } from '@apps/lib/db';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 
 const WIDGETS = [
   { id: 'risk', label: 'Trading' },
@@ -43,6 +44,7 @@ function loadHidden() {
 export default function HomePage() {
   const { loading, snapshot, actions, insights, refresh } = useCommandSnapshot();
   const finance = useFinance();
+  const { period, setPeriod } = usePeriod();
   const [hidden, setHidden] = useState(loadHidden);
   const [customizing, setCustomizing] = useState(false);
   const [calendar, setCalendar] = useState({ events: [], holidays: [] });
@@ -93,6 +95,7 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+      <PeriodPicker period={period} onChange={setPeriod} />
       <nav className="hm-quick" aria-label="Ações rápidas">
         <NavLink to="/journal?new=1" className="hm-quick-btn"><BookOpen size={16} /> Novo trade</NavLink>
         <NavLink to="/expenses" className="hm-quick-btn"><Receipt size={16} /> Novo lançamento</NavLink>

@@ -466,3 +466,13 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   cache local; default `all`. Componente `@apps/ui/PeriodPicker` (Mes/Intervalo/Tudo) e
   `packages/lib/db/period.ts` (helpers + agregadores por periodo). Rollout: Gastos feito;
   Home/Trading/Investimentos a seguir.
+
+## Batch AG � rollout do periodo (Home/Trading/Contas/Investimentos/Planejamento/Tax) (executado)
+- `Gastos`: removidos os atalhos de mes; botao "Mes" do `PeriodPicker` vai para o mes atual.
+- `sliceSeriesByPeriod` no motor (recorte de series acumuladas).
+- `Trading`: trades/payouts filtrados por periodo (KPIs, serie, calendario, histograma,
+  drawdown). `Contas`: saldos/payouts do periodo. `Investimentos`: payouts do periodo.
+  `Planejamento`: marcos do periodo. `Tax`: usa o mes do periodo (ou fim do intervalo) + picker.
+- `Home`: `buildCommandSnapshot(f, period)` escopa freeCash/gastos/cashflow/payouts/PnL por
+  conta/trading series; `CommandContext` re-monta ao mudar o periodo.
+- Gate: tsc 0 + build verde + 247 testes.

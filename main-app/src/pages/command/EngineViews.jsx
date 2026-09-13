@@ -7,10 +7,11 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useFinance } from '@apps/state';
+import { useFinance, usePeriod } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { fmtMoney } from '@apps/ui/currency';
 import { nowIso } from '@apps/lib/db';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 import {
   firmPnlByFirm,
   computeFirmPnlByAccount,
@@ -628,8 +629,11 @@ function AssetSalesSection({ finance }) {
 }
 
 export function TaxPage() {
-  const ym = nowIso().slice(0, 7);
-  const { loading, data, finance } = useEngineData((f) => f.money.taxCockpit(ym));
+  const { period, setPeriod } = usePeriod();
+  // Tax é mensal: usa o mês do período (ou o mês final do intervalo) como referência.
+  const ym = (period.mode === 'month' ? period.ym : period.mode === 'range' ? (period.to || period.from) : null) || nowIso().slice(0, 7);
+  const { loading, data, finance, reload } = useEngineData((f) => f.money.taxCockpit(ym));
+  useEffect(() => { reload(); }, [ym, reload]);
   const handleExportCSV = useCallback(() => {
     if (!data) return;
     const rows = [
@@ -659,6 +663,7 @@ export function TaxPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Tax Cockpit</h1></div>
       <ModuleTabs module="gastos" />
+      <PeriodPicker period={period} onChange={setPeriod} />
       <TaxCockpit cockpit={data} yearMonth={ym} loading={loading} onExportCSV={handleExportCSV} />
       <AssetSalesSection finance={finance} />
     </div>

@@ -21,7 +21,8 @@ import type {
 import type { FirmPnlResult, FreeCashResult, TaxCockpitResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
-import { computeFirmPnl, monthlySeries, expensesByCategory, listCategories } from './money';
+import { computeFirmPnl, monthlySeries, listCategories } from './money';
+import { periodMonths, inPeriod, computeFreeCashPeriod, expensesByCategoryPeriod, currentYm, type Period } from './period';
 import { nowIso } from './dateUtils';
 import type { Payout, Trade, Transaction } from './types';
 
@@ -84,11 +85,14 @@ function currentYearMonth(): string {
  * query de um motor (citada em `source` nos insights). Nada aqui calcula um número
  * financeiro novo — só lê e agrupa.
  */
-export async function buildCommandSnapshot(finance: FinanceServices): Promise<CommandSnapshot> {
+export async function buildCommandSnapshot(finance: FinanceServices, period: Period = { mode: 'all' }): Promise<CommandSnapshot> {
   const { ds, money, wealth, risk } = finance;
 
-  const ym = currentYearMonth();
-  const [netWorth, riskSnap, goals, walletSummary, forecast, safeAvailable, portfolio, taxCockpit, freeCash, pendingPayouts, trades] =
+  const seedTxs = await ds.transactions.list();
+  const months = periodMonths(period, seedTxs);
+  const ym = period.mode === 'month' ? (period.ym ?? currentYm()) : (months[months.length - 1] ?? currentYm());
+
+  const [netWorth, riskSnap, goals, walletSummary, forecast, safeAvailable, portfolio, taxCockpit, pendingPayouts, trades] =
     await Promise.all([
       wealth.netWorth(),
       risk.snapshot(),
@@ -98,44 +102,47 @@ export async function buildCommandSnapshot(finance: FinanceServices): Promise<Co
       wealth.safeAvailable(),
       wealth.portfolio(),
       money.taxCockpit(ym),
-      money.freeCash(ym),
       ds.payouts.list(),
       ds.trades.list(),
     ]);
+  const freeCash = computeFreeCashPeriod(seedTxs, period);
 
   // Firm P&L: agrupa transactions por firmId e usa `computeFirmPnl` (fórmula única).
-  const transactions = await ds.transactions.list();
+  const transactions = seedTxs;
   const firmPnl = firmPnlByFirm(transactions);
 
   // Estratégias: métricas derivadas pelo engine (n<20 => "sem amostra").
   const strategies = allStrategyMetrics(trades);
 
-  // Home — séries p/ os gráficos principais de cada módulo.
-  const cashflowSeries = monthlySeries(transactions, 6, ym);
+  // Home — séries p/ os gráficos principais de cada módulo (respeitam o período).
+  const refYm = months[months.length - 1] ?? ym;
+  const cashflowSeries = monthlySeries(transactions, Math.min(Math.max(months.length, 3), 24), refYm);
   const histRec = await ds.meta.getKey('portfolio:history');
   const portfolioHistory = Array.isArray(histRec?.value) ? (histRec.value as Array<{ at: string; value: number; cost: number }>).slice(-12) : [];
   const byMonth = new Map<string, number>();
   for (const t of trades) {
     if (t.exitPrice == null) continue;
     const stamp = t.exitDatetime || t.entryDatetime;
-    if (!stamp) continue;
+    if (!stamp || !inPeriod(stamp, period)) continue;
     const key = stamp.slice(0, 7);
     byMonth.set(key, (byMonth.get(key) ?? 0) + (Number(t.resultNet) || 0));
   }
   let cum = 0;
-  const tradingSeries = [...byMonth.keys()].sort().slice(-12).map((k) => { cum += byMonth.get(k) ?? 0; return { ym: k, pnl: Number(cum.toFixed(2)) }; });
+  const tradingSeries = [...byMonth.keys()].sort().slice(-24).map((k) => { cum += byMonth.get(k) ?? 0; return { ym: k, pnl: Number(cum.toFixed(2)) }; });
 
-  // Home — payout events, gastos por categoria e PnL por conta.
+  // Home — payout events, gastos por categoria e PnL por conta (no período).
   const payoutEvents = [...pendingPayouts]
+    .filter((p) => inPeriod(p.date || p.updatedAt, period))
     .map((p) => ({ date: p.date || p.updatedAt, net: Number(p.net) || 0 }))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const [accountsList, categories] = await Promise.all([ds.accounts.list(), listCategories(ds)]);
-  const expenseGroups = expensesByCategory(transactions, ym, categories);
+  const expenseGroups = expensesByCategoryPeriod(transactions, period, categories);
   const investByAccount = new Map<string, number>();
   for (const row of portfolio.rows ?? []) investByAccount.set(row.accountId, (investByAccount.get(row.accountId) ?? 0) + (row.pnl ?? 0));
   const tradeByAccount = new Map<string, number>();
   for (const t of trades) {
     if (t.exitPrice == null) continue;
+    if (!inPeriod(t.exitDatetime || t.entryDatetime, period)) continue;
     tradeByAccount.set(t.accountId, (tradeByAccount.get(t.accountId) ?? 0) + (Number(t.resultNet) || 0));
   }
   const accountPnl = accountsList

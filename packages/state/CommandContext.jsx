@@ -9,6 +9,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFinance } from './FinanceContext';
+import { usePeriod } from './PeriodContext';
 import { buildCommandSnapshot, buildActions, generateInsights, getActionRules, listManualActions, saveManualAction, deleteManualAction, setActionRules } from '@apps/lib/db';
 
 const CommandContext = createContext({
@@ -26,6 +27,7 @@ const CommandContext = createContext({
  */
 export function CommandProvider({ children }) {
   const finance = useFinance();
+  const { period } = usePeriod();
   const [state, setState] = useState({
     loading: true,
     snapshot: null,
@@ -34,13 +36,15 @@ export function CommandProvider({ children }) {
     error: null,
   });
   const financeRef = useRef(finance);
+  const periodRef = useRef(period);
+  periodRef.current = period;
 
   const refresh = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
     setState((s) => ({ ...s, loading: true }));
     try {
-      const snapshot = await buildCommandSnapshot(f);
+      const snapshot = await buildCommandSnapshot(f, periodRef.current);
       const [rules, manual] = await Promise.all([getActionRules(f.ds), listManualActions(f.ds)]);
       const derived = buildActions(snapshot).filter((a) => rules.enabled.includes(a.kind));
       const manualItems = manual.map((m) => ({
@@ -60,6 +64,11 @@ export function CommandProvider({ children }) {
     financeRef.current = finance;
     if (finance) refresh();
   }, [finance, refresh]);
+
+  // Re-monta quando o período global muda.
+  useEffect(() => {
+    if (finance) refresh();
+  }, [period, finance, refresh]);
 
   // Reatividade: qualquer escrita (datastore:change) re-monta o snapshot.
   useEffect(() => {

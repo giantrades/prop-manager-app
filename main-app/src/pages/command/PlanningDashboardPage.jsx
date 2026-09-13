@@ -10,9 +10,13 @@ import Goals from '@apps/ui/Goals';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
 import { Sparkles } from 'lucide-react';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
+import { inPeriod } from '@apps/lib/db';
 
 
 export default function PlanningDashboardPage() {
+  const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [goals, safeAvailable, marcos] = await Promise.all([
       f.wealth.goals(),
@@ -24,7 +28,7 @@ export default function PlanningDashboardPage() {
 
   const goals = data?.goals ?? [];
   const completed = goals.filter((g) => g.completed).length;
-  const marcos = data?.marcos ?? [];
+  const marcos = (data?.marcos ?? []).filter((m) => inPeriod(m.date, period));
 
   return (
     <div className="cmd-page">
@@ -32,6 +36,7 @@ export default function PlanningDashboardPage() {
         <h1 className="cmd-page-title">Planejamento</h1>
       </div>
       <ModuleTabs module="planejamento" />
+      <PeriodPicker period={period} onChange={setPeriod} />
 
       {loading || !data ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando planejamento…</div>

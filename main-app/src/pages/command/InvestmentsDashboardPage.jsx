@@ -14,7 +14,9 @@ import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
 import { TrendingUp, CalendarDays, LineChart, Store } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
-import { applyBenchmark, getCdiSeries, computeDcaFromTransactions } from '@apps/lib/db';
+import { applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod } from '@apps/lib/db';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -29,6 +31,7 @@ const CLASS_META = {
 };
 
 export default function InvestmentsDashboardPage() {
+  const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [nw, snapshots, portfolio, positions, allocation, accounts, payouts, txs, histRec, cdi] = await Promise.all([
       f.wealth.netWorth(),
@@ -69,16 +72,16 @@ export default function InvestmentsDashboardPage() {
   ), [data]);
 
   const payoutSeries = useMemo(() => {
-    const payouts = data?.payouts ?? [];
+    const payouts = (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, []));
     const byMonth = new Map();
     for (const p of payouts) {
       const ym = String(p.date || p.updatedAt || '').slice(0, 7);
       if (!ym) continue;
       byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
     }
-    const months = [...byMonth.keys()].sort().slice(-12);
+    const months = [...byMonth.keys()].sort().slice(-24);
     return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
-  }, [data]);
+  }, [data, period]);
 
   return (
     <div className="cmd-page">
@@ -86,6 +89,7 @@ export default function InvestmentsDashboardPage() {
         <h1 className="cmd-page-title">Investimentos</h1>
       </div>
       <ModuleTabs module="investimentos" />
+      <PeriodPicker period={period} onChange={setPeriod} />
 
       {loading || !pf ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando investimentos…</div>

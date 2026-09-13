@@ -9,7 +9,9 @@ import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
-import { listFirms, computeAccountBalance } from '@apps/lib/db';
+import { listFirms, computeAccountBalance, inPeriod } from '@apps/lib/db';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 
 const KIND_META = {
   prop: { label: 'Prop', icon: Building2, color: '#7c5cff' },
@@ -36,6 +38,7 @@ function StatCard({ label, value, sub, color, glow }) {
 }
 
 export default function AccountsDashboardPage() {
+  const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [accounts, propExts, payouts, txs, firms] = await Promise.all([
       f.ds.accounts.list(),
@@ -44,16 +47,18 @@ export default function AccountsDashboardPage() {
       f.ds.transactions.list(),
       listFirms(f.ds),
     ]);
-    const balances = {};
-    for (const a of accounts) balances[a.id] = computeAccountBalance(txs, a.id);
-    return { accounts, propExts, payouts, firms, balances };
+    return { accounts, propExts, payouts, txs, firms };
   });
 
   const stats = useMemo(() => {
     const accounts = data?.accounts ?? [];
     const propExts = data?.propExts ?? [];
-    const payouts = data?.payouts ?? [];
-    const balances = data?.balances ?? {};
+    const txs = data?.txs ?? [];
+    const payouts = (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, []));
+    // Saldos escopados ao período (fluxo do período; 'all' = saldo acumulado total).
+    const periodTxs = txs.filter((t) => inPeriod(t.date, period, txs));
+    const balances = {};
+    for (const a of accounts) balances[a.id] = computeAccountBalance(periodTxs, a.id);
     const nominalByAccount = new Map(propExts.map((p) => [p.accountId, p.nominalSize || 0]));
     const capital = propExts.reduce((s, p) => s + (p.nominalSize || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
@@ -73,7 +78,7 @@ export default function AccountsDashboardPage() {
     const pieData = Object.entries(perKind).filter(([, v]) => v.total > 0).map(([k, v]) => ({ label: KIND_META[k]?.label ?? k, value: v.total, color: KIND_META[k]?.color }));
 
     return { total: accounts.length, capital, netPayouts, roi, perKind, liquidTotal, topBalances, pieData, propCount: perKind.prop?.count ?? 0, payoutsCount: payouts.length };
-  }, [data]);
+  }, [data, period]);
 
   const maxKind = Math.max(1, ...Object.values(stats.perKind).map((v) => v.total));
 
@@ -81,6 +86,7 @@ export default function AccountsDashboardPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Contas</h1></div>
       <ModuleTabs module="contas" />
+      <PeriodPicker period={period} onChange={setPeriod} />
 
       {loading || !data ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando contas…</div>
