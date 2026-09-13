@@ -39,7 +39,7 @@
 ## Limpeza / organização (antes do push)
 
 - **Removidos:** `main-app/src/pages/{Dashboard,Accounts,Payouts,Goals,Firms}.jsx` (mortas, não importadas), `pages/command/JournalShell.jsx` (substituído pelo JournalPage), `scripts/migrate-to-supabase.ts` (obsoleto), `sql/create_deleted_trades_table.sql` (redundante com `001_init.sql`).
-- **Supabase:** env configurado em `main-app/.env` (VITE_SUPABASE_URL/ANON_KEY/PUBLISHABLE_KEY) + `.env.example` atualizado. Migrations em `supabase/migrations/20260101000000_init.sql` e **aplicadas** no projeto (db up to date).
+- **Supabase:** env configurado em `main-app/.env` (VITE_SUPABASE_URL/ANON_KEY/PUBLISHABLE_KEY) + `.env.example` atualizado. Migrations em `supabase/migrations/001_init.sql` e **aplicadas** no projeto (db up to date).
 - **Testes:** 110 passed (inclui `financialIntelligence.test.ts` + `supabaseSync.test.ts`). `pnpm build:all` verde (só main-app).
 
 ## Gate

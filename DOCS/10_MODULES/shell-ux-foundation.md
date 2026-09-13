@@ -31,7 +31,7 @@
   (FirmPnl, Journal).
 
 ## P2 — push (infra pronta, deploy manual)
-- [x] Migration `supabase/migrations/20260201000000_push_subscriptions.sql` (RLS por dono).
+- [x] Migration `supabase/migrations/002_push_subscriptions.sql` (RLS por dono).
 - [x] `sw.js`: handlers `push` (payload {title,body,url}) + `notificationclick`.
 - [x] `main-app/src/usePush.js` + toggle em Settings (com estados sem-chave/negado).
 - [x] Edge Function `supabase/functions/push-sender/index.ts` (envia + limpa 410).
@@ -397,7 +397,7 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
 - **Bridge Patch B** (R correto): `PositionSlTpStore` registra o SL/TP via eventos do Core `PositionAdded`/`PositionRemoved`. No **fechamento** le o bracket ATIVO daquela posicao (mesmo se o SL/TP foi movido durante a operacao) e usa no `stopPrice`/`takePrice` do `TradeDto` -> R correto. Timer de 2s = so rede de seguranca.
 - Gate: `tsc` 0 + build verde + 240 testes.
 
-## Batch Z � demo auto-expiravel (executado)
+## Batch Z � demo auto-expiravel (executado)
 - `packages/lib/db/demoMode.ts`: o seed grava os ids que criou (`demo:ids`). `hasUserData()`
   detecta a 1a conta propria; `clearDemoData()` remove SO os registros demo (contas, trades,
   payouts, goals, positions, propExt, firms do seed + transacoes) e liga `demo:disabled`.
@@ -407,7 +407,7 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   contas reais da ponte) + aviso "Exemplo (demo) - some quando cadastrar sua 1a conta".
 - Testes em `seedDemo.test.ts` (seed + expiracao). Gate: tsc 0 + build verde + 242 testes.
 
-## Batch AA � Contas: status/simplificacao + dropdowns + demo em prod (executado)
+## Batch AA � Contas: status/simplificacao + dropdowns + demo em prod (executado)
 - **Dropdowns**: regra global `select option { background:#0f1218; color:#e7eaf0 }` em
   `packages/ui/styles.css` e `main-app/src/styles.css` (varios inputs nao tinham `option`).
 - **Form de conta**: removidos Moeda, "ID na plataforma"/Plataforma (link agora so via
@@ -419,12 +419,12 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   split. DD/consistencia/minDays seguem com defaults/template (motor intacto).
 - **Cards**: prop mostra Balance/Custo/Profit split; removidos Target e a metrica Moeda.
 - **Painel da conta**: corrigido (detail re-tenta quando `finance` fica pronto + fallback se
-  `accountDashboard` falhar) � nao fica mais preso no skeleton com so "Duplicar".
+  `accountDashboard` falhar) � nao fica mais preso no skeleton com so "Duplicar".
 - **Demo em prod**: botao "Ver exemplo (demo)" funciona em qualquer build (acao explicita e
   rotulada); o demo automatico continua so com VITE_DEMO_MODE.
 - Gate: tsc 0 + build verde + 242 testes.
 
-## Batch AB � conexao -> firm + icone (executado)
+## Batch AB � conexao -> firm + icone (executado)
 - `packages/lib/db/connectionFirms.ts`: metadados `bridge:connectionFirms` (connectionId -> firmId).
 - `ConnectionsManager`: seletor "Firm da conexao" no card; a cor/icone da firm pintam o card
   (fallback brand) e a firm e' propagada para TODAS as contas da conexao (`Account.firmId`),
@@ -432,11 +432,11 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
 - Firms ja suportam icone (emoji/custom) em `FirmsPage`; agora o icone aparece no card da conexao.
 - Gate: tsc 0 + build verde + 242 testes.
 
-## Batch AC � sync de meta (firms/conexoes) + form de firm sem grade (executado)
+## Batch AC � sync de meta (firms/conexoes) + form de firm sem grade (executado)
 - **Por que nao sincronizava**: `meta` era local-only (sem tabela no Supabase). A firm da
   conta (`Account.firmId`) ja sincronizava; o que faltava era a definicao da firm (nome/cor/
   icone) e o vinculo conexao->firm chegarem no outro device.
-- **`app_meta` (supabase/migrations/20260301000000_app_meta.sql)**: tabela `id/user_id/key/
+- **`app_meta` (supabase/migrations/003_app_meta.sql)**: tabela `id/user_id/key/
   value jsonb/...` + RLS, para a whitelist de chaves `firms:*` e `bridge:connectionFirms`.
 - **Codigo**: `meta` entrou no `entityType` (`types.ts`), em `DataService.ENTITY_TYPE_BY_STORE`
   e no `FinanceContext` (com `isSyncedMetaKey` na whitelist). `supabaseSync` mapeia `meta ->

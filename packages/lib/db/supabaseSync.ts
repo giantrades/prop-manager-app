@@ -165,7 +165,7 @@ export function createSupabaseSync(
         // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
         if (table === 'app_meta') {
           // eslint-disable-next-line no-console
-          console.warn('[sync] app_meta indisponível — rode 20260301000000_app_meta.sql:', error.message);
+          console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', error.message);
           continue;
         }
         throw error;

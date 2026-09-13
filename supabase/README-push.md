@@ -37,7 +37,7 @@ Também adicione `VITE_VAPID_PUBLIC_KEY=` ao `.env.example` (já incluído).
 supabase db push
 ```
 
-Aplica `supabase/migrations/20260201000000_push_subscriptions.sql`
+Aplica `supabase/migrations/002_push_subscriptions.sql`
 (tabela `push_subscriptions` + RLS por dono).
 
 ## 4. Deploy da function
