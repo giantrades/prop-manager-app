@@ -431,3 +431,16 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   alimentando a tela Contas e os widgets (firmPnl/cores). Criar/associar conta ja herda a firm.
 - Firms ja suportam icone (emoji/custom) em `FirmsPage`; agora o icone aparece no card da conexao.
 - Gate: tsc 0 + build verde + 242 testes.
+
+## Batch AC � sync de meta (firms/conexoes) + form de firm sem grade (executado)
+- **Por que nao sincronizava**: `meta` era local-only (sem tabela no Supabase). A firm da
+  conta (`Account.firmId`) ja sincronizava; o que faltava era a definicao da firm (nome/cor/
+  icone) e o vinculo conexao->firm chegarem no outro device.
+- **`app_meta` (supabase/migrations/20260301000000_app_meta.sql)**: tabela `id/user_id/key/
+  value jsonb/...` + RLS, para a whitelist de chaves `firms:*` e `bridge:connectionFirms`.
+- **Codigo**: `meta` entrou no `entityType` (`types.ts`), em `DataService.ENTITY_TYPE_BY_STORE`
+  e no `FinanceContext` (com `isSyncedMetaKey` na whitelist). `supabaseSync` mapeia `meta ->
+  app_meta`, filtra por whitelist no push/pull e **degrada sem quebrar** se a migration ainda
+  nao rodou (outros stores seguem sincronizando).
+- **FirmsPage**: removida a grade de emojis; fica so o campo livre de icone (vazio = icone padrao).
+- Testes: `supabaseSync.test.ts` cobre a whitelist. Gate: tsc 0 + build verde + 243 testes.

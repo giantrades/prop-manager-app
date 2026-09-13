@@ -329,6 +329,7 @@ export interface DatastoreChangePayload {
     | 'trade'
     | 'payout'
     | 'goal'
-    | 'position';
+    | 'position'
+    | 'meta';
   entityIds?: string[];
 }

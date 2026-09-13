@@ -63,6 +63,7 @@ const ENTITY_TYPE_BY_STORE: Partial<Record<StoreName, DatastoreChangePayload['en
   payouts: 'payout',
   goals: 'goal',
   positions: 'position',
+  meta: 'meta',
 };
 
 export class DataService {

@@ -12,8 +12,6 @@ function emptyFirm() {
   return { name: '', type: 'Futures', color: DEFAULT_FIRM_COLOR, icon: '', logo: null, notes: '' };
 }
 
-const ICON_CHOICES = ['🏦', '🏛️', '💹', '📈', '🪙', '💠', '🐂', '🐻', '⚡', '🔥', '💎', '🎯', '🌐', '🏢'];
-
 export default function FirmsPage() {
   const finance = useFinance();
   const { toast } = useToast();
@@ -126,21 +124,9 @@ export default function FirmsPage() {
                   </span>
                 </label>
               </div>
-              <div className="ac3-field">
-                <span className="ac3-label">Ícone (emoji)</span>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                  {ICON_CHOICES.map((ic) => (
-                    <button
-                      key={ic}
-                      type="button"
-                      className={`firm-icon-btn${form.icon === ic ? ' active' : ''}`}
-                      onClick={() => setForm((p) => ({ ...p, icon: p.icon === ic ? '' : ic }))}
-                      aria-label={`Ícone ${ic}`}
-                    >{ic}</button>
-                  ))}
-                  <input className="ac3-input" style={{ width: 70 }} value={form.icon} onChange={(e) => setForm((p) => ({ ...p, icon: e.target.value }))} placeholder="ou digite" aria-label="Ícone personalizado" />
-                </div>
-              </div>
+              <label className="ac3-field"><span className="ac3-label">Ícone (emoji)</span>
+                <input className="ac3-input" value={form.icon} onChange={(e) => setForm((p) => ({ ...p, icon: e.target.value }))} placeholder="Ex.: 🏦 (deixe vazio para usar o ícone padrão)" aria-label="Ícone da empresa" />
+              </label>
               <label className="ac3-field"><span className="ac3-label">Logo (PNG/JPG, máx 300KB)</span>
                 <input className="ac3-input" type="file" accept="image/*" onChange={(e) => { setLogo(e.target.files?.[0]); e.target.value = ''; }} />
               </label>

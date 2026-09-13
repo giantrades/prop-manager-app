@@ -16,6 +16,7 @@ import {
   RiskService,
   createSupabaseSync,
   makeSupabaseSyncEngine,
+  isSyncedMetaKey,
 } from '@apps/lib/db';
 import { supabase } from '@apps/supabase/client';
 
@@ -28,6 +29,7 @@ const STORE_BY_ENTITY = {
   payout: 'payouts',
   goal: 'goals',
   position: 'positions',
+  meta: 'meta',
 };
 
 /**
@@ -97,7 +99,10 @@ export function FinanceProvider({ children, adapter = null }) {
         if (!store || !payload.entityIds) return;
         for (const id of payload.entityIds) {
           const rec = await ds.get(store, id);
-          if (rec) syncEngine?.enqueue(payload.entityType, rec);
+          if (!rec) continue;
+          // Meta: só sincroniza chaves na whitelist (firms/conexões).
+          if (payload.entityType === 'meta' && !isSyncedMetaKey(rec.key)) continue;
+          syncEngine?.enqueue(payload.entityType, rec);
         }
       });
 

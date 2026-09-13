@@ -12,7 +12,8 @@ import { keyPathFor } from './adapter';
 import { EVENTS } from './events';
 import { nowIso } from './dateUtils';
 
-/** Store -> tabela Supabase. `meta` é local-only (não sincroniza). */
+/** Store -> tabela Supabase. `meta` só sincroniza as chaves em SYNCED_META_PREFIXES
+ *  (firms/conexões); o resto do meta é estado local do device (cursores, etc.). */
 const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   accounts: 'accounts',
   prop_extensions: 'prop_extensions',
@@ -24,7 +25,16 @@ const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   tax_records: 'tax_records',
   snapshots_networth: 'snapshots_networth',
   firm_costs: 'firm_costs',
+  meta: 'app_meta',
 };
+
+/** Chaves de `meta` que valem a pena sincronizar (definições de firm + vínculo conexão). */
+const SYNCED_META_PREFIXES = ['firms:', 'bridge:connectionFirms'];
+
+/** A chave de meta sincroniza? (whitelist por prefixo) */
+export function isSyncedMetaKey(key: unknown): boolean {
+  return typeof key === 'string' && SYNCED_META_PREFIXES.some((p) => key.startsWith(p));
+}
 
 const ENTITY_BY_STORE: Record<string, string> = {
   account: 'accounts',
@@ -33,6 +43,7 @@ const ENTITY_BY_STORE: Record<string, string> = {
   payout: 'payouts',
   goal: 'goals',
   position: 'positions',
+  meta: 'meta',
 };
 
 /** store -> entityType (para as regras de campo financeiro da Opção B). */
@@ -138,6 +149,8 @@ export function createSupabaseSync(
       const store = ENTITY_BY_STORE[entityType];
       const table = store ? TABLE_BY_ENTITY[store as StoreName] : undefined;
       if (!table) continue;
+      // Meta: só sobe o que está na whitelist (evita sync de cursores/estado do device).
+      if (store === 'meta' && !isSyncedMetaKey((record as unknown as { key?: string }).key)) continue;
       if (!byTable.has(table)) byTable.set(table, []);
       byTable.get(table)!.push({ ...camelToSnake(record as Record<string, unknown>), user_id: userId });
     }
@@ -148,7 +161,15 @@ export function createSupabaseSync(
       if (rows.length === 0) continue;
       // upsert por id; ignora conflito de construtor único (ex.: positions UNIQUE user+account+symbol).
       const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
-      if (error) throw error;
+      if (error) {
+        // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
+        if (table === 'app_meta') {
+          // eslint-disable-next-line no-console
+          console.warn('[sync] app_meta indisponível — rode 20260301000000_app_meta.sql:', error.message);
+          continue;
+        }
+        throw error;
+      }
       count += rows.length;
       entityCounts[table] = (entityCounts[table] ?? 0) + rows.length;
     }
@@ -166,11 +187,20 @@ export function createSupabaseSync(
       if (!table) continue;
       const storeName = store as StoreName;
       const entity = STORE_ENTITY[storeName] ?? storeName;
-      const rows: unknown[] = await pullAllPages((win) =>
-        supabase.from(table).select('*').eq('user_id', userId).range(win.from, win.to),
-      );
+      let rows: unknown[];
+      try {
+        rows = await pullAllPages((win) =>
+          supabase.from(table).select('*').eq('user_id', userId).range(win.from, win.to),
+        );
+      } catch (e) {
+        // app_meta pode não existir ainda — segue sem ele.
+        if (table === 'app_meta') continue;
+        throw e;
+      }
       for (const row of rows) {
         const rec = snakeToCamel(row as Record<string, unknown>) as unknown as SyncedRecord;
+        // Meta: ignora chaves fora da whitelist (defesa extra).
+        if (storeName === 'meta' && !isSyncedMetaKey((rec as unknown as { key?: string }).key)) continue;
         // Chave primária real de cada store (prop_extensions usa accountId).
         const key = (rec as unknown as Record<string, unknown>)[keyPathFor(storeName)] ?? rec.id;
         if (key == null) continue;

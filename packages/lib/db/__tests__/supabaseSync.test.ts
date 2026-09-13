@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { EventBus } from '../events';
-import { camelToSnake, snakeToCamel, createSupabaseSync } from '../supabaseSync';
+import { camelToSnake, snakeToCamel, createSupabaseSync, isSyncedMetaKey } from '../supabaseSync';
 
 function makeDs() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -71,6 +71,23 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     const r0 = calls.upsert[0].rows[0] as Record<string, unknown>;
     expect(r0.user_id).toBe('user-1');
     expect(r0.kind).toBe('wallet');
+  });
+
+  it('push de meta só envia chaves na whitelist (firms/conexões)', async () => {
+    const { ds } = makeDs();
+    const { supabase, calls } = mockSupabase();
+    const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
+    await sync.push([
+      { entityType: 'meta', record: { id: 'meta:firms:registry', key: 'firms:registry', value: [], updatedAt: 't', deviceId: 'd', version: 0 } as any },
+      { entityType: 'meta', record: { id: 'meta:sync:conflicts', key: 'sync:conflicts', value: [], updatedAt: 't', deviceId: 'd', version: 0 } as any },
+    ]);
+    expect(isSyncedMetaKey('firms:registry')).toBe(true);
+    expect(isSyncedMetaKey('bridge:connectionFirms')).toBe(true);
+    expect(isSyncedMetaKey('sync:conflicts')).toBe(false);
+    expect(calls.upsert).toHaveLength(1);
+    expect(calls.upsert[0].table).toBe('app_meta');
+    expect(calls.upsert[0].rows).toHaveLength(1);
+    expect((calls.upsert[0].rows[0] as Record<string, unknown>).key).toBe('firms:registry');
   });
 
   it('push é no-op sem usuário logado', async () => {
