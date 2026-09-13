@@ -444,3 +444,14 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
   nao rodou (outros stores seguem sincronizando).
 - **FirmsPage**: removida a grade de emojis; fica so o campo livre de icone (vazio = icone padrao).
 - Testes: `supabaseSync.test.ts` cobre a whitelist. Gate: tsc 0 + build verde + 243 testes.
+
+## Batch AD � sync total do meta por denylist (executado)
+- `isSyncedMetaKey` virou **denylist**: sincroniza TODO o `meta` do usuario (categorias de
+  gastos, orcamento, rollover, savings goal, regras/acoes manuais, portfolio history,
+  CDI/FX/dividendos, checklist, diario, marcos, firms, conexoes). Fica local so o estado do
+  device: `sync:conflicts`, `price:alerts:fired`, `pricecache*`, `demo:*`, `bridge:url/token`,
+  `bridge:quantower:*`, `qt:*`.
+- **Backfill**: ao logar, apos o pull, o app enfileira todo o `meta` sincronizavel local
+  (`ds.meta.list()`) -> sobe para `app_meta` o que ainda nao estava no remoto.
+- Continua tolerante se `app_meta` nao existir (nao derruba os outros stores).
+- Teste de denylist em `supabaseSync.test.ts`. Gate: tsc 0 + build verde + 243 testes.

@@ -12,8 +12,8 @@ import { keyPathFor } from './adapter';
 import { EVENTS } from './events';
 import { nowIso } from './dateUtils';
 
-/** Store -> tabela Supabase. `meta` só sincroniza as chaves em SYNCED_META_PREFIXES
- *  (firms/conexões); o resto do meta é estado local do device (cursores, etc.). */
+/** Store -> tabela Supabase. `meta` sincroniza tudo, menos as chaves de device em
+ *  `isSyncedMetaKey` (cursores, caches, credenciais da ponte). */
 const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   accounts: 'accounts',
   prop_extensions: 'prop_extensions',
@@ -28,12 +28,27 @@ const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   meta: 'app_meta',
 };
 
-/** Chaves de `meta` que valem a pena sincronizar (definições de firm + vínculo conexão). */
-const SYNCED_META_PREFIXES = ['firms:', 'bridge:connectionFirms'];
+/**
+ * Sync de `meta`: por PADRÃO sincroniza tudo (categorias, orçamento, regras, marcos,
+ * checklist, CDI/FX, firms, vínculo conexão...). Só fica local o que é do DEVICE:
+ * cursores/caches e credenciais da ponte, conflitos de sync e flags de demo.
+ */
+const LOCAL_META_EXACT = new Set<string>([
+  'sync:conflicts',
+  'price:alerts:fired',
+  'pricecache-v1',
+  'demo:disabled',
+  'demo:ids',
+  'bridge:url',
+  'bridge:token',
+]);
+const LOCAL_META_PREFIXES = ['bridge:quantower:', 'qt:', 'pricecache'];
 
-/** A chave de meta sincroniza? (whitelist por prefixo) */
+/** A chave de meta sincroniza? (denylist: tudo menos estado do device) */
 export function isSyncedMetaKey(key: unknown): boolean {
-  return typeof key === 'string' && SYNCED_META_PREFIXES.some((p) => key.startsWith(p));
+  if (typeof key !== 'string' || !key) return false;
+  if (LOCAL_META_EXACT.has(key)) return false;
+  return !LOCAL_META_PREFIXES.some((p) => key.startsWith(p));
 }
 
 const ENTITY_BY_STORE: Record<string, string> = {
@@ -149,7 +164,7 @@ export function createSupabaseSync(
       const store = ENTITY_BY_STORE[entityType];
       const table = store ? TABLE_BY_ENTITY[store as StoreName] : undefined;
       if (!table) continue;
-      // Meta: só sobe o que está na whitelist (evita sync de cursores/estado do device).
+      // Meta: sobe tudo menos estado do device (denylist).
       if (store === 'meta' && !isSyncedMetaKey((record as unknown as { key?: string }).key)) continue;
       if (!byTable.has(table)) byTable.set(table, []);
       byTable.get(table)!.push({ ...camelToSnake(record as Record<string, unknown>), user_id: userId });
@@ -199,7 +214,7 @@ export function createSupabaseSync(
       }
       for (const row of rows) {
         const rec = snakeToCamel(row as Record<string, unknown>) as unknown as SyncedRecord;
-        // Meta: ignora chaves fora da whitelist (defesa extra).
+        // Meta: ignora chaves de device (defesa extra).
         if (storeName === 'meta' && !isSyncedMetaKey((rec as unknown as { key?: string }).key)) continue;
         // Chave primária real de cada store (prop_extensions usa accountId).
         const key = (rec as unknown as Record<string, unknown>)[keyPathFor(storeName)] ?? rec.id;

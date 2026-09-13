@@ -125,6 +125,14 @@ export function FinanceProvider({ children, adapter = null }) {
         // Pull inicial (consolidação remota -> local).
         await supabaseSync.pull().catch((e) => console.error('[sync] pull falhou', e));
         if (cancelled) return;
+        // Backfill: sobe o meta local do usuário que ainda não está no remoto
+        // (categorias, orçamento, regras, marcos, checklist, CDI/FX, firms...).
+        try {
+          const allMeta = await ds.meta.list();
+          for (const m of allMeta) if (isSyncedMetaKey(m.key)) syncEngine?.enqueue('meta', m);
+        } catch {
+          /* noop */
+        }
         // Realtime: mudança remota agenda um pull (debounce).
         unsubCloud = await supabaseSync.subscribe(schedulePull);
       };

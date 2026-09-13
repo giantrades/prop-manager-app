@@ -73,21 +73,24 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     expect(r0.kind).toBe('wallet');
   });
 
-  it('push de meta só envia chaves na whitelist (firms/conexões)', async () => {
+  it('meta sincroniza por denylist: dados do usuário sobem, estado do device não', async () => {
     const { ds } = makeDs();
     const { supabase, calls } = mockSupabase();
     const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
     await sync.push([
+      { entityType: 'meta', record: { id: 'meta:expense:categories', key: 'expense:categories', value: [], updatedAt: 't', deviceId: 'd', version: 0 } as any },
       { entityType: 'meta', record: { id: 'meta:firms:registry', key: 'firms:registry', value: [], updatedAt: 't', deviceId: 'd', version: 0 } as any },
       { entityType: 'meta', record: { id: 'meta:sync:conflicts', key: 'sync:conflicts', value: [], updatedAt: 't', deviceId: 'd', version: 0 } as any },
     ]);
+    expect(isSyncedMetaKey('expense:categories')).toBe(true);
     expect(isSyncedMetaKey('firms:registry')).toBe(true);
     expect(isSyncedMetaKey('bridge:connectionFirms')).toBe(true);
     expect(isSyncedMetaKey('sync:conflicts')).toBe(false);
+    expect(isSyncedMetaKey('qt:lastSync')).toBe(false);
+    expect(isSyncedMetaKey('bridge:quantower:lastSync')).toBe(false);
     expect(calls.upsert).toHaveLength(1);
     expect(calls.upsert[0].table).toBe('app_meta');
-    expect(calls.upsert[0].rows).toHaveLength(1);
-    expect((calls.upsert[0].rows[0] as Record<string, unknown>).key).toBe('firms:registry');
+    expect(calls.upsert[0].rows).toHaveLength(2);
   });
 
   it('push é no-op sem usuário logado', async () => {
