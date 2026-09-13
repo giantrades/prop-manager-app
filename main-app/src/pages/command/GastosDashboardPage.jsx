@@ -17,27 +17,18 @@ import {
   PieChart as PieChartIcon, CalendarClock, Store, List, CreditCard,
 } from 'lucide-react';
 import {
-  listCategories, getBudgets, getSavingsGoal, expensesByCategory, incomeByKind,
-  budgetStatus, monthlySeries, computeFreeCash, pendingBills, pendingSummary,
-  merchantRanking, compareMonths, categoryOf,
+  listCategories, getBudgets, getSavingsGoal, expensesByCategoryPeriod, incomeByKindPeriod,
+  budgetStatusPeriod, monthlySeries, computeFreeCashPeriod, pendingBills, pendingSummary,
+  merchantRankingPeriod, compareMonths, categoryOf, periodMonths, inPeriod, currentYm,
 } from '@apps/lib/db';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
 const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 const nowYm = () => new Date().toISOString().slice(0, 7);
-
-/** Soma `delta` meses a um `YYYY-MM` (UTC-safe). */
-function shiftYm(ym, delta) {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
-function ymLabel(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return `${MONTHS_PT[m - 1]}/${y}`;
-}
 
 function CatIcon({ name, color, size = 16 }) {
   const Cmp = ICONS[name] || Tag;
@@ -50,7 +41,7 @@ function CatIcon({ name, color, size = 16 }) {
 
 export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
-  const [ym, setYm] = useState(nowYm);
+  const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [txs, categories, budgets, savingsGoal, wallets] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(),
@@ -58,7 +49,7 @@ export default function GastosDashboardPage() {
     return { txs, categories, budgets, savingsGoal, wallets };
   });
 
-  // Histórico dos últimos 12 meses (mais recente primeiro) — independente do mês selecionado.
+  // Histórico dos últimos 12 meses (mais recente primeiro) — independente do período.
   const history = useMemo(() => {
     if (!data) return [];
     return monthlySeries(data.txs, 12, nowYm()).slice().reverse();
@@ -69,20 +60,22 @@ export default function GastosDashboardPage() {
     const { txs, categories, budgets, savingsGoal } = data;
     const cats = categories ?? [];
     const catById = new Map(cats.map((c) => [c.id, c]));
-    const groups = expensesByCategory(txs, ym, cats);
-    const gains = incomeByKind(txs, ym);
-    const bStatus = budgetStatus(txs, budgets[ym] || {}, ym, cats);
+    const months = periodMonths(period, txs);
+    const groups = expensesByCategoryPeriod(txs, period, cats);
+    const gains = incomeByKindPeriod(txs, period);
+    const bStatus = budgetStatusPeriod(txs, budgets, period, cats);
     const budget = bStatus.reduce((s, b) => s + (b.budget || 0), 0);
     const spentBudget = bStatus.reduce((s, b) => s + (b.spent || 0), 0);
-    const fc = computeFreeCash(txs, ym);
-    const series = monthlySeries(txs, 6, ym).map((s) => ({
+    const fc = computeFreeCashPeriod(txs, period);
+    const refYm = months[months.length - 1] ?? currentYm();
+    const series = monthlySeries(txs, Math.min(Math.max(months.length, 3), 24), refYm).map((s) => ({
       ym: s.ym.slice(5, 7) + '/' + s.ym.slice(2, 4), Entradas: s.income, Gastos: s.expenses, Saldo: s.balance,
     }));
-    const comparison = compareMonths(txs, ym, cats);
+    const comparison = period.mode === 'month' ? compareMonths(txs, period.ym ?? currentYm(), cats) : [];
     const worstRise = comparison.filter((r) => r.deltaPct != null && r.deltaPct > 0).sort((a, b) => b.deltaPct - a.deltaPct)[0] ?? null;
-    const goal = savingsGoal[ym] ?? 0;
+    const goal = months.reduce((s, m) => s + (savingsGoal[m] ?? 0), 0);
     const recent = txs
-      .filter((t) => (t.date || '').slice(0, 7) === ym && (t.kind === 'expense' || ['payout_in', 'rebate', 'income'].includes(t.kind)))
+      .filter((t) => inPeriod(t.date, period, txs) && (t.kind === 'expense' || ['payout_in', 'rebate', 'income'].includes(t.kind)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 6);
     // Saldo em contas (valor único, convertido para a moeda de exibição).
     let balanceTotal = 0;
@@ -90,23 +83,25 @@ export default function GastosDashboardPage() {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind)) continue;
       balanceTotal += convertMoney(w.balance ?? 0, w.currency);
     }
-    // Cartões de crédito: fatura do mês, em aberto (não pagas) × fechadas.
+    // Cartões de crédito: fatura no período, em aberto (não pagas) × fechadas.
     const cardMap = new Map();
     for (const t of txs) {
       if (t.kind !== 'expense' || !t.card) continue;
-      if ((t.date || '').slice(0, 7) !== ym) continue;
+      if (!inPeriod(t.date, period, txs)) continue;
       const cur = cardMap.get(t.card) ?? { card: t.card, total: 0, open: 0, pending: 0 };
       cur.total += Math.abs(t.amount);
       if (t.paid === false) { cur.open += Math.abs(t.amount); cur.pending += 1; }
       cardMap.set(t.card, cur);
     }
     const cards = [...cardMap.values()].sort((a, b) => b.total - a.total);
+    // Pendências ("a pagar") escopadas ao período selecionado.
+    const periodTxs = txs.filter((t) => inPeriod(t.dueDate || t.date, period, txs));
     return {
-      ym, catById, groups, gains, budget, spentBudget, fc, series,
-      pending: pendingSummary(txs), bills: pendingBills(txs).slice(0, 5),
-      merchants: merchantRanking(txs, ym, 6), recent, worstRise, goal, balanceTotal, cards,
+      ym: period.mode === 'month' ? period.ym : null, catById, groups, gains, budget, spentBudget, fc, series,
+      pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
+      merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
     };
-  }, [data, ym]);
+  }, [data, period]);
 
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
@@ -125,29 +120,27 @@ export default function GastosDashboardPage() {
       </div>
       <ModuleTabs module="gastos" />
 
-      {/* Navegação por mês — histórico estilo Mobills (selecione o mês/ano) */}
+      {/* Período: mês · intervalo X→Y · tudo. Toda a dashboard respeita o selecionado. */}
       <div className="gd-monthbar">
-        <div className="gd-monthnav">
-          <button className="gd-mnav" onClick={() => setYm((v) => shiftYm(v, -1))} aria-label="Mês anterior">‹</button>
-          <span className="gd-month-label">{ymLabel(ym)}</span>
-          <button className="gd-mnav" onClick={() => setYm((v) => shiftYm(v, 1))} aria-label="Próximo mês">›</button>
-          {ym !== nowYm() && <button className="gd-today" onClick={() => setYm(nowYm())}>Mês atual</button>}
-        </div>
+        <PeriodPicker period={period} onChange={setPeriod} />
         {history.length > 0 && (
-          <div className="gd-months" role="tablist" aria-label="Histórico de meses">
-            {history.map((h) => (
-              <button
-                key={h.ym}
-                role="tab"
-                aria-selected={h.ym === ym}
-                className={`gd-monthchip${h.ym === ym ? ' active' : ''}`}
-                onClick={() => setYm(h.ym)}
-              >
-                <span className="gd-monthchip-m">{MONTHS_PT[Number(h.ym.slice(5, 7)) - 1]}</span>
-                <span className="gd-monthchip-y">'{h.ym.slice(2, 4)}</span>
-                <span className={`gd-monthchip-b ${h.balance >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(h.balance, 'R$')}</span>
-              </button>
-            ))}
+          <div className="gd-months" role="tablist" aria-label="Atalhos de meses">
+            {history.map((h) => {
+              const active = period.mode === 'month' && period.ym === h.ym;
+              return (
+                <button
+                  key={h.ym}
+                  role="tab"
+                  aria-selected={active}
+                  className={`gd-monthchip${active ? ' active' : ''}`}
+                  onClick={() => setPeriod({ mode: 'month', ym: h.ym })}
+                >
+                  <span className="gd-monthchip-m">{MONTHS_PT[Number(h.ym.slice(5, 7)) - 1]}</span>
+                  <span className="gd-monthchip-y">'{h.ym.slice(2, 4)}</span>
+                  <span className={`gd-monthchip-b ${h.balance >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(h.balance, 'R$')}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

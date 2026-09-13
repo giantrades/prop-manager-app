@@ -460,3 +460,9 @@ Achado central confirmado: o padrão `ws-tabs` (Payouts|Alocar) já é o drill-d
 - `useReadNotifications` passou a persistir no `meta` (`notifications:read`) alem do cache em
   localStorage: hidrata do meta e mescla, grava nos dois. Com o meta por denylist, o "lido"
   agora sincroniza entre devices.
+
+## Batch AF � periodo global (fundacao) (executado)
+- `PeriodProvider`/`usePeriod` (packages/state) persistido no `meta` `ui:period` (sync) com
+  cache local; default `all`. Componente `@apps/ui/PeriodPicker` (Mes/Intervalo/Tudo) e
+  `packages/lib/db/period.ts` (helpers + agregadores por periodo). Rollout: Gastos feito;
+  Home/Trading/Investimentos a seguir.

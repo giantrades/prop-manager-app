@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import '@apps/ui/styles.css'
-import { CurrencyProvider, FinanceProvider, CommandProvider } from '@apps/state'
+import { CurrencyProvider, FinanceProvider, CommandProvider, PeriodProvider } from '@apps/state'
 import { DriveProvider } from "@apps/state/DriveContext";
 import AuthGate from './AuthGate.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
@@ -30,16 +30,18 @@ createRoot(document.getElementById('root')).render(
       <DriveProvider>
         <CurrencyProvider>
           <FinanceProvider>
-            <ToastProvider>
-              <BridgeAutoSync />
-              <CommandProvider>
-                <AuthGate>
-                  <ErrorBoundary>
-                    <App />
-                  </ErrorBoundary>
-                </AuthGate>
-              </CommandProvider>
-            </ToastProvider>
+            <PeriodProvider>
+              <ToastProvider>
+                <BridgeAutoSync />
+                <CommandProvider>
+                  <AuthGate>
+                    <ErrorBoundary>
+                      <App />
+                    </ErrorBoundary>
+                  </AuthGate>
+                </CommandProvider>
+              </ToastProvider>
+            </PeriodProvider>
           </FinanceProvider>
         </CurrencyProvider>
       </DriveProvider>

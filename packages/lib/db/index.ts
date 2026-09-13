@@ -22,6 +22,7 @@ export * from './bankImport';
 export * from './strategies';
 export * from './copyTrade';
 export * from './money';
+export * from './period';
 export * from './firms';
 export * from './connectionFirms';
 export * from './actions';

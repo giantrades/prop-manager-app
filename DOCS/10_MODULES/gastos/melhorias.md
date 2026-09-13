@@ -135,3 +135,12 @@
   (KPIs, donut, orcamento, ranking, cartoes, ultimos lancamentos, "maior alta vs mes passado").
 - Sem formula nova: tudo reusa `expensesByCategory/incomeByKind/budgetStatus/computeFreeCash/
   monthlySeries/compareMonths/merchantRanking`.
+
+## Batch G-periodo — periodo global (mes/intervalo/tudo) (executado)
+- Fundacao: `packages/lib/db/period.ts` (Period, periodMonths, inPeriod + agregadores por
+  periodo que somam os resultados mensais do motor) e `packages/ui/PeriodPicker.tsx`.
+- Estado global `PeriodProvider`/`usePeriod` (meta `ui:period`, sincroniza) — default `all`.
+- `GastosDashboardPage` passou a usar o periodo em TUDO (KPIs, donut, orcamento, ranking,
+  cartoes, ultimos lancamentos, "a pagar") + atalhos de mes. Grafico de 6m vira o periodo
+  (cap 24 meses).
+- Teste `period.test.ts`. Gate: tsc 0 + build verde + 247 testes.
