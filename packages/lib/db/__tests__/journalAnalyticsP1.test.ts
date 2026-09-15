@@ -17,12 +17,14 @@ const trade = (id, exitDate, resultNet, resultR, direction = 'long') => ({
   fees: 0,
   resultNet,
   resultR,
+  rebate: 0,
+  source: 'manual',
   updatedAt: exitDate,
   deviceId: 'd',
   version: 0,
 });
 
-const TRADES = [
+const TRADES: any[] = [
   trade('t1', '2026-09-07T10:00:00Z', 100, 1),   // Segunda
   trade('t2', '2026-09-07T12:00:00Z', -50, -0.5), // Segunda
   trade('t3', '2026-09-08T10:00:00Z', 200, 2),   // Terça

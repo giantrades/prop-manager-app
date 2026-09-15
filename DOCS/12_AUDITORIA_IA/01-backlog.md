@@ -24,8 +24,8 @@
 - [x] AUD-P1-06 — **R — caixa (quartis + outliers)** no Trading.
 - [ ] AUD-P1-07 — **Strategy Matrix / Edge por setup** (Journal).
 - [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado).
-- [ ] AUD-P1-09 — **Account Matrix** (tabela comparável: status/equity/DD/payouts/sync).
-- [ ] AUD-P1-10 — **Payout Waterfall** (gross → fees → taxes → costs → net).
+- [x] AUD-P1-09 — **Account Matrix** (tabela: status/equity/DD/payouts/trades/sync) no dashboard de Contas.
+- [x] AUD-P1-10 — **Payout Waterfall** (gross → fees → net) no dashboard de Contas.
 - [ ] AUD-P1-11 — **Budget Variance** (orçado × realizado por categoria).
 - [ ] AUD-P1-12 — **Stacked Category Trend** (composição dos gastos por mês).
 - [ ] AUD-P1-13 — **Savings Rate** (poupado % + variação).
