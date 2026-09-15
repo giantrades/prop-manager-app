@@ -65,9 +65,9 @@ export default function TradingDashboardPage() {
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const closed = trades.filter((t) => t.exitDatetime);
     const pnlTotal = closed.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
-    const roi = capital > 0 ? netPayouts / capital : 0;
+    const payoutYield = capital > 0 ? netPayouts / capital : 0;
     const pf = profitFactor(trades);
-    return { trades, netPayouts, capital, roi, wr: winrate(trades), pf, pnlTotal, payoutsCount: payouts.length };
+    return { trades, netPayouts, capital, payoutYield, wr: winrate(trades), pf, pnlTotal, payoutsCount: payouts.length };
   }, [data, trades, payouts]);
 
   const series = useMemo(() => {
@@ -125,7 +125,7 @@ export default function TradingDashboardPage() {
         <StatCard label="Profit factor" value={pfLabel} sub="ganhos / perdas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
         <StatCard label="Capital (nominal)" value={fmtMoney(stats.capital, 'USD')} sub="contas prop" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
         <StatCard label="Total payouts" value={fmtMoney(stats.netPayouts, 'USD')} sub={`${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
-        <StatCard label="ROI" value={fmtPct(stats.roi)} sub="payouts / capital" color={stats.roi >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
+        <StatCard label="Payout Yield" value={fmtPct(stats.payoutYield)} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
       </div>
 
       {series.length > 1 && (

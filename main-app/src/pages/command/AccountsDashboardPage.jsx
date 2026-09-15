@@ -62,7 +62,7 @@ export default function AccountsDashboardPage() {
     const nominalByAccount = new Map(propExts.map((p) => [p.accountId, p.nominalSize || 0]));
     const capital = propExts.reduce((s, p) => s + (p.nominalSize || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
-    const roi = capital > 0 ? netPayouts / capital : 0;
+    const payoutYield = capital > 0 ? netPayouts / capital : 0;
 
     const perKind = {};
     let liquidTotal = 0;
@@ -77,7 +77,7 @@ export default function AccountsDashboardPage() {
     const topBalances = rows.filter((r) => r.liquid).sort((a, b) => b.balance - a.balance).slice(0, 6);
     const pieData = Object.entries(perKind).filter(([, v]) => v.total > 0).map(([k, v]) => ({ label: KIND_META[k]?.label ?? k, value: v.total, color: KIND_META[k]?.color }));
 
-    return { total: accounts.length, capital, netPayouts, roi, perKind, liquidTotal, topBalances, pieData, propCount: perKind.prop?.count ?? 0, payoutsCount: payouts.length };
+    return { total: accounts.length, capital, netPayouts, payoutYield, perKind, liquidTotal, topBalances, pieData, propCount: perKind.prop?.count ?? 0, payoutsCount: payouts.length };
   }, [data, period]);
 
   const maxKind = Math.max(1, ...Object.values(stats.perKind).map((v) => v.total));
@@ -96,7 +96,7 @@ export default function AccountsDashboardPage() {
             <StatCard label="Líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
             <StatCard label="Capital gerido" value={fmtMoney(stats.capital, 'USD')} sub={`${stats.propCount} conta(s) prop`} color="#7c5cff" glow="rgba(124,92,255,0.15)" />
             <StatCard label="Total payouts" value={fmtMoney(stats.netPayouts, 'USD')} sub={`${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
-            <StatCard label="ROI" value={`${(stats.roi * 100).toFixed(2)}%`} sub="payouts / capital" color={stats.roi >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Payout Yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
             <StatCard label="Contas" value={String(stats.total)} sub="todas as contas" color="#f59e0b" glow="rgba(245,158,11,0.15)" />
             <StatCard label="Firms" value={String((data.firms ?? []).length)} sub="empresas cadastradas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
           </div>
