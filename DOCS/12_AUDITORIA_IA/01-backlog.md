@@ -7,13 +7,13 @@
 > Convenção: `- [ ] ID — descrição (módulo · nota)`.
 
 ## P0 — alto impacto e barato
-- [ ] AUD-P0-01 — Terminologia: renomear "ROI" (payout/capital nominal) → **Payout Yield** e padronizar "return/capital" (Trading, Contas, Relatórios).
-- [ ] AUD-P0-02 — Widget **Data Freshness** na Home (Quantower, preços, USD/BRL, backup + idade/status do dado).
-- [ ] AUD-P0-03 — Insights com **evidência clicável**: `metric`, `evidence`, `threshold`, `href` (Insight Engine + gaveta).
-- [ ] AUD-P0-04 — Alertas: severidade INFO/WARN/CRIT + **snooze/dismiss** + link ao contexto.
-- [ ] AUD-P0-05 — **Drill-down + Entity Drawer** (abrir conta/payout/trade/ativo sem sair da página).
-- [ ] AUD-P0-06 — **URL state** dos filtros (período/conta/estratégia) para preservar/voltar.
-- [ ] AUD-P0-07 — **Delta vs período anterior** nos KPIs da Home.
+- [x] AUD-P0-01 — Terminologia: "ROI" → **Payout Yield** (payouts/capital nominal) em Trading e Contas. (branch `audit/execucao`)
+- [x] AUD-P0-02 — Widget **Data Freshness** na Home (Quantower, última sync, preços, USD/BRL + idade/status).
+- [x] AUD-P0-03 — Insights com **evidência clicável** (`href` de drill-down por tipo; `source` como evidência).
+- [x] AUD-P0-04 — Alertas: severidade **critical/warn/info/good** + **snooze/dismiss** + link ao contexto.
+- [x] AUD-P0-05 — **Entity Drawer** (conta a partir dos widgets da Home) + drill-down nos insights/alertas.
+- [x] AUD-P0-06 — **URL state** do período (`?p=month|range|all&ym=...&from=...&to=...`).
+- [x] AUD-P0-07 — **Delta vs período anterior** nos KPIs da Home (saldo e PnL acumulado).
 
 ## P1 — analítico e gestão
 - [ ] AUD-P1-01 — **Risk Headroom** por conta (equity, DD máx/usado/restante).
