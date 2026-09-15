@@ -11,6 +11,7 @@ import HomeCommandCenter from '@apps/ui/HomeCommandCenter';
 import { useCommandSnapshot, useFinance, usePeriod } from '@apps/state';
 import { fetchEconomicEvents, usMarketHolidays, nowIso } from '@apps/lib/db';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import DataFreshness from '../../DataFreshness';
 
 const WIDGETS = [
   { id: 'risk', label: 'Trading' },
@@ -19,6 +20,7 @@ const WIDGETS = [
   { id: 'payouts', label: 'Contas & Payouts' },
   { id: 'goals', label: 'Metas' },
   { id: 'actions', label: 'Ações' },
+  { id: 'freshness', label: 'Frescor dos dados' },
   { id: 'calendar', label: 'Calendário' },
   { id: 'insights', label: 'Insights' },
 ];
@@ -96,6 +98,7 @@ export default function HomePage() {
         </div>
       </div>
       <PeriodPicker period={period} onChange={setPeriod} />
+      {!hidden.includes('freshness') && <DataFreshness />}
       <nav className="hm-quick" aria-label="Ações rápidas">
         <NavLink to="/journal?new=1" className="hm-quick-btn"><BookOpen size={16} /> Novo trade</NavLink>
         <NavLink to="/expenses" className="hm-quick-btn"><Receipt size={16} /> Novo lançamento</NavLink>
