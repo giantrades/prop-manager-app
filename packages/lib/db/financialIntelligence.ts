@@ -22,7 +22,7 @@ import type { FirmPnlResult, FreeCashResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
 import { computeFirmPnl, monthlySeries, listCategories } from './money';
-import { periodMonths, inPeriod, computeFreeCashPeriod, expensesByCategoryPeriod, currentYm, type Period } from './period';
+import { periodMonths, inPeriod, computeFreeCashPeriod, expensesByCategoryPeriod, currentYm, shiftYm, ymToList, type Period } from './period';
 import { nowIso } from './dateUtils';
 import type { Payout, Trade, Transaction } from './types';
 
@@ -71,6 +71,8 @@ export interface CommandSnapshot {
   accountPnl: Array<{ accountId: string; name: string; trading: number; invest: number; total: number }>;
   /** Alocação do patrimônio por classe (Renda variável, Cripto, Renda fixa, Imóveis/Outros, Dinheiro). */
   assetClasses: Array<{ key: string; label: string; value: number }>;
+  /** Totais do período ANTERIOR (mesma duração) para delta nos KPIs. `null` quando "Tudo". */
+  previous: { freeCash: number; payouts: number; tradingPnl: number } | null;
   generatedAt: string;
 }
 
@@ -172,6 +174,31 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
     { key: 'cash', label: 'Dinheiro', value: r2fi(cls.cash) },
   ].filter((c) => c.value > 0);
 
+  // Delta vs período anterior (mesma duração). "Tudo" não tem anterior.
+  let previous = null;
+  let prevWindow: { from: string; to: string } | null = null;
+  if (period.mode === 'month' && period.ym) {
+    const prevYm = shiftYm(period.ym, -1);
+    prevWindow = { from: prevYm, to: prevYm };
+  } else if (period.mode === 'range' && period.from && period.to) {
+    const len = ymToList(period.from, period.to).length || 1;
+    const prevTo = shiftYm(period.from, -1);
+    prevWindow = { from: shiftYm(prevTo, -(len - 1)), to: prevTo };
+  }
+  if (prevWindow) {
+    const prevPeriod: Period = { mode: 'range', from: prevWindow.from, to: prevWindow.to };
+    const sumTrades = (arr) => arr.reduce((s, t) => {
+      if (t.exitPrice == null || !inPeriod(t.exitDatetime || t.entryDatetime, prevPeriod)) return s;
+      return s + (Number(t.resultNet) || 0);
+    }, 0);
+    const payoutsPrev = pendingPayouts.reduce((s, p) => (inPeriod(p.date || p.updatedAt, prevPeriod) ? s + (Number(p.net) || 0) : s), 0);
+    previous = {
+      freeCash: computeFreeCashPeriod(seedTxs, prevPeriod).freeCash,
+      payouts: r2fi(payoutsPrev),
+      tradingPnl: r2fi(sumTrades(trades)),
+    };
+  }
+
   return {
     netWorth,
     risk: riskSnap,
@@ -193,6 +220,7 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
     categories,
     accountPnl,
     assetClasses,
+    previous,
     generatedAt: nowIso(),
     priceAlerts: await getFiredPriceAlerts(ds),
   };
@@ -238,6 +266,8 @@ export interface Insight {
   data: Record<string, number | string | null>;
   /** Prioridade de exibição (0..1) — UI pode ordenar por isso. */
   priority: number;
+  /** Rota de drill-down (contexto que gerou o insight). */
+  href?: string;
 }
 
 /** Soma de `amount` (magnitude) de uma lista de payouts (já é net nos Payout). */
@@ -345,6 +375,17 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
     });
   }
 
+  // Drill-down: rota padrão por tipo de insight (a UI usa como link de contexto).
+  const hrefByKind: Record<InsightKind, string> = {
+    growth: '/investimentos',
+    cash: '/gastos',
+    edge: '/journal',
+    projection: '/planejamento',
+    action: '/gastos',
+    info: '/reports',
+  };
+  for (const i of insights) i.href = i.href ?? hrefByKind[i.kind];
+
   return insights.sort((a, b) => b.priority - a.priority);
 }
 
@@ -353,7 +394,7 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
 // ---------------------------------------------------------------------------
 
 export type ActionKind = 'risk' | 'goal' | 'payout' | 'price' | 'manual';
-export type ActionSeverity = 'warn' | 'info' | 'good';
+export type ActionSeverity = 'critical' | 'warn' | 'info' | 'good';
 
 export interface ActionItem {
   id: string;
@@ -363,6 +404,8 @@ export interface ActionItem {
   detail: string;
   /** Query/fonte exata que sustenta a ação. */
   source: string;
+  /** Rota de drill-down para o contexto que gerou a ação. */
+  href?: string;
 }
 
 /**
@@ -379,10 +422,11 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
       actions.push({
         id: `action:risk:${row.account.id}`,
         kind: 'risk',
-        severity: row.status.status === 'STOP' ? 'warn' : 'info',
+        severity: row.status.status === 'STOP' ? 'critical' : 'info',
         title: `Risco ${row.status.status} — ${row.account.name}`,
         detail: row.status.reason,
         source: `risk.snapshot() → row(status=${row.status.status})`,
+        href: '/contas',
       });
     }
   }
@@ -397,6 +441,7 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
         title: `Meta concluída: ${g.goal.kind}`,
         detail: `${fmtMoney(g.current)} atingiu ${fmtMoney(g.target)}.`,
         source: `wealth.goals() → goal(id=${g.goal.id}, completed=true)`,
+        href: '/goals',
       });
     }
   }
@@ -410,6 +455,7 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
       title: `Payout disponível: ${fmtMoney(p.net)}`,
       detail: `Status ${p.status} — net ${fmtMoney(p.net)} (fee ${fmtMoney(p.fee)}).`,
       source: `ds.payouts.list() → status='Pending'`,
+      href: '/payouts',
     });
   }
   for (const row of s.risk.rows) {
@@ -421,6 +467,7 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
         title: `Payout elegível — ${row.account.name}`,
         detail: 'Equity ≥ target e drawdown dentro do limite.',
         source: `risk.snapshot() → metrics.eligible=true`,
+        href: '/payouts',
       });
     }
   }
@@ -434,6 +481,7 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
       title: `Alerta de preço: ${a.symbol} ${a.dir === 'above' ? '≥' : '≤'} ${a.price}`,
       detail: `Atual ${a.current} (disparado em ${String(a.firedAt).slice(0, 10)}).`,
       source: `priceService.checkPriceAlerts ⇢ meta price:alerts:fired`,
+      href: '/portfolio',
     });
   }
 

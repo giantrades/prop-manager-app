@@ -1,11 +1,12 @@
 // Gaveta de notificações (ações em aberto). Abre pela navbar; ao ler, o item sai e o
 // sinal some. COMPOSIÇÃO — os itens vêm prontos do Command Center (nenhum cálculo aqui).
 import React, { useState } from 'react';
-import { X, Bell, CheckCheck, Plus, Trash2 } from 'lucide-react';
+import { X, Bell, CheckCheck, Plus, Trash2, Clock, ExternalLink } from 'lucide-react';
 
 const SEVERITY_META = {
-  warn: { label: 'Atenção', color: 'var(--red, #e74c3c)', dot: '#e74c3c' },
-  info: { label: 'Info', color: 'var(--yellow, #e1b12c)', dot: '#e1b12c' },
+  critical: { label: 'Crítico', color: 'var(--red, #e74c3c)', dot: '#e74c3c' },
+  warn: { label: 'Atenção', color: 'var(--yellow, #e1b12c)', dot: '#e1b12c' },
+  info: { label: 'Info', color: 'var(--blue, #3498db)', dot: '#3498db' },
   good: { label: 'Ok', color: 'var(--green, #2ecc71)', dot: '#2ecc71' },
 };
 
@@ -18,13 +19,13 @@ const SEVERITY_META = {
  * @param {()=>void} [props.onReadAll]
  * @param {()=>void} [props.onGoActions] — abrir o Action Center completo
  */
-export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions, onCreate, onDelete }) {
+export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions, onCreate, onDelete, onOpen, onSnooze, onDismiss }) {
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
   const [severity, setSeverity] = useState('info');
   if (!open) return null;
-  const order = { warn: 0, info: 1, good: 2 };
-  const sorted = [...items].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
+  const order = { critical: 0, warn: 1, info: 2, good: 3 };
+  const sorted = [...items].sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
 
   return (
     <>
@@ -50,14 +51,26 @@ export default function NotificationsDrawer({ open, onClose, items = [], onRead,
                 <button type="button" className="nb-item-main" onClick={() => onRead?.(a.id)} title="Marcar como lida">
                   <span className="nb-dot" style={{ background: meta.dot }} aria-hidden="true" />
                   <span className="nb-item-body">
+                    <span className="nb-item-sev" style={{ color: meta.color }}>{meta.label}</span>
                     <span className="nb-item-title">{a.title}</span>
                     <span className="nb-item-detail">{a.detail}</span>
                     <span className="nb-item-source">{a.kind === 'manual' ? 'lembrete' : `fonte: ${a.source}`}</span>
                   </span>
                 </button>
-                {a.kind === 'manual' && onDelete && (
-                  <button type="button" className="nb-icon nb-item-del" onClick={() => onDelete(a.id)} aria-label={`Excluir ${a.title}`}><Trash2 size={13} /></button>
-                )}
+                <div className="nb-item-actions">
+                  {a.href && onOpen && (
+                    <button type="button" className="nb-icon" onClick={() => { onRead?.(a.id); onOpen(a.href); }} title="Abrir contexto" aria-label={`Abrir ${a.title}`}><ExternalLink size={13} /></button>
+                  )}
+                  {onSnooze && (
+                    <button type="button" className="nb-icon" onClick={() => onSnooze(a.id)} title="Adiar 1 dia" aria-label={`Adiar ${a.title}`}><Clock size={13} /></button>
+                  )}
+                  {onDismiss && (
+                    <button type="button" className="nb-icon" onClick={() => onDismiss(a.id)} title="Dispensar" aria-label={`Dispensar ${a.title}`}><X size={13} /></button>
+                  )}
+                  {a.kind === 'manual' && onDelete && (
+                    <button type="button" className="nb-icon nb-item-del" onClick={() => onDelete(a.id)} aria-label={`Excluir ${a.title}`}><Trash2 size={13} /></button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -106,11 +119,15 @@ const NB_CSS = `
 .nb-empty { padding: 40px 16px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; }
 .nb-item { display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); color: var(--text, #e7eaf0); cursor: pointer; transition: background 120ms ease; }
 .nb-item:hover { background: rgba(255,255,255,0.05); }
-.nb-warn { border-color: rgba(231,76,60,0.3); }
-.nb-info { border-color: rgba(225,177,44,0.3); }
+.nb-warn { border-color: rgba(225,177,44,0.3); }
+.nb-critical { border-color: rgba(231,76,60,0.45); }
+.nb-info { border-color: rgba(52,152,219,0.3); }
 .nb-good { border-color: rgba(46,204,113,0.3); }
 .nb-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
 .nb-item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nb-item-sev { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
+.nb-item-actions { display: flex; flex-direction: column; gap: 4px; }
+.nb-item-actions .nb-icon { width: 28px; height: 28px; }
 .nb-item-title { font-size: 13px; font-weight: 700; }
 .nb-item-detail { font-size: 12px; color: var(--muted, #a1a7b3); }
 .nb-item-source { font-size: 10px; color: var(--muted, #a1a7b3); opacity: 0.7; }
