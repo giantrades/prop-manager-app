@@ -8,6 +8,7 @@ import Navbar from "./Navbar";
 import Onboarding from "./Onboarding";
 import { usePwa } from "./usePwa";
 import { pageLoaders } from "./routeLoaders";
+import usePeriodUrl from "./usePeriodUrl";
 import './styles.css';
 import { PALETTE_ROUTES } from "./navConfig";
 
@@ -61,6 +62,7 @@ export default function App() {
   const navigate = useNavigate();
   const finance = useFinance();
   const { currency, rate } = useCurrency();
+  usePeriodUrl();
   // Sincroniza a moeda de exibição global (fmtMoney nos componentes) durante o render,
   // para que TODOS os valores já saiam convertidos quando o usuário troca USD/BRL.
   setDisplayCurrency(currency === 'BRL' ? 'BRL' : 'USD', rate);

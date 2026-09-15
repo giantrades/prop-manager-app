@@ -89,7 +89,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
     usePlatform();
   const { actions, addManualAction, removeManualAction } = useCommandSnapshot();
-  const { unread, markRead, markAllRead } = useReadNotifications(actions);
+  const { unread, markRead, markAllRead, dismiss, snooze } = useReadNotifications(actions);
   const alertCount = unread.length;
   const navigate = useNavigate();
   const finance = useFinance();
@@ -480,6 +480,9 @@ export default function Navbar({ isPinned, onTogglePin }) {
         onGoActions={() => { setNotifOpen(false); navigate('/settings'); }}
         onCreate={(title, severity) => { addManualAction({ title, severity }); markAllRead(); }}
         onDelete={(id) => removeManualAction(id)}
+        onOpen={(href) => { setNotifOpen(false); navigate(href); }}
+        onSnooze={(id) => snooze(id, 24)}
+        onDismiss={(id) => dismiss(id)}
       />
     </>
   );

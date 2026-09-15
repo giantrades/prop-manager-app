@@ -5046,3 +5046,9 @@ select optgroup {
   background-color: #0f1218;
   color: #e7eaf0;
 }
+
+/* Home — delta vs período anterior (KPIs) */
+.hc-delta { font-size: 10px; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+.hc-delta-up { color: var(--green, #2ecc71); }
+.hc-delta-down { color: var(--red, #e74c3c); }
+.hc-delta-flat { color: var(--muted, #a1a7b3); }

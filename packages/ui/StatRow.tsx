@@ -12,9 +12,13 @@ import React from 'react';
  * @param {React.ReactNode} props.value
  * @param {string} [props.valueClass]
  */
-export default function StatRow({ icon = null, label, sub, barPct, color = '#7c5cff', value, valueClass = '' }) {
+export default function StatRow({ icon = null, label, sub, barPct, color = '#7c5cff', value, valueClass = '', onClick }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className="sr-row">
+    <Tag
+      className={`sr-row${onClick ? ' sr-row-btn' : ''}`}
+      {...(onClick ? { type: 'button', onClick, 'aria-label': `Abrir ${label}` } : {})}
+    >
       <span className="sr-ico" style={icon ? { color, borderColor: color } : { border: 'none' }}>{icon}</span>
       <span className="sr-name">{label}</span>
       {sub != null && <span className="sr-sub">{sub}</span>}
@@ -24,12 +28,14 @@ export default function StatRow({ icon = null, label, sub, barPct, color = '#7c5
         </span>
       )}
       <span className={`sr-val ${valueClass}`}>{value}</span>
-    </div>
+    </Tag>
   );
 }
 
 const SR_CSS = `
 .sr-row { display: grid; grid-template-columns: 26px 1fr auto 90px auto; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+.sr-row-btn { width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.04); color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.sr-row-btn:hover { background: rgba(255,255,255,0.04); }
 .sr-row:last-child { border-bottom: none; }
 .sr-ico { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid; background: rgba(255,255,255,0.03); }
 .sr-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
