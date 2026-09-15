@@ -144,3 +144,14 @@
   cartoes, ultimos lancamentos, "a pagar") + atalhos de mes. Grafico de 6m vira o periodo
   (cap 24 meses).
 - Teste `period.test.ts`. Gate: tsc 0 + build verde + 247 testes.
+
+## Batch G-impostos — tracker de impostos + fim do cap (executado)
+- Categorias ganharam `group`; impostos viram categorias com `group=imposto` (IR, DARF, ITBI,
+  IPTU, IOF, Cripto, Exterior + "Impostos"). Sem migration (categorias vivem no meta, que sincroniza).
+- Widget "Impostos" no Resumo do Gastos: total do periodo + quebra por tipo + "desde o inicio",
+  respeitando o periodo global.
+- Tax cockpit (day/swing DARF) removido: aba e rota `/tax` eliminadas (EngineViews.TaxPage ficou
+  sem rota). Forecast mantido.
+- Fim do cap: graficos desenham o periodo inteiro; PnL acumulado passa a acumular DESDE O INICIO
+  (inception-to-date) e so entao recorta a janela -> ultimo ponto = total real.
+- Gate: tsc 0 + build verde + 247 testes.

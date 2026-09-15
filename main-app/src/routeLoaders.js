@@ -20,7 +20,6 @@ export const pageLoaders = {
   '/risk': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.RiskPage })),
   '/networth': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.NetWorthPage })),
   '/portfolio': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.PortfolioPage })),
-  '/tax': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.TaxPage })),
   '/forecast': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.ForecastPage })),
   '/firms': () => import('./pages/trading/FirmsPage.jsx'),
   '/expenses': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.ExpensesPage })),

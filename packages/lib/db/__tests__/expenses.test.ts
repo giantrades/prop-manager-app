@@ -67,8 +67,9 @@ const SEED: Transaction[] = [
 ];
 
 describe('gastos — categorias (G1/G9)', () => {
-  it('DEFAULT_CATEGORIES tem 9 com ícone e token de cor (sem hex)', () => {
-    expect(DEFAULT_CATEGORIES).toHaveLength(9);
+  it('DEFAULT_CATEGORIES: 9 gerais + tipos de imposto (ícone e token de cor, sem hex)', () => {
+    expect(DEFAULT_CATEGORIES.filter((c) => c.group !== 'imposto')).toHaveLength(8);
+    expect(DEFAULT_CATEGORIES.filter((c) => c.group === 'imposto').length).toBeGreaterThanOrEqual(7);
     for (const c of DEFAULT_CATEGORIES) {
       expect(c.icon).toMatch(/^[A-Za-z0-9]+$/);
       expect(c.color).not.toMatch(/#/);
@@ -83,10 +84,10 @@ describe('gastos — categorias (G1/G9)', () => {
 
   it('listCategories: defaults + custom sobrescreve por id', async () => {
     const { ds } = makeService();
-    expect((await listCategories(ds))).toHaveLength(9);
+    expect((await listCategories(ds))).toHaveLength(DEFAULT_CATEGORIES.length);
     await saveCategory(ds, { id: 'pets', name: 'Pets', icon: 'PawPrint', color: 'brand' });
     const all = await listCategories(ds);
-    expect(all).toHaveLength(10);
+    expect(all).toHaveLength(DEFAULT_CATEGORIES.length + 1);
     expect(all.find((c) => c.id === 'pets')).toMatchObject({ name: 'Pets' });
     await saveCategory(ds, { id: 'lazer', name: 'Lazer & Jogos', icon: 'Gamepad2', color: 'brand' });
     expect((await listCategories(ds)).find((c) => c.id === 'lazer')?.name).toBe('Lazer & Jogos');

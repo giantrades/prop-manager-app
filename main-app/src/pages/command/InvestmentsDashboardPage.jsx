@@ -79,7 +79,7 @@ export default function InvestmentsDashboardPage() {
       if (!ym) continue;
       byMonth.set(ym, (byMonth.get(ym) ?? 0) + (Number(p.net) || 0));
     }
-    const months = [...byMonth.keys()].sort().slice(-24);
+    const months = [...byMonth.keys()].sort();
     return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
   }, [data, period]);
 

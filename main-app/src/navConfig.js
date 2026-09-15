@@ -17,7 +17,6 @@ import {
   Bell,
   ShieldAlert,
   TrendingUp,
-  Landmark,
   LineChart,
   Database,
   Receipt,
@@ -70,7 +69,6 @@ export const MODULES = [
     children: [
       { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
       { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills orçamento extratos" },
-      { to: "/tax", label: "Tax", icon: Landmark, keywords: "imposto darf fiscal" },
       { to: "/forecast", label: "Forecast", icon: LineChart, keywords: "previsão fluxo caixa" },
     ],
   },

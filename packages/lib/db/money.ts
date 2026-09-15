@@ -601,7 +601,12 @@ export interface CategoryDef {
   name: string;
   icon: string; // nome do componente lucide-react (ex.: 'House')
   color: string; // token: 'blue'|'green'|'yellow'|'red'|'brand'|'gray'
+  /** Agrupamento opcional. `imposto` = entra no widget de Impostos. */
+  group?: string;
 }
+
+/** Categoria de imposto (usado pelo widget de Impostos). */
+export const TAX_CATEGORY_GROUP = 'imposto';
 
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
   { id: 'moradia', name: 'Moradia', icon: 'House', color: 'blue' },
@@ -609,10 +614,18 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   { id: 'transporte', name: 'Transporte', icon: 'Car', color: 'yellow' },
   { id: 'saude', name: 'Saúde', icon: 'HeartPulse', color: 'red' },
   { id: 'lazer', name: 'Lazer', icon: 'Gamepad2', color: 'brand' },
-  { id: 'impostos', name: 'Impostos', icon: 'Landmark', color: 'gray' },
+  { id: 'impostos', name: 'Impostos', icon: 'Landmark', color: 'gray', group: TAX_CATEGORY_GROUP },
   { id: 'trading', name: 'Trading', icon: 'TrendingUp', color: 'green' },
   { id: 'invest', name: 'Invest', icon: 'Briefcase', color: 'blue' },
   { id: 'educacao', name: 'Educação', icon: 'GraduationCap', color: 'yellow' },
+  // Tipos de imposto (todos com group=imposto) — separação p/ visualizar o que é pago.
+  { id: 'imposto-ir', name: 'IR', icon: 'Receipt', color: 'red', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-darf', name: 'DARF', icon: 'Receipt', color: 'red', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-itbi', name: 'ITBI', icon: 'Landmark', color: 'blue', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-iptu', name: 'IPTU', icon: 'House', color: 'blue', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-iof', name: 'IOF', icon: 'Coins', color: 'yellow', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-cripto', name: 'Cripto', icon: 'Coins', color: 'yellow', group: TAX_CATEGORY_GROUP },
+  { id: 'imposto-exterior', name: 'Exterior', icon: 'Landmark', color: 'gray', group: TAX_CATEGORY_GROUP },
 ];
 
 const CATEGORY_META_KEY = 'expense:categories';
@@ -632,6 +645,7 @@ export async function listCategories(ds: DataService): Promise<CategoryDef[]> {
         name: c.name,
         icon: typeof c.icon === 'string' && c.icon ? c.icon : 'Tag',
         color: typeof c.color === 'string' && c.color ? c.color : 'gray',
+        group: typeof c.group === 'string' ? c.group : undefined,
       });
     }
   }

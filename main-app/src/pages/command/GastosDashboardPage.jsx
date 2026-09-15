@@ -60,7 +60,7 @@ export default function GastosDashboardPage() {
     const spentBudget = bStatus.reduce((s, b) => s + (b.spent || 0), 0);
     const fc = computeFreeCashPeriod(txs, period);
     const refYm = months[months.length - 1] ?? currentYm();
-    const series = monthlySeries(txs, Math.min(Math.max(months.length, 3), 24), refYm).map((s) => ({
+    const series = monthlySeries(txs, Math.max(months.length, 3), refYm).map((s) => ({
       ym: s.ym.slice(5, 7) + '/' + s.ym.slice(2, 4), Entradas: s.income, Gastos: s.expenses, Saldo: s.balance,
     }));
     const comparison = period.mode === 'month' ? compareMonths(txs, period.ym ?? currentYm(), cats) : [];
@@ -86,12 +86,19 @@ export default function GastosDashboardPage() {
       cardMap.set(t.card, cur);
     }
     const cards = [...cardMap.values()].sort((a, b) => b.total - a.total);
+    // Impostos: categorias com group='imposto' (IR, DARF, ITBI, IPTU, IOF, Cripto, Exterior...).
+    const taxIds = new Set(cats.filter((c) => c.group === 'imposto').map((c) => c.id));
+    const taxGroups = groups.filter((g) => taxIds.has(g.categoryId));
+    const taxTotal = taxGroups.reduce((s, g) => s + g.total, 0);
+    const taxAllTime = expensesByCategoryPeriod(txs, { mode: 'all' }, cats)
+      .filter((g) => taxIds.has(g.categoryId)).reduce((s, g) => s + g.total, 0);
     // Pendências ("a pagar") escopadas ao período selecionado.
     const periodTxs = txs.filter((t) => inPeriod(t.dueDate || t.date, period, txs));
     return {
       ym: period.mode === 'month' ? period.ym : null, catById, groups, gains, budget, spentBudget, fc, series,
       pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
+      taxGroups, taxTotal, taxAllTime,
     };
   }, [data, period]);
 
@@ -237,6 +244,32 @@ export default function GastosDashboardPage() {
                       <span className="gd-row-sub">{m.count}x</span>
                       <span className="gd-kind-bar-wrap"><span className="gd-kind-bar" style={{ width: `${Math.round((m.total / max) * 100)}%` }} /></span>
                       <span className="gd-row-val gd-neg">{fmtMoney(m.total, 'R$')}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+
+            {view.taxGroups.length > 0 && (
+              <div className="dash-section" key="tax">
+                <div className="dash-title">
+                  <span><Landmark size={14} /> Impostos</span>
+                  <span className="gd-row-sub">desde o início {fmtMoney(view.taxAllTime, 'R$')}</span>
+                </div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><Receipt size={14} /></span>
+                  <span className="gd-row-name">Total no período</span>
+                  <span className="gd-row-val gd-neg">{fmtMoney(view.taxTotal, 'R$')}</span>
+                </div>
+                {(() => {
+                  const max = Math.max(1, ...view.taxGroups.map((g) => g.total));
+                  return view.taxGroups.map((g) => (
+                    <div key={g.categoryId} className="gd-kind-row">
+                      <span className="gd-row-ico"><CatIcon name={catMeta(g.categoryId).icon} color={catMeta(g.categoryId).color} /></span>
+                      <span className="gd-row-name">{catName(g.categoryId)}</span>
+                      <span className="gd-row-sub">{g.count}x</span>
+                      <span className="gd-kind-bar-wrap"><span className="gd-kind-bar" style={{ width: `${Math.round((g.total / max) * 100)}%` }} /></span>
+                      <span className="gd-row-val gd-neg">{fmtMoney(g.total, 'R$')}</span>
                     </div>
                   ));
                 })()}

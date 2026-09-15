@@ -119,16 +119,22 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
   const cashflowSeries = monthlySeries(transactions, Math.min(Math.max(months.length, 3), 24), refYm);
   const histRec = await ds.meta.getKey('portfolio:history');
   const portfolioHistory = Array.isArray(histRec?.value) ? (histRec.value as Array<{ at: string; value: number; cost: number }>).slice(-12) : [];
+  // PnL acumulado DESDE O INÍCIO (inception-to-date); a janela desenhada segue o período.
   const byMonth = new Map<string, number>();
   for (const t of trades) {
     if (t.exitPrice == null) continue;
     const stamp = t.exitDatetime || t.entryDatetime;
-    if (!stamp || !inPeriod(stamp, period)) continue;
+    if (!stamp) continue;
     const key = stamp.slice(0, 7);
     byMonth.set(key, (byMonth.get(key) ?? 0) + (Number(t.resultNet) || 0));
   }
-  let cum = 0;
-  const tradingSeries = [...byMonth.keys()].sort().slice(-24).map((k) => { cum += byMonth.get(k) ?? 0; return { ym: k, pnl: Number(cum.toFixed(2)) }; });
+  const allTradeMonths = [...byMonth.keys()].sort();
+  const tradingCum = new Map<string, number>();
+  let cumulative = 0;
+  for (const k of allTradeMonths) { cumulative += byMonth.get(k) ?? 0; tradingCum.set(k, Number(cumulative.toFixed(2))); }
+  const winMonths = new Set(periodMonths(period, seedTxs));
+  const tradingMonths = period.mode === 'all' ? allTradeMonths : allTradeMonths.filter((k) => winMonths.has(k));
+  const tradingSeries = tradingMonths.map((k) => ({ ym: k, pnl: tradingCum.get(k) ?? 0 }));
 
   // Home — payout events, gastos por categoria e PnL por conta (no período).
   const payoutEvents = [...pendingPayouts]

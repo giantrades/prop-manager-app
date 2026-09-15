@@ -14,7 +14,7 @@ import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { CalendarDays, BarChart3 } from 'lucide-react';
 import {
-  winrate, profitFactor, inPeriod,
+  winrate, profitFactor, inPeriod, periodMonths,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -71,26 +71,34 @@ export default function TradingDashboardPage() {
   }, [data, trades, payouts]);
 
   const series = useMemo(() => {
-    const byMonth = new Map();
-    const touch = (ym) => { if (!byMonth.has(ym)) byMonth.set(ym, { ym, pnl: 0, payout: 0 }); return byMonth.get(ym); };
-    for (const t of trades) {
+    const allTrades = data?.trades ?? [];
+    // Acumulado DESDE O INÍCIO (inception-to-date): o último ponto = total real.
+    const pnlByMonth = new Map();
+    for (const t of allTrades) {
       const stamp = t.exitDatetime || t.entryDatetime;
       if (!stamp) continue;
-      touch(String(stamp).slice(0, 7)).pnl += Number(t.resultNet) || 0;
+      const ym = String(stamp).slice(0, 7);
+      pnlByMonth.set(ym, (pnlByMonth.get(ym) ?? 0) + (Number(t.resultNet) || 0));
     }
+    const allMonths = [...pnlByMonth.keys()].sort();
+    const cumByMonth = new Map();
+    let cum = 0;
+    for (const ym of allMonths) { cum += pnlByMonth.get(ym) ?? 0; cumByMonth.set(ym, Number(cum.toFixed(2))); }
+    // Janela desenhada = período selecionado (sem cap).
+    const win = new Set(periodMonths(period, allTrades));
+    const displayMonths = period.mode === 'all' ? allMonths : allMonths.filter((ym) => win.has(ym));
+    const payoutByMonth = new Map();
     for (const p of payouts) {
       const ym = String(p.date || p.updatedAt || '').slice(0, 7);
       if (!ym) continue;
-      touch(ym).payout += Number(p.net) || 0;
+      payoutByMonth.set(ym, (payoutByMonth.get(ym) ?? 0) + (Number(p.net) || 0));
     }
-    const months = [...byMonth.keys()].sort().slice(-24);
-    let cp = 0;
-    return months.map((ym) => {
-      const m = byMonth.get(ym);
-      cp += m.pnl;
-      return { ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), pnl: Number(cp.toFixed(2)), payout: Number(m.payout.toFixed(2)) };
-    });
-  }, [trades, payouts]);
+    return displayMonths.map((ym) => ({
+      ym: ym.slice(5, 7) + '/' + ym.slice(2, 4),
+      pnl: cumByMonth.get(ym) ?? 0,
+      payout: Number((payoutByMonth.get(ym) ?? 0).toFixed(2)),
+    }));
+  }, [data, payouts, period]);
 
   if (loading || !data) {
     return (
