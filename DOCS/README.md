@@ -50,6 +50,9 @@ DOCS/
     gastos/00-spec.md              <- Mobills-like + melhorias/ (4 itens)
     portfolio/00-spec.md           <- dados LIVE + melhorias/ (4 itens)
     propfirm/00-spec.md            <- Prop/Firm + melhorias/ (4 itens)
+  12_AUDITORIA_IA/                 <- auditoria externa (PDF) + analise critica + backlog rastreavel
+    00-analise-auditoria-profissional.md  <- leitura critica por modulo (o que faz sentido/adiar)
+    01-backlog.md                  <- MEMORIA: checklist de execucao (P0/P1/P2) - marcar [x] ao fazer
 ```
 
 ## Roadmap (reconstrução, mobile-first desde o dia 1)
