@@ -1,7 +1,7 @@
 // HomeCommandCenter — cockpit (COMPOSIÇÃO PURA). Mostra o gráfico principal de cada
 // módulo (Trading, Gastos, Investimentos, Contas/Payouts, Metas) + Ações + Calendário.
 // Nenhum cálculo financeiro aqui: só lê o snapshot do Command Center.
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceDot,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -10,6 +10,7 @@ import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays } fro
 import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
 import StatRow from './StatRow';
+import EntityDrawer from './EntityDrawer';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 
 const WIDGET_ICONS = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
@@ -19,15 +20,21 @@ function fmtPct(value) {
   const v = value * 100;
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 }
-const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;
-const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
+const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
 const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
+function Delta({ current, previous, currency = 'BRL' }) {
+  if (previous == null || !Number.isFinite(current) || !Number.isFinite(previous)) return null;
+  const diff = current - previous;
+  if (diff === 0) return <span className="hc-delta hc-delta-flat">=</span>;
+  const up = diff > 0;
+  return <span className={`hc-delta ${up ? 'hc-delta-up' : 'hc-delta-down'}`} title="vs período anterior">{up ? '▲' : '▼'} {fmtMoney(Math.abs(diff), currency)}</span>;
+}
+
 const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'];
 const CLASS_COLORS = { equity: '#7c5cff', crypto: '#f7931a', fixed: '#3498db', other: '#e1b12c', cash: '#2ecc71' };
 const CAT_COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
 
-function Widget({ id, title, to = null, hide, children }) {
-  if (hide(id)) return null;
+function Widget({ id, title, to = null, hide, children }) {  if (hide(id)) return null;
   const Icon = WIDGET_ICONS[id];
   return (
     <section className="hc-widget" aria-label={title}>
@@ -42,6 +49,7 @@ function Widget({ id, title, to = null, hide, children }) {
 
 export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }) {
   const hide = (id) => (hidden || []).includes(id);
+  const [openAcct, setOpenAcct] = useState(null);
   if (loading || !snapshot) {
     return (
       <div className="hc-root hc-loading" role="status" aria-live="polite">
@@ -101,7 +109,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">PnL hoje</span><span className="hc-stat-value" style={{ color: risk.pnlToday >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(risk.pnlToday, 'USD')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Hoje</span><span className="hc-stat-value">{risk.tradesToday.win}W / {risk.tradesToday.loss}L</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Acumulado</span><span className="hc-stat-value">{fmtMoney(trading.length ? trading[trading.length - 1].pnl : 0, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Acumulado</span><span className="hc-stat-value">{fmtMoney(trading.length ? trading[trading.length - 1].pnl : 0, 'USD')} <Delta currency="USD" current={trading.length ? trading[trading.length - 1].pnl : 0} previous={snapshot.previous?.tradingPnl ?? null} /></span></div>
           </div>
           {trading.length > 1 && (
             <ResponsiveContainer width="100%" height={150}>
@@ -129,7 +137,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           <div className="hc-stats">
             <div className="hc-stat"><span className="hc-stat-label">Entrou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--green)' }}>{fmtMoney(snapshot.freeCash?.income, 'BRL')}</span></div>
             <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'BRL')}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'BRL')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'BRL')} <Delta current={snapshot.freeCash?.freeCash ?? 0} previous={snapshot.previous?.freeCash ?? null} /></span></div>
           </div>
           {expensePie.length > 0 ? (
             <div className="hc-pie">
@@ -191,6 +199,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                 sub={`trad ${fmtMoney(a.trading, 'USD')} · inv ${fmtMoney(a.invest)}`}
                 barPct={(Math.abs(a.total) / max) * 100}
                 value={fmtMoney(a.total, 'USD')}
+                onClick={() => setOpenAcct(a)}
               />
             ));
           })() : <div className="hc-empty">Sem PnL por conta ainda.</div>}
@@ -248,12 +257,27 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
             {insights.slice(0, 4).map((ins) => (
               <div key={ins.id} className="hc-insight">
                 <div className="hc-insight-text">{ins.text}</div>
-                <div className="hc-insight-source">fonte: {ins.source}</div>
+                <div className="hc-insight-source">fonte: {ins.source}{ins.href ? <> · <a className="hc-widget-link" href={ins.href}>abrir →</a></> : null}</div>
               </div>
             ))}
           </div>
         </section>
       )}
+
+      <EntityDrawer
+        open={!!openAcct}
+        title={openAcct ? `Conta — ${openAcct.name}` : ''}
+        onClose={() => setOpenAcct(null)}
+      >
+        {openAcct && (
+          <>
+            <div className="ed-kv"><span className="ed-k">PnL trading</span><span className="ed-v">{fmtMoney(openAcct.trading, 'USD')}</span></div>
+            <div className="ed-kv"><span className="ed-k">PnL investimentos</span><span className="ed-v">{fmtMoney(openAcct.invest)}</span></div>
+            <div className="ed-kv"><span className="ed-k">Total</span><span className="ed-v">{fmtMoney(openAcct.total, 'USD')}</span></div>
+            <div className="hc-empty">Para editar a conta, abra Contas → Contas.</div>
+          </>
+        )}
+      </EntityDrawer>
     </div>
   );
 }
