@@ -438,8 +438,8 @@ export function durationStats(trades: Trade[]): DurationStats {
 }
 
 // ---------------------------------------------------------------------------
-// Drawdown (análise) — curva de equity dos trades + detecção de drawdowns.
-// Fórmula de risco vem do motor; aqui é agregação/série. Nunca calculado na UI.
+// Drawdown (anï¿½lise) ï¿½ curva de equity dos trades + detecï¿½ï¿½o de drawdowns.
+// Fï¿½rmula de risco vem do motor; aqui ï¿½ agregaï¿½ï¿½o/sï¿½rie. Nunca calculado na UI.
 // ---------------------------------------------------------------------------
 
 export interface EquityPointLite { at: string; equity: number }
@@ -469,7 +469,7 @@ export interface DrawdownAnalysis {
 const r2dd = (n: number) => Math.round(n * 100) / 100;
 const daysBetween = (a: string, b: string) => Math.max(1, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
 
-/** Série de equity a partir dos trades fechados + capital inicial. */
+/** Sï¿½rie de equity a partir dos trades fechados + capital inicial. */
 export function drawdownAnalysis(trades: Trade[], initialFunding: number): DrawdownAnalysis {
   const start = initialFunding > 0 ? initialFunding : 0;
   const sorted = trades
@@ -538,4 +538,168 @@ export function drawdownAnalysis(trades: Trade[], initialFunding: number): Drawd
     significant: drawdowns.filter((d) => d.drawdownPct >= 5).length,
     atPeak: Math.abs(last - Math.max(...series.map((s) => s.equity), start)) < 1e-6,
   };
+}
+
+// ---------------------------------------------------------------------------
+// P1 â€” Analytics adicionais (daily PnL, expectancy mÃ³vel, R box, heatmap dia)
+// ---------------------------------------------------------------------------
+
+/** PnL lÃ­quido por dia (barras). */
+export interface DailyPnl {
+  date: string;
+  pnl: number;
+  trades: number;
+  wins: number;
+  losses: number;
+}
+
+export function dailyPnlSeries(trades: Trade[]): DailyPnl[] {
+  const map = new Map<string, DailyPnl>();
+  for (const t of closedTrades(trades)) {
+    const stamp = t.exitDatetime || t.entryDatetime;
+    if (!stamp) continue;
+    const date = String(stamp).slice(0, 10);
+    const e = map.get(date) ?? { date, pnl: 0, trades: 0, wins: 0, losses: 0 };
+    const net = Number(t.resultNet) || 0;
+    e.pnl += net;
+    e.trades += 1;
+    if (net > 0) e.wins += 1;
+    else if (net < 0) e.losses += 1;
+    map.set(date, e);
+  }
+  return [...map.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((e) => ({ ...e, pnl: Number(e.pnl.toFixed(2)) }));
+}
+
+/** Expectancy mÃ³vel (mÃ©dia de R em janela de N trades). */
+export interface ExpectancyPoint {
+  index: number;
+  date: string;
+  expectancy: number;
+}
+
+export function rollingExpectancy(trades: Trade[], window = 20): ExpectancyPoint[] {
+  const closed = closedTrades(trades).filter((t) => t.resultR != null && !Number.isNaN(t.resultR));
+  if (closed.length < window) return [];
+  const out: ExpectancyPoint[] = [];
+  for (let i = window - 1; i < closed.length; i += 1) {
+    let sum = 0;
+    for (let j = i - window + 1; j <= i; j += 1) sum += closed[j].resultR as number;
+    out.push({
+      index: i + 1,
+      date: String(closed[i].exitDatetime || closed[i].entryDatetime || '').slice(0, 10),
+      expectancy: Number((sum / window).toFixed(3)),
+    });
+  }
+  return out;
+}
+
+/** EstatÃ­stica de caixa da distribuiÃ§Ã£o de R (min, quartis, mediana, mÃ¡x). */
+export interface RBoxStats {
+  count: number;
+  min: number;
+  q1: number;
+  median: number;
+  q3: number;
+  max: number;
+  mean: number;
+  outliers: number[];
+}
+
+function quantile(sorted: number[], q: number): number {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
+}
+
+export function rBoxStats(trades: Trade[]): RBoxStats | null {
+  const rs = closedTrades(trades)
+    .map((t) => t.resultR)
+    .filter((r): r is number => r != null && !Number.isNaN(r))
+    .sort((a, b) => a - b);
+  if (!rs.length) return null;
+  const q1 = quantile(rs, 0.25);
+  const q3 = quantile(rs, 0.75);
+  const iqr = q3 - q1;
+  const lo = q1 - 1.5 * iqr;
+  const hi = q3 + 1.5 * iqr;
+  return {
+    count: rs.length,
+    min: rs[0],
+    q1: Number(q1.toFixed(2)),
+    median: Number(quantile(rs, 0.5).toFixed(2)),
+    q3: Number(q3.toFixed(2)),
+    max: rs[rs.length - 1],
+    mean: Number((rs.reduce((s, r) => s + r, 0) / rs.length).toFixed(2)),
+    outliers: rs.filter((r) => r < lo || r > hi).map((r) => Number(r.toFixed(2))),
+  };
+}
+
+/** Heatmap por dia da semana (PnL, nÂº trades, winrate, R mÃ©dio). */
+export interface WeekdayStat {
+  weekday: number;
+  label: string;
+  trades: number;
+  pnl: number;
+  winrate: number | null;
+  avgR: number | null;
+}
+
+const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'SÃ¡b'];
+
+export function heatmapByWeekday(trades: Trade[]): WeekdayStat[] {
+  const map = new Map<number, { trades: number; pnl: number; wins: number; rSum: number; rCount: number }>();
+  for (const t of closedTrades(trades)) {
+    const stamp = t.exitDatetime || t.entryDatetime;
+    if (!stamp) continue;
+    const d = new Date(stamp);
+    if (Number.isNaN(d.getTime())) continue;
+    const wd = d.getUTCDay();
+    const e = map.get(wd) ?? { trades: 0, pnl: 0, wins: 0, rSum: 0, rCount: 0 };
+    const net = Number(t.resultNet) || 0;
+    e.trades += 1;
+    e.pnl += net;
+    if (net > 0) e.wins += 1;
+    if (t.resultR != null && !Number.isNaN(t.resultR)) { e.rSum += t.resultR; e.rCount += 1; }
+    map.set(wd, e);
+  }
+  return [1, 2, 3, 4, 5, 6, 0].map((wd) => {
+    const e = map.get(wd);
+    return {
+      weekday: wd,
+      label: WEEKDAYS_PT[wd],
+      trades: e?.trades ?? 0,
+      pnl: Number((e?.pnl ?? 0).toFixed(2)),
+      winrate: e && e.trades > 0 ? Number(((e.wins / e.trades) * 100).toFixed(1)) : null,
+      avgR: e && e.rCount > 0 ? Number((e.rSum / e.rCount).toFixed(2)) : null,
+    };
+  });
+}
+
+/** Resumo MAE/MFE (em unidades de preÃ§o) â€” mÃ©dias e razÃ£o MFE/MAE. */
+export interface MaeMfeSummary {
+  count: number;
+  avgMae: number | null;
+  avgMfe: number | null;
+  ratio: number | null;
+}
+
+export function maeMfeSummary(trades: Trade[]): MaeMfeSummary {
+  let maeSum = 0;
+  let mfeSum = 0;
+  let n = 0;
+  for (const t of closedTrades(trades)) {
+    const { mae, mfe } = maeMfe(t);
+    if (mae == null && mfe == null) continue;
+    maeSum += Math.abs(mae ?? 0);
+    mfeSum += mfe ?? 0;
+    n += 1;
+  }
+  if (!n) return { count: 0, avgMae: null, avgMfe: null, ratio: null };
+  const avgMae = Number((maeSum / n).toFixed(4));
+  const avgMfe = Number((mfeSum / n).toFixed(4));
+  return { count: n, avgMae, avgMfe, ratio: avgMae > 0 ? Number((avgMfe / avgMae).toFixed(2)) : null };
 }

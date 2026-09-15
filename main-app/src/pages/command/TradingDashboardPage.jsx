@@ -3,7 +3,7 @@
 // histograma). Sem seções redundantes. COMPOSIÇÃO pura dos motores.
 import React, { useMemo } from 'react';
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot,
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot, ReferenceLine,
 } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
@@ -12,9 +12,10 @@ import PnLCalendar from '@apps/ui/PnLCalendar';
 import HistogramR from '@apps/ui/HistogramR';
 import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
-import { CalendarDays, BarChart3 } from 'lucide-react';
+import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
+  dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, maeMfeSummary,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -42,12 +43,13 @@ function StatCard({ label, value, sub, color, glow }) {
 export default function TradingDashboardPage() {
   const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
-    const [trades, payouts, propExts] = await Promise.all([
+    const [trades, payouts, propExts, riskSnap] = await Promise.all([
       f.ds.trades.list(),
       f.ds.payouts.list(),
       f.ds.propExtensions.list(),
+      f.risk.snapshot(),
     ]);
-    return { trades, payouts, propExts };
+    return { trades, payouts, propExts, riskSnap };
   });
 
   // Trades/payouts escopados ao período selecionado.
@@ -113,6 +115,17 @@ export default function TradingDashboardPage() {
   const pfLabel = stats.pf === 'n/a' ? '—' : stats.pf === 'infinity' ? '∞' : stats.pf.toFixed(2);
   const markers = series.filter((s) => s.payout > 0);
 
+  const analytics = useMemo(() => ({
+    daily: dailyPnlSeries(trades),
+    expectancy: rollingExpectancy(trades, 20),
+    rbox: rBoxStats(trades),
+    weekday: heatmapByWeekday(trades),
+    maemfe: maeMfeSummary(trades),
+  }), [trades]);
+
+  const riskRows = (data?.riskSnap?.rows ?? []).filter((r) => r.account?.kind === 'prop');
+  const weekdayMax = Math.max(1, ...analytics.weekday.map((w) => Math.abs(w.pnl)));
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
@@ -158,6 +171,109 @@ export default function TradingDashboardPage() {
       <WidgetGrid
         storageKey="trading"
         items={[
+          { id: 'risk', node: (
+            <div className="td-widget">
+              <div className="td-chart-title"><ShieldAlert size={14} /> Risk headroom (prop)</div>
+              {riskRows.length === 0 ? <div className="muted">Sem contas prop rastreadas.</div> : riskRows.map((r) => {
+                const used = Math.max(0, Math.min(1, r.metrics?.maxDDUsed ?? 0));
+                const pct = used * 100;
+                const color = r.status?.status === 'STOP' ? '#e74c3c' : r.status?.status === 'WARN' ? '#e1b12c' : '#2ecc71';
+                return (
+                  <div key={r.account.id} className="td-risk-row">
+                    <span className="td-risk-name">{r.account.name}</span>
+                    <span className="td-risk-eq">{fmtMoney(r.metrics?.equity ?? 0, 'USD')}</span>
+                    <span className="td-risk-bar"><span className="td-risk-fill" style={{ width: `${pct}%`, background: color }} /></span>
+                    <span className="td-risk-pct">{pct.toFixed(0)}% DD</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) },
+          { id: 'daily', defaultSpan: 2, node: (
+            <div className="td-widget">
+              <div className="td-chart-title"><BarChart3 size={14} /> PnL por dia</div>
+              {analytics.daily.length < 2 ? <div className="muted">Sem dias suficientes.</div> : (
+                <ResponsiveContainer width="100%" height={210}>
+                  <BarChart data={analytics.daily.map((d) => ({ ...d, label: d.date.slice(5) }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={24} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
+                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+                    <Bar dataKey="pnl" name="PnL">
+                      {analytics.daily.map((d) => <Cell key={d.date} fill={d.pnl >= 0 ? '#2ecc71' : '#e74c3c'} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          ) },
+          { id: 'expectancy', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">Rolling expectancy (20 trades)</div>
+              {analytics.expectancy.length < 2 ? <div className="muted">Amostra insuficiente (≥20 trades com R).</div> : (
+                <ResponsiveContainer width="100%" height={210}>
+                  <LineChart data={analytics.expectancy} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="index" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={40} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => `${Number(v).toFixed(2)}R`} />
+                    <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+                    <Line type="monotone" dataKey="expectancy" stroke="#7c5cff" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          ) },
+          { id: 'rbox', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">R — caixa (quartis)</div>
+              {!analytics.rbox ? <div className="muted">Sem trades com R (stop definido).</div> : (
+                <>
+                  <div className="td-rbox">
+                    <span className="td-rbox-cell"><span className="td-dd-label">Mín</span><span className="td-rbox-v">{analytics.rbox.min}R</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">Q1</span><span className="td-rbox-v">{analytics.rbox.q1}R</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">Mediana</span><span className="td-rbox-v">{analytics.rbox.median}R</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">Q3</span><span className="td-rbox-v">{analytics.rbox.q3}R</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">Máx</span><span className="td-rbox-v">{analytics.rbox.max}R</span></span>
+                  </div>
+                  <div className="td-dd-hint">{analytics.rbox.count} trades · média {analytics.rbox.mean}R · {analytics.rbox.outliers.length} outlier(s)</div>
+                </>
+              )}
+            </div>
+          ) },
+          { id: 'weekday', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">Heatmap por dia da semana</div>
+              {analytics.weekday.map((w) => {
+                const intensity = Math.abs(w.pnl) / weekdayMax;
+                const bg = w.pnl === 0 ? 'rgba(255,255,255,0.03)' : w.pnl > 0 ? `rgba(46,204,113,${0.1 + 0.5 * intensity})` : `rgba(231,76,60,${0.1 + 0.5 * intensity})`;
+                return (
+                  <div key={w.weekday} className="td-heat-row" style={{ background: bg }}>
+                    <span className="td-heat-day">{w.label}</span>
+                    <span className="td-heat-n">{w.trades}x</span>
+                    <span className="td-heat-wr">{w.winrate != null ? `${w.winrate}%` : '—'}</span>
+                    <span className="td-heat-avgr">{w.avgR != null ? `${w.avgR}R` : '—'}</span>
+                    <span className={`td-heat-pnl ${w.pnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(w.pnl, 'USD')}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) },
+          { id: 'maemfe', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">MAE / MFE</div>
+              {analytics.maemfe.count === 0 ? <div className="muted">Sem fills/MAE-MFE registrados nos trades.</div> : (
+                <>
+                  <div className="td-dd-grid">
+                    <div className="td-dd-cell"><span className="td-dd-label">MAE médio</span><span className="td-dd-value td-neg">{analytics.maemfe.avgMae}</span></div>
+                    <div className="td-dd-cell"><span className="td-dd-label">MFE médio</span><span className="td-dd-value dash-pos">{analytics.maemfe.avgMfe}</span></div>
+                  </div>
+                  <div className="td-dd-hint">{analytics.maemfe.count} trades · MFE/MAE {analytics.maemfe.ratio ?? '—'}</div>
+                </>
+              )}
+            </div>
+          ) },
           { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} loading={false} /></div>) },
           { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={trades} bucketSize={0.5} loading={false} /></div>) },
           { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={trades} initialFunding={stats.capital} currency="USD" /></div>) },
@@ -189,6 +305,22 @@ const TD_CSS = `
 .td-neg { color: var(--red, #e74c3c); }
 .td-warn { color: var(--yellow, #e1b12c); }
 .td-dd-hint { font-size: 11px; color: var(--muted, #a1a7b3); margin-top: 10px; }
+
+.td-risk-row { display: grid; grid-template-columns: 1fr auto 90px auto; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+.td-risk-row:last-child { border-bottom: none; }
+.td-risk-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-risk-eq { font-variant-numeric: tabular-nums; color: var(--muted, #a1a7b3); }
+.td-risk-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.td-risk-fill { display: block; height: 100%; border-radius: 999px; }
+.td-risk-pct { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 12px; text-align: right; }
+.td-rbox { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.td-rbox-cell { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); text-align: center; }
+.td-rbox-v { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.td-heat-row { display: grid; grid-template-columns: 44px auto auto auto 1fr; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 12px; margin-bottom: 4px; }
+.td-heat-day { font-weight: 700; }
+.td-heat-n { color: var(--muted, #a1a7b3); }
+.td-heat-wr, .td-heat-avgr { color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; }
+.td-heat-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 
 @media (max-width: 1000px) { .td-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .td-cards { grid-template-columns: 1fr; } .td-widgets { grid-template-columns: 1fr; } }
