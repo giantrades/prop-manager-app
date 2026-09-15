@@ -154,9 +154,8 @@ describe('Fase 6 — Financial Intelligence (leitura-only, fonte citável)', () 
     const s = await buildCommandSnapshot(ctx);
     const actions = buildActions(s);
 
-    const darf = actions.find((a) => a.kind === 'tax');
-    expect(darf).toBeDefined();
-    expect(darf!.source).toContain('money.taxCockpit');
+    // Ação de DARF removida (cockpit de day/swing não existe mais).
+    expect(actions.some((a) => (a as { kind: string }).kind === 'tax')).toBe(false);
 
     const payoutAction = actions.find((a) => a.kind === 'payout' && a.id.includes('payout-1'));
     expect(payoutAction).toBeDefined();

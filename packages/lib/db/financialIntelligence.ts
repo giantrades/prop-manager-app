@@ -18,7 +18,7 @@ import type {
   GoalProgressResult,
   ForecastResult,
 } from './wealth';
-import type { FirmPnlResult, FreeCashResult, TaxCockpitResult, WalletSummaryRow } from './money';
+import type { FirmPnlResult, FreeCashResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
 import { computeFirmPnl, monthlySeries, listCategories } from './money';
@@ -55,7 +55,6 @@ export interface CommandSnapshot {
   pendingPayouts: Payout[];
   priceAlerts: Array<{ alertId: string; positionId: string; symbol: string; dir: 'above' | 'below'; price: number; current: number; firedAt: string }>;
   freeCash: FreeCashResult;
-  taxCockpit: TaxCockpitResult;
   strategies: StrategyMetrics[];
   tradesToday: { win: number; loss: number };
   /** Home — séries principais dos módulos (composição pura, sem número novo). */
@@ -75,11 +74,6 @@ export interface CommandSnapshot {
   generatedAt: string;
 }
 
-/** Mês corrente "YYYY-MM" (usado pro Tax Cockpit / Free Cash). */
-function currentYearMonth(): string {
-  return nowIso().slice(0, 7);
-}
-
 /**
  * Agrega num único snapshot tudo o que os motores expõem. Cada campo vem de UMA
  * query de um motor (citada em `source` nos insights). Nada aqui calcula um número
@@ -92,7 +86,7 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
   const months = periodMonths(period, seedTxs);
   const ym = period.mode === 'month' ? (period.ym ?? currentYm()) : (months[months.length - 1] ?? currentYm());
 
-  const [netWorth, riskSnap, goals, walletSummary, forecast, safeAvailable, portfolio, taxCockpit, pendingPayouts, trades] =
+  const [netWorth, riskSnap, goals, walletSummary, forecast, safeAvailable, portfolio, pendingPayouts, trades] =
     await Promise.all([
       wealth.netWorth(),
       risk.snapshot(),
@@ -101,7 +95,6 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
       wealth.forecast(),
       wealth.safeAvailable(),
       wealth.portfolio(),
-      money.taxCockpit(ym),
       ds.payouts.list(),
       ds.trades.list(),
     ]);
@@ -190,7 +183,6 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
     portfolio,
     pendingPayouts: pendingPayouts.filter((p) => p.status === 'Pending'),
     freeCash,
-    taxCockpit,
     strategies,
     tradesToday: riskSnap.tradesToday,
     cashflowSeries,
@@ -360,7 +352,7 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
 // Action Center — flags de ações (só leitura de booleans expostos pelos motores)
 // ---------------------------------------------------------------------------
 
-export type ActionKind = 'risk' | 'goal' | 'payout' | 'tax' | 'price' | 'manual';
+export type ActionKind = 'risk' | 'goal' | 'payout' | 'price' | 'manual';
 export type ActionSeverity = 'warn' | 'info' | 'good';
 
 export interface ActionItem {
@@ -442,18 +434,6 @@ export function buildActions(s: CommandSnapshot): ActionItem[] {
       title: `Alerta de preço: ${a.symbol} ${a.dir === 'above' ? '≥' : '≤'} ${a.price}`,
       detail: `Atual ${a.current} (disparado em ${String(a.firedAt).slice(0, 10)}).`,
       source: `priceService.checkPriceAlerts ⇢ meta price:alerts:fired`,
-    });
-  }
-
-  // DARF prazo
-  if (s.taxCockpit.prepareDarf && s.taxCockpit.darfDeadline) {
-    actions.push({
-      id: 'action:tax:darf',
-      kind: 'tax',
-      severity: 'warn',
-      title: `Preparar DARF (${s.taxCockpit.darfDeadline.slice(0, 10)})`,
-      detail: `Imposto estimado ${fmtMoney(s.taxCockpit.estTax)} (day 20% / swing 15%).`,
-      source: `money.taxCockpit(${currentYearMonth()}) → prepareDarf=true, darfDeadline`,
     });
   }
 

@@ -22,12 +22,11 @@ export interface ActionRules {
   enabled: ActionKind[];
 }
 
-export const ALL_ACTION_KINDS: ActionKind[] = ['risk', 'goal', 'payout', 'tax', 'price', 'manual'];
+export const ALL_ACTION_KINDS: ActionKind[] = ['risk', 'goal', 'payout', 'price', 'manual'];
 export const ACTION_KIND_LABEL: Record<string, string> = {
   risk: 'Risco (conta em STOP/WARN)',
   goal: 'Meta concluída/próxima',
   payout: 'Payout disponível/pendente',
-  tax: 'DARF a preparar',
   price: 'Alerta de preço disparado',
   manual: 'Ações manuais (lembretes)',
 };
