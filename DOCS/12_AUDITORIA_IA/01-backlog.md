@@ -16,12 +16,12 @@
 - [x] AUD-P0-07 — **Delta vs período anterior** nos KPIs da Home (saldo e PnL acumulado).
 
 ## P1 — analítico e gestão
-- [ ] AUD-P1-01 — **Risk Headroom** por conta (equity, DD máx/usado/restante).
-- [ ] AUD-P1-02 — **Daily PnL bars** (resultado por dia).
-- [ ] AUD-P1-03 — **Rolling Expectancy** (janela ~20 trades).
-- [ ] AUD-P1-04 — **MAE/MFE** (usar `AllFills` capturado pelo bridge).
-- [ ] AUD-P1-05 — **Heatmap** dia×hora e setup×sessão.
-- [ ] AUD-P1-06 — **R Distribution + Box Plot**.
+- [x] AUD-P1-01 — **Risk Headroom** por conta prop (equity + % DD usado, colorido por status) no Trading.
+- [x] AUD-P1-02 — **Daily PnL bars** (resultado por dia) no Trading.
+- [x] AUD-P1-03 — **Rolling Expectancy** (janela 20 trades) no Trading.
+- [x] AUD-P1-04 — **MAE/MFE** (médias + razão MFE/MAE; usa fills/mae/mfe do trade) no Trading.
+- [x] AUD-P1-05 — **Heatmap por dia da semana** (PnL/winrate/R) no Trading. (sessão/setup = a seguir)
+- [x] AUD-P1-06 — **R — caixa (quartis + outliers)** no Trading.
 - [ ] AUD-P1-07 — **Strategy Matrix / Edge por setup** (Journal).
 - [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado).
 - [ ] AUD-P1-09 — **Account Matrix** (tabela comparável: status/equity/DD/payouts/sync).

@@ -276,7 +276,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
         <div className="sb-header">
           <div className="sb-logo">
             <span className="sb-logo-icon">📊</span>
-            <span className="sb-logo-text">PropManager</span>
+            <span className="sb-logo-text">Finance OS</span>
           </div>
           <div className="sb-header-actions">
             <button
