@@ -159,8 +159,12 @@ function staleWhileRevalidate(request) {
         return res;
       })
       .catch(() => cached);
-    // Garante sempre uma Response (evita "Failed to convert value to 'Response'").
-    return (cached || network).then((res) => res || new Response("", { status: 504, statusText: "Offline" }));
+    // `cached` é uma Response (não Promise): nunca chamar .then nela.
+    if (cached) {
+      network.catch(() => {});
+      return cached;
+    }
+    return network.then((res) => res || new Response("", { status: 504, statusText: "Offline" }));
   });
 }
 
@@ -168,6 +172,11 @@ function staleWhileRevalidate(request) {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Só intercepta o MESMO domínio (app shell + anexos). Requisições a outras origens
+  // (Supabase, bridge 127.0.0.1, calendário) passam DIRETO ao navegador — evita cache
+  // indevido de API e os erros "promise was rejected" do SW.
+  if (url.origin !== self.location.origin) return;
 
   // Writes (POST/PUT/DELETE) — NUNCA cacheadas.
   if (request.method !== "GET") {
@@ -250,14 +259,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // GET de leitura de dado: stale-while-revalidate.
+  // GET de leitura de dado (mesmo domínio): stale-while-revalidate.
   if (isDataRead(url) && !isCrossOrigin(url)) {
-    event.respondWith(staleWhileRevalidate(request));
-    return;
-  }
-  // GET cross-origin (bridge accounts/trades/positions): stale-while-revalidate
-  // também, mas sem esconder STALE (o app mostra banner via /status que é network-only).
-  if (isDataRead(url) && isCrossOrigin(url)) {
     event.respondWith(staleWhileRevalidate(request));
     return;
   }
