@@ -38,7 +38,7 @@
 ## P2 — depois
 - [x] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped) na página Quantower.
 - [x] AUD-P2-02 — Platform Health (Live): plataforma, conexões, posições, ordens, última sync.
-- [ ] AUD-P2-03 — Exposure long×short + Position Heatmap (conta×símbolo).
+- [x] AUD-P2-03 — Exposure long×short + Position Heatmap (por símbolo) na página de posições.
 - [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance).
 - [ ] AUD-P2-05 — Relatório do mês (waterfall + KPIs) — builder genérico adiado.
 - [ ] AUD-P2-06 — Purchase Simulator ("posso comprar isso?").

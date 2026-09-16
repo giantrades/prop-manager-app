@@ -90,3 +90,6 @@
   num relance se a ponte está saudável.
 - **P2-01 — Sync Center (Quantower)**: mostra o **último run de sincronização**: quando foi,
   quantos trades foram **criados**, **atualizados** e **ignorados**.
+- **P2-03 — Exposure + Position Heatmap (Positions & Orders)**: mostra o **total long vs short**
+  (barras) e um **mapa de calor por símbolo** onde a cor indica o PnL (verde ganho, vermelho perda,
+  intensidade = tamanho), com a quantidade long/short de cada símbolo.
