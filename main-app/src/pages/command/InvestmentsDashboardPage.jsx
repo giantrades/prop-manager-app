@@ -12,9 +12,12 @@ import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
-import { TrendingUp, CalendarDays, LineChart, Store } from 'lucide-react';
+import { TrendingUp, CalendarDays, LineChart, Store, Coins } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
-import { applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries } from '@apps/lib/db';
+import {
+  applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries,
+  dividendHistory, dividendIncomeByMonth, dividendByAsset, getAnnouncedDividends, upcomingDividends,
+} from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
@@ -51,7 +54,8 @@ export default function InvestmentsDashboardPage() {
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
-    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), relative: relativeSeries(history, cdi), dca: computeDcaFromTransactions(txs), txs, trades };
+    const announced = upcomingDividends(await getAnnouncedDividends(f.ds));
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), relative: relativeSeries(history, cdi), dca: computeDcaFromTransactions(txs), txs, trades, dividends: dividendHistory(txs), announced };
   });
 
   const pf = data?.portfolio;
@@ -97,6 +101,17 @@ export default function InvestmentsDashboardPage() {
     }
     const months = [...byMonth.keys()].sort();
     return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
+  }, [data, period]);
+
+  // #4 — proventos do período: total, por mês (barras) e por ativo.
+  const dividend = useMemo(() => {
+    const rows = data?.dividends ?? [];
+    const symbolById = Object.fromEntries((data?.positions ?? []).map((p) => [p.id, p.symbol]));
+    const inP = rows.filter((d) => inPeriod(d.date, period, []));
+    const total = inP.reduce((s, d) => s + (d.amount || 0), 0);
+    const monthly = dividendIncomeByMonth(inP).slice(-12).map((m) => ({ ym: m.ym.slice(5, 7) + '/' + m.ym.slice(2, 4), amount: m.amount }));
+    const byAsset = dividendByAsset(inP, symbolById);
+    return { total, monthly, byAsset, count: inP.length, avgMonth: monthly.length ? total / monthly.length : 0 };
   }, [data, period]);
 
   // B6/B7 — abrir ativo (posição) sem navegar, a partir da lista ou do treemap.
@@ -215,6 +230,34 @@ export default function InvestmentsDashboardPage() {
                   </div>
                 ),
               },
+              { id: 'dividends', node: (
+                <div className="dash-section">
+                  <div className="dash-title"><span><Coins size={14} /> Proventos</span><NavLink className="dash-link" to="/portfolio">abrir →</NavLink></div>
+                  <div className="dash-cards" style={{ marginBottom: 10 }}>
+                    <div className="card accent1"><h3>Recebido</h3><div className="stat">{fmtMoney(dividend.total)}</div><div className="muted">{dividend.count} provento(s)</div></div>
+                    <div className="card accent3"><h3>Média/mês</h3><div className="stat">{fmtMoney(dividend.avgMonth)}</div><div className="muted">{dividend.byAsset.length} ativo(s)</div></div>
+                    <div className="card accent4"><h3>Próximos</h3><div className="stat">{data.announced?.length ?? 0}</div><div className="muted">anunciados</div></div>
+                  </div>
+                  {dividend.monthly.length > 1 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={dividend.monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                        <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+                        <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v)} />
+                        <Bar dataKey="amount" name="Proventos" fill="#2ecc71" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : <div className="muted">Sem histórico suficiente de proventos.</div>}
+                  {dividend.byAsset.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      {dividend.byAsset.slice(0, 4).map((a) => (
+                        <StatRow key={a.positionId} icon={<Coins size={14} />} color="#2ecc71" label={a.symbol} sub={`${a.count} provento(s)`} barPct={dividend.total > 0 ? (a.amount / dividend.total) * 100 : 0} value={fmtMoney(a.amount)} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) },
               { id: 'relative', node: (
                 <div className="dash-section">
                   <div className="dash-title"><span><LineChart size={14} /> Performance relativa (base 100)</span></div>

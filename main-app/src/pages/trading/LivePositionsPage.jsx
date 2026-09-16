@@ -20,7 +20,7 @@ export default function LivePositionsPage() {
   const [confirmId, setConfirmId] = useState(null);
   const [orders, setOrders] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [form, setForm] = useState({ accountId: '', symbol: '', side: 'buy', type: 'limit', qty: '', price: '' });
+  const [form, setForm] = useState({ accountId: '', symbol: '', side: 'buy', type: 'limit', qty: '', price: '', sl: '', tp: '' });
   const [pending, setPending] = useState(() => readQueue().length);
   const adapterRef = useRef(null);
   if (!adapterRef.current) {
@@ -145,15 +145,18 @@ export default function LivePositionsPage() {
     try {
       const res = await submitOrQueue(adapter, {
         kind: 'place',
-        payload: { accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price },
+        payload: {
+          accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price,
+          sl: num(form.sl), tp: num(form.tp),
+        },
       });
       if (res.queued) {
         setPending(readQueue().length);
         toast(`Bridge offline — ordem ${form.symbol.toUpperCase()} na fila.`, { type: 'warn' });
-        setForm((f) => ({ ...f, symbol: '', qty: '', price: '' }));
+        setForm((f) => ({ ...f, symbol: '', qty: '', price: '', sl: '', tp: '' }));
       } else {
         toast(`Ordem ${form.type} enviada — ${form.symbol.toUpperCase()}`);
-        setForm((f) => ({ ...f, symbol: '', qty: '', price: '' }));
+        setForm((f) => ({ ...f, symbol: '', qty: '', price: '', sl: '', tp: '' }));
         loadOrders();
         refreshStatuses();
       }
@@ -315,6 +318,8 @@ export default function LivePositionsPage() {
             </select>
             <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} aria-label="Quantidade da ordem" />
             <input className="lp-input" type="number" step="0.00001" placeholder="Preço" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} aria-label="Preço da ordem" />
+            <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={form.sl} onChange={(e) => setForm((f) => ({ ...f, sl: e.target.value }))} aria-label="Stop loss da ordem" />
+            <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={form.tp} onChange={(e) => setForm((f) => ({ ...f, tp: e.target.value }))} aria-label="Take profit da ordem" />
             <button className="ac3-btn ac3-btn-sm" disabled={busy === 'new-order'} onClick={placeOrder}>Enviar</button>
           </div>
 
@@ -383,7 +388,7 @@ const LP_CSS = `
 .lp-input { width: 100%; min-width: 64px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text, #e7eaf0); font-size: 12px; padding: 7px 8px; min-height: 38px; font-family: inherit; }
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
 .lp-actions { display: flex; gap: 6px; justify-content: flex-end; }
-.lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
+.lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
 @media (max-width: 900px) {
   .lp-row { grid-template-columns: 1fr 1fr 1fr; }
   .lp-head { display: none; }
