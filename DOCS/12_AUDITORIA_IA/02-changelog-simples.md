@@ -108,3 +108,5 @@
   mostra o seu **caixa livre agora**, **como fica depois** e um veredito (cabe / repense).
 - **P2-09 — Treemap do portfólio (Investimentos)**: um mapa de blocos onde o **tamanho** de cada
   bloco é o valor do ativo — ótimo para ver concentração num relance.
+- **P2-07 — Runway (Planejamento)**: quantos **meses** seu caixa livre cobre, usando o **gasto médio
+  mensal** dos últimos 3 meses. (Scenario Cone fica como continuação.)

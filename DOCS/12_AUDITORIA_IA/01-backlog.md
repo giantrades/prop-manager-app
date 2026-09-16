@@ -42,7 +42,7 @@
 - [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance).
 - [x] AUD-P2-05 — Relatório do período (KPIs + waterfall) com seletor de período.
 - [x] AUD-P2-06 — Purchase Simulator ("posso comprar isso?") no Planejamento.
-- [ ] AUD-P2-07 — Cashflow Scenario Cone + Runway.
+- [x] AUD-P2-07 — Runway (meses de caixa) no Planejamento. *(Scenario Cone fica como continuação)*
 - [ ] AUD-P2-08 — Goal Projection (conservador/base/agressivo).
 - [x] AUD-P2-09 — Treemap do portfólio (por ativo) no Investimentos.
 - [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema**.
