@@ -96,3 +96,8 @@
 - **P1-08 — Rule Adherence (Trading)**: cruza o **checklist do dia** com o **resultado do dia**.
   Mostra a aderência média, quantos dias você seguiu o plano (=80%) e o **PnL médio** nos dias em
   que seguiu vs nos que não seguiu — pra ver se a disciplina está pagando.
+- **P1-17 — Filtros globais (conta/estratégia)**: além do período, agora dá para filtrar por
+  **conta** e por **estratégia** — e isso vai para o endereço (compartilhável). Aplicado no
+  Trading e no Gastos.
+- **P1-18 — Empty states acionáveis (slice)**: quando não há dados, a tela agora diz o que fazer
+  com um atalho (ex.: “Sem despesas no período ? lançar”; “Sem estratégia ? abrir Journal”).
