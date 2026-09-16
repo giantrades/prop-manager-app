@@ -39,13 +39,13 @@
 - [x] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped) na página Quantower.
 - [x] AUD-P2-02 — Platform Health (Live): plataforma, conexões, posições, ordens, última sync.
 - [x] AUD-P2-03 — Exposure long×short + Position Heatmap (por símbolo) na página de posições.
-- [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance).
+- [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance). → **precisa campo `strategyVersion` no trade (schema/migration)** — aguardando OK do dono
 - [x] AUD-P2-05 — Relatório do período (KPIs + waterfall) com seletor de período.
 - [x] AUD-P2-06 — Purchase Simulator ("posso comprar isso?") no Planejamento.
 - [x] AUD-P2-07 — Runway (meses de caixa) no Planejamento. *(Scenario Cone fica como continuação)*
-- [ ] AUD-P2-08 — Goal Projection (conservador/base/agressivo).
+- [x] AUD-P2-08 — Goal Projection (meses + data estimada pelo fluxo mensal) no Planejamento.
 - [x] AUD-P2-09 — Treemap do portfólio (por ativo) no Investimentos.
-- [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema**.
+- [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema/migration** — aguardando OK do dono
 - [x] AUD-P2-11 — Metric Registry leve (doc `03-metric-registry.md`).
 - [x] AUD-P2-12 — Reserva de imposto (linha "A pagar (reservar)" no widget de Impostos).
 - [x] AUD-P2-13 — Auditoria de rotas/legacy: removidas rotas órfãs /risk e /networth; nav e rotas alinhadas.
