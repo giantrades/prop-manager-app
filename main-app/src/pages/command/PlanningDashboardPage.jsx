@@ -145,6 +145,28 @@ export default function PlanningDashboardPage() {
             <div className="dash-row-sub">no ritmo do fluxo mensal líquido: {fmtMoney(data.forecast?.netMonthly ?? 0)}/mês</div>
           </div>
 
+          <div className="dash-section" key="scenario">
+            <div className="dash-title"><span><Sparkles size={14} /> Cenário do forecast (30/60/90d)</span></div>
+            {(() => {
+              const f = data.forecast ?? {};
+              const rows = [
+                { label: 'Hoje', v: f.today },
+                { label: '30 dias', v: f.d30 },
+                { label: '60 dias', v: f.d60 },
+                { label: '90 dias', v: f.d90 },
+              ];
+              const max = Math.max(1, ...rows.map((r) => Math.abs(Number(r.v) || 0)));
+              return rows.map((r) => (
+                <div key={r.label} className="ac-wf-row">
+                  <span className="ac-wf-label">{r.label}</span>
+                  <span className="ac-wf-bar-wrap"><span className={`ac-wf-bar ${(Number(r.v) || 0) < 0 ? 'is-neg' : 'is-pos'}`} style={{ width: `${Math.round((Math.abs(Number(r.v) || 0) / max) * 100)}%` }} /></span>
+                  <span className={`ac-wf-val ${(Number(r.v) || 0) < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v ?? 0)}</span>
+                </div>
+              ));
+            })()}
+            <div className="dash-row-sub">fluxo mensal líquido: {fmtMoney(data.forecast?.netMonthly ?? 0)}/mês</div>
+          </div>
+
           <div className="dash-section" key="metas">
             <div className="dash-title">
               <span>Metas</span>

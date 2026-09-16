@@ -15,7 +15,7 @@ import WidgetGrid from '@apps/ui/WidgetGrid';
 import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
-  dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, maeMfeSummary, allStrategyMetrics,
+  dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
   ruleAdherence, getChecklistTemplate, getDayCheck,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
@@ -150,6 +150,8 @@ export default function TradingDashboardPage() {
 
   const riskRows = (data?.riskSnap?.rows ?? []).filter((r) => r.account?.kind === 'prop');
   const weekdayMax = Math.max(1, ...analytics.weekday.map((w) => Math.abs(w.pnl)));
+  const sessions = heatmapBySession(trades);
+  const sessionMax = Math.max(1, ...sessions.map((s) => Math.abs(s.pnl)));
 
   return (
     <div className="cmd-page">
@@ -266,6 +268,24 @@ export default function TradingDashboardPage() {
                   <div className="td-dd-hint">{analytics.rbox.count} trades · média {analytics.rbox.mean}R · {analytics.rbox.outliers.length} outlier(s)</div>
                 </>
               )}
+            </div>
+          ) },
+          { id: 'sessions', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">Heatmap por sessão</div>
+              {sessions.every((s) => s.trades === 0) ? <div className="muted">Sem trades nas sessões.</div> : sessions.map((s) => {
+                const intensity = Math.abs(s.pnl) / sessionMax;
+                const bg = s.pnl === 0 ? 'rgba(255,255,255,0.03)' : s.pnl > 0 ? `rgba(46,204,113,${0.1 + 0.5 * intensity})` : `rgba(231,76,60,${0.1 + 0.5 * intensity})`;
+                return (
+                  <div key={s.session} className="td-heat-row" style={{ background: bg }}>
+                    <span className="td-heat-day">{s.label}</span>
+                    <span className="td-heat-n">{s.trades}x</span>
+                    <span className="td-heat-wr">{s.trades > 0 ? `${Math.round((s.winrate <= 1 ? s.winrate * 100 : s.winrate))}%` : '—'}</span>
+                    <span className="td-heat-avgr">{s.avgR != null ? `${s.avgR}R` : '—'}</span>
+                    <span className={`td-heat-pnl ${s.pnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(s.pnl, 'USD')}</span>
+                  </div>
+                );
+              })}
             </div>
           ) },
           { id: 'adherence', node: (
