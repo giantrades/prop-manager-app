@@ -32,8 +32,8 @@
 - [x] AUD-P1-14 — **Quick Add** (lançamento rápido: conta/valor/categoria/nota) no Gastos.
 - [x] AUD-P1-15 — **Fluxo do patrimônio (waterfall)** no Investimentos: Entradas → (−) Gastos → (−) Custos → PnL trading → Variação.
 - [x] AUD-P1-16 — **Relative Performance** vs CDI (base 100) no Investimentos.
-- [ ] AUD-P1-17 — **Filtros globais** conta/estratégia. → **movido para P2** (transversal)
-- [ ] AUD-P1-18 — **Micro UX** (skeleton, empty states com ação, erros acionáveis). → **movido para P2**
+- [x] AUD-P1-17 — **Filtros globais** conta/estratégia (contexto + URL; aplicados em Trading e Gastos).
+- [x] AUD-P1-18 — **Micro UX** (slice): empty states acionáveis em Gastos e Trading (skeleton/erros acionáveis ficam como melhoria contínua).
 
 ## P2 — depois
 - [x] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped) na página Quantower.

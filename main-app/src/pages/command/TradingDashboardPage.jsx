@@ -319,7 +319,7 @@ export default function TradingDashboardPage() {
           { id: 'strategies', defaultSpan: 2, node: (
             <div className="td-widget">
               <div className="td-chart-title">Strategy Matrix (edge por estratégia)</div>
-              {analytics.strategies.length === 0 ? <div className="muted">Sem trades com estratégia. Atribua a estratégia no Journal.</div> : (
+              {analytics.strategies.length === 0 ? <div className="muted">Sem trades com estratégia no período. Atribua a estratégia no <a className="dash-link" href="/journal">Journal</a>.</div> : (
                 <>
                   <div className="td-strat">
                     <div className="td-strat-head"><span>Estratégia</span><span>N</span><span>WR</span><span>Avg R</span><span>PF</span><span>Expectancy</span></div>

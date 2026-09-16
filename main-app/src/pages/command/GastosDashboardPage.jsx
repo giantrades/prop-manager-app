@@ -228,7 +228,7 @@ export default function GastosDashboardPage() {
             <div className="dash-section" key="donut">
               <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria</span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>limpar filtro</button>}</div>
               {donut.length === 0 ? (
-                <div className="gd-empty">Sem despesas neste mês.</div>
+                <div className="gd-empty">Sem despesas no período. <NavLink className="dash-link" to="/expenses">lançar →</NavLink></div>
               ) : (
                 <div className="gd-donut">
                   <ResponsiveContainer width="100%" height={220}>
