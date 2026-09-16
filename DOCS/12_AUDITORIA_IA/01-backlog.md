@@ -80,12 +80,18 @@
 - [x] **Strategy Matrix por `strategyVersion`** (#2): `strategyVersionMetrics()` (mesma métrica, agrupada por
       `strategyId` × versão) + toggle "por estratégia / por versão" + versão no detalhe (Entity Drawer).
 - [ ] **Relative Performance só vs CDI** — falta IBOV/benchmark configurável.
-- [ ] **Dividendos**: Income Calendar / Dividend History não implementados.
+- [x] **Dividendos** (#4): motor `dividendHistory` / `dividendIncomeByMonth` / `dividendByAsset` /
+      `dividendCalendar` (puros) + na aba Proventos do Portfolio: **Histórico de proventos** (total,
+      média/mês, barras por mês, ranking por ativo) e **Calendário de renda** (recebido × anunciado,
+      navegação por mês). Testes em `expenses.test.ts`.
 - [x] **AccountPicker melhorado (Trading)** (#5): busca + seleção múltipla escalável (20+ contas), ordenação
       por tipo/nome, "todas (filtradas)", contador e fechar por Esc/clique-fora; seleção persistida em
       `ui:filters` (meta) e na URL (`?accounts=`). **Gastos segue sem filtro de conta (geral).**
-- [ ] **SW não enfileira mais writes cross-origin** (bridge): se quiser fila offline de ordens, implementar
-      na camada do app (não no SW).
+- [x] **Fila offline de ordens na camada do app** (#6): `packages/utils/orderQueue.js`
+      (`submitOrQueue`/`flushQueue`, `clientOrderId` estável p/ replay idempotente, erros reais não entram
+      na fila). `LivePositionsPage` usa a fila em modificar SL/TP, fechar, cancelar e nova ordem + banner
+      "N na fila" com "Enviar agora"; flush automático ao reconectar. `closePosition` passou a aceitar
+      `clientOrderId`. Testes em `packages/utils/__tests__/orderQueue.test.js`.
 - [ ] **Sync cross-device a validar**: `cards` e `app_meta` (onConflict composto `user_id,id`) e
       `trades.strategy_version`.
 - [ ] **Backup antes/depois do bump `DB_VERSION=4`** (store `cards` nova).

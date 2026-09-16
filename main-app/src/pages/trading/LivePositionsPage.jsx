@@ -8,7 +8,8 @@ import { usePlatform, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { Activity, RefreshCw, X } from 'lucide-react';
+import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
+import { Activity, RefreshCw, X, Clock } from 'lucide-react';
 
 
 export default function LivePositionsPage() {
@@ -20,6 +21,7 @@ export default function LivePositionsPage() {
   const [orders, setOrders] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [form, setForm] = useState({ accountId: '', symbol: '', side: 'buy', type: 'limit', qty: '', price: '' });
+  const [pending, setPending] = useState(() => readQueue().length);
   const adapterRef = useRef(null);
   if (!adapterRef.current) {
     const { bridgeUrl, bridgeToken } = bridgePrefs();
@@ -54,6 +56,26 @@ export default function LivePositionsPage() {
     return () => clearInterval(t);
   }, [loadOrders, online]);
 
+  // #6 — reexecuta a fila quando a ponte volta (online / evento de rede).
+  const flush = useCallback(async () => {
+    const res = await flushQueue(adapter);
+    setPending(res.remaining);
+    if (res.sent > 0) {
+      toast(`${res.sent} operação(ões) da fila enviada(s).`);
+      loadOrders();
+      refreshStatuses();
+    }
+  }, [adapter, loadOrders, refreshStatuses, toast]);
+
+  useEffect(() => {
+    if (!online) return undefined;
+    flush();
+    const onOnline = () => flush();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online]);
+
   const setEdit = (id, k, v) => setEdits((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), [k]: v } }));
   const num = (v) => { const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 
@@ -63,10 +85,15 @@ export default function LivePositionsPage() {
     const tp = 'tp' in e ? num(e.tp) : p.tp;
     setBusy(p.platformPositionId);
     try {
-      await adapter.modifyPosition({ platformPositionId: p.platformPositionId, sl, tp });
-      toast(`SL/TP atualizados — ${p.symbol}`);
-      setEdits((prev) => { const n = { ...prev }; delete n[p.platformPositionId]; return n; });
-      refreshStatuses();
+      const res = await submitOrQueue(adapter, { kind: 'modify', payload: { platformPositionId: p.platformPositionId, sl, tp } });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — SL/TP de ${p.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`SL/TP atualizados — ${p.symbol}`);
+        setEdits((prev) => { const n = { ...prev }; delete n[p.platformPositionId]; return n; });
+        refreshStatuses();
+      }
     } catch (err) {
       toast(`Falha ao atualizar ${p.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
@@ -75,10 +102,16 @@ export default function LivePositionsPage() {
   const close = async (p) => {
     setBusy(p.platformPositionId);
     try {
-      await adapter.closePosition(p);
-      toast(`Posição fechada — ${p.symbol}`);
-      setConfirmId(null);
-      refreshStatuses();
+      const res = await submitOrQueue(adapter, { kind: 'close', payload: { platformPositionId: p.platformPositionId } });
+      if (res.queued) {
+        setPending(readQueue().length);
+        setConfirmId(null);
+        toast(`Bridge offline — fechar ${p.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`Posição fechada — ${p.symbol}`);
+        setConfirmId(null);
+        refreshStatuses();
+      }
     } catch (err) {
       toast(`Falha ao fechar ${p.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
@@ -87,10 +120,15 @@ export default function LivePositionsPage() {
   const cancelOrder = async (o) => {
     setBusy(o.platformOrderId);
     try {
-      await adapter.cancelOrder({ platformOrderId: o.platformOrderId });
-      toast(`Ordem cancelada — ${o.symbol}`);
-      loadOrders();
-      refreshStatuses();
+      const res = await submitOrQueue(adapter, { kind: 'cancel', payload: { platformOrderId: o.platformOrderId } });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — cancelar ${o.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`Ordem cancelada — ${o.symbol}`);
+        loadOrders();
+        refreshStatuses();
+      }
     } catch (err) {
       toast(`Falha ao cancelar ${o.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
@@ -105,11 +143,20 @@ export default function LivePositionsPage() {
     }
     setBusy('new-order');
     try {
-      await adapter.placeOrder({ accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price });
-      toast(`Ordem ${form.type} enviada — ${form.symbol.toUpperCase()}`);
-      setForm((f) => ({ ...f, symbol: '', qty: '', price: '' }));
-      loadOrders();
-      refreshStatuses();
+      const res = await submitOrQueue(adapter, {
+        kind: 'place',
+        payload: { accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — ordem ${form.symbol.toUpperCase()} na fila.`, { type: 'warn' });
+        setForm((f) => ({ ...f, symbol: '', qty: '', price: '' }));
+      } else {
+        toast(`Ordem ${form.type} enviada — ${form.symbol.toUpperCase()}`);
+        setForm((f) => ({ ...f, symbol: '', qty: '', price: '' }));
+        loadOrders();
+        refreshStatuses();
+      }
     } catch (err) {
       toast(`Falha ao enviar ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
@@ -132,6 +179,14 @@ export default function LivePositionsPage() {
         <span>{online ? 'Plataforma conectada' : 'Plataforma offline — abra o bridge'}</span>
         <span className="lp-muted">{livePositions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
       </div>
+
+      {pending > 0 && (
+        <div className="lp-queue" role="status" aria-live="polite">
+          <Clock size={14} />
+          <span>{pending} operação(ões) na fila (bridge offline).</span>
+          <button className="ac3-btn ac3-btn-sm" disabled={!online} onClick={flush}>Enviar agora</button>
+        </div>
+      )}
 
       {online && (
         <div className="lp-health" aria-label="Saúde da plataforma">
@@ -310,6 +365,8 @@ const LP_CSS = `
 .lp-heat-net { color: var(--muted, #a1a7b3); }
 .lp-heat-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .lp-muted { color: var(--muted, #a1a7b3); margin-left: auto; }
+.lp-queue { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(225,177,44,0.08); border: 1px solid rgba(225,177,44,0.35); color: var(--text, #e7eaf0); }
+.lp-queue span { flex: 1; }
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
 .lp-dot.off { background: var(--red, #e74c3c); }

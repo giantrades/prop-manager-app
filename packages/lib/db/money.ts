@@ -161,6 +161,113 @@ export function darfDeadline(yearMonth: string): string {
   return lastBusinessDayOfMonth(nextYear, nextMonth).toISOString();
 }
 
+// ---------------------------------------------------------------------------
+// #4 — Dividendos: histórico, renda por mês/ativo e calendário de renda (puro).
+// ---------------------------------------------------------------------------
+
+export interface DividendRow {
+  id: string;
+  date: string;
+  amount: number;
+  currency: string;
+  positionId: string;
+  note?: string;
+}
+
+/** Proventos RECEBIDOS (kind='dividend' ligado a uma posição), mais recentes primeiro. */
+export function dividendHistory(transactions: Transaction[]): DividendRow[] {
+  return transactions
+    .filter((t) => t.kind === 'dividend' && t.ref?.type === 'investmentId' && !!t.ref.id)
+    .map((t) => ({
+      id: t.id,
+      date: t.date,
+      amount: r2(Math.abs(t.amount)),
+      currency: t.currency,
+      positionId: (t.ref as { id: string }).id,
+      note: t.note,
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+export interface DividendMonthPoint { ym: string; amount: number; count: number; }
+
+/** Renda por mês (opcionalmente restrita a uma lista de `ym`), ordenada cronologicamente. */
+export function dividendIncomeByMonth(rows: DividendRow[], months?: string[]): DividendMonthPoint[] {
+  const map = new Map<string, { amount: number; count: number }>();
+  for (const d of rows) {
+    const ym = d.date.slice(0, 7);
+    if (months && months.length && !months.includes(ym)) continue;
+    const cur = map.get(ym) ?? { amount: 0, count: 0 };
+    cur.amount += d.amount;
+    cur.count += 1;
+    map.set(ym, cur);
+  }
+  return [...map.entries()]
+    .map(([ym, v]) => ({ ym, amount: r2(v.amount), count: v.count }))
+    .sort((a, b) => a.ym.localeCompare(b.ym));
+}
+
+export interface DividendAssetPoint { positionId: string; symbol: string; amount: number; count: number; }
+
+/** Renda por ativo (usa o mapa positionId→symbol; sem símbolo fica o próprio id). */
+export function dividendByAsset(rows: DividendRow[], symbolById: Record<string, string> = {}): DividendAssetPoint[] {
+  const map = new Map<string, { amount: number; count: number }>();
+  for (const d of rows) {
+    const cur = map.get(d.positionId) ?? { amount: 0, count: 0 };
+    cur.amount += d.amount;
+    cur.count += 1;
+    map.set(d.positionId, cur);
+  }
+  return [...map.entries()]
+    .map(([positionId, v]) => ({ positionId, symbol: symbolById[positionId] ?? positionId, amount: r2(v.amount), count: v.count }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+/** Evento anunciado mínimo (estrutura compatível com `DividendEvent`). */
+export interface DividendAnnouncement { symbol: string; exDate: string; amountPerShare?: number; note?: string; }
+
+export interface DividendCalendarDay {
+  date: string;
+  day: number;
+  /** Total recebido nesse dia. */
+  received: number;
+  /** Anúncios (data-com) nesse dia. */
+  announced: DividendAnnouncement[];
+}
+
+/** Calendário de renda de um mês: recebido + anunciado, dia a dia. */
+export function dividendCalendar(
+  rows: DividendRow[],
+  events: DividendAnnouncement[],
+  yearMonth: string,
+): DividendCalendarDay[] {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const recv = new Map<number, number>();
+  for (const d of rows) {
+    if (d.date.slice(0, 7) !== yearMonth) continue;
+    const day = Number(d.date.slice(8, 10));
+    recv.set(day, (recv.get(day) ?? 0) + d.amount);
+  }
+  const ann = new Map<number, DividendAnnouncement[]>();
+  for (const e of events ?? []) {
+    if ((e.exDate || '').slice(0, 7) !== yearMonth) continue;
+    const day = Number(e.exDate.slice(8, 10));
+    const arr = ann.get(day) ?? [];
+    arr.push(e);
+    ann.set(day, arr);
+  }
+  return Array.from({ length: last }, (_, i) => {
+    const day = i + 1;
+    return {
+      date: `${yearMonth}-${String(day).padStart(2, '0')}`,
+      day,
+      received: r2(recv.get(day) ?? 0),
+      announced: ann.get(day) ?? [],
+    };
+  });
+}
+
 /** Janela da fatura aberta de um cartão (por dia de fechamento). */
 export interface InvoiceCycle {
   /** Início (exclusivo) da fatura aberta: logo após o fechamento anterior. */

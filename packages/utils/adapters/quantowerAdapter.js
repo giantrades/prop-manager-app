@@ -382,12 +382,13 @@ export class QuantowerAdapter extends BaseAdapter {
     return result;
   }
 
-  async closePosition(position) {
+  async closePosition(position, clientOrderId) {
     const rawId = (position.platformPositionId || '').replace(/^qt_pos_/, '');
     if (!rawId) throw new Error('Invalid position: missing platformPositionId');
     const result = await this._fetchPost('/positions/close', {
       id: rawId,
-      clientOrderId: QuantowerAdapter.newClientOrderId(),
+      // clientOrderId estável permite replay idempotente da fila offline (app layer).
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
     });
     this._assertNotQueued(result);
     if (!result.success) throw new BridgeApiError(result.error, result);

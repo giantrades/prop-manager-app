@@ -122,6 +122,15 @@
   app. Criei a migration **`005_rls_and_sync_columns.sql`** com as regras e as colunas —
   **é preciso aplicá-la** (`supabase db push`) para valer.
 
+## Pendências 2 (executadas)
+- **Histórico de proventos + Calendário de renda (Investimentos → Proventos)**: total recebido,
+  média por mês, gráfico de proventos por mês e ranking por ativo; e um **calendário do mês**
+  mostrando, dia a dia, o que **já recebeu** e os **anúncios (data-com)** — com navegação entre meses.
+- **Fila offline de ordens (Positions & Orders)**: se a ponte do Quantower estiver **offline**, enviar/
+  alterar/cancelar/fechar ordem **não se perde** — entra numa **fila** e aparece um aviso
+  “N na fila · Enviar agora”. Quando a ponte volta, a fila é **reexecutada em ordem**, sem duplicar
+  (mesmo `clientOrderId`). Erros de verdade (ex.: dados inválidos) **não** entram na fila.
+
 ## Como ler o status
 - `01-backlog.md` → checklist por item (`[x]` feito / `[ ]` pendente).
 - Este documento → explicação simples do que cada item faz.

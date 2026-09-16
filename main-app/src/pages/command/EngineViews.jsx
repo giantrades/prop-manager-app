@@ -108,7 +108,7 @@ export function PortfolioPage() {
   // A5 — taxa USD→BRL (manual, com data). Sem taxa, posições USD ficam fora dos totais.
   const [fxInput, setFxInput] = useState('');
   const { loading, data, finance, reload } = useEngineData(async (f) => {
-    const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends } = await import('@apps/lib/db');
+    const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends, dividendHistory } = await import('@apps/lib/db');
     const [fxRec, allocation, txs, histRec, cdi, announced, positions, accounts] = await Promise.all([
       f.ds.meta.getKey('fx:USDBRL'),
       f.wealth.allocation(),
@@ -125,6 +125,7 @@ export function PortfolioPage() {
     return {
       portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi,
       benchmark: applyBenchmark(history, cdi), announced: upcomingDividends(announced), positions,
+      dividends: dividendHistory(txs),
       accounts: accounts.filter((a) => a.kind === 'investment' || a.kind === 'crypto' || a.kind === 'wallet'),
     };
   });
@@ -441,6 +442,7 @@ export function PortfolioPage() {
           benchmark={[]}
           loading={loading}
           announced={data?.announced ?? []}
+          dividends={data?.dividends ?? []}
           positions={data?.positions ?? []}
           onReceiveDividend={handleReceiveDividend}
           onSaveDividendEvent={handleSaveDividendEvent}

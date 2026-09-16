@@ -30,6 +30,10 @@ import {
   merchantRanking,
   computeAccountBalance,
   invoiceCycle,
+  dividendHistory,
+  dividendIncomeByMonth,
+  dividendByAsset,
+  dividendCalendar,
 } from '../money';
 import type { Transaction } from '../types';
 
@@ -367,6 +371,53 @@ describe('#1 — cartão/fatura vinculados à entidade', () => {
     const out = await money.recordInstallments({ accountId: 'w', currency: 'BRL', totalAmount: 300, count: 3, card: 'Nubank', cardId: 'card-1', firstDate: '2026-09-05T12:00:00Z' });
     expect(out).toHaveLength(3);
     expect(out.every((t) => t.cardId === 'card-1')).toBe(true);
+  });
+});
+
+describe('#4 — dividendos (histórico, renda e calendário)', () => {
+  const tx = (over) => ({
+    id: over.id, kind: 'dividend', amount: over.amount, currency: 'BRL',
+    accountId: 'inv', date: over.date, ref: { type: 'investmentId', id: over.positionId },
+  });
+
+  const ROWS = [
+    tx({ id: 'd1', positionId: 'p1', amount: 30, date: '2026-08-10T12:00:00Z' }),
+    tx({ id: 'd2', positionId: 'p2', amount: 20, date: '2026-08-20T12:00:00Z' }),
+    tx({ id: 'd3', positionId: 'p1', amount: 50, date: '2026-09-05T12:00:00Z' }),
+    // não-dividendo é ignorado
+    { id: 'x', kind: 'expense', amount: -10, currency: 'BRL', accountId: 'w', date: '2026-09-05T12:00:00Z' },
+  ];
+
+  it('dividendHistory só pega kind=dividend ligado a posição, mais recente primeiro', () => {
+    const rows = dividendHistory(ROWS as never);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].id).toBe('d3');
+    expect(rows.every((r) => r.positionId)).toBe(true);
+  });
+
+  it('dividendIncomeByMonth agrega por mês', () => {
+    const rows = dividendHistory(ROWS as never);
+    expect(dividendIncomeByMonth(rows)).toEqual([
+      { ym: '2026-08', amount: 50, count: 2 },
+      { ym: '2026-09', amount: 50, count: 1 },
+    ]);
+  });
+
+  it('dividendByAsset ranqueia por valor com símbolo', () => {
+    const rows = dividendHistory(ROWS as never);
+    expect(dividendByAsset(rows, { p1: 'PETR4', p2: 'ITSA4' })).toEqual([
+      { positionId: 'p1', symbol: 'PETR4', amount: 80, count: 2 },
+      { positionId: 'p2', symbol: 'ITSA4', amount: 20, count: 1 },
+    ]);
+  });
+
+  it('dividendCalendar marca recebido por dia e anúncios (data-com)', () => {
+    const rows = dividendHistory(ROWS as never);
+    const cal = dividendCalendar(rows, [{ symbol: 'PETR4', exDate: '2026-09-18' }], '2026-09');
+    expect(cal).toHaveLength(30); // setembro
+    expect(cal.find((d) => d.day === 5)?.received).toBe(50);
+    expect(cal.find((d) => d.day === 18)?.announced[0].symbol).toBe('PETR4');
+    expect(cal.find((d) => d.day === 10)?.received).toBe(0);
   });
 });
 

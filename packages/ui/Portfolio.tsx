@@ -8,8 +8,16 @@
 import { fmtMoney as fmtMoneyShared } from './currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import AllocationPie from './AllocationPie';
+import { dividendIncomeByMonth, dividendByAsset, dividendCalendar } from '@apps/lib/db';
+
+/** #4 — desloca um `YYYY-MM` em N meses. */
+function shiftYm(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#f7931a', '#e74c3c', '#a855f7', '#22d3ee'];
 
@@ -42,8 +50,14 @@ function fmtPct(value) {
  * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
  * @param {boolean} [props.loading]
  */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
   const show = (k) => !only || only.includes(k);
+  const [calYm, setCalYm] = React.useState(() => new Date().toISOString().slice(0, 7));
+  const symbolById = React.useMemo(() => Object.fromEntries((positions || []).map((p) => [p.id, p.symbol])), [positions]);
+  const divMonthly = React.useMemo(() => dividendIncomeByMonth(dividends), [dividends]);
+  const divByAsset = React.useMemo(() => dividendByAsset(dividends, symbolById), [dividends, symbolById]);
+  const divCal = React.useMemo(() => dividendCalendar(dividends, announced, calYm), [dividends, announced, calYm]);
+  const divTotal = React.useMemo(() => dividends.reduce((s, d) => s + (d.amount || 0), 0), [dividends]);
   const benchByAt = React.useMemo(() => new Map((benchmark || []).map((b) => [b.at, b.index])), [benchmark]);
   const [divRow, setDivRow] = React.useState(null);
   const [divAmount, setDivAmount] = React.useState('');
@@ -276,6 +290,77 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* #4 — Histórico de proventos + Calendário de renda */}
+      {show('income') && dividends.length > 0 && (
+        <div className="pf-section">
+          <div className="pf-section-title">Histórico de proventos ({dividends.length})</div>
+          <div className="pf-div-stats">
+            <div className="pf-div-stat"><span className="pf-stat-label">Total recebido</span><span className="pf-stat-value pf-pos">{fmtMoney(divTotal, currency)}</span></div>
+            <div className="pf-div-stat"><span className="pf-stat-label">Média/mês</span><span className="pf-stat-value">{fmtMoney(divMonthly.length ? divTotal / divMonthly.length : 0, currency)}</span></div>
+            <div className="pf-div-stat"><span className="pf-stat-label">Ativos pagadores</span><span className="pf-stat-value">{divByAsset.length}</span></div>
+          </div>
+          {divMonthly.length > 1 && (
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={divMonthly.slice(-12).map((m) => ({ ym: m.ym.slice(5, 7) + '/' + m.ym.slice(2, 4), amount: m.amount }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+                <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, currency)} />
+                <Bar dataKey="amount" name="Proventos" fill="#2ecc71" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <div className="pf-div-assets">
+            {divByAsset.slice(0, 6).map((a) => {
+              const pct = divTotal > 0 ? (a.amount / divTotal) * 100 : 0;
+              return (
+                <div key={a.positionId} className="pf-div-asset-row">
+                  <span className="pf-alert-sym">{a.symbol}</span>
+                  <span className="pf-div-bar"><span className="pf-div-fill" style={{ width: `${pct}%` }} /></span>
+                  <span className="pf-stat-value">{fmtMoney(a.amount, currency)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {show('income') && (
+        <div className="pf-section">
+          <div className="pf-div-cal-head">
+            <span className="pf-section-title" style={{ margin: 0 }}>Calendário de renda</span>
+            <span className="pf-div-cal-nav">
+              <button className="pf-mark-btn" onClick={() => setCalYm((ym) => shiftYm(ym, -1))} aria-label="Mês anterior">‹</button>
+              <span className="pf-div-cal-ym">{calYm.slice(5, 7)}/{calYm.slice(0, 4)}</span>
+              <button className="pf-mark-btn" onClick={() => setCalYm((ym) => shiftYm(ym, 1))} aria-label="Próximo mês">›</button>
+            </span>
+          </div>
+          <div className="pf-cal-week" aria-hidden="true">{['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <span key={i}>{d}</span>)}</div>
+          <div className="pf-cal-grid">
+            {Array.from({ length: new Date(Number(calYm.slice(0, 4)), Number(calYm.slice(5, 7)) - 1, 1).getDay() }).map((_, i) => <span key={`pad${i}`} className="pf-cal-pad" />)}
+            {divCal.map((d) => {
+              const hasAnn = d.announced.length > 0;
+              const title = [d.received > 0 ? `recebido ${fmtMoney(d.received, currency)}` : '', ...d.announced.map((e) => `${e.symbol} (data-com)`)].filter(Boolean).join(' · ');
+              return (
+                <span
+                  key={d.date}
+                  className={`pf-cal-day ${d.received > 0 ? 'has-recv' : ''} ${hasAnn ? 'has-ann' : ''}`}
+                  title={title || undefined}
+                >
+                  <span className="pf-cal-num">{d.day}</span>
+                  {d.received > 0 && <span className="pf-cal-val">{Math.abs(d.received) >= 1000 ? `${(d.received / 1000).toFixed(1)}k` : d.received.toFixed(0)}</span>}
+                  {hasAnn && d.received === 0 && <span className="pf-cal-dot" />}
+                </span>
+              );
+            })}
+          </div>
+          <div className="pf-div-legend">
+            <span className="pf-legend-item"><span className="pf-cal-swatch has-recv" /> recebido</span>
+            <span className="pf-legend-item"><span className="pf-cal-swatch has-ann" /> anunciado (data-com)</span>
+          </div>
         </div>
       )}
 
@@ -563,6 +648,32 @@ const PF_CSS = `
 .pf-card { padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); }
 .pf-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .pf-card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+/* #4 — proventos (histórico + calendário) */
+.pf-div-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+.pf-div-stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
+.pf-div-assets { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.pf-div-asset-row { display: grid; grid-template-columns: 88px 1fr auto; gap: 10px; align-items: center; font-size: 12px; }
+.pf-div-bar { height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+.pf-div-fill { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2ecc71, #7bed9f); }
+.pf-div-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.pf-div-cal-nav { display: inline-flex; align-items: center; gap: 6px; }
+.pf-div-cal-ym { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 56px; text-align: center; }
+.pf-cal-week, .pf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.pf-cal-week { font-size: 10px; color: var(--muted, #a1a7b3); text-align: center; margin-bottom: 4px; }
+.pf-cal-pad { min-height: 34px; }
+.pf-cal-day { position: relative; min-height: 34px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10px; }
+.pf-cal-num { font-variant-numeric: tabular-nums; color: var(--muted, #a1a7b3); }
+.pf-cal-day.has-recv { background: rgba(46,204,113,0.16); border-color: rgba(46,204,113,0.45); }
+.pf-cal-day.has-recv .pf-cal-num { color: var(--text, #e7eaf0); }
+.pf-cal-val { font-size: 10px; font-weight: 700; color: #2ecc71; }
+.pf-cal-day.has-ann { outline: 1px dashed rgba(225,177,44,0.7); outline-offset: -2px; }
+.pf-cal-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--yellow, #e1b12c); }
+.pf-div-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 11px; color: var(--muted, #a1a7b3); }
+.pf-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.pf-cal-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; background: rgba(255,255,255,0.08); }
+.pf-cal-swatch.has-recv { background: rgba(46,204,113,0.6); }
+.pf-cal-swatch.has-ann { border: 1px dashed rgba(225,177,44,0.9); }
 
 @keyframes pf-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 `;
