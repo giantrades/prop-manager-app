@@ -73,6 +73,9 @@
   categoria e nota e clica “Adicionar”, sem abrir a página de lançamentos.
 - **P1-16 — Performance relativa (Investimentos)**: gráfico comparando o **seu portfólio** com o
   **CDI**, os dois começando em **100**. Se a sua linha fica acima, você bateu o CDI no período.
+- **P1-15 — Fluxo do patrimônio (Investimentos)**: um “waterfall” do período mostrando
+  **Entradas → (−) Gastos → (−) Custos de firm → PnL de trading → Variação**. Ajuda a ver de onde
+  o patrimônio subiu ou desceu.
 
 ---
 

@@ -23,17 +23,17 @@
 - [x] AUD-P1-05 — **Heatmap por dia da semana** (PnL/winrate/R) no Trading. (sessão/setup = a seguir)
 - [x] AUD-P1-06 — **R — caixa (quartis + outliers)** no Trading.
 - [x] AUD-P1-07 — **Strategy Matrix / Edge por setup** (tabela com N/WR/Avg R/PF/Expectancy por estratégia) no Trading.
-- [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado).
+- [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado). → **movido para P2** (precisa de leitura dia-a-dia do checklist)
 - [x] AUD-P1-09 — **Account Matrix** (tabela: status/equity/DD/payouts/trades/sync) no dashboard de Contas.
 - [x] AUD-P1-10 — **Payout Waterfall** (gross → fees → net) no dashboard de Contas.
 - [x] AUD-P1-11 — **Budget Variance** (orçado × realizado por categoria, barra verde/vermelha) no Gastos.
 - [x] AUD-P1-12 — **Stacked Category Trend** (composição dos gastos por mês, empilhado) no Gastos.
 - [x] AUD-P1-13 — **Savings Rate** (poupado % + comparação com o período anterior) no Gastos.
 - [x] AUD-P1-14 — **Quick Add** (lançamento rápido: conta/valor/categoria/nota) no Gastos.
-- [ ] AUD-P1-15 — **Net Worth Waterfall** (início → trading → payouts → gastos → invest → fim).
+- [x] AUD-P1-15 — **Fluxo do patrimônio (waterfall)** no Investimentos: Entradas → (−) Gastos → (−) Custos → PnL trading → Variação.
 - [x] AUD-P1-16 — **Relative Performance** vs CDI (base 100) no Investimentos.
-- [ ] AUD-P1-17 — **Filtros globais** conta/estratégia (período já existe).
-- [ ] AUD-P1-18 — **Micro UX**: skeleton estrutural, empty states com ação, erros "o quê/por quê/como".
+- [ ] AUD-P1-17 — **Filtros globais** conta/estratégia. → **movido para P2** (transversal)
+- [ ] AUD-P1-18 — **Micro UX** (skeleton, empty states com ação, erros acionáveis). → **movido para P2**
 
 ## P2 — depois
 - [ ] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped/erros).
