@@ -143,6 +143,47 @@ export default function LivePositionsPage() {
         </div>
       )}
 
+      {online && livePositions.length > 0 && (() => {
+        const notional = (p) => Math.abs((p.quantity || 0) * (p.currentPrice || 0));
+        const longs = livePositions.filter((p) => p.side === 'Long');
+        const shorts = livePositions.filter((p) => p.side === 'Short');
+        const longN = longs.reduce((s, p) => s + notional(p), 0);
+        const shortN = shorts.reduce((s, p) => s + notional(p), 0);
+        const maxN = Math.max(1, longN, shortN);
+        const bySym = new Map();
+        for (const p of livePositions) {
+          const e = bySym.get(p.symbol) ?? { symbol: p.symbol, long: 0, short: 0, pnl: 0 };
+          if (p.side === 'Long') e.long += p.quantity; else e.short += p.quantity;
+          e.pnl += Number(p.netPnl || 0);
+          bySym.set(p.symbol, e);
+        }
+        const rows = [...bySym.values()].sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
+        const maxPnl = Math.max(1, ...rows.map((r) => Math.abs(r.pnl)));
+        return (
+          <div className="dash-section">
+            <div className="dash-title">Exposure &amp; Position Heatmap</div>
+            <div className="lp-expo">
+              <div className="lp-expo-item"><span className="lp-h-k">Long</span><span className="lp-h-v">{longs.length}</span><span className="lp-expo-bar"><span className="lp-expo-fill lp-expo-long" style={{ width: `${(longN / maxN) * 100}%` }} /></span></div>
+              <div className="lp-expo-item"><span className="lp-h-k">Short</span><span className="lp-h-v">{shorts.length}</span><span className="lp-expo-bar"><span className="lp-expo-fill lp-expo-short" style={{ width: `${(shortN / maxN) * 100}%` }} /></span></div>
+            </div>
+            <div className="lp-heat">
+              {rows.map((r) => {
+                const pnl = r.pnl;
+                const intensity = Math.abs(pnl) / maxPnl;
+                const bg = pnl === 0 ? 'rgba(255,255,255,0.03)' : pnl > 0 ? `rgba(46,204,113,${0.12 + 0.5 * intensity})` : `rgba(231,76,60,${0.12 + 0.5 * intensity})`;
+                return (
+                  <div key={r.symbol} className="lp-heat-row" style={{ background: bg }}>
+                    <span className="lp-heat-sym">{r.symbol}</span>
+                    <span className="lp-heat-net">{r.long ? `L ${r.long}` : ''}{r.short ? ` S ${r.short}` : ''}</span>
+                    <span className={`lp-heat-pnl ${pnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(pnl)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {online && livePositions.length > 0 && (
         <div className="dash-cards">
           <div className={`card ${totals.pnl >= 0 ? 'accent1' : 'accent2'}`}>
@@ -257,6 +298,17 @@ const LP_CSS = `
 .lp-h { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); min-width: 110px; }
 .lp-h-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
 .lp-h-v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lp-expo { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.lp-expo-item { display: flex; align-items: center; gap: 8px; }
+.lp-expo-bar { width: 160px; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
+.lp-expo-fill { display: block; height: 100%; border-radius: 999px; }
+.lp-expo-long { background: linear-gradient(90deg, #2ecc71, #7bed9f); }
+.lp-expo-short { background: linear-gradient(90deg, #e74c3c, #ff7b6b); }
+.lp-heat { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.lp-heat-row { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px; font-size: 12px; }
+.lp-heat-sym { font-weight: 700; }
+.lp-heat-net { color: var(--muted, #a1a7b3); }
+.lp-heat-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .lp-muted { color: var(--muted, #a1a7b3); margin-left: auto; }
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
