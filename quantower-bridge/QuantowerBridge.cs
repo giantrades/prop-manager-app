@@ -1041,6 +1041,9 @@ namespace QuantowerBridge
                 reward = t.Reward,
                 stopPrice = t.StopPrice,
                 takePrice = t.TakePrice,
+                // [PATCH C] MAE/MFE em $ (excursão adversa/favorável sobre os fills).
+                mae = t.Mae,
+                mfe = t.Mfe,
                 holdingSeconds = t.HoldingSeconds,
                 maxScaleIn = t.MaxScaleIn,
                 firstOrderId = t.FirstOrderId,
@@ -1596,6 +1599,10 @@ namespace QuantowerBridge
         // [PATCH B] Stop/take por unidade (preço). O app usa stopPrice para calcular R.
         public decimal? StopPrice { get; set; }
         public decimal? TakePrice { get; set; }
+        // [PATCH C] MAE/MFE reais em $ (excursão máxima adversa/favorável sobre os fills).
+        // Mae <= 0, Mfe >= 0; null quando não há fills.
+        public decimal? Mae { get; set; }
+        public decimal? Mfe { get; set; }
         public double HoldingSeconds { get; set; }
         public int MaxScaleIn { get; set; }
         public string FirstOrderId { get; set; }
@@ -1631,6 +1638,24 @@ namespace QuantowerBridge
 
             var directionSign = closedState.Direction == "LONG" ? 1 : -1;
             var calculatedGrossPnL = (avgExit - avgEntry) * entryQty * directionSign;
+
+            // [PATCH C] MAE/MFE em $: excursão sobre TODOS os fills (entradas + saídas),
+            // medida a partir do preço médio de entrada, na direção do trade. Mesma
+            // convenção do proxy do app (`maeMfe`): Mfe >= 0, Mae <= 0. Null sem fills.
+            decimal? mae = null;
+            decimal? mfe = null;
+            if (entryQty > 0 && closedState.AllFills.Count > 0)
+            {
+                decimal maxFav = 0m, maxAdv = 0m;
+                foreach (var f in closedState.AllFills)
+                {
+                    var signed = (f.Price - avgEntry) * directionSign * entryQty;
+                    if (signed > maxFav) maxFav = signed;
+                    if (signed < maxAdv) maxAdv = signed;
+                }
+                mfe = Math.Round(maxFav, 2);
+                mae = Math.Round(maxAdv, 2);
+            }
 
             var idInput = $"{closedState.AccountId}|{closedState.Symbol}|{closedState.OpenTime:O}|{closedState.ExitTime:O}|{closedState.FirstOrderId}";
             var platformTradeId = "qt_" + TradeHelpers.ComputeSha1Hash(idInput);
@@ -1682,6 +1707,8 @@ namespace QuantowerBridge
                 Reward = 0,
                 StopPrice = stopPrice,
                 TakePrice = takePrice,
+                Mae = mae,
+                Mfe = mfe,
                 HoldingSeconds = holdingSeconds,
                 MaxScaleIn = Math.Max(0, entries.Count - 1),
                 FirstOrderId = closedState.FirstOrderId,

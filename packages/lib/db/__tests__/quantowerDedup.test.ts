@@ -66,3 +66,33 @@ describe('B — stopPrice vindo do bridge gera R', () => {
     expect(t.resultR).toBeNull();
   });
 });
+
+describe('A3 — MAE/MFE vindos do bridge', () => {
+  it('quantowerToTrade mapeia mae/mfe quando presentes', () => {
+    const t = quantowerToTrade({
+      platformTradeId: 'qt_mae', symbol: 'EURUSD', side: 'Long', quantity: 1,
+      entryPrice: 1.1, exitPrice: 1.11, netPnl: 100, mae: -25.5, mfe: 40,
+    });
+    expect(t.mae).toBe(-25.5);
+    expect(t.mfe).toBe(40);
+  });
+
+  it('sem mae/mfe do bridge => undefined (nunca 0)', () => {
+    const t = quantowerToTrade({
+      platformTradeId: 'qt_nomae', symbol: 'EURUSD', side: 'Long', quantity: 1,
+      entryPrice: 1.1, exitPrice: 1.11, netPnl: 100,
+    });
+    expect(t.mae).toBeUndefined();
+    expect(t.mfe).toBeUndefined();
+  });
+
+  it('re-sync sem mae/mfe NÃO apaga o valor já conhecido', async () => {
+    const { ds, chain } = makeEngine();
+    await ingestQuantowerTrades(ds, chain, [{ ...BATCH[0], mae: -12, mfe: 30 }]);
+    // segunda rodada sem os campos (bridge antigo) — deve preservar
+    await ingestQuantowerTrades(ds, chain, [BATCH[0]]);
+    const t = (await ds.trades.list()).find((x) => x.quantowerId === 'qt_1');
+    expect(t?.mae).toBe(-12);
+    expect(t?.mfe).toBe(30);
+  });
+});

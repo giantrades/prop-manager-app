@@ -20,6 +20,9 @@ export interface QuantowerTrade {
   exitDateTime?: string | null;
   stopPrice?: number | null;
   takePrice?: number | null;
+  /** [PATCH C] MAE/MFE em $ vindos do bridge (excursão sobre os fills). */
+  mae?: number | null;
+  mfe?: number | null;
   multiplier?: number | null;
   grossPnl?: number;
   netPnl?: number;
@@ -46,6 +49,9 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   const entryDatetime = q.entryDateTime ?? nowIso();
   const exitPrice = q.exitPrice && q.exitPrice !== 0 ? q.exitPrice : undefined;
   const stopPrice = q.stopPrice != null && q.stopPrice !== 0 ? q.stopPrice : undefined;
+  // [PATCH C] MAE/MFE reais do bridge — `maeMfe()` os prefere ao proxy via fills.
+  const mae = typeof q.mae === 'number' ? q.mae : undefined;
+  const mfe = typeof q.mfe === 'number' ? q.mfe : undefined;
   const resultNet = q.netPnl ?? 0;
   const trade = {
     id: `qt_${q.platformTradeId}`,
@@ -58,6 +64,8 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     entryPrice: q.entryPrice ?? 0,
     exitPrice,
     stopPrice,
+    mae,
+    mfe,
     multiplier: q.multiplier ?? undefined,
     commission: 0,
     swap: 0,
@@ -110,7 +118,14 @@ export async function ingestQuantowerTrades(
     const trade = quantowerToTrade(q, accountId);
     const existing = await ds.trades.byQuantowerId(q.platformTradeId);
     if (existing.length > 0) {
-      const merged: Trade = { ...existing[0], ...trade, id: existing[0].id };
+      // Preserva MAE/MFE já conhecidos quando o bridge desta rodada não os enviou.
+      const merged: Trade = {
+        ...existing[0],
+        ...trade,
+        id: existing[0].id,
+        mae: trade.mae ?? existing[0].mae,
+        mfe: trade.mfe ?? existing[0].mfe,
+      };
       await ds.trades.put(merged, { source: 'quantower' });
       await chain.syncTrade(merged);
       updated += 1;

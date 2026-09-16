@@ -233,6 +233,8 @@ export class QuantowerAdapter extends BaseAdapter {
       exitDateTime: t.exitDateTime && !t.exitDateTime.startsWith('0001') ? t.exitDateTime : null,
       stopPrice: t.stopPrice ?? t.stopLoss ?? null,
       takePrice: t.takePrice ?? t.takeProfit ?? null,
+      mae: t.mae ?? null,
+      mfe: t.mfe ?? null,
       multiplier: t.multiplier ?? null,
       grossPnl: t.grossPnl ?? 0,
       netPnl: t.netPnl ?? 0,

@@ -58,3 +58,24 @@
 ## Desvios vs a auditoria (decisÃµes jÃ¡ tomadas)
 - **Tax**: tracker de impostos por categoria (nÃ£o fluxo fiscal day/swing). Cockpit removido.
 - **ROI**: serÃ¡ renomeado (AUD-P0-01).
+
+## Pendências fora do passo 3 (levantadas após o P2 + fixes de deploy)
+- [ ] **Cartão ainda não integrado aos lançamentos**: `Transaction.card` continua texto livre. Ligar o
+      formulário de despesa à entidade `cards` (selecionar cartão salvo; fatura por fechamento/vencimento).
+- [ ] **Strategy Matrix não agrupa por `strategyVersion`**: o campo é salvo, mas a comparação por versão
+      ainda não existe (completar o Strategy Versioning de verdade).
+- [ ] **Relative Performance só vs CDI** — falta IBOV/benchmark configurável.
+- [ ] **Dividendos**: Income Calendar / Dividend History não implementados.
+- [ ] **`filters` (conta/estratégia) sem uso** após remover do Gastos/Trading: o AccountPicker do Trading é
+      estado local (não persiste, não vai para a URL). Decidir: religar em `ui:filters` + URL, ou remover.
+- [ ] **SW não enfileira mais writes cross-origin** (bridge): se quiser fila offline de ordens, implementar
+      na camada do app (não no SW).
+- [ ] **Sync cross-device a validar**: `cards` e `app_meta` (onConflict composto `user_id,id`) e
+      `trades.strategy_version`.
+- [ ] **Backup antes/depois do bump `DB_VERSION=4`** (store `cards` nova).
+- [ ] **Verificar RLS**: `cards`/`app_meta` têm policies; conferir que as demais tabelas usadas têm policy
+      correspondente (a migration `001` habilita RLS em várias sem policy explícita).
+- [ ] **QA manual** (sem E2E): checklist por módulo (Home, Trading, Contas, Gastos, Investimentos,
+      Planejamento, Relatórios, Positions & Orders, Settings).
+- [ ] **Produção**: confirmar deploy do fix do SW + Portfolio abrindo; e **hard refresh** (SW antigo pode
+      estar ativo no navegador).
