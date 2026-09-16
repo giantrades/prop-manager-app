@@ -5,7 +5,7 @@ import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, LineChart as RLineChart, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
@@ -14,7 +14,7 @@ import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
 import { TrendingUp, CalendarDays, LineChart, Store } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
-import { applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod } from '@apps/lib/db';
+import { applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 
@@ -47,7 +47,7 @@ export default function InvestmentsDashboardPage() {
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
-    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), dca: computeDcaFromTransactions(txs) };
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), relative: relativeSeries(history, cdi), dca: computeDcaFromTransactions(txs) };
   });
 
   const pf = data?.portfolio;
@@ -164,6 +164,24 @@ export default function InvestmentsDashboardPage() {
                   </div>
                 ),
               },
+              { id: 'relative', node: (
+                <div className="dash-section">
+                  <div className="dash-title"><span><LineChart size={14} /> Performance relativa (base 100)</span></div>
+                  {(data.relative ?? []).length < 2 ? <div className="muted">Histórico insuficiente (precisa de snapshots + CDI).</div> : (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <RLineChart data={data.relative} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="at" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                        <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={44} />
+                        <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => Number(v).toFixed(1)} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} />
+                        <Line type="monotone" dataKey="portfolio" name="Portfólio" stroke="#7c5cff" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="cdi" name="CDI" stroke="#3498db" dot={false} strokeWidth={2} />
+                      </RLineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              ) },
               { id: 'valuecost', node: (<div className="dash-section"><Portfolio only={['history', 'dca']} history={data.history ?? []} benchmark={data.benchmark ?? []} dca={data.dca ?? []} loading={false} /></div>) },
               { id: 'evolution', defaultSpan: 2, node: (<div className="dash-section"><div className="dash-title"><span><LineChart size={14} /> Evolução do patrimônio</span></div><NetWorth netWorth={data.nw} snapshots={data.snapshots} loading={false} /></div>) },
             ]}

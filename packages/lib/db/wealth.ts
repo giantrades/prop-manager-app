@@ -1241,3 +1241,24 @@ export class WealthService {
     return this.ds.positions.put(updated, { source: 'local' });
   }
 }
+
+/** P1-16 — Performance relativa: portfólio vs CDI, ambos com base 100 no 1º ponto. */
+export interface RelativePoint {
+  at: string;
+  portfolio: number;
+  cdi: number;
+}
+
+export function relativeSeries(
+  history: Array<{ at: string; value: number; cost: number }>,
+  cdi: CdiPoint[],
+): RelativePoint[] {
+  if (!history.length) return [];
+  const bench = applyBenchmark(history, cdi);
+  const base = history[0].value || 1;
+  return history.map((h, i) => ({
+    at: String(h.at).slice(0, 7),
+    portfolio: Number((((h.value || 0) / base) * 100).toFixed(2)),
+    cdi: bench[i]?.index ?? 100,
+  }));
+}
