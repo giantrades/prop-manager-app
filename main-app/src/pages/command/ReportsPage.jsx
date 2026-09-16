@@ -8,7 +8,9 @@ import usePageData from '../../usePageData';
 import { fmtMoney } from '@apps/ui/currency';
 import StatRow from '@apps/ui/StatRow';
 import { Activity, LineChart, CalendarDays } from 'lucide-react';
-import { monthlySeries, computeFreeCash } from '@apps/lib/db';
+import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod } from '@apps/lib/db';
+import { usePeriod } from '@apps/state';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 import {
   ResponsiveContainer, BarChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
@@ -16,17 +18,40 @@ import {
 export default function ReportsPage() {
   const finance = useFinance();
   const { toast } = useToast();
+  const { period, setPeriod } = usePeriod();
   const { loading, data, reload: load } = usePageData('reports', async (f) => {
-    const [txs, nw, snapshots] = await Promise.all([
+    const [txs, nw, snapshots, trades, payouts] = await Promise.all([
       f.ds.transactions.list(),
       f.wealth.netWorth(),
       f.wealth.netWorthSeries(),
+      f.ds.trades.list(),
+      f.ds.payouts.list(),
     ]);
     const ym = new Date().toISOString().slice(0, 7);
     const series = monthlySeries(txs, 12, ym);
     const freeCash = computeFreeCash(txs, ym);
-    return { series, freeCash, nw, snapshots, ym };
+    return { series, freeCash, nw, snapshots, ym, txs, trades, payouts };
   });
+
+  // Período selecionado: KPIs + waterfall (fluxo do patrimônio).
+  const periodView = useMemo(() => {
+    if (!data) return null;
+    const txs = (data.txs ?? []).filter((t) => inPeriod(t.date, period, []));
+    const trades = (data.trades ?? []).filter((t) => t.exitPrice != null && inPeriod(t.exitDatetime || t.entryDatetime, period, []));
+    const payouts = (data.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, []));
+    const sumKinds = (kinds) => txs.filter((t) => kinds.includes(t.kind)).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const freeCash = computeFreeCashPeriod(data.txs, period);
+    const entradas = sumKinds(['income', 'payout_in', 'rebate']);
+    const gastos = sumKinds(['expense']);
+    const custos = sumKinds(['challenge_cost', 'reset_fee', 'monthly_fee']);
+    const tradingPnl = trades.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const payoutNet = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
+    const r2 = (n) => Number(n.toFixed(2));
+    return {
+      freeCash,
+      waterfall: { entradas: r2(entradas), gastos: r2(gastos), custos: r2(custos), tradingPnl: r2(tradingPnl), payoutNet: r2(payoutNet), variacao: r2(entradas - gastos - custos + tradingPnl) },
+    };
+  }, [data, period]);
 
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -65,6 +90,7 @@ export default function ReportsPage() {
         </div>
       </div>
       <ModuleTabs module="relatorios" />
+      <PeriodPicker period={period} onChange={setPeriod} />
 
       {loading || !data ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando relatório…</div>
@@ -77,21 +103,45 @@ export default function ReportsPage() {
               <div className="muted">derivado</div>
             </div>
             <div className="card accent1">
-              <h3>Entrou no mês</h3>
-              <div className="stat">{fmtMoney(data.freeCash.income, 'BRL')}</div>
-              <div className="muted">{data.ym}</div>
+              <h3>Entrou no período</h3>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).income, 'BRL')}</div>
+              <div className="muted">seleção de período</div>
             </div>
             <div className="card accent2">
-              <h3>Gastou no mês</h3>
-              <div className="stat">{fmtMoney(data.freeCash.expenses, 'BRL')}</div>
-              <div className="muted">{data.ym}</div>
+              <h3>Gastou no período</h3>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).expenses, 'BRL')}</div>
+              <div className="muted">seleção de período</div>
             </div>
-            <div className={`card ${data.freeCash.freeCash >= 0 ? 'accent1' : 'accent2'}`}>
-              <h3>Saldo do mês</h3>
-              <div className="stat">{fmtMoney(data.freeCash.freeCash, 'BRL')}</div>
+            <div className={`card ${(periodView?.freeCash ?? data.freeCash).freeCash >= 0 ? 'accent1' : 'accent2'}`}>
+              <h3>Saldo do período</h3>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).freeCash, 'BRL')}</div>
               <div className="muted">entradas − gastos</div>
             </div>
           </div>
+
+          {periodView && (
+            <div className="dash-section">
+              <div className="dash-title"><span><Activity size={14} /> Fluxo do patrimônio (período)</span></div>
+              {(() => {
+                const w = periodView.waterfall;
+                const max = Math.max(1, ...[w.entradas, w.gastos, w.custos, Math.abs(w.tradingPnl), Math.abs(w.payoutNet), Math.abs(w.variacao)].map(Math.abs));
+                return [
+                  { label: 'Entradas', v: w.entradas },
+                  { label: '(−) Gastos', v: -w.gastos },
+                  { label: '(−) Custos (firm)', v: -w.custos },
+                  { label: 'PnL trading', v: w.tradingPnl },
+                  { label: 'Payouts (net)', v: w.payoutNet },
+                  { label: '= Variação', v: w.variacao },
+                ].map((r) => (
+                  <div key={r.label} className="ac-wf-row">
+                    <span className="ac-wf-label">{r.label}</span>
+                    <span className="ac-wf-bar-wrap"><span className={`ac-wf-bar ${r.v < 0 ? 'is-neg' : 'is-pos'}`} style={{ width: `${Math.round((Math.abs(r.v) / max) * 100)}%` }} /></span>
+                    <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v, 'BRL')}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
 
           <div className="rp-widgets">
             <div className="dash-section">
