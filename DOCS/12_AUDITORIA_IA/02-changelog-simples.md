@@ -119,3 +119,8 @@
   de impostos lançados como **ainda não pagos**.
 - **P2-08 — Projeção de metas (Planejamento)**: para cada meta em aberto, estima em **quantos meses**
   (e em que **mês/ano**) ela é atingida, no ritmo do **fluxo mensal líquido** do forecast.
+- **P2-10 — Cartões como entidade (Sistema ? Settings)**: agora você cadastra o cartão com
+  **limite, dia de fechamento, dia de vencimento, bandeira e conta**. Fica sincronizado.
+  (Migration `004` aplicada no banco.)
+- **P2-04 — Versão do playbook no trade (Journal)**: campo **“Versão do playbook”** ao lançar/editar
+  um trade — base para comparar desempenho por versão. (Coluna nova `strategy_version` no banco.)
