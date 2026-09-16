@@ -122,6 +122,10 @@ export default function GastosDashboardPage() {
     const taxTotal = taxGroups.reduce((s, g) => s + g.total, 0);
     const taxAllTime = expensesByCategoryPeriod(txs, { mode: 'all' }, cats)
       .filter((g) => taxIds.has(g.categoryId)).reduce((s, g) => s + g.total, 0);
+    // Reserva de imposto: impostos lançados como ainda não pagos (a pagar).
+    const taxPending = txs
+      .filter((t) => t.kind === 'expense' && t.paid === false && taxIds.has(categoryOf(t, cats) ?? ''))
+      .reduce((s, t) => s + Math.abs(t.amount || 0), 0);
     // Pendências ("a pagar") escopadas ao período selecionado.
     const periodTxs = txs.filter((t) => inPeriod(t.dueDate || t.date, period, txs));
     return {
@@ -130,6 +134,7 @@ export default function GastosDashboardPage() {
       pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
       taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
+      taxPending: Number(taxPending.toFixed(2)),
     };
   }, [data, period, filters]);
 
@@ -386,6 +391,11 @@ export default function GastosDashboardPage() {
                   <span className="gd-row-ico"><Receipt size={14} /></span>
                   <span className="gd-row-name">Total no período</span>
                   <span className="gd-row-val gd-neg">{fmtMoney(view.taxTotal, 'R$')}</span>
+                </div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><PiggyBank size={14} /></span>
+                  <span className="gd-row-name">A pagar (reservar)</span>
+                  <span className="gd-row-val gd-warn-t">{fmtMoney(view.taxPending, 'R$')}</span>
                 </div>
                 {(() => {
                   const max = Math.max(1, ...view.taxGroups.map((g) => g.total));

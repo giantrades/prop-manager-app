@@ -46,8 +46,8 @@
 - [ ] AUD-P2-08 — Goal Projection (conservador/base/agressivo).
 - [x] AUD-P2-09 — Treemap do portfólio (por ativo) no Investimentos.
 - [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema**.
-- [ ] AUD-P2-11 — Metric Registry leve (doc nome+fórmula+versão) / Data Quality.
-- [ ] AUD-P2-12 — Reserva de imposto (alocação dedicada).
+- [x] AUD-P2-11 — Metric Registry leve (doc `03-metric-registry.md`).
+- [x] AUD-P2-12 — Reserva de imposto (linha "A pagar (reservar)" no widget de Impostos).
 - [x] AUD-P2-13 — Auditoria de rotas/legacy: removidas rotas órfãs /risk e /networth; nav e rotas alinhadas.
 
 ## Descartado conscientemente (não fazer agora)
@@ -57,4 +57,4 @@
 
 ## Desvios vs a auditoria (decisões já tomadas)
 - **Tax**: tracker de impostos por categoria (não fluxo fiscal day/swing). Cockpit removido.
-- **ROI**: será renomeado (AUD-P0-01).
+- **ROI**: será renomead
