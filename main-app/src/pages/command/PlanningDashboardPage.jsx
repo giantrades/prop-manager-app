@@ -19,11 +19,12 @@ export default function PlanningDashboardPage() {
   const { period, setPeriod } = usePeriod();
   const [buyAmount, setBuyAmount] = useState('');
   const { loading, data } = useEngineData(async (f) => {
-    const [goals, safeAvailable, marcos, txs] = await Promise.all([
+    const [goals, safeAvailable, marcos, txs, forecast] = await Promise.all([
       f.wealth.goals(),
       f.wealth.safeAvailable(),
       f.wealth.listJournalEvents(),
       f.ds.transactions.list(),
+      f.wealth.forecast(),
     ]);
     // Runway: caixa livre / gasto médio mensal (últimos 3 meses com despesa).
     const byMonth = new Map();
@@ -36,7 +37,7 @@ export default function PlanningDashboardPage() {
     const months = [...byMonth.keys()].sort().slice(-3);
     const avgMonthlyExpense = months.length ? months.reduce((s, m) => s + byMonth.get(m), 0) / months.length : 0;
     const runway = avgMonthlyExpense > 0 ? Number((Number(safeAvailable) / avgMonthlyExpense).toFixed(1)) : null;
-    return { goals, safeAvailable, marcos, runway, avgMonthlyExpense: Number(avgMonthlyExpense.toFixed(2)) };
+    return { goals, safeAvailable, marcos, runway, avgMonthlyExpense: Number(avgMonthlyExpense.toFixed(2)), forecast };
   });
 
   const goals = data?.goals ?? [];
@@ -120,6 +121,30 @@ export default function PlanningDashboardPage() {
             ))}
           </div>
 
+          <div className="dash-section" key="projection">
+            <div className="dash-title"><span><Sparkles size={14} /> Projeção de metas</span></div>
+            {(() => {
+              const netMonthly = Number(data.forecast?.netMonthly) || 0;
+              const list = (goals ?? []).filter((g) => !g.completed && g.target > g.current);
+              if (list.length === 0) return <div className="muted">Nenhuma meta em aberto.</div>;
+              if (netMonthly <= 0) return <div className="muted">Fluxo mensal líquido ≤ 0 — sem projeção.</div>;
+              return list.map((g) => {
+                const months = Math.ceil((g.target - g.current) / netMonthly);
+                const d = new Date();
+                d.setMonth(d.getMonth() + months);
+                const label = `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                return (
+                  <div key={g.goal.id} className="dash-row">
+                    <span className="dash-row-name">{g.goal.kind}</span>
+                    <span className="dash-row-sub">{fmtMoney(g.current)} / {fmtMoney(g.target)}</span>
+                    <span className="dash-row-val">{months} m · {label}</span>
+                  </div>
+                );
+              });
+            })()}
+            <div className="dash-row-sub">no ritmo do fluxo mensal líquido: {fmtMoney(data.forecast?.netMonthly ?? 0)}/mês</div>
+          </div>
+
           <div className="dash-section" key="metas">
             <div className="dash-title">
               <span>Metas</span>
@@ -127,6 +152,7 @@ export default function PlanningDashboardPage() {
             </div>
             <Goals goals={goals} loading={false} />
           </div>
+
           </WidgetGrid>
         </>
       )}
