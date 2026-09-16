@@ -820,15 +820,16 @@ export function FirmPnlPage() {
 export function ExpensesPage() {
   const { loading, data, finance } = useEngineData(async (f) => {
     const { getSavingsGoal, getRolloverCats } = await import('@apps/lib/db');
-    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats] = await Promise.all([
+    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards] = await Promise.all([
       f.ds.transactions.list(),
       f.ds.accounts.list(),
       listCategories(f.ds),
       getBudgets(f.ds),
       getSavingsGoal(f.ds),
       getRolloverCats(f.ds),
+      f.ds.cards.list(),
     ]);
-    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats };
+    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -840,9 +841,12 @@ export function ExpensesPage() {
     if (input.kind === 'income') {
       await f.money.recordIncome({ accountId: input.accountId, amount: input.amount, currency: 'BRL', date: input.date, note: input.note });
     } else {
+      // #1 — repassa TODOS os campos do form (cartão/contas a pagar/parcela/anexos/tags).
       await f.money.recordExpense({
         accountId: input.accountId, amount: input.amount, currency: 'BRL',
         category: input.category, date: input.date, note: input.note, recurrence: input.recurrence,
+        attachments: input.attachments, paid: input.paid, dueDate: input.dueDate,
+        card: input.card, cardId: input.cardId, tags: input.tags, installments: input.installments,
       });
     }
   }, []);
@@ -953,6 +957,7 @@ export function ExpensesPage() {
         budgets={data?.budgets ?? {}}
         savingsGoal={data?.savingsGoal ?? {}}
         accounts={data?.accounts ?? []}
+        cards={data?.cards ?? []}
         onAdd={onAdd}
         onUpdate={onUpdate}
         onDelete={onDelete}

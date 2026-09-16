@@ -37,6 +37,21 @@
 - **Saldo** de conta = soma do ledger; **Equity** de prop = base + PnL.
 - **Amostra insuficiente**: n < 20 trades (Playbook) — UI marca com `*`, nunca “estatística decorativa”.
 
+## v2 (2026-09) — métricas do Insight Engine (B5)
+
+> Cada insight do Command Center carrega `metric` (nome canônico abaixo), `evidence`
+> (os números que o sustentam) e `threshold` (a regra determinística que disparou).
+
+| Métrica (`metric`) | Definição | Fonte (motor) | Versão |
+|---|---|---|---|
+| `payout_share_by_firm` | participação da firm líder nos payouts (%) | `firmPnlByFirm` + Σ | v2 |
+| `cash_ratio` | caixa ÷ patrimônio líquido (%) | `wealth.netWorth()` → components.cash | v2 |
+| `avg_r_by_strategy` | R médio por estratégia (n ≥ 20) | `allStrategyMetrics(trades)` | v2 |
+| `projected_net_worth_90d` | patrimônio projetado em 90 dias pelo fluxo líquido | `wealth.forecast()` → d90 | v2 |
+| `accounts_at_risk` | contas prop em WARN/STOP | `risk.snapshot()` → counts | v2 |
+| `mae` / `mfe` | excursão máxima adversa/favorável em $ | `Trade.mae/mfe` (bridge PATCH C) ou `maeMfe()` | v2 |
+
 ## Pendências conscientes (não são métricas ainda)
-- **MAE/MFE**: só quando o trade tem `mae`/`mfe` ou `executions` (bridge precisa mapear).
+- **MAE/MFE**: o bridge agora envia `mae`/`mfe` em `$` (PATCH C); `maeMfe()` prefere os
+  campos reais e cai no proxy via `executions` quando ausentes. Sem fills, null (nunca 0).
 - **Sessão/hora**: heatmap por dia da semana entregue; sessão×hora/setup = continuação.

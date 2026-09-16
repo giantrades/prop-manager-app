@@ -70,7 +70,11 @@ function breakdown(trades: Trade[], direction: 'long' | 'short'): DirectionBreak
  * mostrar "sem amostra" em vez de um número de baixa confiança.
  */
 export function strategyMetrics(strategyId: string, trades: Trade[]): StrategyMetrics {
-  const subset = trades.filter((t) => t.strategyId === strategyId);
+  return computeStrategyMetrics(strategyId, trades.filter((t) => t.strategyId === strategyId));
+}
+
+/** Métricas sobre um subconjunto JÁ filtrado (base única p/ estratégia × versão). */
+function computeStrategyMetrics(strategyId: string, subset: Trade[]): StrategyMetrics {
   const n = subset.length;
 
   const wins = subset.filter((t) => t.resultNet > 0).length;
@@ -122,6 +126,33 @@ export function strategyMetrics(strategyId: string, trades: Trade[]): StrategyMe
 export function allStrategyMetrics(trades: Trade[]): StrategyMetrics[] {
   const ids = new Set(trades.map((t) => t.strategyId).filter((s): s is string => !!s));
   return [...ids].map((id) => strategyMetrics(id, trades));
+}
+
+/** Métrica de estratégia quebrada por VERSÃO do playbook (`Trade.strategyVersion`). */
+export interface StrategyVersionMetrics extends StrategyMetrics {
+  /** Versão do playbook; `'—'` quando o trade não informou. */
+  version: string;
+}
+
+/**
+ * #2 — Strategy Matrix por versão: agrupa por `strategyId` × `strategyVersion` e
+ * reusa a MESMA métrica (não duplica fórmula). Sem versão informada, agrupa em '—'.
+ */
+export function strategyVersionMetrics(trades: Trade[], strategyId?: string): StrategyVersionMetrics[] {
+  const base = strategyId ? trades.filter((t) => t.strategyId === strategyId) : trades;
+  const groups = new Map<string, Trade[]>();
+  for (const t of base) {
+    if (!t.strategyId) continue;
+    const version = t.strategyVersion || '—';
+    const key = `${t.strategyId}||${version}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(t);
+    else groups.set(key, [t]);
+  }
+  return [...groups.entries()].map(([key, subset]) => {
+    const [sid, version] = key.split('||');
+    return { ...computeStrategyMetrics(sid, subset), version };
+  });
 }
 
 // ---------------------------------------------------------------------------

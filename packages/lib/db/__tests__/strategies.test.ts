@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { EventBus } from '../events';
-import { strategyMetrics, allStrategyMetrics, deleteStrategyClean, MIN_SAMPLE } from '../strategies';
+import { strategyMetrics, allStrategyMetrics, strategyVersionMetrics, deleteStrategyClean, MIN_SAMPLE } from '../strategies';
 import type { Trade } from '../types';
 
 function makeService(deviceId = 'dev-test') {
@@ -60,6 +60,31 @@ describe('strategies — métricas', () => {
     const all = allStrategyMetrics(trades);
     expect(all.length).toBe(2);
     expect(all.find((x) => x.strategyId === 's1')?.n).toBe(1);
+  });
+
+  it('#2 strategyVersionMetrics separa por versão (mesma métrica)', () => {
+    const trades = [
+      trade({ id: 'a', strategyId: 's1', strategyVersion: 'v1', resultNet: 10, resultR: 2 }),
+      trade({ id: 'b', strategyId: 's1', strategyVersion: 'v1', resultNet: -5, resultR: -1 }),
+      trade({ id: 'c', strategyId: 's1', strategyVersion: 'v2', resultNet: 20, resultR: 4 }),
+      trade({ id: 'd', strategyId: 's2', strategyVersion: 'v1', resultNet: 1, resultR: 0.5 }),
+    ];
+    const rows = strategyVersionMetrics(trades);
+    // s1 v1 | s1 v2 | s2 v1
+    expect(rows).toHaveLength(3);
+    const s1v1 = rows.find((r) => r.strategyId === 's1' && r.version === 'v1');
+    expect(s1v1?.n).toBe(2);
+    // PF = 10 / 5 = 2 (só a v1)
+    expect(s1v1?.profitFactor).toBe(2);
+    const s1v2 = rows.find((r) => r.strategyId === 's1' && r.version === 'v2');
+    expect(s1v2?.n).toBe(1);
+    // filtra por estratégia
+    expect(strategyVersionMetrics(trades, 's1')).toHaveLength(2);
+  });
+
+  it('#2 sem versão agrupa em "—"', () => {
+    const rows = strategyVersionMetrics([trade({ id: 'a', strategyId: 's1' })]);
+    expect(rows[0].version).toBe('—');
   });
 });
 

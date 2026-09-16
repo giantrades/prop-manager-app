@@ -12,13 +12,14 @@ import StatRow from '@apps/ui/StatRow';
 import { Sparkles, ShoppingCart } from 'lucide-react';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { inPeriod } from '@apps/lib/db';
 
 
 export default function PlanningDashboardPage() {
   const { period, setPeriod } = usePeriod();
   const [buyAmount, setBuyAmount] = useState('');
-  const { loading, data } = useEngineData(async (f) => {
+  const { loading, data, error, reload } = useEngineData(async (f) => {
     const [goals, safeAvailable, marcos, txs, forecast] = await Promise.all([
       f.wealth.goals(),
       f.wealth.safeAvailable(),
@@ -52,8 +53,11 @@ export default function PlanningDashboardPage() {
       <ModuleTabs module="planejamento" />
       <PeriodPicker period={period} onChange={setPeriod} />
 
-      {loading || !data ? (
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando planejamento…</div>
+      {error && data && <ActionableError stale error={error} onRetry={reload} label="o Planejamento" />}
+      {error && !data ? (
+        <ActionableError error={error} onRetry={reload} label="o Planejamento" />
+      ) : loading || !data ? (
+        <DashSkeleton cards={4} widgets={3} />
       ) : (
         <>
           <div className="dash-cards">

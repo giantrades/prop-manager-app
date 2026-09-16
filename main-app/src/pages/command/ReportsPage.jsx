@@ -10,6 +10,7 @@ import { Activity, LineChart, CalendarDays } from 'lucide-react';
 import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import {
   ResponsiveContainer, BarChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
@@ -18,7 +19,7 @@ export default function ReportsPage() {
   const finance = useFinance();
   const { toast } = useToast();
   const { period, setPeriod } = usePeriod();
-  const { loading, data, reload: load } = usePageData('reports', async (f) => {
+  const { loading, data, error, reload: load } = usePageData('reports', async (f) => {
     const [txs, nw, snapshots, trades, payouts] = await Promise.all([
       f.ds.transactions.list(),
       f.wealth.netWorth(),
@@ -91,8 +92,11 @@ export default function ReportsPage() {
       <ModuleTabs module="relatorios" />
       <PeriodPicker period={period} onChange={setPeriod} />
 
-      {loading || !data ? (
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando relatório…</div>
+      {error && data && <ActionableError stale error={error} onRetry={load} label="o Relatório" />}
+      {error && !data ? (
+        <ActionableError error={error} onRetry={load} label="o Relatório" />
+      ) : loading || !data ? (
+        <DashSkeleton cards={3} widgets={3} />
       ) : (
         <>
           <div className="dash-cards">

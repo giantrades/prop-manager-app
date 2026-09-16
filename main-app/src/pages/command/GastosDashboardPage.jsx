@@ -10,6 +10,8 @@ import {
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
+import { useEntityDrawer } from '@apps/ui/EntityDrawer';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown, Briefcase,
@@ -20,7 +22,7 @@ import {
   listCategories, getBudgets, getSavingsGoal, expensesByCategoryPeriod, incomeByKindPeriod,
   budgetStatusPeriod, monthlySeries, computeFreeCashPeriod, pendingBills, pendingSummary,
   merchantRankingPeriod, compareMonths, categoryOf, periodMonths, inPeriod, currentYm,
-  categoryTrend, shiftYm, ymToList,
+  categoryTrend, shiftYm, ymToList, invoiceCycle,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -41,12 +43,13 @@ export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
   const [quick, setQuick] = useState({ accountId: '', amount: '', category: 'moradia', note: '' });
   const [quickBusy, setQuickBusy] = useState(false);
+  const drawer = useEntityDrawer();
   const { period, setPeriod } = usePeriod();
-  const { loading, data, finance, reload } = useEngineData(async (f) => {
-    const [txs, categories, budgets, savingsGoal, wallets] = await Promise.all([
-      f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(),
+  const { loading, data, error, finance, reload } = useEngineData(async (f) => {
+    const [txs, categories, budgets, savingsGoal, wallets, cards] = await Promise.all([
+      f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(), f.ds.cards.list(),
     ]);
-    return { txs, categories, budgets, savingsGoal, wallets };
+    return { txs, categories, budgets, savingsGoal, wallets, cards };
   });
 
   // Histórico não é mais necessário (atalhos removidos; o período global cobre tudo).
@@ -78,15 +81,40 @@ export default function GastosDashboardPage() {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind)) continue;
       balanceTotal += convertMoney(w.balance ?? 0, w.currency);
     }
-    // Cartões de crédito: fatura no período, em aberto (não pagas) × fechadas.
+    // Cartões de crédito: fatura no período + fatura ABERTA (por fechamento) + uso do limite.
+    const cardById = new Map((data.cards ?? []).map((c) => [c.id, c]));
+    const cardByName = new Map((data.cards ?? []).map((c) => [c.name, c]));
     const cardMap = new Map();
     for (const t of txs) {
-      if (t.kind !== 'expense' || !t.card) continue;
+      const key = t.cardId || t.card;
+      if (t.kind !== 'expense' || !key) continue;
       if (!inPeriod(t.date, period, txs)) continue;
-      const cur = cardMap.get(t.card) ?? { card: t.card, total: 0, open: 0, pending: 0 };
+      const meta = cardById.get(t.cardId) || cardByName.get(t.card);
+      const cur = cardMap.get(key) ?? {
+        key, card: meta?.name ?? t.card, limit: meta?.creditLimit ?? 0,
+        closingDay: meta?.closingDay, dueDay: meta?.dueDay, total: 0, open: 0, pending: 0, invoice: 0,
+      };
       cur.total += Math.abs(t.amount);
       if (t.paid === false) { cur.open += Math.abs(t.amount); cur.pending += 1; }
-      cardMap.set(t.card, cur);
+      cardMap.set(key, cur);
+    }
+    // Fatura aberta (ignora o período; é a janela do ciclo de fechamento).
+    for (const c of (data.cards ?? [])) {
+      const cyc = invoiceCycle(c.closingDay);
+      let inv = 0;
+      for (const t of txs) {
+        if (t.kind !== 'expense') continue;
+        if ((t.cardId || t.card) !== c.id && t.card !== c.name) continue;
+        if (t.date >= cyc.start && t.date <= cyc.end) inv += Math.abs(t.amount);
+      }
+      const cur = cardMap.get(c.id) ?? {
+        key: c.id, card: c.name, limit: c.creditLimit ?? 0, closingDay: c.closingDay, dueDay: c.dueDay, total: 0, open: 0, pending: 0, invoice: 0,
+      };
+      cur.invoice = inv;
+      cur.limit = c.creditLimit ?? 0;
+      cur.closingDay = c.closingDay;
+      cur.dueDay = c.dueDay;
+      cardMap.set(c.id, cur);
     }
     const cards = [...cardMap.values()].sort((a, b) => b.total - a.total);
     // Savings rate do período (+ do período anterior).
@@ -166,6 +194,20 @@ export default function GastosDashboardPage() {
   }));
   const donutShown = focusCat ? donut.filter((d) => d.id === focusCat) : donut;
 
+  // B6 — abrir o lançamento sem sair da dashboard.
+  const openTx = (t, meta) => drawer.open({
+    title: t.note || meta?.name || 'Lançamento',
+    subtitle: `${meta?.name ?? 'Lançamento'}${t.paid === false ? ' · pendente' : ''}`,
+    href: '/expenses',
+    rows: [
+      { k: 'Valor', v: fmtMoney(t.amount, 'R$'), color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' },
+      { k: 'Data', v: String(t.date || '').slice(0, 10) || '—' },
+      { k: 'Conta', v: (data?.wallets ?? []).find((w) => w.account.id === t.accountId)?.account.name ?? '—' },
+      ...(t.card ? [{ k: 'Cartão', v: t.card }] : []),
+      ...(t.installments ? [{ k: 'Parcelas', v: `${t.installments.n}x` }] : []),
+    ],
+  });
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
@@ -194,8 +236,11 @@ export default function GastosDashboardPage() {
         </div>
       )}
 
-      {loading || !view ? (
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando gastos…</div>
+      {error && view && <ActionableError stale error={error} onRetry={reload} label="os Gastos" />}
+      {error && !view ? (
+        <ActionableError error={error} onRetry={reload} label="os Gastos" />
+      ) : loading || !view ? (
+        <DashSkeleton cards={6} widgets={4} />
       ) : (
         <>
           {/* Saldo em contas (topo, estilo Mobills) */}
@@ -416,12 +461,12 @@ export default function GastosDashboardPage() {
               ) : view.recent.map((t) => {
                 const meta = catMeta(categoryOf(t, data.categories) ?? 'outros');
                 return (
-                  <div key={t.id} className="gd-row">
+                  <button key={t.id} type="button" className="gd-row gd-row-click" onClick={() => openTx(t, meta)}>
                     <CatIcon name={meta.icon} color={meta.color} />
                     <span className="gd-row-name">{t.note || meta.name}</span>
                     <span className="gd-row-sub">{(t.date || '').slice(0, 10)}{t.paid === false ? ' · pendente' : ''}</span>
                     <span className={`gd-row-val ${t.amount >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(t.amount, 'R$')}</span>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -429,24 +474,39 @@ export default function GastosDashboardPage() {
             {view.cards.length > 0 && (
               <div className="dash-section" key="cards">
                 <div className="dash-title"><span><CreditCard size={14} /> Cartões de crédito</span></div>
-                {view.cards.map((c) => (
-                  <div key={c.card} className="gd-card-row">
-                    <span className="gd-card-badge"><Landmark size={14} /></span>
-                    <div className="gd-card-info">
-                      <div className="gd-row-name">{c.card}</div>
-                      <div className="gd-row-sub">{c.pending > 0 ? `${c.pending} em aberto · ` : ''}fatura do mês</div>
+                {view.cards.map((c) => {
+                  const limit = c.limit || 0;
+                  const usedPct = limit > 0 ? Math.min(100, (c.invoice / limit) * 100) : null;
+                  return (
+                    <div key={c.key} className="gd-card-row">
+                      <span className="gd-card-badge"><Landmark size={14} /></span>
+                      <div className="gd-card-info">
+                        <div className="gd-row-name">{c.card}</div>
+                        <div className="gd-row-sub">
+                          {c.pending > 0 ? `${c.pending} em aberto · ` : ''}
+                          {c.closingDay ? `fecha dia ${c.closingDay}` : 'fatura do período'}
+                          {c.dueDay ? ` · vence dia ${c.dueDay}` : ''}
+                        </div>
+                        {usedPct != null && (
+                          <div className="gd-card-bar" aria-label={`Uso do limite ${Math.round(usedPct)}%`}>
+                            <span className="gd-card-fill" style={{ width: `${usedPct}%`, background: usedPct >= 80 ? 'var(--red, #e74c3c)' : 'var(--brand, #7c5cff)' }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="gd-card-amt">
+                        <span className="gd-row-val gd-neg">{fmtMoney(c.total, 'R$')}</span>
+                        {c.invoice > 0 && <span className="gd-card-open">fatura aberta {fmtMoney(c.invoice, 'R$')}{limit > 0 ? ` · ${Math.round(usedPct)}% do limite` : ''}</span>}
+                        {c.invoice === 0 && c.open > 0 && <span className="gd-card-open">em aberto {fmtMoney(c.open, 'R$')}</span>}
+                      </div>
                     </div>
-                    <div className="gd-card-amt">
-                      <span className="gd-row-val gd-neg">{fmtMoney(c.total, 'R$')}</span>
-                      {c.open > 0 && <span className="gd-card-open">em aberto {fmtMoney(c.open, 'R$')}</span>}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </WidgetGrid>
         </>
       )}
+      {drawer.node}
     </div>
   );
 }
@@ -492,6 +552,8 @@ const GD_CSS = `
 .gd-card-info { flex: 1; min-width: 0; }
 .gd-card-amt { text-align: right; display: flex; flex-direction: column; }
 .gd-card-open { font-size: 10px; color: var(--yellow, #e1b12c); }
+.gd-card-bar { height: 5px; margin-top: 5px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; max-width: 220px; }
+.gd-card-fill { display: block; height: 100%; border-radius: 999px; }
 
 .gd-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .gd-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
@@ -514,6 +576,8 @@ const GD_CSS = `
 .gd-row-late .gd-row-sub { color: var(--red, #e74c3c); }
 .gd-row-ico { color: var(--muted, #a1a7b3); }
 .gd-row-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gd-row-click { width: 100%; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.04); color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.gd-row-click:hover { background: rgba(255,255,255,0.03); }
 .gd-row-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
 .gd-row-val { font-variant-numeric: tabular-nums; font-weight: 700; }
 @media (max-width: 1000px) { .gd-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

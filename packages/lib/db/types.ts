@@ -155,8 +155,10 @@ export interface Transaction extends SyncedRecord {
   dueDate?: string; // ISO: vencimento da conta (a pagar/receber)
   // D2 — parcelamento: parcela atual / total + agrupador.
   installments?: { n: number; of: number; groupId: string };
-  // D2 — cartão/fatura (agrupa lançamentos por cartão).
+  // D2 — cartão/fatura (agrupa lançamentos por cartão). `card` = nome (legado/texto);
+  // `cardId` = vínculo com a entidade `Card` (quando escolhido da lista).
   card?: string;
+  cardId?: string;
   // D4 — tags livres (ex.: 'viagem', 'trabalho').
   tags?: string[];
 }

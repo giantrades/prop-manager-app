@@ -50,6 +50,19 @@
 - [x] AUD-P2-12 — Reserva de imposto (linha "A pagar (reservar)" no widget de Impostos).
 - [x] AUD-P2-13 — Auditoria de rotas/legacy: removidas rotas órfãs /risk e /networth; nav e rotas alinhadas.
 
+## Passo 3 — continuidades + próximo nível (A/B)
+> "Passo 3" = fechar as continuidades da auditoria (A) e o próximo nível estrutural (B).
+> A1/A2 entregues em `2ed291f4`. A3–B8 entregues na rodada de 2026-09-16.
+
+- [x] A1 — Heatmap por **sessão** (Trading). `2ed291f4`
+- [x] A2 — **Cenário do forecast** 30/60/90d (Planejamento). `2ed291f4`
+- [x] A3 — **MAE/MFE com dados do bridge**: `TradeDto.Mae/Mfe` (PATCH C, C#) + adapter + ingest + testes. *(compilar o bridge no Quantower)*
+- [x] A4 — **Micro UX**: `DashSkeleton` + `ActionableError` (o quê/por quê/como resolver + retry) em Trading/Gastos/Investimentos/Contas/Planejamento/Relatórios.
+- [x] B5 — **Insight Engine formal**: cada insight com `metric` + `evidence` + `threshold` (+ UI e `03-metric-registry.md` v2).
+- [x] B6 — **Entity Drawer universal**: `useEntityDrawer` + drawer declarativo (`rows`/`href`); Home (conta/ação), Trading (dia/estratégia/conta), Investimentos (ativo/payout), Gastos (lançamento).
+- [x] B7 — **Drill-down de gráficos**: clique nas barras de PnL por dia (Trading), payouts por mês (Investimentos), treemap (Investimentos) e linha de lançamento (Gastos).
+- [x] B8 — **Push Digest**: Edge Function `push-digest` (retrospecto 24h, só narra números já gravados) + toggle "Resumo diário" em Settings + runbook de cron.
+
 ## Descartado conscientemente (não fazer agora)
 - Metric Registry formal, audit log before/after, agregação pré-computada, Sankey,
   idempotência com contentHash, gauges/radar/3D. Motivo: infraestrutura de "empresa",
@@ -59,23 +72,30 @@
 - **Tax**: tracker de impostos por categoria (não fluxo fiscal day/swing). Cockpit removido.
 - **ROI**: será renomeado (AUD-P0-01).
 
-## Pend�ncias fora do passo 3 (levantadas ap�s o P2 + fixes de deploy)
-- [ ] **Cart�o ainda n�o integrado aos lan�amentos**: `Transaction.card` continua texto livre. Ligar o
-      formul�rio de despesa � entidade `cards` (selecionar cart�o salvo; fatura por fechamento/vencimento).
-- [ ] **Strategy Matrix n�o agrupa por `strategyVersion`**: o campo � salvo, mas a compara��o por vers�o
-      ainda n�o existe (completar o Strategy Versioning de verdade).
-- [ ] **Relative Performance s� vs CDI** � falta IBOV/benchmark configur�vel.
-- [ ] **Dividendos**: Income Calendar / Dividend History n�o implementados.
-- [ ] **`filters` (conta/estrat�gia) sem uso** ap�s remover do Gastos/Trading: o AccountPicker do Trading �
-      estado local (n�o persiste, n�o vai para a URL). Decidir: religar em `ui:filters` + URL, ou remover.
-- [ ] **SW n�o enfileira mais writes cross-origin** (bridge): se quiser fila offline de ordens, implementar
-      na camada do app (n�o no SW).
+## Pendências fora do passo 3 (levantadas após o P2 + fixes de deploy)
+- [x] **Cartão integrado aos lançamentos** (#1): `Transaction.cardId` (aditivo) + select de cartão salvo no
+      form (fallback texto quando não há cartões) + `invoiceCycle()` (fatura aberta por fechamento) + faturas
+      por cartão com uso do limite no Gastos. Corrigido também o `onAdd` que descartava card/paid/dueDate/
+      tags/anexos ao lançar. *(Testes: expenses/`invoiceCycle`.)*
+- [x] **Strategy Matrix por `strategyVersion`** (#2): `strategyVersionMetrics()` (mesma métrica, agrupada por
+      `strategyId` × versão) + toggle "por estratégia / por versão" + versão no detalhe (Entity Drawer).
+- [ ] **Relative Performance só vs CDI** — falta IBOV/benchmark configurável.
+- [ ] **Dividendos**: Income Calendar / Dividend History não implementados.
+- [x] **AccountPicker melhorado (Trading)** (#5): busca + seleção múltipla escalável (20+ contas), ordenação
+      por tipo/nome, "todas (filtradas)", contador e fechar por Esc/clique-fora; seleção persistida em
+      `ui:filters` (meta) e na URL (`?accounts=`). **Gastos segue sem filtro de conta (geral).**
+- [ ] **SW não enfileira mais writes cross-origin** (bridge): se quiser fila offline de ordens, implementar
+      na camada do app (não no SW).
 - [ ] **Sync cross-device a validar**: `cards` e `app_meta` (onConflict composto `user_id,id`) e
       `trades.strategy_version`.
 - [ ] **Backup antes/depois do bump `DB_VERSION=4`** (store `cards` nova).
-- [ ] **Verificar RLS**: `cards`/`app_meta` t�m policies; conferir que as demais tabelas usadas t�m policy
-      correspondente (a migration `001` habilita RLS em v�rias sem policy expl�cita).
-- [ ] **QA manual** (sem E2E): checklist por m�dulo (Home, Trading, Contas, Gastos, Investimentos,
-      Planejamento, Relat�rios, Positions & Orders, Settings).
-- [ ] **Produ��o**: confirmar deploy do fix do SW + Portfolio abrindo; e **hard refresh** (SW antigo pode
+- [x] **RLS auditado** (#9): `001_init.sql` liga RLS em **10 tabelas sem nenhuma policy** (bloqueava sync
+      autenticado); `cards`/`app_meta` sem DELETE. Criada a migration **`005_rls_and_sync_columns.sql`**
+      (policies de dono para todas + DELETE de app_meta/cards + colunas de sync que faltavam: firm_id,
+      category/recurrence/attachments/asset/paid/due_date/installments/card/card_id/tags em transactions;
+      executions/mae/mfe/platform_*/tags em trades; currency/asset_kind/yield_*/alerts em positions).
+      **Aplicar: `supabase db push`.**
+- [ ] **QA manual** (sem E2E): checklist por módulo (Home, Trading, Contas, Gastos, Investimentos,
+      Planejamento, Relatórios, Positions & Orders, Settings).
+- [ ] **Produção**: confirmar deploy do fix do SW + Portfolio abrindo; e **hard refresh** (SW antigo pode
       estar ativo no navegador).

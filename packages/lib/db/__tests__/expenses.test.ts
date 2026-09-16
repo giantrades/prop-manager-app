@@ -29,6 +29,7 @@ import {
   pendingSummary,
   merchantRanking,
   computeAccountBalance,
+  invoiceCycle,
 } from '../money';
 import type { Transaction } from '../types';
 
@@ -337,6 +338,35 @@ describe('gastos D5 — transferência entre carteiras (dupla entrada)', () => {
     const { money } = makeService();
     await expect(money.recordTransferBetween({ fromAccountId: 'w', toAccountId: 'w', amount: 10, currency: 'BRL' })).rejects.toThrow();
     await expect(money.recordTransferBetween({ fromAccountId: 'a', toAccountId: 'b', amount: 0, currency: 'BRL' })).rejects.toThrow();
+  });
+});
+
+describe('#1 — cartão/fatura vinculados à entidade', () => {
+  it('recordExpense persiste card (nome) + cardId', async () => {
+    const { ds, money } = makeService();
+    const tx = await money.recordExpense({ accountId: 'w', amount: 100, currency: 'BRL', card: 'Nubank', cardId: 'card-1', category: 'compras' });
+    expect(tx.card).toBe('Nubank');
+    expect(tx.cardId).toBe('card-1');
+    expect((await ds.transactions.list())[0].cardId).toBe('card-1');
+  });
+
+  it('invoiceCycle antes do fechamento fecha no mês corrente', () => {
+    const c = invoiceCycle(15, new Date(Date.UTC(2026, 8, 10))); // 10/set, fecha dia 15
+    expect(c.end.slice(0, 10)).toBe('2026-09-15');
+    expect(c.start.slice(0, 10)).toBe('2026-08-16');
+  });
+
+  it('invoiceCycle depois do fechamento fecha no mês seguinte', () => {
+    const c = invoiceCycle(15, new Date(Date.UTC(2026, 8, 20))); // 20/set
+    expect(c.end.slice(0, 10)).toBe('2026-10-15');
+    expect(c.start.slice(0, 10)).toBe('2026-09-16');
+  });
+
+  it('recordInstallments propaga cardId em todas as parcelas', async () => {
+    const { money } = makeService();
+    const out = await money.recordInstallments({ accountId: 'w', currency: 'BRL', totalAmount: 300, count: 3, card: 'Nubank', cardId: 'card-1', firstDate: '2026-09-05T12:00:00Z' });
+    expect(out).toHaveLength(3);
+    expect(out.every((t) => t.cardId === 'card-1')).toBe(true);
   });
 });
 

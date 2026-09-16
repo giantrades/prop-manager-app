@@ -17,6 +17,8 @@ import Portfolio from '@apps/ui/Portfolio';
 import { applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
+import { useEntityDrawer } from '@apps/ui/EntityDrawer';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -32,7 +34,8 @@ const CLASS_META = {
 
 export default function InvestmentsDashboardPage() {
   const { period, setPeriod } = usePeriod();
-  const { loading, data } = useEngineData(async (f) => {
+  const drawer = useEntityDrawer();
+  const { loading, data, error, reload } = useEngineData(async (f) => {
     const [nw, snapshots, portfolio, positions, allocation, accounts, payouts, txs, trades, histRec, cdi] = await Promise.all([
       f.wealth.netWorth(),
       f.wealth.netWorthSeries(),
@@ -96,6 +99,37 @@ export default function InvestmentsDashboardPage() {
     return months.map((ym) => ({ ym: ym.slice(5, 7) + '/' + ym.slice(2, 4), payout: Number((byMonth.get(ym) ?? 0).toFixed(2)) }));
   }, [data, period]);
 
+  // B6/B7 — abrir ativo (posição) sem navegar, a partir da lista ou do treemap.
+  const openPosition = (p) => drawer.open({
+    title: `Ativo — ${p.symbol}`,
+    subtitle: 'Posição',
+    href: '/portfolio',
+    rows: [
+      { k: 'Quantidade', v: String(p.qty ?? '—') },
+      { k: 'Valor de mercado', v: fmtMoney(p.marketValue ?? 0) },
+      { k: 'PnL', v: fmtMoney(p.pnl ?? 0), color: (p.pnl ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' },
+      { k: 'PnL %', v: p.pnlPercent != null ? fmtPct(p.pnlPercent) : '—', color: (p.pnlPercent ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' },
+    ],
+  });
+  const openAssetByName = (symbol) => {
+    const row = (data?.portfolio?.rows ?? []).find((r) => r.symbol === symbol);
+    if (row) openPosition(row);
+  };
+  const openPayoutMonth = (label) => {
+    const m = (payoutSeries ?? []).find((x) => x.ym === label);
+    if (!m) return;
+    const list = (data?.payouts ?? []).filter((p) => String(p.date || p.updatedAt || '').slice(5, 7) + '/' + String(p.date || p.updatedAt || '').slice(2, 4) === label);
+    drawer.open({
+      title: `Payouts — ${label}`,
+      subtitle: `Drill-down · ${list.length} payout(s)`,
+      href: '/payouts',
+      rows: [
+        { k: 'Total líquido', v: fmtMoney(m.payout, 'USD'), color: 'var(--green)' },
+        { k: 'Payouts', v: String(list.length) },
+      ],
+    });
+  };
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
@@ -104,8 +138,11 @@ export default function InvestmentsDashboardPage() {
       <ModuleTabs module="investimentos" />
       <PeriodPicker period={period} onChange={setPeriod} />
 
-      {loading || !pf ? (
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando investimentos…</div>
+      {error && pf && <ActionableError stale error={error} onRetry={reload} label="os Investimentos" />}
+      {error && !pf ? (
+        <ActionableError error={error} onRetry={reload} label="os Investimentos" />
+      ) : loading || !pf ? (
+        <DashSkeleton cards={3} widgets={4} />
       ) : (
         <>
           <div className="dash-cards">
@@ -152,6 +189,7 @@ export default function InvestmentsDashboardPage() {
                           sub={`${p.qty} un. · ${fmtPct(p.pnlPercent)}`}
                           barPct={((p.marketValue ?? 0) / max) * 100}
                           value={fmtMoney(p.marketValue)}
+                          onClick={() => openPosition(p)}
                         />
                       ));
                     })()}
@@ -165,7 +203,7 @@ export default function InvestmentsDashboardPage() {
                     <div className="dash-title"><span><CalendarDays size={14} /> Payouts por mês</span><NavLink className="dash-link" to="/payouts">payouts →</NavLink></div>
                     {payoutSeries.length > 1 ? (
                       <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                        <BarChart data={payoutSeries} margin={{ top: 10, right: 12, left: 4, bottom: 4 }} onClick={(st) => { if (st?.activeLabel) openPayoutMonth(st.activeLabel); }}>
                           <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                           <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                           <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
@@ -200,7 +238,7 @@ export default function InvestmentsDashboardPage() {
                   <div className="dash-title"><span><TrendingUp size={14} /> Treemap do portfólio</span></div>
                   {symbolData.length === 0 ? <div className="muted">Sem posições.</div> : (
                     <ResponsiveContainer width="100%" height={240}>
-                      <Treemap data={symbolData.map((d) => ({ name: d.label, value: d.value }))} dataKey="value" nameKey="name" stroke="#131825" fill="#7c5cff" isAnimationActive={false}>
+                      <Treemap data={symbolData.map((d) => ({ name: d.label, value: d.value }))} dataKey="value" nameKey="name" stroke="#131825" fill="#7c5cff" isAnimationActive={false} onClick={(node) => { if (node?.name) openAssetByName(node.name); }}>
                         {symbolData.map((d, i) => <Cell key={d.label} fill={['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'][i % 8]} />)}
                       </Treemap>
                     </ResponsiveContainer>
@@ -236,6 +274,7 @@ export default function InvestmentsDashboardPage() {
           />
         </>
       )}
+      {drawer.node}
     </div>
   );
 }

@@ -79,48 +79,91 @@
 
 ---
 
+## Passo 3 â€” continuidades + prÃ³ximo nÃ­vel (entregue)
+- **A1 â€” Heatmap por sessÃ£o (Trading)**: mostra PnL, acerto e R mÃ©dio por **Ãsia /
+  Londres / Nova York / fora de sessÃ£o**, com cor pela intensidade.
+- **A2 â€” CenÃ¡rio do forecast (Planejamento)**: barras de **hoje â†’ 30 â†’ 60 â†’ 90 dias**
+  com o fluxo mensal lÃ­quido, pra ver o horizonte de caixa.
+- **A3 â€” MAE/MFE do bridge**: o plugin do Quantower agora manda **quanto o trade andou
+  contra (MAE) e a favor (MFE)**, em dÃ³lar, lidos dos fills reais. O app usa esses valores
+  quando existem e cai no cÃ¡lculo aproximado quando nÃ£o. *(Precisa recompilar o bridge no Quantower.)*
+- **A4 â€” Telas que "explicam" enquanto carregam/erram**: no lugar do texto "Carregandoâ€¦",
+  um **esqueleto** no formato da tela; se der erro, aparece **o que houve, por quÃª e como
+  resolver**, com botÃ£o **Tentar novamente** (Trading, Gastos, Investimentos, Contas,
+  Planejamento e RelatÃ³rios).
+- **B5 â€” Insights auditÃ¡veis**: cada insight agora mostra a **mÃ©trica** (nome padronizado),
+  a **evidÃªncia** (os nÃºmeros que o sustentam, ao passar o mouse) e o **limiar** (a regra
+  que disparou, ex.: `>= 50%`). Ficou fÃ¡cil conferir de onde veio cada frase.
+- **B6 â€” Abrir detalhe de qualquer entidade sem sair da tela**: clicar em **conta, aÃ§Ã£o,
+  estratÃ©gia, ativo, payout ou lanÃ§amento** abre a gaveta lateral com o resumo e um link
+  para o mÃ³dulo.
+- **B7 â€” GrÃ¡ficos clicÃ¡veis (drill-down)**: clicar numa **barra de PnL por dia** mostra os
+  trades daquele dia; clicar num **mÃªs de payouts** mostra os payouts do mÃªs; clicar numa
+  **posiÃ§Ã£o/treemap** abre o ativo; clicar num **lanÃ§amento** abre o detalhe.
+- **B8 â€” Resumo diÃ¡rio por push**: novo interruptor **"Resumo diÃ¡rio"** em
+  Settings â†’ NotificaÃ§Ãµes push. Um job no servidor envia, 1x/dia, um retrospecto das
+  **Ãºltimas 24h** (trading, entrou/gastou, payouts pendentes) â€” sÃ³ com nÃºmeros que o app
+  jÃ¡ calculou. *(Requer agendar o job; ver `supabase/README-push.md` Â§ 6.)*
+
+## PendÃªncias (executadas nesta rodada)
+- **CartÃ£o ligado aos lanÃ§amentos**: ao lanÃ§ar uma despesa vocÃª agora escolhe um **cartÃ£o
+  cadastrado** (nÃ£o digita o nome). A dashboard do Gastos mostra a **fatura aberta por dia
+  de fechamento** e quanto do **limite** jÃ¡ foi usado. (TambÃ©m corrigi um bug em que cartÃ£o,
+  â€œjÃ¡ pagoâ€, vencimento, tags e anexos se perdiam ao adicionar.)
+- **Strategy Matrix por versÃ£o**: no Trading, um botÃ£o alterna a tabela entre **por
+  estratÃ©gia** e **por versÃ£o do playbook** (o campo â€œVersÃ£o do playbookâ€ do journal),
+  comparando resultado de cada versÃ£o.
+- **Seletor de contas do Trading melhorado**: pensado para **20+ contas** â€” busca, ordenar
+  por tipo, â€œselecionar todas (filtradas)â€, contador e escolha mÃºltipla para comparar. A
+  seleÃ§Ã£o **fica salva** (sincroniza) e vai no **endereÃ§o** (dÃ¡ pra compartilhar). No
+  **Gastos nÃ£o existe filtro de conta** â€” ele Ã© sempre geral, como vocÃª pediu.
+- **RLS (seguranÃ§a do banco) auditado**: descobri que **10 tabelas** tinham RLS ligada
+  **sem nenhuma regra de acesso** (isso bloqueia o sync) e que faltavam colunas usadas pelo
+  app. Criei a migration **`005_rls_and_sync_columns.sql`** com as regras e as colunas â€”
+  **Ã© preciso aplicÃ¡-la** (`supabase db push`) para valer.
+
 ## Como ler o status
 - `01-backlog.md` â†’ checklist por item (`[x]` feito / `[ ]` pendente).
 - Este documento â†’ explicaÃ§Ã£o simples do que cada item faz.
 - Toda entrega roda com verificaÃ§Ã£o automÃ¡tica (build + testes) antes de ir para produÃ§Ã£o.
 
-## P2 — em andamento
-- **P2-02 — Saúde da plataforma (Positions & Orders)**: um painel compacto mostrando **plataforma,
-  nº de conexões, posições abertas, ordens pendentes e a última sincronização** — pra você ver
-  num relance se a ponte está saudável.
-- **P2-01 — Sync Center (Quantower)**: mostra o **último run de sincronização**: quando foi,
+## P2 ï¿½ em andamento
+- **P2-02 ï¿½ Saï¿½de da plataforma (Positions & Orders)**: um painel compacto mostrando **plataforma,
+  nï¿½ de conexï¿½es, posiï¿½ï¿½es abertas, ordens pendentes e a ï¿½ltima sincronizaï¿½ï¿½o** ï¿½ pra vocï¿½ ver
+  num relance se a ponte estï¿½ saudï¿½vel.
+- **P2-01 ï¿½ Sync Center (Quantower)**: mostra o **ï¿½ltimo run de sincronizaï¿½ï¿½o**: quando foi,
   quantos trades foram **criados**, **atualizados** e **ignorados**.
-- **P2-03 — Exposure + Position Heatmap (Positions & Orders)**: mostra o **total long vs short**
-  (barras) e um **mapa de calor por símbolo** onde a cor indica o PnL (verde ganho, vermelho perda,
-  intensidade = tamanho), com a quantidade long/short de cada símbolo.
-- **P1-08 — Rule Adherence (Trading)**: cruza o **checklist do dia** com o **resultado do dia**.
-  Mostra a aderência média, quantos dias você seguiu o plano (=80%) e o **PnL médio** nos dias em
-  que seguiu vs nos que não seguiu — pra ver se a disciplina está pagando.
-- **P1-17 — Filtros globais (conta/estratégia)**: além do período, agora dá para filtrar por
-  **conta** e por **estratégia** — e isso vai para o endereço (compartilhável). Aplicado no
+- **P2-03 ï¿½ Exposure + Position Heatmap (Positions & Orders)**: mostra o **total long vs short**
+  (barras) e um **mapa de calor por sï¿½mbolo** onde a cor indica o PnL (verde ganho, vermelho perda,
+  intensidade = tamanho), com a quantidade long/short de cada sï¿½mbolo.
+- **P1-08 ï¿½ Rule Adherence (Trading)**: cruza o **checklist do dia** com o **resultado do dia**.
+  Mostra a aderï¿½ncia mï¿½dia, quantos dias vocï¿½ seguiu o plano (=80%) e o **PnL mï¿½dio** nos dias em
+  que seguiu vs nos que nï¿½o seguiu ï¿½ pra ver se a disciplina estï¿½ pagando.
+- **P1-17 ï¿½ Filtros globais (conta/estratï¿½gia)**: alï¿½m do perï¿½odo, agora dï¿½ para filtrar por
+  **conta** e por **estratï¿½gia** ï¿½ e isso vai para o endereï¿½o (compartilhï¿½vel). Aplicado no
   Trading e no Gastos.
-- **P1-18 — Empty states acionáveis (slice)**: quando não há dados, a tela agora diz o que fazer
-  com um atalho (ex.: “Sem despesas no período ? lançar”; “Sem estratégia ? abrir Journal”).
-- **P2-05 — Relatório do período (Relatórios)**: a página agora tem **seletor de período** e um
-  **resumo do período** (entrou/gastou/saldo) + **fluxo do patrimônio** (entradas ? gastos ?
-  custos ? PnL trading ? payouts ? variação). Bom para “como foi o mês”.
-- **P2-06 — “Posso comprar isso?” (Planejamento)**: você digita o valor de uma compra e o app
+- **P1-18 ï¿½ Empty states acionï¿½veis (slice)**: quando nï¿½o hï¿½ dados, a tela agora diz o que fazer
+  com um atalho (ex.: ï¿½Sem despesas no perï¿½odo ? lanï¿½arï¿½; ï¿½Sem estratï¿½gia ? abrir Journalï¿½).
+- **P2-05 ï¿½ Relatï¿½rio do perï¿½odo (Relatï¿½rios)**: a pï¿½gina agora tem **seletor de perï¿½odo** e um
+  **resumo do perï¿½odo** (entrou/gastou/saldo) + **fluxo do patrimï¿½nio** (entradas ? gastos ?
+  custos ? PnL trading ? payouts ? variaï¿½ï¿½o). Bom para ï¿½como foi o mï¿½sï¿½.
+- **P2-06 ï¿½ ï¿½Posso comprar isso?ï¿½ (Planejamento)**: vocï¿½ digita o valor de uma compra e o app
   mostra o seu **caixa livre agora**, **como fica depois** e um veredito (cabe / repense).
-- **P2-09 — Treemap do portfólio (Investimentos)**: um mapa de blocos onde o **tamanho** de cada
-  bloco é o valor do ativo — ótimo para ver concentração num relance.
-- **P2-07 — Runway (Planejamento)**: quantos **meses** seu caixa livre cobre, usando o **gasto médio
-  mensal** dos últimos 3 meses. (Scenario Cone fica como continuação.)
-- **P2-13 — Auditoria de rotas/legacy**: comparei rotas × navegação × links. Resultado: **/risk** e
-  **/networth** eram “órfãs” (existiam só por URL, sem link) e foram **removidas**; **/playbook**
-  fica (é usado pelo Journal). Navegação e rotas agora estão alinhadas.
-- **P2-11 — Metric Registry leve**: um documento (`03-metric-registry.md`) com **nome, definição e
-  fonte** de cada métrica (evita divergência de nome/fórmula). Regra: a UI nunca recalcula.
-- **P2-12 — Reserva de imposto (Gastos ? Impostos)**: nova linha **“A pagar (reservar)”** com o total
-  de impostos lançados como **ainda não pagos**.
-- **P2-08 — Projeção de metas (Planejamento)**: para cada meta em aberto, estima em **quantos meses**
-  (e em que **mês/ano**) ela é atingida, no ritmo do **fluxo mensal líquido** do forecast.
-- **P2-10 — Cartões como entidade (Sistema ? Settings)**: agora você cadastra o cartão com
+- **P2-09 ï¿½ Treemap do portfï¿½lio (Investimentos)**: um mapa de blocos onde o **tamanho** de cada
+  bloco ï¿½ o valor do ativo ï¿½ ï¿½timo para ver concentraï¿½ï¿½o num relance.
+- **P2-07 ï¿½ Runway (Planejamento)**: quantos **meses** seu caixa livre cobre, usando o **gasto mï¿½dio
+  mensal** dos ï¿½ltimos 3 meses. (Scenario Cone fica como continuaï¿½ï¿½o.)
+- **P2-13 ï¿½ Auditoria de rotas/legacy**: comparei rotas ï¿½ navegaï¿½ï¿½o ï¿½ links. Resultado: **/risk** e
+  **/networth** eram ï¿½ï¿½rfï¿½sï¿½ (existiam sï¿½ por URL, sem link) e foram **removidas**; **/playbook**
+  fica (ï¿½ usado pelo Journal). Navegaï¿½ï¿½o e rotas agora estï¿½o alinhadas.
+- **P2-11 ï¿½ Metric Registry leve**: um documento (`03-metric-registry.md`) com **nome, definiï¿½ï¿½o e
+  fonte** de cada mï¿½trica (evita divergï¿½ncia de nome/fï¿½rmula). Regra: a UI nunca recalcula.
+- **P2-12 ï¿½ Reserva de imposto (Gastos ? Impostos)**: nova linha **ï¿½A pagar (reservar)ï¿½** com o total
+  de impostos lanï¿½ados como **ainda nï¿½o pagos**.
+- **P2-08 ï¿½ Projeï¿½ï¿½o de metas (Planejamento)**: para cada meta em aberto, estima em **quantos meses**
+  (e em que **mï¿½s/ano**) ela ï¿½ atingida, no ritmo do **fluxo mensal lï¿½quido** do forecast.
+- **P2-10 ï¿½ Cartï¿½es como entidade (Sistema ? Settings)**: agora vocï¿½ cadastra o cartï¿½o com
   **limite, dia de fechamento, dia de vencimento, bandeira e conta**. Fica sincronizado.
   (Migration `004` aplicada no banco.)
-- **P2-04 — Versão do playbook no trade (Journal)**: campo **“Versão do playbook”** ao lançar/editar
-  um trade — base para comparar desempenho por versão. (Coluna nova `strategy_version` no banco.)
+- **P2-04 ï¿½ Versï¿½o do playbook no trade (Journal)**: campo **ï¿½Versï¿½o do playbookï¿½** ao lanï¿½ar/editar
+  um trade ï¿½ base para comparar desempenho por versï¿½o. (Coluna nova `strategy_version` no banco.)

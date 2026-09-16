@@ -1,7 +1,8 @@
 // Dashboard do módulo Trading (porta de entrada) — cards glass + evolução do PnL
 // acumulado com marcadores de payout/withdrawal + widgets (calendário, drawdown,
 // histograma). Sem seções redundantes. COMPOSIÇÃO pura dos motores.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot, ReferenceLine,
 } from 'recharts';
@@ -12,15 +13,17 @@ import PnLCalendar from '@apps/ui/PnLCalendar';
 import HistogramR from '@apps/ui/HistogramR';
 import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
-  ruleAdherence, getChecklistTemplate, getDayCheck,
+  strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import AccountPicker from '../../AccountPicker';
+import { useEntityDrawer } from '@apps/ui/EntityDrawer';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -44,8 +47,14 @@ function StatCard({ label, value, sub, color, glow }) {
 
 export default function TradingDashboardPage() {
   const { period, setPeriod } = usePeriod();
-  const [acctSel, setAcctSel] = useState([]);
-  const { loading, data } = useEngineData(async (f) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [acctSel, setAcctSel] = useState(() => {
+    const url = searchParams.get('accounts');
+    return url ? url.split(',').filter(Boolean) : [];
+  });
+  const [stratByVersion, setStratByVersion] = useState(false);
+  const drawer = useEntityDrawer();
+  const { loading, data, error, reload, finance } = useEngineData(async (f) => {
     const [trades, payouts, propExts, riskSnap, accounts] = await Promise.all([
       f.ds.trades.list(),
       f.ds.payouts.list(),
@@ -72,6 +81,37 @@ export default function TradingDashboardPage() {
     }
     return { trades, payouts, propExts, riskSnap, adherenceDays, accounts };
   });
+
+  // #3 — seleção de contas persistida (meta `ui:filters`) + refletida na URL (?accounts=).
+  useEffect(() => {
+    if (acctSel.length) return; // URL já trouxe contas
+    let alive = true;
+    (async () => {
+      if (!finance?.ds) return;
+      try {
+        const rec = await finance.ds.meta.getKey('ui:filters');
+        const ids = Array.isArray(rec?.value?.accounts) ? rec.value.accounts : [];
+        if (alive && ids.length) setAcctSel(ids);
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finance]);
+
+  useEffect(() => {
+    if (!finance?.ds) return undefined;
+    const t = setTimeout(() => {
+      finance.ds.meta.setKey('ui:filters', { accounts: acctSel }).catch(() => {});
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (acctSel.length) next.set('accounts', acctSel.join(','));
+        else next.delete('accounts');
+        return next;
+      }, { replace: true });
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acctSel, finance]);
 
   // Trades/payouts escopados ao período + contas selecionadas (comparação).
   const trades = useMemo(
@@ -133,15 +173,25 @@ export default function TradingDashboardPage() {
     weekday: heatmapByWeekday(trades),
     maemfe: maeMfeSummary(trades),
     strategies: allStrategyMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
+    strategyVersions: strategyVersionMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
     adherence: ruleAdherence(data?.adherenceDays ?? []),
   }), [trades, data]);
 
+  if (error && !data) {
+    return (
+      <div className="cmd-page">
+        <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
+        <ModuleTabs module="trading" />
+        <ActionableError error={error} onRetry={reload} label="o Trading" />
+      </div>
+    );
+  }
   if (loading || !data) {
     return (
       <div className="cmd-page">
         <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
         <ModuleTabs module="trading" />
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando trading…</div>
+        <DashSkeleton cards={6} widgets={4} />
       </div>
     );
   }
@@ -175,10 +225,55 @@ export default function TradingDashboardPage() {
     })).sort((a, b) => b.pnl - a.pnl);
   }, [trades, acctSel, data]);
 
+  // B6/B7 — drill-down: abrir a entidade (dia/estratégia/conta) sem navegar.
+  const openDay = (dayLabel) => {
+    const d = (analytics.daily ?? []).find((x) => String(x.date).slice(5) === dayLabel);
+    if (!d) return;
+    const dayTrades = trades.filter((t) => String(t.exitDatetime || t.entryDatetime || '').slice(0, 10) === d.date);
+    drawer.open({
+      title: `Dia ${d.date}`,
+      subtitle: `Drill-down · ${dayTrades.length} trade(s)`,
+      href: '/journal',
+      rows: [
+        { k: 'PnL do dia', v: fmtMoney(d.pnl, 'USD'), color: d.pnl >= 0 ? 'var(--green)' : 'var(--red)' },
+        { k: 'Trades', v: String(dayTrades.length) },
+        ...dayTrades.slice(0, 12).map((t) => ({
+          k: `${t.symbol} · ${t.direction === 'short' ? 'Short' : 'Long'}`,
+          v: fmtMoney(t.resultNet ?? 0, 'USD'),
+          color: (t.resultNet ?? 0) >= 0 ? 'var(--green)' : 'var(--red)',
+        })),
+      ],
+    });
+  };
+  const openStrategy = (s) => drawer.open({
+    title: `Estratégia — ${s.strategyId}${s.version ? ` · ${s.version}` : ''}`,
+    subtitle: `${s.n} trade(s)${s.sampleSufficient ? '' : ' · amostra insuficiente'}`,
+    href: '/journal',
+    rows: [
+      ...(s.version ? [{ k: 'Versão do playbook', v: s.version }] : []),
+      { k: 'Winrate', v: `${(s.winRate * 100).toFixed(1)}%` },
+      { k: 'Avg R', v: `${s.avgR.toFixed(2)}R` },
+      { k: 'Profit factor', v: String(s.profitFactor === 'infinity' ? '∞' : s.profitFactor === 'n/a' ? '—' : Number(s.profitFactor).toFixed(2)) },
+      { k: 'Expectancy', v: s.expectancy.toFixed(2), color: s.expectancy >= 0 ? 'var(--green)' : 'var(--red)' },
+    ],
+  });
+  const openCompareRow = (c) => drawer.open({
+    title: `Conta — ${c.name}`,
+    subtitle: 'Comparação entre contas',
+    href: '/contas',
+    rows: [
+      { k: 'Trades', v: String(c.trades) },
+      { k: 'Winrate', v: c.wr != null ? `${c.wr.toFixed(0)}%` : '—' },
+      { k: 'Avg R', v: c.avgR != null ? `${c.avgR}R` : '—' },
+      { k: 'PnL', v: fmtMoney(c.pnl, 'USD'), color: c.pnl >= 0 ? 'var(--green)' : 'var(--red)' },
+    ],
+  });
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
       <ModuleTabs module="trading" />
+      {error && <ActionableError stale error={error} onRetry={reload} label="o Trading" />}
       <PeriodPicker period={period} onChange={setPeriod} />
       <AccountPicker selected={acctSel} onChange={setAcctSel} />
 
@@ -197,13 +292,13 @@ export default function TradingDashboardPage() {
           <div className="td-cmp">
             <div className="td-cmp-head"><span>Conta</span><span>N</span><span>WR</span><span>Avg R</span><span>PnL</span></div>
             {compare.map((c) => (
-              <div key={c.id} className="td-cmp-row">
+              <button type="button" key={c.id} className="td-cmp-row td-clickable" onClick={() => openCompareRow(c)}>
                 <span className="td-strat-name">{c.name}</span>
                 <span className="td-strat-n">{c.trades}</span>
                 <span>{c.wr != null ? `${c.wr.toFixed(0)}%` : '—'}</span>
                 <span>{c.avgR != null ? `${c.avgR}R` : '—'}</span>
                 <span className={c.pnl >= 0 ? 'dash-pos' : 'dash-neg'}>{fmtMoney(c.pnl, 'USD')}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -262,7 +357,11 @@ export default function TradingDashboardPage() {
               <div className="td-chart-title"><BarChart3 size={14} /> PnL por dia</div>
               {analytics.daily.length < 2 ? <div className="muted">Sem dias suficientes.</div> : (
                 <ResponsiveContainer width="100%" height={210}>
-                  <BarChart data={analytics.daily.map((d) => ({ ...d, label: d.date.slice(5) }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <BarChart
+                    data={analytics.daily.map((d) => ({ ...d, label: d.date.slice(5) }))}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                    onClick={(st) => { if (st?.activeLabel) openDay(st.activeLabel); }}
+                  >
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={24} />
                     <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
@@ -378,28 +477,47 @@ export default function TradingDashboardPage() {
           ) },
           { id: 'strategies', defaultSpan: 2, node: (
             <div className="td-widget">
-              <div className="td-chart-title">Strategy Matrix (edge por estratégia)</div>
-              {analytics.strategies.length === 0 ? <div className="muted">Sem trades com estratégia no período. Atribua a estratégia no <a className="dash-link" href="/journal">Journal</a>.</div> : (
-                <>
-                  <div className="td-strat">
-                    <div className="td-strat-head"><span>Estratégia</span><span>N</span><span>WR</span><span>Avg R</span><span>PF</span><span>Expectancy</span></div>
-                    {analytics.strategies.map((s) => {
-                      const pf = s.profitFactor === 'infinity' ? '∞' : s.profitFactor === 'n/a' ? '—' : Number(s.profitFactor).toFixed(2);
-                      return (
-                        <div key={s.strategyId} className="td-strat-row">
-                          <span className="td-strat-name">{s.strategyId}</span>
-                          <span className="td-strat-n">{s.sampleSufficient ? s.n : `${s.n}*`}</span>
-                          <span>{(s.winRate * 100).toFixed(1)}%</span>
-                          <span>{s.avgR.toFixed(2)}R</span>
-                          <span>{pf}</span>
-                          <span className={s.expectancy >= 0 ? 'dash-pos' : 'dash-neg'}>{s.expectancy.toFixed(2)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="td-dd-hint">* amostra insuficiente (menos de 20 trades). Ordenado por expectancy.</div>
-                </>
-              )}
+              <div className="td-chart-head">
+                <span className="td-chart-title">Strategy Matrix (edge {stratByVersion ? 'por versão' : 'por estratégia'})</span>
+                <button
+                  type="button"
+                  className="td-toggle"
+                  onClick={() => setStratByVersion((v) => !v)}
+                  aria-pressed={stratByVersion}
+                >
+                  {stratByVersion ? 'por versão' : 'por estratégia'}
+                </button>
+              </div>
+              {(() => {
+                const rows = stratByVersion ? analytics.strategyVersions : analytics.strategies;
+                if (rows.length === 0) {
+                  return <div className="muted">Sem trades com estratégia no período. Atribua a estratégia no <a className="dash-link" href="/journal">Journal</a>.</div>;
+                }
+                return (
+                  <>
+                    <div className="td-strat">
+                      <div className="td-strat-head"><span>Estratégia</span><span>N</span><span>WR</span><span>Avg R</span><span>PF</span><span>Expectancy</span></div>
+                      {rows.map((s) => {
+                        const pf = s.profitFactor === 'infinity' ? '∞' : s.profitFactor === 'n/a' ? '—' : Number(s.profitFactor).toFixed(2);
+                        return (
+                          <button type="button" key={`${s.strategyId}||${s.version ?? ''}`} className="td-strat-row td-clickable" onClick={() => openStrategy(s)}>
+                            <span className="td-strat-name">
+                              {s.strategyId}
+                              {'version' in s && s.version ? <span className="td-strat-ver">{s.version}</span> : null}
+                            </span>
+                            <span className="td-strat-n">{s.sampleSufficient ? s.n : `${s.n}*`}</span>
+                            <span>{(s.winRate * 100).toFixed(1)}%</span>
+                            <span>{s.avgR.toFixed(2)}R</span>
+                            <span>{pf}</span>
+                            <span className={s.expectancy >= 0 ? 'dash-pos' : 'dash-neg'}>{s.expectancy.toFixed(2)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="td-dd-hint">* amostra insuficiente (menos de 20 trades). Ordenado por expectancy.</div>
+                  </>
+                );
+              })()}
             </div>
           ) },
           { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} loading={false} /></div>) },
@@ -407,6 +525,7 @@ export default function TradingDashboardPage() {
           { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={trades} initialFunding={stats.capital} currency="USD" /></div>) },
         ]}
       />
+      {drawer.node}
     </div>
   );
 }
@@ -455,13 +574,19 @@ const TD_CSS = `
 .td-strat-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .td-strat-row { border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
 .td-strat-row:last-child { border-bottom: none; }
-.td-strat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-strat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.td-strat-ver { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(124,92,255,0.16); border: 1px solid rgba(124,92,255,0.35); color: #b9a8ff; }
+.td-toggle { font-size: 11px; font-weight: 700; padding: 5px 10px; min-height: 30px; border-radius: 9px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: var(--text, #e7eaf0); cursor: pointer; }
+.td-toggle[aria-pressed="true"] { background: rgba(124,92,255,0.2); border-color: rgba(124,92,255,0.5); }
 .td-strat-n { color: var(--muted, #a1a7b3); }
 .td-cmp { display: flex; flex-direction: column; font-size: 12px; }
 .td-cmp-head, .td-cmp-row { display: grid; grid-template-columns: 1.6fr 0.6fr 0.8fr 0.8fr 1fr; gap: 8px; align-items: center; padding: 7px 4px; }
 .td-cmp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .td-cmp-row { border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
 .td-cmp-row:last-child { border-bottom: none; }
+.td-clickable { cursor: pointer; background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.04); color: inherit; font: inherit; text-align: left; width: 100%; border-radius: 8px; }
+.td-clickable:hover { background: rgba(255,255,255,0.03); }
+.td-clickable:last-child { border-bottom: none; }
 
 @media (max-width: 1000px) { .td-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .td-cards { grid-template-columns: 1fr; } .td-widgets { grid-template-columns: 1fr; } }

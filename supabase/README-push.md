@@ -85,9 +85,43 @@ select cron.schedule(
 Alertas inteligentes (DD perto do limite, payout elegível) entram como queries
 nesse cron depois — a infra já está pronta.
 
+## 6. Digest diário (B8 — `push-digest`)
+
+O app tem um toggle **Settings → Notificações push → "Resumo diário"** (grava
+`app_meta` key `push:digest` = `{ enabled }`; sincroniza). A Edge Function
+`push-digest` monta, para cada usuário com subscription, um retrospecto das
+**últimas 24h** — **só narra** números já gravados (`trades.result_net`,
+`transactions.amount`, `payouts` pendentes); **não cria fórmula nova**.
+
+```bash
+supabase functions deploy push-digest --no-verify-jwt
+```
+
+Agendar (SQL Editor, requer `pg_cron` + `pg_net`):
+
+```sql
+select cron.schedule(
+  'push-digest-daily',
+  '0 11 * * *',  -- 08:00 BRT
+  $$
+  select net.http_post(
+    url := 'https://<ref>.supabase.co/functions/v1/push-digest',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+```
+
+Quem desativou o "Resumo diário" é pulado (a function lê `app_meta.push:digest`).
+
 ## Checklist de aceite
 
 - [ ] Settings → "Ativar neste dispositivo" → permissão concedida, linha em `push_subscriptions`
 - [ ] `curl` de teste chega como notificação (app fechado inclusive)
 - [ ] Clicar abre a URL (`/actions`)
 - [ ] Subscription morta (410) é removida sozinha
+- [ ] `push-digest` agendado + toggle "Resumo diário" respeitado

@@ -74,7 +74,7 @@ function emptyForm() {
     type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '',
     recur: false, recurDay: new Date().getDate(), attachments: {},
     // D1/D2/D4
-    paid: true, dueDate: '', card: '', installmentCount: '', tags: '',
+    paid: true, dueDate: '', card: '', cardId: '', installmentCount: '', tags: '',
   };
 }
 
@@ -147,11 +147,12 @@ function compressImage(file, maxBytes = ATTACH_MAX_BYTES) {
  * @param {(entries:Array<object>)=>void} [props.onImportBatch] — A3: importar extrato
  * @param {Array<string>} [props.rolloverCats] — B1: opt-in de rollover por categoria
  * @param {(catId:string)=>void} [props.onToggleRollover] — B1
+ * @param {Array<object>} [props.cards] #1: cartões cadastrados (entidade `Card`)
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
 export default function Expenses({
-  txs = [], categories = [], budgets = {}, accounts = [],
+  txs = [], categories = [], budgets = {}, accounts = [], cards = [],
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer,
@@ -242,12 +243,15 @@ export default function Expenses({
   const cardTotals = useMemo(() => {
     const acc = new Map();
     for (const t of txs) {
-      if (t.kind !== 'expense' || !t.card) continue;
+      const cardKey = t.cardId || t.card;
+      if (t.kind !== 'expense' || !cardKey) continue;
       if (t.date.slice(0, 7) !== key) continue;
-      acc.set(t.card, (acc.get(t.card) ?? 0) + Math.abs(t.amount));
+      acc.set(cardKey, (acc.get(cardKey) ?? 0) + Math.abs(t.amount));
     }
-    return [...acc.entries()].map(([card, total]) => ({ card, total })).sort((a, b) => b.total - a.total);
-  }, [txs, key]);
+    return [...acc.entries()]
+      .map(([cardKey, total]) => ({ cardKey, card: cards.find((c) => c.id === cardKey)?.name || cardKey, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [txs, key, cards]);
   // D4 — onde mais gastei (estabelecimento derivado da nota).
   const merchants = useMemo(() => merchantRanking(txs, key, 6), [txs, key]);
   // D3 — lançamentos agrupados por dia (extrato).
@@ -292,6 +296,7 @@ export default function Expenses({
       paid: t.paid !== false,
       dueDate: (t.dueDate || '').slice(0, 16),
       card: t.card ?? '',
+      cardId: t.cardId ?? '',
       installmentCount: '',
       tags: (t.tags ?? []).join(', '),
     });
@@ -313,6 +318,7 @@ export default function Expenses({
       paid: form.paid,
       dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
       card: form.card.trim() || undefined,
+      cardId: form.cardId || undefined,
       tags: tags.length ? tags : undefined,
     };
     if (editingId) {
@@ -326,7 +332,7 @@ export default function Expenses({
         // D2 — parcelamento: N parcelas mensais (contas a pagar).
         onAddInstallments({
           accountId: form.accountId, currency: 'BRL', totalAmount: amt, count: parts,
-          category: form.category, card: base.card, note: base.note,
+          category: form.category, card: base.card, cardId: base.cardId, note: base.note,
           firstDate: base.dueDate ?? base.date,
         });
       } else {
@@ -667,7 +673,24 @@ export default function Expenses({
               <input className="ex-input" type="text" value={form.tags} onChange={(e) => setF('tags', e.target.value)} placeholder="viagem, trabalho (separe por vírgula)" aria-label="Tags" />
             </label>
             <label className="ex-field"><span>Cartão (fatura)</span>
-              <input className="ex-input" type="text" value={form.card} onChange={(e) => setF('card', e.target.value)} placeholder="Ex.: Nubank" aria-label="Cartão" />
+              {cards.length > 0 ? (
+                <select
+                  className="ex-input"
+                  value={form.cardId || ''}
+                  onChange={(e) => {
+                    const c = cards.find((x) => x.id === e.target.value);
+                    setForm((p) => ({ ...p, cardId: c?.id ?? '', card: c?.name ?? '' }));
+                  }}
+                  aria-label="Cartão"
+                >
+                  <option value="">Sem cartão</option>
+                  {cards.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}{c.closingDay ? ` · fecha ${c.closingDay}` : ''}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className="ex-input" type="text" value={form.card} onChange={(e) => setF('card', e.target.value)} placeholder="Ex.: Nubank (cadastre em Settings p/ vincular)" aria-label="Cartão" />
+              )}
             </label>
           </div>
           <label className="ex-check">

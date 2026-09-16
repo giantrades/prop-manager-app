@@ -161,6 +161,37 @@ export function darfDeadline(yearMonth: string): string {
   return lastBusinessDayOfMonth(nextYear, nextMonth).toISOString();
 }
 
+/** Janela da fatura aberta de um cartão (por dia de fechamento). */
+export interface InvoiceCycle {
+  /** Início (exclusivo) da fatura aberta: logo após o fechamento anterior. */
+  start: string;
+  /** Fechamento da fatura aberta (inclusivo). */
+  end: string;
+}
+
+/**
+ * #1 — Fatura ABERTA de um cartão a partir do dia de fechamento. Puro: dado o dia
+ * de fechamento (1..28) e uma referência, devolve a janela [start, end] da fatura
+ * que ainda está aberta (a que fecha no próximo fechamento). `closingDay` fora do
+ * intervalo => dia 1 (comportamento previsível, nunca lança).
+ */
+export function invoiceCycle(closingDay?: number, ref: Date = new Date()): InvoiceCycle {
+  const d = Math.min(28, Math.max(1, Math.floor(closingDay || 1)));
+  const y = ref.getUTCFullYear();
+  const m = ref.getUTCMonth();
+  const day = ref.getUTCDate();
+  // Se hoje passou do fechamento, a fatura aberta fecha no mês seguinte.
+  let closeM = m;
+  let closeY = y;
+  if (day > d) {
+    closeM = m + 1;
+    if (closeM > 11) { closeM = 0; closeY = y + 1; }
+  }
+  const end = new Date(Date.UTC(closeY, closeM, d, 23, 59, 59, 999));
+  const prevClose = new Date(Date.UTC(closeY, closeM - 1, d, 23, 59, 59, 999));
+  return { start: new Date(prevClose.getTime() + 1).toISOString(), end: end.toISOString() };
+}
+
 // ---------------------------------------------------------------------------
 // Firm P&L (puro) — exigência "quanto gastei com cada propfirm?"
 // ---------------------------------------------------------------------------
@@ -1231,6 +1262,7 @@ export class MoneyService {
     dueDate?: string;
     installments?: { n: number; of: number; groupId: string };
     card?: string;
+    cardId?: string;
     tags?: string[];
   }): Promise<Transaction> {
     if (input.rate != null && input.rate <= 0) {
@@ -1256,6 +1288,7 @@ export class MoneyService {
       dueDate: input.dueDate,
       installments: input.installments,
       card: input.card,
+      cardId: input.cardId,
       tags: input.tags,
       updatedAt: nowIso(),
       deviceId: this.ds.deviceId,
@@ -1285,6 +1318,7 @@ export class MoneyService {
     paid?: boolean;
     dueDate?: string;
     card?: string;
+    cardId?: string;
     tags?: string[];
     installments?: { n: number; of: number; groupId: string };
   }): Promise<Transaction> {
@@ -1299,6 +1333,7 @@ export class MoneyService {
       paid: input.paid,
       dueDate: input.dueDate,
       card: input.card,
+      cardId: input.cardId,
       tags: input.tags,
       installments: input.installments,
     });
@@ -1317,6 +1352,7 @@ export class MoneyService {
     count: number;
     category?: string;
     card?: string;
+    cardId?: string;
     firstDate?: string;
     note?: string;
   }): Promise<Transaction[]> {
@@ -1337,6 +1373,7 @@ export class MoneyService {
         currency: input.currency,
         category: input.category,
         card: input.card,
+        cardId: input.cardId,
         note: input.note,
         date: d.toISOString(),
         dueDate: d.toISOString(),

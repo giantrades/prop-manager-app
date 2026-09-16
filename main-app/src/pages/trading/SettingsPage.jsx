@@ -109,7 +109,36 @@ function CloudBackupCard() {
 
 function PushSettingsCard() {
   const { supported, permission, subscribed, busy, subscribe, unsubscribe, hasVapidKey } = usePush();
+  const finance = useFinance();
   const { toast } = useToast();
+  const [digest, setDigest] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!finance?.ds) return;
+      try {
+        const rec = await finance.ds.meta.getKey('push:digest');
+        if (alive) setDigest(rec?.value?.enabled !== false);
+      } catch {
+        /* sem preferência salva = ligado por padrão */
+      }
+    })();
+    return () => { alive = false; };
+  }, [finance]);
+
+  // B8 — resumo diário (o job `push-digest` lê este flag em app_meta).
+  const toggleDigest = async () => {
+    const next = !digest;
+    setDigest(next);
+    try {
+      await finance?.ds?.meta.setKey('push:digest', { enabled: next });
+      toast(next ? 'Resumo diário ativado.' : 'Resumo diário desativado.');
+    } catch {
+      setDigest(!next);
+      toast('Não foi possível salvar a preferência.', { type: 'warn' });
+    }
+  };
 
   if (!supported) return null;
 
@@ -143,6 +172,12 @@ function PushSettingsCard() {
         <span className="st-rate">
           {!hasVapidKey ? 'sem chave VAPID' : `permissão: ${permission}`}
         </span>
+      </div>
+      <div className="st-row">
+        <button className={`st-btn${digest ? ' active' : ''}`} onClick={toggleDigest}>
+          {digest ? 'Resumo diário ✓' : 'Resumo diário'}
+        </button>
+        <span className="st-rate">retrospecto 1x/dia das últimas 24h (precisa de push ativo)</span>
       </div>
     </div>
   );

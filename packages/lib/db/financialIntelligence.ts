@@ -256,6 +256,16 @@ export function firmPnlByFirm(transactions: Transaction[]): FirmPnlResult[] {
 
 export type InsightKind = 'growth' | 'cash' | 'edge' | 'projection' | 'action' | 'info';
 
+/** Comparador de limiar (regra que disparou a narrativa). */
+export type ThresholdOp = '>=' | '<=' | '>' | '<' | '==' | '!=';
+
+export interface InsightThreshold {
+  op: ThresholdOp;
+  value: number;
+  /** Unidade do limiar: '%' | 'USD' | 'R' | 'trades' | 'x' … */
+  unit: string;
+}
+
 export interface Insight {
   id: string;
   kind: InsightKind;
@@ -268,6 +278,12 @@ export interface Insight {
   priority: number;
   /** Rota de drill-down (contexto que gerou o insight). */
   href?: string;
+  /** B5 — nome canônico da métrica (registry) que sustenta este insight. */
+  metric?: string;
+  /** B5 — evidência tipada: nome do número → valor (o "porquê" auditável). */
+  evidence?: Record<string, number | string | null>;
+  /** B5 — regra determinística que disparou a narrativa (quando aplicável). */
+  threshold?: InsightThreshold;
 }
 
 /** Soma de `amount` (magnitude) de uma lista de payouts (já é net nos Payout). */
@@ -300,6 +316,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
       source: `money.firmPnl(firmId=${topFirm.firmId}) + Σ firmPnl[].payouts`,
       data: { share, topFirmPayouts: topFirm.payouts, totalPayouts },
       priority: 0.55,
+      metric: 'payout_share_by_firm',
+      evidence: { firmId: topFirm.firmId, sharePct: share, topFirmPayouts: topFirm.payouts, totalPayouts },
+      threshold: { op: '>=', value: 50, unit: '%' },
     });
   }
 
@@ -318,6 +337,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
       source: `wealth.netWorth() → components.cash / netWorth`,
       data: { cash, netWorth: nw, cashPct },
       priority: cashPct >= 30 ? 0.7 : 0.4,
+      metric: 'cash_ratio',
+      evidence: { cash, netWorth: nw, cashPct },
+      threshold: { op: cashPct >= 30 ? '>=' : '<', value: 30, unit: '%' },
     });
   }
 
@@ -334,6 +356,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
         source: `strategies.allStrategyMetrics(trades) → strategyMetrics(strategyId, n≥${MIN_SAMPLE})`,
         data: { bestAvgR: best.avgR, worstAvgR: worst.avgR, bestId: best.strategyId, worstId: worst.strategyId },
         priority: 0.5,
+        metric: 'avg_r_by_strategy',
+        evidence: { bestStrategy: best.strategyId, bestAvgR: best.avgR, worstStrategy: worst.strategyId, worstAvgR: worst.avgR, minSample: MIN_SAMPLE },
+        threshold: { op: '>=', value: MIN_SAMPLE, unit: 'trades' },
       });
     }
   } else if (withSample.length === 1) {
@@ -345,6 +370,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
       source: `strategies.allStrategyMetrics(trades) → strategyMetrics(${only.strategyId})`,
       data: { avgR: only.avgR, n: only.n, pf: only.profitFactor },
       priority: 0.4,
+      metric: 'avg_r_by_strategy',
+      evidence: { strategy: only.strategyId, avgR: only.avgR, n: only.n, profitFactor: String(only.profitFactor) },
+      threshold: { op: '>=', value: MIN_SAMPLE, unit: 'trades' },
     });
   }
 
@@ -359,6 +387,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
       source: `wealth.forecast() → netMonthly / d90`,
       data: { netMonthly, projected90: projected, today: s.forecast.today },
       priority: 0.5,
+      metric: 'projected_net_worth_90d',
+      evidence: { netMonthly, projected90: projected, today: s.forecast.today },
+      threshold: { op: '>', value: 0, unit: 'USD/mês' },
     });
   }
 
@@ -372,6 +403,9 @@ export function generateInsights(s: CommandSnapshot): Insight[] {
       source: `risk.snapshot() → counts{WARN,STOP}`,
       data: { warn: s.risk.counts.WARN, stop: s.risk.counts.STOP },
       priority: 0.85,
+      metric: 'accounts_at_risk',
+      evidence: { warn: s.risk.counts.WARN, stop: s.risk.counts.STOP, total: warnCount },
+      threshold: { op: '>', value: 0, unit: 'contas' },
     });
   }
 

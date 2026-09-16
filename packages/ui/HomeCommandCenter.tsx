@@ -1,7 +1,7 @@
 // HomeCommandCenter — cockpit (COMPOSIÇÃO PURA). Mostra o gráfico principal de cada
 // módulo (Trading, Gastos, Investimentos, Contas/Payouts, Metas) + Ações + Calendário.
 // Nenhum cálculo financeiro aqui: só lê o snapshot do Command Center.
-import React, { useState } from 'react';
+import React from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceDot,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -10,7 +10,7 @@ import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays } fro
 import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
 import StatRow from './StatRow';
-import EntityDrawer from './EntityDrawer';
+import { useEntityDrawer } from './EntityDrawer';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 
 const WIDGET_ICONS = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
@@ -49,7 +49,7 @@ function Widget({ id, title, to = null, hide, children }) {  if (hide(id)) retur
 
 export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }) {
   const hide = (id) => (hidden || []).includes(id);
-  const [openAcct, setOpenAcct] = useState(null);
+  const drawer = useEntityDrawer();
   if (loading || !snapshot) {
     return (
       <div className="hc-root hc-loading" role="status" aria-live="polite">
@@ -199,7 +199,16 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                 sub={`trad ${fmtMoney(a.trading, 'USD')} · inv ${fmtMoney(a.invest)}`}
                 barPct={(Math.abs(a.total) / max) * 100}
                 value={fmtMoney(a.total, 'USD')}
-                onClick={() => setOpenAcct(a)}
+                onClick={() => drawer.open({
+                  title: `Conta — ${a.name}`,
+                  subtitle: 'Conta',
+                  href: '/contas',
+                  rows: [
+                    { k: 'PnL trading', v: fmtMoney(a.trading, 'USD'), color: a.trading >= 0 ? 'var(--green)' : 'var(--red)' },
+                    { k: 'PnL investimentos', v: fmtMoney(a.invest), color: a.invest >= 0 ? 'var(--green)' : 'var(--red)' },
+                    { k: 'Total', v: fmtMoney(a.total, 'USD'), color: a.total >= 0 ? 'var(--green)' : 'var(--red)' },
+                  ],
+                })}
               />
             ));
           })() : <div className="hc-empty">Sem PnL por conta ainda.</div>}
@@ -224,11 +233,24 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
           {actions.length === 0 ? (
             <div className="hc-empty">Sem ações em aberto.</div>
           ) : actions.slice(0, 6).map((a) => (
-            <div key={a.id} className={`hc-row hc-action-${a.severity}`}>
+            <button
+              key={a.id}
+              type="button"
+              className={`hc-row hc-action hc-action-${a.severity}`}
+              onClick={() => drawer.open({
+                title: a.title,
+                subtitle: `Ação · ${a.kind} · ${a.severity}`,
+                href: a.href,
+                rows: [
+                  { k: 'Detalhe', v: a.detail },
+                  { k: 'Fonte', v: a.source },
+                ],
+              })}
+            >
               <span className="hc-action-dot" aria-hidden="true" />
               <span className="hc-row-name">{a.title}</span>
               <span className="hc-row-sub">{a.detail}</span>
-            </div>
+            </button>
           ))}
         </Widget>)}
 
@@ -257,6 +279,24 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
             {insights.slice(0, 4).map((ins) => (
               <div key={ins.id} className="hc-insight">
                 <div className="hc-insight-text">{ins.text}</div>
+                {(ins.metric || ins.threshold) && (
+                  <div className="hc-insight-meta">
+                    {ins.metric ? <span className="hc-insight-chip" title="métrica canônica (registry)">{ins.metric}</span> : null}
+                    {ins.threshold ? (
+                      <span className="hc-insight-thr" title="regra determinística que disparou">
+                        {ins.threshold.op} {ins.threshold.value}{ins.threshold.unit}
+                      </span>
+                    ) : null}
+                    {ins.evidence ? (
+                      <span
+                        className="hc-insight-ev"
+                        title={Object.entries(ins.evidence).map(([k, v]) => `${k}=${v}`).join(' · ')}
+                      >
+                        evidência
+                      </span>
+                    ) : null}
+                  </div>
+                )}
                 <div className="hc-insight-source">fonte: {ins.source}{ins.href ? <> · <a className="hc-widget-link" href={ins.href}>abrir →</a></> : null}</div>
               </div>
             ))}
@@ -264,20 +304,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
         </section>
       )}
 
-      <EntityDrawer
-        open={!!openAcct}
-        title={openAcct ? `Conta — ${openAcct.name}` : ''}
-        onClose={() => setOpenAcct(null)}
-      >
-        {openAcct && (
-          <>
-            <div className="ed-kv"><span className="ed-k">PnL trading</span><span className="ed-v">{fmtMoney(openAcct.trading, 'USD')}</span></div>
-            <div className="ed-kv"><span className="ed-k">PnL investimentos</span><span className="ed-v">{fmtMoney(openAcct.invest)}</span></div>
-            <div className="ed-kv"><span className="ed-k">Total</span><span className="ed-v">{fmtMoney(openAcct.total, 'USD')}</span></div>
-            <div className="hc-empty">Para editar a conta, abra Contas → Contas.</div>
-          </>
-        )}
-      </EntityDrawer>
+      {drawer.node}
     </div>
   );
 }
@@ -313,6 +340,8 @@ const HC_CSS = `
 
 .hc-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .hc-row:last-child { border-bottom: none; }
+.hc-action { width: 100%; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; padding-left: 4px; padding-right: 4px; }
+.hc-action:hover { background: rgba(255,255,255,0.04); }
 .hc-row-name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hc-row-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
 .hc-row-val { font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -337,6 +366,10 @@ const HC_CSS = `
 .hc-insights-list { display: flex; flex-direction: column; gap: 12px; }
 .hc-insight-text { font-size: 13px; }
 .hc-insight-source { font-size: 10px; color: var(--muted, #a1a7b3); font-family: monospace; margin-top: 2px; }
+.hc-insight-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.hc-insight-chip { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(124,92,255,0.14); border: 1px solid rgba(124,92,255,0.35); color: #b9a8ff; font-family: monospace; }
+.hc-insight-thr { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: var(--text, #e7eaf0); font-family: monospace; }
+.hc-insight-ev { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.18); color: var(--muted, #a1a7b3); cursor: help; }
 
 .hc-empty { font-size: 12px; color: var(--muted, #a1a7b3); }
 .hc-pie { display: flex; align-items: center; gap: 10px; }

@@ -12,6 +12,7 @@ import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
 import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 
 const KIND_META = {
   prop: { label: 'Prop', icon: Building2, color: '#7c5cff' },
@@ -39,7 +40,7 @@ function StatCard({ label, value, sub, color, glow }) {
 
 export default function AccountsDashboardPage() {
   const { period, setPeriod } = usePeriod();
-  const { loading, data } = useEngineData(async (f) => {
+  const { loading, data, error, reload } = useEngineData(async (f) => {
     const [accounts, propExts, payouts, txs, firms, trades, riskSnap] = await Promise.all([
       f.ds.accounts.list(),
       f.ds.propExtensions.list(),
@@ -125,8 +126,11 @@ export default function AccountsDashboardPage() {
       <ModuleTabs module="contas" />
       <PeriodPicker period={period} onChange={setPeriod} />
 
-      {loading || !data ? (
-        <div className="cmd-msg" role="status" aria-live="polite">Carregando contas…</div>
+      {error && data && <ActionableError stale error={error} onRetry={reload} label="as Contas" />}
+      {error && !data ? (
+        <ActionableError error={error} onRetry={reload} label="as Contas" />
+      ) : loading || !data ? (
+        <DashSkeleton cards={5} widgets={3} />
       ) : (
         <>
           <div className="ad-cards">
