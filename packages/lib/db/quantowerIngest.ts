@@ -125,6 +125,19 @@ export async function ingestQuantowerTrades(
     }
   }
 
+  // Sync Center — resumo do último run (para a página do Quantower).
+  try {
+    await ds.meta.setKey('qt:lastRun', {
+      at: nowIso(),
+      created,
+      updated,
+      skipped,
+      total: created + updated + skipped,
+    });
+  } catch {
+    /* noop */
+  }
+
   ds.bus.emit('quantower:synced' as any, {
     count: created + updated,
     lastSync: nowIso(),

@@ -5062,3 +5062,10 @@ select optgroup {
 .ac-wf-bar.is-pos { background: linear-gradient(90deg, #2ecc71, #7bed9f); }
 .ac-wf-bar.is-neg { background: linear-gradient(90deg, #e74c3c, #ff7b6b); }
 .ac-wf-val { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+
+/* Sync Center — resumo do último run (Quantower) */
+.qt-sync { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 14px; padding: 12px 14px; }
+.qt-sync-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); font-weight: 700; }
+.qt-sync-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 14px; font-size: 13px; }
+.qt-sync-k { color: var(--muted, #a1a7b3); }
+.qt-sync-v { font-variant-numeric: tabular-nums; font-weight: 700; }

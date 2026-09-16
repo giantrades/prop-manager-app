@@ -36,7 +36,7 @@
 - [ ] AUD-P1-18 — **Micro UX** (skeleton, empty states com ação, erros acionáveis). → **movido para P2**
 
 ## P2 — depois
-- [ ] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped/erros).
+- [x] AUD-P2-01 — Sync Center simples (último run, criados/atualizados/skipped) na página Quantower.
 - [x] AUD-P2-02 — Platform Health (Live): plataforma, conexões, posições, ordens, última sync.
 - [ ] AUD-P2-03 — Exposure long×short + Position Heatmap (conta×símbolo).
 - [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance).

@@ -1,7 +1,7 @@
 // STAGE 11 — QuantowerPage. Conecta ao bridge v2, baixa trades e ingere no app-db v3
 // (DataService/DataChainEngine). Fim do Risk com dado manual atrasado.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
 import { useFinance } from '@apps/state';
@@ -22,6 +22,22 @@ export default function QuantowerPage() {
   const [copyForm, setCopyForm] = useState({ masterId: '', symbol: '', side: 'buy', qty: '' });
   const [copyResult, setCopyResult] = useState(null);
   const [livePositions, setLivePositions] = useState([]);
+  const [lastRun, setLastRun] = useState(null);
+
+  // Sync Center — resumo do último run de ingestão (escrito pelo ingest).
+  useEffect(() => {
+    if (!finance) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const rec = await finance.ds.meta.getKey('qt:lastRun');
+        if (alive) setLastRun(rec?.value ?? null);
+      } catch {
+        /* noop */
+      }
+    })();
+    return () => { alive = false; };
+  }, [finance, result]);
 
   const savePrefs = useCallback(() => {
     localStorage.setItem('qt:bridgeUrl', bridgeUrl);
@@ -127,6 +143,17 @@ export default function QuantowerPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Quantower Sync</h1></div>
+      {lastRun && (
+        <div className="qt-sync" aria-label="Sync Center">
+          <div className="qt-sync-title">Sync Center — último run</div>
+          <div className="qt-sync-grid">
+            <span className="qt-sync-k">Quando</span><span className="qt-sync-v">{new Date(lastRun.at).toLocaleString('pt-BR')}</span>
+            <span className="qt-sync-k">Criados</span><span className="qt-sync-v">{lastRun.created ?? 0}</span>
+            <span className="qt-sync-k">Atualizados</span><span className="qt-sync-v">{lastRun.updated ?? 0}</span>
+            <span className="qt-sync-k">Ignorados</span><span className="qt-sync-v">{lastRun.skipped ?? 0}</span>
+          </div>
+        </div>
+      )}
       <ModuleTabs module="system" />
 
       <div className="qt-card">
