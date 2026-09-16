@@ -340,6 +340,64 @@ export function PortfolioPage() {
     await removeAnnouncedDividend(f.ds, ev.id);
   }, []);
 
+  // #4 — busca o HISTÓRICO no Yahoo e projeta o próximo provento por cadência
+  // (mediana dos intervalos), rotulado "estimado". Não cria recebidos sozinho.
+  const handleFetchDividends = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    const { fetchDividendEvents, saveAnnouncedDividend, getAnnouncedDividends } = await import('@apps/lib/db');
+    const positions = await f.ds.positions.list();
+    if (!positions.length) {
+      toast('Cadastre posições primeiro.', { type: 'warn' });
+      return;
+    }
+    const existing = await getAnnouncedDividends(f.ds);
+    const seen = new Set(existing.map((e) => `${e.symbol}|${e.exDate}`));
+    const today = new Date().toISOString().slice(0, 10);
+    let created = 0;
+    let checked = 0;
+    for (const p of positions) {
+      try {
+        const events = await fetchDividendEvents(p.symbol);
+        checked += 1;
+        if (events.length < 2) continue;
+        const sorted = events.slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const gaps = [];
+        for (let i = 1; i < sorted.length; i += 1) {
+          const g = (Date.parse(sorted[i].date) - Date.parse(sorted[i - 1].date)) / 86400000;
+          if (g > 0) gaps.push(g);
+        }
+        if (!gaps.length) continue;
+        gaps.sort((a, b) => a - b);
+        const gap = gaps[Math.floor(gaps.length / 2)];
+        const last = sorted[sorted.length - 1];
+        const nextDate = new Date(Date.parse(last.date) + gap * 86400000).toISOString().slice(0, 10);
+        if (nextDate < today) continue;
+        const key = `${p.symbol}|${nextDate}`;
+        if (seen.has(key)) continue;
+        await saveAnnouncedDividend(f.ds, {
+          id: `div-est-${p.id}-${nextDate}`,
+          symbol: p.symbol,
+          positionId: p.id,
+          exDate: nextDate,
+          amountPerShare: last.amount,
+          note: 'estimado (Yahoo)',
+        });
+        seen.add(key);
+        created += 1;
+      } catch {
+        /* sem cobertura no Yahoo para este ativo — segue */
+      }
+    }
+    toast(
+      created > 0
+        ? `${created} provento(s) estimado(s) adicionado(s) (${checked} ativo(s) consultado(s)).`
+        : `Nada novo para projetar (${checked} ativo(s) consultado(s)).`,
+      { type: created > 0 ? 'ok' : 'warn' },
+    );
+    reload();
+  }, [toast, reload]);
+
   // A1 — registrar provento ligado à posição (entra no yield, sem mexer no custo).
   const handleDividend = useCallback(async (row, amount) => {
     const f = financeRef.current;
@@ -447,6 +505,7 @@ export function PortfolioPage() {
           onReceiveDividend={handleReceiveDividend}
           onSaveDividendEvent={handleSaveDividendEvent}
           onRemoveDividendEvent={handleRemoveDividendEvent}
+          onFetchDividends={handleFetchDividends}
           onDividend={handleDividend}
           only={['income', 'positions']}
         />

@@ -132,6 +132,39 @@ async function fetchYahoo(
   return { price, currency };
 }
 
+/** Converte um ticker do app para o formato do Yahoo (BR vira `.SA`, US tira `.US`). */
+export function yahooSymbol(ticker: string): string {
+  const raw = String(ticker || '').trim().toUpperCase();
+  if (raw.endsWith('.US')) return raw.slice(0, -3);
+  if (raw.endsWith('.SA')) return raw;
+  // B3: PETR4, VALE3, ITUB4, BOVA11, HGLG11...
+  if (/^[A-Z]{4}\d{1,2}$/.test(raw)) return `${raw}.SA`;
+  return raw;
+}
+
+export interface YahooDividendEvent { date: string; amount: number; }
+
+/**
+ * #4 — Histórico de proventos via Yahoo (proxy CORS). Retorna eventos passados
+ * (data-com + valor por ação). NÃO traz o próximo data-com (Yahoo exige crumb).
+ */
+export async function fetchDividendEvents(
+  ticker: string,
+  fetchImpl: FetchImpl = defaultFetch(),
+  timeoutMs = 8000,
+  proxyUrl?: string,
+): Promise<YahooDividendEvent[]> {
+  const base = proxyUrl || envYahooProxy();
+  const sep = base.includes('?') ? '&' : '?';
+  const json = (await fetchJson(
+    `${base}${sep}type=dividends&symbol=${encodeURIComponent(yahooSymbol(ticker))}`,
+    fetchImpl,
+    timeoutMs,
+  )) as { events?: YahooDividendEvent[]; error?: string };
+  if (json?.error) throw new Error(`Yahoo proxy: ${json.error}`);
+  return Array.isArray(json?.events) ? json.events : [];
+}
+
 type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
 
 function defaultFetch(): FetchImpl {

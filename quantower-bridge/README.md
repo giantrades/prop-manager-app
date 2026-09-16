@@ -60,6 +60,7 @@ Abra no browser: `http://localhost:8787/status`
 | `/trades` | GET | Histórico de trades (optional: `?from=&to=`) |
 | `/positions` | GET | Posições abertas com P&L em tempo real |
 | `/orders` | GET | Ordens pendentes |
+| `/stream` | GET (SSE) | Stream contínuo de posições+ordens (`text/event-stream`, ~1.5s). Auth por `?token=` (EventSource não manda header) |
 
 ### Escrita (toda resposta `{ success, platformPositionId?, platformOrderId?, error? }`)
 
@@ -70,6 +71,20 @@ Abra no browser: `http://localhost:8787/status`
 | `/positions/close` | POST | `{ id, clientOrderId }` | `{ success }` |
 | `/orders/place` | POST | `{ accountId, symbol, side, qty, type:'limit'\|'stop', price, sl?, tp?, clientOrderId }` | `{ success, platformOrderId }` |
 | `/orders/cancel` | POST | `{ platformOrderId, clientOrderId }` | `{ success }` |
+
+## Streaming (SSE) — posições em tempo real
+
+`GET /stream?token=<token>` mantém a conexão aberta e envia, a cada ~1.5s, um evento
+`data: { positions, orders, timestamp }`. O app (`usePlatform`) abre via `EventSource`
+quando o bridge está online e cai para polling (60s) se não puder.
+
+- **Desktop**: praticamente tempo real com o app aberto.
+- **Celular**: funciona **com o app em primeiro plano**. iOS/Android suspendem conexões
+  quando o app vai para segundo plano — por isso o botão **"Manter tela ligada"**
+  (Screen Wake Lock) em Positions & Orders, e o **Web Push** para alertas com o app fechado.
+- **Rede**: no celular, exponha o bridge via **Tailscale** (URL `https://…ts.net`) — SSE
+  exige HTTPS quando a página é HTTPS (evita mixed content). O token vai na query porque
+  `EventSource` não permite header customizado; use só em rede privada/Tailscale.
 
 ## Idempotência
 

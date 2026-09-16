@@ -403,6 +403,11 @@ export class QuantowerAdapter extends BaseAdapter {
     }
   }
 
+  /** URL base que está funcionando (fallback) ou a configurada — p/ SSE e diagnósticos. */
+  getBridgeBase() {
+    return this._lastWorkingUrl || this.bridgeUrl;
+  }
+
   setBridgeUrl(url) {
     // aplica o mesmo filtro de segurança ao setar manualmente
     if (isPageSecure && url && !url.startsWith('https://')) {

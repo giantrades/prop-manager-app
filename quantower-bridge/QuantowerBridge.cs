@@ -98,7 +98,7 @@ namespace QuantowerBridge
         private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromMinutes(10);
         private static readonly object _idempotencyLock = new();
 
-        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health" };
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -339,8 +339,11 @@ namespace QuantowerBridge
         {
             if (string.IsNullOrEmpty(_bridgeToken)) return false;
             string header = request.Headers["X-Bridge-Token"];
-            if (string.IsNullOrEmpty(header)) return false;
-            return string.Equals(header.Trim(), _bridgeToken, StringComparison.Ordinal);
+            if (!string.IsNullOrEmpty(header) && string.Equals(header.Trim(), _bridgeToken, StringComparison.Ordinal))
+                return true;
+            // SSE (EventSource) não permite header customizado → aceita o token na query.
+            string q = request.QueryString["token"];
+            return !string.IsNullOrEmpty(q) && string.Equals(q.Trim(), _bridgeToken, StringComparison.Ordinal);
         }
 
         /// <summary>Se clientOrderId já foi processado, retorna a resposta original (idempotência).</summary>
@@ -455,6 +458,14 @@ namespace QuantowerBridge
 
                 string path = request.Url?.AbsolutePath?.ToLower().TrimEnd('/') ?? "";
 
+                // [STREAM] SSE: conexão longa que empurra posições/ordens (~1.5s).
+                // Tratada ANTES do switch (não escreve um JSON único e dá return).
+                if (path == "/stream")
+                {
+                    HandleStream(response);
+                    return;
+                }
+
                 // Normalize path - preserve v2 sub-rotas (open/modify/close/place/cancel).
                 if (path == "/positions/open" || path == "/positions/modify" || path == "/positions/close")
                 {
@@ -560,6 +571,50 @@ namespace QuantowerBridge
             // 04-BRIDGE_V2_SPEC.md: removemos Access-Control-Allow-Private-Network.
             // Esse header opt-in permitia que uma página pública acessasse o bridge
             // na rede privada — reintroduzir só depois do token, se necessário.
+        }
+
+        // ── [STREAM] SSE: empurra posições/ordens enquanto o cliente estiver conectado ──
+        private void HandleStream(HttpListenerResponse response)
+        {
+            response.StatusCode = 200;
+            response.ContentType = "text/event-stream; charset=utf-8";
+            response.Headers.Add("Cache-Control", "no-cache");
+            response.Headers.Add("X-Accel-Buffering", "no");
+            response.SendChunked = true;
+            var writer = new StreamWriter(response.OutputStream, new UTF8Encoding(false));
+            try
+            {
+                writer.Write("retry: 3000\n\n");
+                writer.Flush();
+                while (!_cts.IsCancellationRequested)
+                {
+                    writer.Write("data: " + BuildStreamPayload() + "\n\n");
+                    writer.Flush();
+                    Thread.Sleep(1500);
+                }
+            }
+            catch { /* cliente desconectou (normal) */ }
+            finally { try { writer.Dispose(); } catch { } }
+        }
+
+        private static string BuildStreamPayload()
+        {
+            try
+            {
+                using var pDoc = JsonDocument.Parse(BuildPositionsJson());
+                using var oDoc = JsonDocument.Parse(BuildOrdersJson());
+                var obj = new
+                {
+                    positions = pDoc.RootElement.GetProperty("positions"),
+                    orders = oDoc.RootElement.GetProperty("orders"),
+                    timestamp = DateTime.UtcNow.ToString("O")
+                };
+                return JsonSerializer.Serialize(obj, JsonOptions);
+            }
+            catch
+            {
+                return "{\"positions\":[],\"orders\":[],\"timestamp\":\"" + DateTime.UtcNow.ToString("O") + "\"}";
+            }
         }
 
         private static string HandleClosePosition(HttpListenerRequest request)

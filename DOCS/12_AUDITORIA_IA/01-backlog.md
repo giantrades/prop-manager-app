@@ -84,6 +84,10 @@
       `dividendCalendar` (puros) + na aba Proventos do Portfolio: **Histórico de proventos** (total,
       média/mês, barras por mês, ranking por ativo) e **Calendário de renda** (recebido × anunciado,
       navegação por mês). Testes em `expenses.test.ts`.
+      **+ Yahoo**: proxy estendido (`?type=dividends`) e botão **"Buscar (Yahoo)"** que puxa o
+      **histórico** e **projeta o próximo** por cadência (mediana), rotulado `est.` (estimado).
+      Ressalva honesta: o Yahoo gratuito **não** dá a próxima data-com (`quoteSummary` = 401 sem crumb);
+      recebidos continuam **manuais/import** (confiável). Widget **Proventos** no dashboard de Investimentos.
 - [x] **AccountPicker melhorado (Trading)** (#5): busca + seleção múltipla escalável (20+ contas), ordenação
       por tipo/nome, "todas (filtradas)", contador e fechar por Esc/clique-fora; seleção persistida em
       `ui:filters` (meta) e na URL (`?accounts=`). **Gastos segue sem filtro de conta (geral).**

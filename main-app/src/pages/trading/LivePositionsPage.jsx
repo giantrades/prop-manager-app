@@ -9,12 +9,14 @@ import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
-import { Activity, RefreshCw, X, Clock } from 'lucide-react';
+import { useWakeLock } from '../../useWakeLock';
+import { Activity, RefreshCw, X, Clock, Zap, ZapOff } from 'lucide-react';
 
 
 export default function LivePositionsPage() {
-  const { livePositions, statuses, lastSync, refreshStatuses } = usePlatform();
+  const { livePositions, statuses, lastSync, refreshStatuses, streaming } = usePlatform();
   const { toast } = useToast();
+  const wake = useWakeLock();
   const [edits, setEdits] = useState({});
   const [busy, setBusy] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
@@ -55,6 +57,16 @@ export default function LivePositionsPage() {
     const t = setInterval(loadOrders, 60000);
     return () => clearInterval(t);
   }, [loadOrders, online]);
+
+  // SSE: ordens chegam empurradas pelo bridge (posições já vêm via usePlatform).
+  useEffect(() => {
+    const onStream = (e) => {
+      const d = e.detail;
+      if (Array.isArray(d?.orders)) setOrders(d.orders);
+    };
+    window.addEventListener('qt:stream', onStream);
+    return () => window.removeEventListener('qt:stream', onStream);
+  }, []);
 
   // #6 — reexecuta a fila quando a ponte volta (online / evento de rede).
   const flush = useCallback(async () => {
@@ -171,9 +183,16 @@ export default function LivePositionsPage() {
     <div className="cmd-page">
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Positions &amp; Orders</h1>
-        <button className="cmd-refresh" onClick={refresh}>
-          <RefreshCw size={14} /> Atualizar
-        </button>
+        <div className="cmd-actions">
+          {wake.supported && (
+            <button className="cmd-refresh" onClick={wake.toggle} aria-pressed={wake.active} title="Mantém a tela ligada para o streaming continuar (útil no celular)">
+              {wake.active ? <Zap size={14} /> : <ZapOff size={14} />} {wake.active ? 'Tela ligada' : 'Manter tela ligada'}
+            </button>
+          )}
+          <button className="cmd-refresh" onClick={refresh}>
+            <RefreshCw size={14} /> Atualizar
+          </button>
+        </div>
       </div>
       <ModuleTabs module="trading" />
 
@@ -181,6 +200,7 @@ export default function LivePositionsPage() {
         <span className={`lp-dot ${online ? 'on' : 'off'}`} />
         <span>{online ? 'Plataforma conectada' : 'Plataforma offline — abra o bridge'}</span>
         <span className="lp-muted">{livePositions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
+        <span className={`lp-live ${streaming ? 'on' : ''}`} title={streaming ? 'Streaming ao vivo (SSE)' : 'Atualizando por polling'}>{streaming ? 'LIVE' : 'polling'}</span>
       </div>
 
       {pending > 0 && (
@@ -375,6 +395,8 @@ const LP_CSS = `
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
 .lp-dot.off { background: var(--red, #e74c3c); }
+.lp-live { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: var(--muted, #a1a7b3); }
+.lp-live.on { background: rgba(46,204,113,0.16); border-color: rgba(46,204,113,0.5); color: #2ecc71; }
 .lp-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 18px 0 8px; }
 .lp-empty { display: flex; align-items: center; gap: 8px; padding: 28px; justify-content: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 .lp-list { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }

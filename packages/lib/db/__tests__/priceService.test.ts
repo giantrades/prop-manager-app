@@ -14,6 +14,8 @@ import {
   checkPriceAlerts,
   evalAlertsForPrice,
   PRICE_TIMEOUT_MS,
+  yahooSymbol,
+  fetchDividendEvents,
 } from '../priceService';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
@@ -171,6 +173,31 @@ describe('priceService A6 — Yahoo via proxy (ações US)', () => {
   it('proxy com erro => tenta cache, senão relança', async () => {
     const bad = mockFetch(() => ({ error: 'Yahoo HTTP 429' }));
     await expect(getQuote('MSFT.US', { fetchImpl: bad, proxyUrl: 'https://x/fn' })).rejects.toThrow();
+  });
+
+  it('#4 yahooSymbol: BR vira .SA, US perde .US', () => {
+    expect(yahooSymbol('PETR4')).toBe('PETR4.SA');
+    expect(yahooSymbol('BOVA11')).toBe('BOVA11.SA');
+    expect(yahooSymbol('AAPL.US')).toBe('AAPL');
+    expect(yahooSymbol('petr4.sa')).toBe('PETR4.SA');
+    expect(yahooSymbol('AAPL')).toBe('AAPL');
+  });
+
+  it('#4 fetchDividendEvents parseia eventos do proxy', async () => {
+    let seenUrl = '';
+    const fetchImpl = mockFetch((url: string) => {
+      seenUrl = url;
+      return { symbol: 'PETR4.SA', events: [{ date: '2026-08-24', amount: 1.348143 }] };
+    });
+    const ev = await fetchDividendEvents('PETR4', fetchImpl, 5000, 'https://x/fn');
+    expect(seenUrl).toContain('type=dividends');
+    expect(seenUrl).toContain('symbol=PETR4.SA');
+    expect(ev).toEqual([{ date: '2026-08-24', amount: 1.348143 }]);
+  });
+
+  it('#4 fetchDividendEvents sem eventos => []', async () => {
+    const fetchImpl = mockFetch(() => ({ symbol: 'X', events: [] }));
+    expect(await fetchDividendEvents('X', fetchImpl, 5000, 'https://x/fn')).toEqual([]);
   });
 });
 
