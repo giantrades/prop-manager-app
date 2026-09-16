@@ -5,7 +5,7 @@
 import React, { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, ComposedChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
@@ -20,6 +20,7 @@ import {
   listCategories, getBudgets, getSavingsGoal, expensesByCategoryPeriod, incomeByKindPeriod,
   budgetStatusPeriod, monthlySeries, computeFreeCashPeriod, pendingBills, pendingSummary,
   merchantRankingPeriod, compareMonths, categoryOf, periodMonths, inPeriod, currentYm,
+  categoryTrend, shiftYm, ymToList,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -38,8 +39,10 @@ function CatIcon({ name, color, size = 16 }) {
 
 export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
+  const [quick, setQuick] = useState({ accountId: '', amount: '', category: 'moradia', note: '' });
+  const [quickBusy, setQuickBusy] = useState(false);
   const { period, setPeriod } = usePeriod();
-  const { loading, data } = useEngineData(async (f) => {
+  const { loading, data, finance, reload } = useEngineData(async (f) => {
     const [txs, categories, budgets, savingsGoal, wallets] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(),
     ]);
@@ -86,6 +89,31 @@ export default function GastosDashboardPage() {
       cardMap.set(t.card, cur);
     }
     const cards = [...cardMap.values()].sort((a, b) => b.total - a.total);
+    // Savings rate do período (+ do período anterior).
+    const savingsRate = fc.income > 0 ? (fc.freeCash / fc.income) * 100 : null;
+    let prevSavingsRate = null;
+    if (period.mode === 'month' && period.ym) {
+      const prev = computeFreeCashPeriod(txs, { mode: 'month', ym: shiftYm(period.ym, -1) });
+      prevSavingsRate = prev.income > 0 ? (prev.freeCash / prev.income) * 100 : null;
+    } else if (period.mode === 'range' && period.from && period.to) {
+      const len = ymToList(period.from, period.to).length || 1;
+      const prevTo = shiftYm(period.from, -1);
+      const prev = computeFreeCashPeriod(txs, { mode: 'range', from: shiftYm(prevTo, -(len - 1)), to: prevTo });
+      prevSavingsRate = prev.income > 0 ? (prev.freeCash / prev.income) * 100 : null;
+    }
+    // Série empilhada por categoria (top 6 + Outros).
+    const trendRaw = categoryTrend(txs, months, cats);
+    const topCats = groups.slice(0, 6).map((g) => g.categoryId);
+    const trend = trendRaw.map((p) => {
+      const row = { ym: p.ym.slice(5, 7) + '/' + p.ym.slice(2, 4) };
+      let rest = 0;
+      for (const [cid, val] of Object.entries(p.byCategory)) {
+        if (topCats.includes(cid)) row[cid] = val;
+        else rest += val;
+      }
+      if (rest > 0) row.__outros = rest;
+      return row;
+    });
     // Impostos: categorias com group='imposto' (IR, DARF, ITBI, IPTU, IOF, Cripto, Exterior...).
     const taxIds = new Set(cats.filter((c) => c.group === 'imposto').map((c) => c.id));
     const taxGroups = groups.filter((g) => taxIds.has(g.categoryId));
@@ -96,14 +124,36 @@ export default function GastosDashboardPage() {
     const periodTxs = txs.filter((t) => inPeriod(t.dueDate || t.date, period, txs));
     return {
       ym: period.mode === 'month' ? period.ym : null, catById, groups, gains, budget, spentBudget, fc, series,
+      bStatus,
       pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
-      taxGroups, taxTotal, taxAllTime,
+      taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
     };
   }, [data, period]);
 
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
+
+  const quickAccounts = (data?.wallets ?? []).filter((w) => ['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind));
+  const quickAdd = async () => {
+    const amount = Number(String(quick.amount).replace(',', '.'));
+    if (!finance || !quick.accountId || !(amount > 0)) return;
+    setQuickBusy(true);
+    try {
+      const acc = quickAccounts.find((w) => w.account.id === quick.accountId)?.account;
+      await finance.money.recordExpense({
+        accountId: quick.accountId,
+        amount,
+        currency: acc?.currency || 'BRL',
+        category: quick.category,
+        note: quick.note || undefined,
+      });
+      setQuick((s) => ({ ...s, amount: '', note: '' }));
+      reload();
+    } finally {
+      setQuickBusy(false);
+    }
+  };
 
   const donut = (view?.groups ?? []).map((g) => ({
     id: g.categoryId, name: catName(g.categoryId), value: g.total,
@@ -123,6 +173,21 @@ export default function GastosDashboardPage() {
       <div className="gd-monthbar">
         <PeriodPicker period={period} onChange={setPeriod} />
       </div>
+
+      {quickAccounts.length > 0 && (
+        <div className="gd-quick" role="group" aria-label="Lançamento rápido">
+          <select className="gd-quick-input" value={quick.accountId} onChange={(e) => setQuick((s) => ({ ...s, accountId: e.target.value }))} aria-label="Conta">
+            <option value="">Conta…</option>
+            {quickAccounts.map((w) => (<option key={w.account.id} value={w.account.id}>{w.account.name}</option>))}
+          </select>
+          <input className="gd-quick-input" type="number" step="0.01" placeholder="Valor" value={quick.amount} onChange={(e) => setQuick((s) => ({ ...s, amount: e.target.value }))} aria-label="Valor" />
+          <select className="gd-quick-input" value={quick.category} onChange={(e) => setQuick((s) => ({ ...s, category: e.target.value }))} aria-label="Categoria">
+            {(data.categories ?? []).map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+          </select>
+          <input className="gd-quick-input" placeholder="Nota (opcional)" value={quick.note} onChange={(e) => setQuick((s) => ({ ...s, note: e.target.value }))} aria-label="Nota" />
+          <button className="gd-quick-btn" disabled={quickBusy || !quick.accountId || !quick.amount} onClick={quickAdd}>{quickBusy ? '…' : 'Adicionar'}</button>
+        </div>
+      )}
 
       {loading || !view ? (
         <div className="cmd-msg" role="status" aria-live="polite">Carregando gastos…</div>
@@ -216,6 +281,64 @@ export default function GastosDashboardPage() {
                   <Line type="monotone" dataKey="Saldo" stroke="#7c5cff" strokeWidth={2} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="dash-section" key="savings">
+              <div className="dash-title"><span><PiggyBank size={14} /> Taxa de poupança</span></div>
+              {view.savingsRate == null ? (
+                <div className="gd-empty">Sem entradas no período.</div>
+              ) : (
+                <>
+                  <div className="gd-row">
+                    <span className="gd-row-ico"><PiggyBank size={14} /></span>
+                    <span className="gd-row-name">Poupado no período</span>
+                    <span className={`gd-row-val ${view.savingsRate >= 0 ? 'gd-pos' : 'gd-neg'}`}>{view.savingsRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="gd-row">
+                    <span className="gd-row-ico"><Activity size={14} /></span>
+                    <span className="gd-row-name">vs período anterior</span>
+                    <span className={`gd-row-val ${view.prevSavingsRate != null && view.savingsRate >= view.prevSavingsRate ? 'gd-pos' : 'gd-neg'}`}>{view.prevSavingsRate != null ? `${view.prevSavingsRate.toFixed(1)}%` : '—'}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="dash-section" key="budget">
+              <div className="dash-title"><span><PiggyBank size={14} /> Orçado × realizado</span></div>
+              {(() => {
+                const rows = (view.bStatus ?? []).filter((b) => b.budget > 0 || b.spent > 0).sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                if (!rows.length) return <div className="gd-empty">Sem orçamento definido no período.</div>;
+                return rows.map((b) => (
+                  <div key={b.categoryId} className="gd-kind-row">
+                    <span className="gd-row-ico"><CatIcon name={catMeta(b.categoryId).icon} color={catMeta(b.categoryId).color} /></span>
+                    <span className="gd-row-name">{catName(b.categoryId)}</span>
+                    <span className="gd-row-sub">{fmtMoney(b.spent, 'R$')} / {fmtMoney(b.budget, 'R$')}</span>
+                    <span className="gd-kind-bar-wrap"><span className={`gd-kind-bar ${b.over ? 'gd-bar-over' : 'gd-bar-ok'}`} style={{ width: `${Math.min(100, Math.round((b.pct || 0) * 100))}%` }} /></span>
+                    <span className={`gd-row-val ${b.over ? 'gd-neg' : ''}`}>{b.budget > 0 ? `${Math.round((b.pct || 0) * 100)}%` : '—'}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="dash-section" key="trend">
+              <div className="dash-title"><span><Activity size={14} /> Composição dos gastos (por mês)</span></div>
+              {view.trend.length < 2 ? (
+                <div className="gd-empty">Período curto para tendência.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={view.trend} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={52} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'R$')} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {view.topCats.map((cid) => (
+                      <Bar key={cid} dataKey={cid} stackId="a" name={catName(cid)} fill={COLORS[catMeta(cid).color] || COLORS.gray} />
+                    ))}
+                    <Bar dataKey="__outros" stackId="a" name="Outros" fill={COLORS.gray} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             {view.bills.length > 0 && (
@@ -319,6 +442,11 @@ export default function GastosDashboardPage() {
 }
 
 const GD_CSS = `
+.gd-quick { display: grid; grid-template-columns: 1.2fr 0.8fr 1.1fr 1.4fr auto; gap: 8px; align-items: center; }
+.gd-quick-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 10px; color: var(--text, #e7eaf0); font-size: 12px; min-height: 40px; font-family: inherit; }
+.gd-quick-btn { padding: 8px 16px; border-radius: 10px; border: none; background: linear-gradient(135deg, #7c5cff, #6d4df2); color: #fff; font-weight: 700; font-size: 12px; cursor: pointer; min-height: 40px; }
+.gd-quick-btn:disabled { opacity: 0.5; cursor: default; }
+@media (max-width: 900px) { .gd-quick { grid-template-columns: 1fr 1fr; } }
 .gd-monthbar { display: flex; flex-direction: column; gap: 8px; }
 .gd-monthnav { display: flex; align-items: center; gap: 8px; }
 .gd-mnav { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }

@@ -1675,3 +1675,7 @@ select optgroup {
   background-color: #0f1218;
   color: #e7eaf0;
 }
+
+/* Gastos — orçado x realizado: barra verde (dentro) / vermelha (estourou) */
+.gd-bar-ok { background: linear-gradient(90deg, #2ecc71, #7bed9f) !important; }
+.gd-bar-over { background: linear-gradient(90deg, #e74c3c, #ff7b6b) !important; }

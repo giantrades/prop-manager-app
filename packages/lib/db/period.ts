@@ -155,8 +155,7 @@ export function merchantRankingPeriod(txs: Transaction[], period: Period, limit 
 }
 
 /** Orçamento do período = soma dos orçamentos mensais; gasto por mês. */
-export function budgetStatusPeriod(txs: Transaction[], budgets: Record<string, Record<string, number>>, period: Period, cats?: CategoryDef[]): BudgetStatus[] {
-  const months = periodMonths(period, txs);
+export function budgetStatusPeriod(txs: Transaction[], budgets: Record<string, Record<string, number>>, period: Period, cats?: CategoryDef[]): BudgetStatus[] {  const months = periodMonths(period, txs);
   const merged = sumBy(
     months,
     (ym) => budgetStatus(txs, budgets[ym] || {}, ym, cats),
@@ -167,4 +166,23 @@ export function budgetStatusPeriod(txs: Transaction[], budgets: Record<string, R
     return { ...b, pct, over: b.budget > 0 && b.spent > b.budget };
   });
   return merged;
+}
+
+/** Série mensal de gastos por categoria (para gráfico empilhado). */
+export interface CategoryTrendPoint {
+  ym: string;
+  byCategory: Record<string, number>;
+  total: number;
+}
+
+export function categoryTrend(txs: Transaction[], months: string[], cats?: CategoryDef[]): CategoryTrendPoint[] {
+  return months.map((ym) => {
+    const byCategory: Record<string, number> = {};
+    let total = 0;
+    for (const g of expensesByCategory(txs, ym, cats)) {
+      byCategory[g.categoryId] = g.total;
+      total += g.total;
+    }
+    return { ym, byCategory, total: Number(total.toFixed(2)) };
+  });
 }
