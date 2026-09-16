@@ -44,7 +44,7 @@
 - [x] AUD-P2-06 — Purchase Simulator ("posso comprar isso?") no Planejamento.
 - [ ] AUD-P2-07 — Cashflow Scenario Cone + Runway.
 - [ ] AUD-P2-08 — Goal Projection (conservador/base/agressivo).
-- [ ] AUD-P2-09 — Portfolio Treemap.
+- [x] AUD-P2-09 — Treemap do portfólio (por ativo) no Investimentos.
 - [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema**.
 - [ ] AUD-P2-11 — Metric Registry leve (doc nome+fórmula+versão) / Data Quality.
 - [ ] AUD-P2-12 — Reserva de imposto (alocação dedicada).

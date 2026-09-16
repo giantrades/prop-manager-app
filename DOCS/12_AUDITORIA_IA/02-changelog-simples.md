@@ -106,3 +106,5 @@
   custos ? PnL trading ? payouts ? variação). Bom para “como foi o mês”.
 - **P2-06 — “Posso comprar isso?” (Planejamento)**: você digita o valor de uma compra e o app
   mostra o seu **caixa livre agora**, **como fica depois** e um veredito (cabe / repense).
+- **P2-09 — Treemap do portfólio (Investimentos)**: um mapa de blocos onde o **tamanho** de cada
+  bloco é o valor do ativo — ótimo para ver concentração num relance.
