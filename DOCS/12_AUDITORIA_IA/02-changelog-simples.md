@@ -88,3 +88,5 @@
 - **P2-02 — Saúde da plataforma (Positions & Orders)**: um painel compacto mostrando **plataforma,
   nº de conexões, posições abertas, ordens pendentes e a última sincronização** — pra você ver
   num relance se a ponte está saudável.
+- **P2-01 — Sync Center (Quantower)**: mostra o **último run de sincronização**: quando foi,
+  quantos trades foram **criados**, **atualizados** e **ignorados**.
