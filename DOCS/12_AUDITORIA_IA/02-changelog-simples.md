@@ -104,3 +104,5 @@
 - **P2-05 — Relatório do período (Relatórios)**: a página agora tem **seletor de período** e um
   **resumo do período** (entrou/gastou/saldo) + **fluxo do patrimônio** (entradas ? gastos ?
   custos ? PnL trading ? payouts ? variação). Bom para “como foi o mês”.
+- **P2-06 — “Posso comprar isso?” (Planejamento)**: você digita o valor de uma compra e o app
+  mostra o seu **caixa livre agora**, **como fica depois** e um veredito (cabe / repense).

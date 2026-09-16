@@ -41,7 +41,7 @@
 - [x] AUD-P2-03 — Exposure long×short + Position Heatmap (por símbolo) na página de posições.
 - [ ] AUD-P2-04 — Strategy Versioning (versões do playbook × performance).
 - [x] AUD-P2-05 — Relatório do período (KPIs + waterfall) com seletor de período.
-- [ ] AUD-P2-06 — Purchase Simulator ("posso comprar isso?").
+- [x] AUD-P2-06 — Purchase Simulator ("posso comprar isso?") no Planejamento.
 - [ ] AUD-P2-07 — Cashflow Scenario Cone + Runway.
 - [ ] AUD-P2-08 — Goal Projection (conservador/base/agressivo).
 - [ ] AUD-P2-09 — Portfolio Treemap.
