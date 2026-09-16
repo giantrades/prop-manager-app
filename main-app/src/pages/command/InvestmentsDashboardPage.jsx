@@ -5,7 +5,7 @@ import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ResponsiveContainer, BarChart, Bar, LineChart as RLineChart, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, LineChart as RLineChart, Line, Legend, Treemap, Cell, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
@@ -191,6 +191,18 @@ export default function InvestmentsDashboardPage() {
                         <Line type="monotone" dataKey="portfolio" name="Portfólio" stroke="#7c5cff" dot={false} strokeWidth={2} />
                         <Line type="monotone" dataKey="cdi" name="CDI" stroke="#3498db" dot={false} strokeWidth={2} />
                       </RLineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              ) },
+              { id: 'treemap', node: (
+                <div className="dash-section">
+                  <div className="dash-title"><span><TrendingUp size={14} /> Treemap do portfólio</span></div>
+                  {symbolData.length === 0 ? <div className="muted">Sem posições.</div> : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <Treemap data={symbolData.map((d) => ({ name: d.label, value: d.value }))} dataKey="value" nameKey="name" stroke="#131825" fill="#7c5cff" isAnimationActive={false}>
+                        {symbolData.map((d, i) => <Cell key={d.label} fill={['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'][i % 8]} />)}
+                      </Treemap>
                     </ResponsiveContainer>
                   )}
                 </div>
