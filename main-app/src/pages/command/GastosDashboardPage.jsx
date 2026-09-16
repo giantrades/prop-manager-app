@@ -24,6 +24,7 @@ import {
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import GlobalFilters from '../../GlobalFilters';
 
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
@@ -41,7 +42,7 @@ export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
   const [quick, setQuick] = useState({ accountId: '', amount: '', category: 'moradia', note: '' });
   const [quickBusy, setQuickBusy] = useState(false);
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, filters } = usePeriod();
   const { loading, data, finance, reload } = useEngineData(async (f) => {
     const [txs, categories, budgets, savingsGoal, wallets] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(),
@@ -52,7 +53,8 @@ export default function GastosDashboardPage() {
   // Histórico não é mais necessário (atalhos removidos; o período global cobre tudo).
   const view = useMemo(() => {
     if (!data) return null;
-    const { txs, categories, budgets, savingsGoal } = data;
+    const { txs: allTxs, categories, budgets, savingsGoal } = data;
+    const txs = filters.accountId ? allTxs.filter((t) => t.accountId === filters.accountId) : allTxs;
     const cats = categories ?? [];
     const catById = new Map(cats.map((c) => [c.id, c]));
     const months = periodMonths(period, txs);
@@ -129,7 +131,7 @@ export default function GastosDashboardPage() {
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
       taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
     };
-  }, [data, period]);
+  }, [data, period, filters]);
 
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
@@ -172,6 +174,7 @@ export default function GastosDashboardPage() {
       {/* Período: mês · intervalo X→Y · tudo. Toda a dashboard respeita o selecionado. */}
       <div className="gd-monthbar">
         <PeriodPicker period={period} onChange={setPeriod} />
+        <GlobalFilters />
       </div>
 
       {quickAccounts.length > 0 && (

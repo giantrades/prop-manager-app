@@ -20,6 +20,7 @@ import {
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
+import GlobalFilters from '../../GlobalFilters';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -42,7 +43,7 @@ function StatCard({ label, value, sub, color, glow }) {
 }
 
 export default function TradingDashboardPage() {
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, filters } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
     const [trades, payouts, propExts, riskSnap] = await Promise.all([
       f.ds.trades.list(),
@@ -70,14 +71,17 @@ export default function TradingDashboardPage() {
     return { trades, payouts, propExts, riskSnap, adherenceDays };
   });
 
-  // Trades/payouts escopados ao período selecionado.
+  // Trades/payouts escopados ao período + filtros globais (conta/estratégia).
   const trades = useMemo(
-    () => (data?.trades ?? []).filter((t) => inPeriod(t.exitDatetime || t.entryDatetime, period, [])),
-    [data, period],
+    () => (data?.trades ?? []).filter((t) => inPeriod(t.exitDatetime || t.entryDatetime, period, [])
+      && (!filters.accountId || t.accountId === filters.accountId)
+      && (!filters.strategyId || t.strategyId === filters.strategyId)),
+    [data, period, filters],
   );
   const payouts = useMemo(
-    () => (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, [])),
-    [data, period],
+    () => (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, [])
+      && (!filters.accountId || (p.accountIds ?? []).includes(filters.accountId))),
+    [data, period, filters],
   );
 
   const stats = useMemo(() => {
@@ -152,6 +156,7 @@ export default function TradingDashboardPage() {
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
       <ModuleTabs module="trading" />
       <PeriodPicker period={period} onChange={setPeriod} />
+      <GlobalFilters />
 
       <div className="td-cards">
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />
