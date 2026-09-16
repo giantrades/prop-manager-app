@@ -101,3 +101,6 @@
   Trading e no Gastos.
 - **P1-18 — Empty states acionáveis (slice)**: quando não há dados, a tela agora diz o que fazer
   com um atalho (ex.: “Sem despesas no período ? lançar”; “Sem estratégia ? abrir Journal”).
+- **P2-05 — Relatório do período (Relatórios)**: a página agora tem **seletor de período** e um
+  **resumo do período** (entrou/gastou/saldo) + **fluxo do patrimônio** (entradas ? gastos ?
+  custos ? PnL trading ? payouts ? variação). Bom para “como foi o mês”.
