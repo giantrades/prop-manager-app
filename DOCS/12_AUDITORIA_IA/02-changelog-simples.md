@@ -71,6 +71,8 @@
   com o **período anterior**.
 - **P1-14 — Quick Add (Gastos)**: um **lançamento rápido** direto no resumo — escolhe conta, valor,
   categoria e nota e clica “Adicionar”, sem abrir a página de lançamentos.
+- **P1-16 — Performance relativa (Investimentos)**: gráfico comparando o **seu portfólio** com o
+  **CDI**, os dois começando em **100**. Se a sua linha fica acima, você bateu o CDI no período.
 
 ---
 

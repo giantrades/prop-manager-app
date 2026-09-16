@@ -31,7 +31,7 @@
 - [x] AUD-P1-13 — **Savings Rate** (poupado % + comparação com o período anterior) no Gastos.
 - [x] AUD-P1-14 — **Quick Add** (lançamento rápido: conta/valor/categoria/nota) no Gastos.
 - [ ] AUD-P1-15 — **Net Worth Waterfall** (início → trading → payouts → gastos → invest → fim).
-- [ ] AUD-P1-16 — **Relative Performance** vs CDI/IBOV (normalizado 100).
+- [x] AUD-P1-16 — **Relative Performance** vs CDI (base 100) no Investimentos.
 - [ ] AUD-P1-17 — **Filtros globais** conta/estratégia (período já existe).
 - [ ] AUD-P1-18 — **Micro UX**: skeleton estrutural, empty states com ação, erros "o quê/por quê/como".
 
