@@ -83,3 +83,8 @@
 - `01-backlog.md` â†’ checklist por item (`[x]` feito / `[ ]` pendente).
 - Este documento â†’ explicaÃ§Ã£o simples do que cada item faz.
 - Toda entrega roda com verificaÃ§Ã£o automÃ¡tica (build + testes) antes de ir para produÃ§Ã£o.
+
+## P2 — em andamento
+- **P2-02 — Saúde da plataforma (Positions & Orders)**: um painel compacto mostrando **plataforma,
+  nº de conexões, posições abertas, ordens pendentes e a última sincronização** — pra você ver
+  num relance se a ponte está saudável.
