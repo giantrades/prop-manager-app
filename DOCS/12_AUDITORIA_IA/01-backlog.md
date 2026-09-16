@@ -23,7 +23,7 @@
 - [x] AUD-P1-05 — **Heatmap por dia da semana** (PnL/winrate/R) no Trading. (sessão/setup = a seguir)
 - [x] AUD-P1-06 — **R — caixa (quartis + outliers)** no Trading.
 - [x] AUD-P1-07 — **Strategy Matrix / Edge por setup** (tabela com N/WR/Avg R/PF/Expectancy por estratégia) no Trading.
-- [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado). → **movido para P2** (precisa de leitura dia-a-dia do checklist)
+- [x] AUD-P1-08 — **Rule Adherence** (checklist do dia × resultado) no Trading (últimos 30 dias com trades).
 - [x] AUD-P1-09 — **Account Matrix** (tabela: status/equity/DD/payouts/trades/sync) no dashboard de Contas.
 - [x] AUD-P1-10 — **Payout Waterfall** (gross → fees → net) no dashboard de Contas.
 - [x] AUD-P1-11 — **Budget Variance** (orçado × realizado por categoria, barra verde/vermelha) no Gastos.

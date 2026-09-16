@@ -93,3 +93,6 @@
 - **P2-03 — Exposure + Position Heatmap (Positions & Orders)**: mostra o **total long vs short**
   (barras) e um **mapa de calor por símbolo** onde a cor indica o PnL (verde ganho, vermelho perda,
   intensidade = tamanho), com a quantidade long/short de cada símbolo.
+- **P1-08 — Rule Adherence (Trading)**: cruza o **checklist do dia** com o **resultado do dia**.
+  Mostra a aderência média, quantos dias você seguiu o plano (=80%) e o **PnL médio** nos dias em
+  que seguiu vs nos que não seguiu — pra ver se a disciplina está pagando.
