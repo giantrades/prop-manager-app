@@ -19,12 +19,24 @@ export default function PlanningDashboardPage() {
   const { period, setPeriod } = usePeriod();
   const [buyAmount, setBuyAmount] = useState('');
   const { loading, data } = useEngineData(async (f) => {
-    const [goals, safeAvailable, marcos] = await Promise.all([
+    const [goals, safeAvailable, marcos, txs] = await Promise.all([
       f.wealth.goals(),
       f.wealth.safeAvailable(),
       f.wealth.listJournalEvents(),
+      f.ds.transactions.list(),
     ]);
-    return { goals, safeAvailable, marcos };
+    // Runway: caixa livre / gasto médio mensal (últimos 3 meses com despesa).
+    const byMonth = new Map();
+    for (const t of txs) {
+      if (t.kind !== 'expense') continue;
+      const ym = (t.date || '').slice(0, 7);
+      if (!ym) continue;
+      byMonth.set(ym, (byMonth.get(ym) ?? 0) + Math.abs(t.amount || 0));
+    }
+    const months = [...byMonth.keys()].sort().slice(-3);
+    const avgMonthlyExpense = months.length ? months.reduce((s, m) => s + byMonth.get(m), 0) / months.length : 0;
+    const runway = avgMonthlyExpense > 0 ? Number((Number(safeAvailable) / avgMonthlyExpense).toFixed(1)) : null;
+    return { goals, safeAvailable, marcos, runway, avgMonthlyExpense: Number(avgMonthlyExpense.toFixed(2)) };
   });
 
   const goals = data?.goals ?? [];
@@ -53,6 +65,11 @@ export default function PlanningDashboardPage() {
               <h3>Safe Available</h3>
               <div className="stat">{fmtMoney(data.safeAvailable)}</div>
               <div className="muted">posso comprar isso?</div>
+            </div>
+            <div className="card accent1">
+              <h3>Runway</h3>
+              <div className="stat">{data.runway != null ? `${data.runway} meses` : '—'}</div>
+              <div className="muted">caixa livre ÷ gasto médio ({fmtMoney(data.avgMonthlyExpense)}/mês)</div>
             </div>
             <div className="card accent3">
               <h3>Marcos</h3>
