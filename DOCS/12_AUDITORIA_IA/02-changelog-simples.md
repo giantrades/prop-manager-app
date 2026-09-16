@@ -113,3 +113,7 @@
 - **P2-13 — Auditoria de rotas/legacy**: comparei rotas × navegação × links. Resultado: **/risk** e
   **/networth** eram “órfãs” (existiam só por URL, sem link) e foram **removidas**; **/playbook**
   fica (é usado pelo Journal). Navegação e rotas agora estão alinhadas.
+- **P2-11 — Metric Registry leve**: um documento (`03-metric-registry.md`) com **nome, definição e
+  fonte** de cada métrica (evita divergência de nome/fórmula). Regra: a UI nunca recalcula.
+- **P2-12 — Reserva de imposto (Gastos ? Impostos)**: nova linha **“A pagar (reservar)”** com o total
+  de impostos lançados como **ainda não pagos**.

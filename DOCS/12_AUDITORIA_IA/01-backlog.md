@@ -57,4 +57,4 @@
 
 ## Desvios vs a auditoria (decisões já tomadas)
 - **Tax**: tracker de impostos por categoria (não fluxo fiscal day/swing). Cockpit removido.
-- **ROI**: será renomead
+- **ROI**: será renomeado (AUD-P0-01).
