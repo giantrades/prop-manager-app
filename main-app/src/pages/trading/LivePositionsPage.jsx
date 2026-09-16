@@ -28,6 +28,7 @@ export default function LivePositionsPage() {
   const adapter = adapterRef.current;
 
   const online = statuses.some((s) => s.online);
+  const quantower = statuses.find((s) => s.platformId === 'quantower');
   const totals = useMemo(() => {
     const pnl = livePositions.reduce((s, p) => s + (p.netPnl ?? 0), 0);
     const long = livePositions.filter((p) => p.side === 'Long').length;
@@ -131,6 +132,16 @@ export default function LivePositionsPage() {
         <span>{online ? 'Plataforma conectada' : 'Plataforma offline — abra o bridge'}</span>
         <span className="lp-muted">{livePositions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
       </div>
+
+      {online && (
+        <div className="lp-health" aria-label="Saúde da plataforma">
+          <div className="lp-h"><span className="lp-h-k">Plataforma</span><span className="lp-h-v">{quantower?.name || quantower?.platformId || 'Quantower'}</span></div>
+          <div className="lp-h"><span className="lp-h-k">Conexões</span><span className="lp-h-v">{quantower?.connections?.length ?? 0}</span></div>
+          <div className="lp-h"><span className="lp-h-k">Posições</span><span className="lp-h-v">{livePositions.length}</span></div>
+          <div className="lp-h"><span className="lp-h-k">Ordens</span><span className="lp-h-v">{orders.length}</span></div>
+          <div className="lp-h"><span className="lp-h-k">Última sync</span><span className="lp-h-v">{lastSync ? new Date(lastSync).toLocaleString('pt-BR') : '—'}</span></div>
+        </div>
+      )}
 
       {online && livePositions.length > 0 && (
         <div className="dash-cards">
@@ -242,6 +253,10 @@ export default function LivePositionsPage() {
 
 const LP_CSS = `
 .lp-status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+.lp-health { display: flex; flex-wrap: wrap; gap: 10px; }
+.lp-h { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); min-width: 110px; }
+.lp-h-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.lp-h-v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .lp-muted { color: var(--muted, #a1a7b3); margin-left: auto; }
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
