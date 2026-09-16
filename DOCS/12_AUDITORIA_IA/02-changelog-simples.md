@@ -110,3 +110,6 @@
   bloco é o valor do ativo — ótimo para ver concentração num relance.
 - **P2-07 — Runway (Planejamento)**: quantos **meses** seu caixa livre cobre, usando o **gasto médio
   mensal** dos últimos 3 meses. (Scenario Cone fica como continuação.)
+- **P2-13 — Auditoria de rotas/legacy**: comparei rotas × navegação × links. Resultado: **/risk** e
+  **/networth** eram “órfãs” (existiam só por URL, sem link) e foram **removidas**; **/playbook**
+  fica (é usado pelo Journal). Navegação e rotas agora estão alinhadas.

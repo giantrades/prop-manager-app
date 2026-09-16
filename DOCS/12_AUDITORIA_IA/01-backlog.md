@@ -48,7 +48,7 @@
 - [ ] AUD-P2-10 — Credit Card como entidade (limite/fechamento/vencimento) — **precisa schema**.
 - [ ] AUD-P2-11 — Metric Registry leve (doc nome+fórmula+versão) / Data Quality.
 - [ ] AUD-P2-12 — Reserva de imposto (alocação dedicada).
-- [ ] AUD-P2-13 — Auditoria de rotas/legacy (Defined → … → Dead).
+- [x] AUD-P2-13 — Auditoria de rotas/legacy: removidas rotas órfãs /risk e /networth; nav e rotas alinhadas.
 
 ## Descartado conscientemente (não fazer agora)
 - Metric Registry formal, audit log before/after, agregação pré-computada, Sankey,
