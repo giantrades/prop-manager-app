@@ -126,10 +126,27 @@ function isShellAsset(url) {
   );
 }
 
-function networkOnlyWithTimeout(request, timeoutMs = SW_TIMEOUT_MS) {
+async function networkOnlyWithTimeout(request, timeoutMs = SW_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(request, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  try {
+    return await fetch(request, { signal: controller.signal });
+  } catch (e) {
+    // NUNCA rejeitar: respondWith exige uma Response. Bridge offline/timeout => 503 honesto.
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: {
+          code: e && e.name === "AbortError" ? "timeout" : "bridge_offline",
+          message: "Sem conexão — bridge offline",
+          retryable: true,
+        },
+      }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // stale-while-revalidate
@@ -142,7 +159,8 @@ function staleWhileRevalidate(request) {
         return res;
       })
       .catch(() => cached);
-    return cached || network;
+    // Garante sempre uma Response (evita "Failed to convert value to 'Response'").
+    return (cached || network).then((res) => res || new Response("", { status: 504, statusText: "Offline" }));
   });
 }
 

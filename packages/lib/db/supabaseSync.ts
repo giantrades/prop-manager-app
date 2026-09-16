@@ -29,6 +29,9 @@ const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   meta: 'app_meta',
 };
 
+/** Tabelas com PK composta `(user_id, id)` — upsert precisa do conflito correspondente. */
+const COMPOSITE_PK_TABLES = new Set(['app_meta', 'cards']);
+
 /**
  * Sync de `meta`: por PADRÃO sincroniza tudo (categorias, orçamento, regras, marcos,
  * checklist, CDI/FX, firms, vínculo conexão...). Só fica local o que é do DEVICE:
@@ -45,8 +48,7 @@ const LOCAL_META_EXACT = new Set<string>([
 ]);
 const LOCAL_META_PREFIXES = ['bridge:quantower:', 'qt:', 'pricecache'];
 
-/** A chave de meta sincroniza? (denylist: tudo menos estado do device) */
-export function isSyncedMetaKey(key: unknown): boolean {
+/** A chave de meta sincroniza? (denylist: tudo menos estado do device) */export function isSyncedMetaKey(key: unknown): boolean {
   if (typeof key !== 'string' || !key) return false;
   if (LOCAL_META_EXACT.has(key)) return false;
   return !LOCAL_META_PREFIXES.some((p) => key.startsWith(p));
@@ -178,7 +180,8 @@ export function createSupabaseSync(
     for (const [table, rows] of byTable) {
       if (rows.length === 0) continue;
       // upsert por id; ignora conflito de construtor único (ex.: positions UNIQUE user+account+symbol).
-      const { error } = await supabase.from(table).upsert(rows, { onConflict: 'id' });
+      const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
+      const { error } = await supabase.from(table).upsert(rows, { onConflict: conflict });
       if (error) {
         // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
         if (table === 'app_meta') {
@@ -278,9 +281,10 @@ export function createSupabaseSync(
     if (choice === 'theirs') {
       await ds.put(store, found.remote as unknown as SyncedRecord, { source: 'sync:pull' });
     } else {
+      const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
       const { error } = await supabase
         .from(table)
-        .upsert([{ ...camelToSnake(found.local), user_id: userId }], { onConflict: 'id' });
+        .upsert([{ ...camelToSnake(found.local), user_id: userId }], { onConflict: conflict });
       if (error) throw error;
     }
     await ds.meta.setKey(

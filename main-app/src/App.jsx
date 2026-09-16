@@ -31,8 +31,10 @@ const GoalsManagePage = lazy(pageLoaders['/goals']);
 const LivePositionsPage = lazy(pageLoaders['/live-positions']);
 const DataPage = lazy(pageLoaders['/import']);
 const QuantowerPage = lazy(pageLoaders['/quantower']);
-  const ForecastPage = lazy(pageLoaders['/forecast']);
-const FirmPnlPage = lazy(pageLoaders['/firms']);const ExpensesPage = lazy(pageLoaders['/expenses']);
+const PortfolioPage = lazy(pageLoaders['/portfolio']);
+const ForecastPage = lazy(pageLoaders['/forecast']);
+const FirmPnlPage = lazy(pageLoaders['/firms']);
+const ExpensesPage = lazy(pageLoaders['/expenses']);
 const FinancialJournalPage = lazy(pageLoaders['/journal-events']);
 const ReportsPage = lazy(pageLoaders['/reports']);
 
