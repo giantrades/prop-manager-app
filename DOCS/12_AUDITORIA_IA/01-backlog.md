@@ -22,14 +22,14 @@
 - [x] AUD-P1-04 — **MAE/MFE** (médias + razão MFE/MAE; usa fills/mae/mfe do trade) no Trading.
 - [x] AUD-P1-05 — **Heatmap por dia da semana** (PnL/winrate/R) no Trading. (sessão/setup = a seguir)
 - [x] AUD-P1-06 — **R — caixa (quartis + outliers)** no Trading.
-- [ ] AUD-P1-07 — **Strategy Matrix / Edge por setup** (Journal).
+- [x] AUD-P1-07 — **Strategy Matrix / Edge por setup** (tabela com N/WR/Avg R/PF/Expectancy por estratégia) no Trading.
 - [ ] AUD-P1-08 — **Rule Adherence** (checklist × resultado).
 - [x] AUD-P1-09 — **Account Matrix** (tabela: status/equity/DD/payouts/trades/sync) no dashboard de Contas.
 - [x] AUD-P1-10 — **Payout Waterfall** (gross → fees → net) no dashboard de Contas.
-- [ ] AUD-P1-11 — **Budget Variance** (orçado × realizado por categoria).
-- [ ] AUD-P1-12 — **Stacked Category Trend** (composição dos gastos por mês).
-- [ ] AUD-P1-13 — **Savings Rate** (poupado % + variação).
-- [ ] AUD-P1-14 — **Quick Add** (lançamento rápido + "mais opções").
+- [x] AUD-P1-11 — **Budget Variance** (orçado × realizado por categoria, barra verde/vermelha) no Gastos.
+- [x] AUD-P1-12 — **Stacked Category Trend** (composição dos gastos por mês, empilhado) no Gastos.
+- [x] AUD-P1-13 — **Savings Rate** (poupado % + comparação com o período anterior) no Gastos.
+- [x] AUD-P1-14 — **Quick Add** (lançamento rápido: conta/valor/categoria/nota) no Gastos.
 - [ ] AUD-P1-15 — **Net Worth Waterfall** (início → trading → payouts → gastos → invest → fim).
 - [ ] AUD-P1-16 — **Relative Performance** vs CDI/IBOV (normalizado 100).
 - [ ] AUD-P1-17 — **Filtros globais** conta/estratégia (período já existe).
