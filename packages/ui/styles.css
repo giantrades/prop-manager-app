@@ -5069,3 +5069,10 @@ select optgroup {
 .qt-sync-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 14px; font-size: 13px; }
 .qt-sync-k { color: var(--muted, #a1a7b3); }
 .qt-sync-v { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* Planejamento — Purchase Simulator */
+.pl-sim { display: flex; gap: 8px; margin-bottom: 8px; }
+.pl-sim-input { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: var(--text, #e7eaf0); font-size: 13px; padding: 8px 10px; min-height: 40px; }
+.pl-sim-verdict { margin-top: 8px; font-size: 12px; font-weight: 700; }
+.pl-sim-verdict.is-ok { color: var(--green, #2ecc71); }
+.pl-sim-verdict.is-bad { color: var(--red, #e74c3c); }

@@ -2,14 +2,14 @@
 // Composição pura: metas (progresso derivado) + marcos + safável.
 import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ShoppingCart } from 'lucide-react';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import { inPeriod } from '@apps/lib/db';
@@ -17,6 +17,7 @@ import { inPeriod } from '@apps/lib/db';
 
 export default function PlanningDashboardPage() {
   const { period, setPeriod } = usePeriod();
+  const [buyAmount, setBuyAmount] = useState('');
   const { loading, data } = useEngineData(async (f) => {
     const [goals, safeAvailable, marcos] = await Promise.all([
       f.wealth.goals(),
@@ -61,6 +62,28 @@ export default function PlanningDashboardPage() {
           </div>
 
           <WidgetGrid storageKey="planejamento">
+          <div className="dash-section" key="simulator">
+            <div className="dash-title"><span><ShoppingCart size={14} /> Posso comprar isso?</span></div>
+            <div className="pl-sim">
+              <input className="pl-sim-input" type="number" step="0.01" placeholder="Valor da compra (R$)" value={buyAmount} onChange={(e) => setBuyAmount(e.target.value)} aria-label="Valor da compra" />
+            </div>
+            {(() => {
+              const value = Number(String(buyAmount).replace(',', '.')) || 0;
+              const safe = Number(data.safeAvailable) || 0;
+              const after = safe - value;
+              return (
+                <>
+                  <div className="dash-row"><span className="dash-row-name">Safe available</span><span className="dash-row-val">{fmtMoney(safe)}</span></div>
+                  <div className="dash-row"><span className="dash-row-name">Depois da compra</span><span className={`dash-row-val ${after >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(after)}</span></div>
+                  {value > 0 && (
+                    <div className={`pl-sim-verdict ${after >= 0 ? 'is-ok' : 'is-bad'}`}>
+                      {after >= 0 ? 'Cabe no seu caixa livre.' : 'Fica abaixo do seu caixa livre — repense o valor.'}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
           <div className="dash-section" key="marcos">
             <div className="dash-title">
               <span>Marcos recentes</span>
