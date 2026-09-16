@@ -15,7 +15,7 @@ import WidgetGrid from '@apps/ui/WidgetGrid';
 import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
-  dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, maeMfeSummary,
+  dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, maeMfeSummary, allStrategyMetrics,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -121,6 +121,7 @@ export default function TradingDashboardPage() {
     rbox: rBoxStats(trades),
     weekday: heatmapByWeekday(trades),
     maemfe: maeMfeSummary(trades),
+    strategies: allStrategyMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
   }), [trades]);
 
   const riskRows = (data?.riskSnap?.rows ?? []).filter((r) => r.account?.kind === 'prop');
@@ -274,6 +275,32 @@ export default function TradingDashboardPage() {
               )}
             </div>
           ) },
+          { id: 'strategies', defaultSpan: 2, node: (
+            <div className="td-widget">
+              <div className="td-chart-title">Strategy Matrix (edge por estratégia)</div>
+              {analytics.strategies.length === 0 ? <div className="muted">Sem trades com estratégia. Atribua a estratégia no Journal.</div> : (
+                <>
+                  <div className="td-strat">
+                    <div className="td-strat-head"><span>Estratégia</span><span>N</span><span>WR</span><span>Avg R</span><span>PF</span><span>Expectancy</span></div>
+                    {analytics.strategies.map((s) => {
+                      const pf = s.profitFactor === 'infinity' ? '∞' : s.profitFactor === 'n/a' ? '—' : Number(s.profitFactor).toFixed(2);
+                      return (
+                        <div key={s.strategyId} className="td-strat-row">
+                          <span className="td-strat-name">{s.strategyId}</span>
+                          <span className="td-strat-n">{s.sampleSufficient ? s.n : `${s.n}*`}</span>
+                          <span>{(s.winRate * 100).toFixed(1)}%</span>
+                          <span>{s.avgR.toFixed(2)}R</span>
+                          <span>{pf}</span>
+                          <span className={s.expectancy >= 0 ? 'dash-pos' : 'dash-neg'}>{s.expectancy.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="td-dd-hint">* amostra insuficiente (menos de 20 trades). Ordenado por expectancy.</div>
+                </>
+              )}
+            </div>
+          ) },
           { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} loading={false} /></div>) },
           { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={trades} bucketSize={0.5} loading={false} /></div>) },
           { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={trades} initialFunding={stats.capital} currency="USD" /></div>) },
@@ -321,6 +348,14 @@ const TD_CSS = `
 .td-heat-n { color: var(--muted, #a1a7b3); }
 .td-heat-wr, .td-heat-avgr { color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; }
 .td-heat-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.td-strat { display: flex; flex-direction: column; font-size: 12px; }
+.td-strat-head, .td-strat-row { display: grid; grid-template-columns: 1.6fr 0.6fr 0.8fr 0.8fr 0.7fr 1fr; gap: 8px; align-items: center; padding: 7px 4px; }
+.td-strat-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.td-strat-row { border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
+.td-strat-row:last-child { border-bottom: none; }
+.td-strat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-strat-n { color: var(--muted, #a1a7b3); }
 
 @media (max-width: 1000px) { .td-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .td-cards { grid-template-columns: 1fr; } .td-widgets { grid-template-columns: 1fr; } }
