@@ -33,7 +33,7 @@ const CLASS_META = {
 export default function InvestmentsDashboardPage() {
   const { period, setPeriod } = usePeriod();
   const { loading, data } = useEngineData(async (f) => {
-    const [nw, snapshots, portfolio, positions, allocation, accounts, payouts, txs, histRec, cdi] = await Promise.all([
+    const [nw, snapshots, portfolio, positions, allocation, accounts, payouts, txs, trades, histRec, cdi] = await Promise.all([
       f.wealth.netWorth(),
       f.wealth.netWorthSeries(),
       f.wealth.portfolio(),
@@ -42,15 +42,28 @@ export default function InvestmentsDashboardPage() {
       f.ds.accounts.list(),
       f.ds.payouts.list(),
       f.ds.transactions.list(),
+      f.ds.trades.list(),
       f.ds.meta.getKey('portfolio:history'),
       getCdiSeries(f.ds),
     ]);
     const top = (portfolio.rows ?? []).slice().sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0, 5);
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
-    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), relative: relativeSeries(history, cdi), dca: computeDcaFromTransactions(txs) };
+    return { nw, snapshots, portfolio, positions, top, payouts, allocation, accounts, history, benchmark: applyBenchmark(history, cdi), relative: relativeSeries(history, cdi), dca: computeDcaFromTransactions(txs), txs, trades };
   });
 
   const pf = data?.portfolio;
+
+  const waterfall = useMemo(() => {
+    const txs = (data?.txs ?? []).filter((t) => inPeriod(t.date, period, []));
+    const trades = (data?.trades ?? []).filter((t) => t.exitPrice != null && inPeriod(t.exitDatetime || t.entryDatetime, period, []));
+    const sum = (kinds) => txs.filter((t) => kinds.includes(t.kind)).reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+    const entradas = sum(['income', 'payout_in', 'rebate']);
+    const gastos = sum(['expense']);
+    const custos = sum(['challenge_cost', 'reset_fee', 'monthly_fee']);
+    const tradingPnl = trades.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const r2 = (n) => Number(n.toFixed(2));
+    return { entradas: r2(entradas), gastos: r2(gastos), custos: r2(custos), tradingPnl: r2(tradingPnl), variacao: r2(entradas - gastos - custos + tradingPnl) };
+  }, [data, period]);
 
   const classData = useMemo(() => {
     const rows = data?.portfolio?.rows ?? [];
@@ -180,6 +193,29 @@ export default function InvestmentsDashboardPage() {
                       </RLineChart>
                     </ResponsiveContainer>
                   )}
+                </div>
+              ) },
+              { id: 'waterfall', node: (
+                <div className="dash-section">
+                  <div className="dash-title"><span><TrendingUp size={14} /> Fluxo do patrimônio (período)</span></div>
+                  {(() => {
+                    const w = waterfall;
+                    const max = Math.max(1, ...[w.entradas, w.gastos, w.custos, Math.abs(w.tradingPnl), Math.abs(w.variacao)].map(Math.abs));
+                    const rows = [
+                      { label: 'Entradas', v: w.entradas, pos: true },
+                      { label: '(−) Gastos', v: -w.gastos, pos: false },
+                      { label: '(−) Custos (firm)', v: -w.custos, pos: false },
+                      { label: 'PnL trading', v: w.tradingPnl, pos: w.tradingPnl >= 0 },
+                      { label: '= Variação', v: w.variacao, pos: w.variacao >= 0 },
+                    ];
+                    return rows.map((r) => (
+                      <div key={r.label} className="ac-wf-row">
+                        <span className="ac-wf-label">{r.label}</span>
+                        <span className="ac-wf-bar-wrap"><span className={`ac-wf-bar ${r.v < 0 ? 'is-neg' : 'is-pos'}`} style={{ width: `${Math.round((Math.abs(r.v) / max) * 100)}%` }} /></span>
+                        <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v)}</span>
+                      </div>
+                    ));
+                  })()}
                 </div>
               ) },
               { id: 'valuecost', node: (<div className="dash-section"><Portfolio only={['history', 'dca']} history={data.history ?? []} benchmark={data.benchmark ?? []} dca={data.dca ?? []} loading={false} /></div>) },

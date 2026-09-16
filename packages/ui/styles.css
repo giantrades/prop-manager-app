@@ -5052,3 +5052,13 @@ select optgroup {
 .hc-delta-up { color: var(--green, #2ecc71); }
 .hc-delta-down { color: var(--red, #e74c3c); }
 .hc-delta-flat { color: var(--muted, #a1a7b3); }
+
+/* Waterfall (Contas/Investimentos) — barras gross/neg */
+.ac-wf-row { display: grid; grid-template-columns: 1fr 110px auto; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+.ac-wf-row:last-child { border-bottom: none; }
+.ac-wf-label { font-weight: 600; }
+.ac-wf-bar-wrap { height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
+.ac-wf-bar { display: block; height: 100%; border-radius: 999px; }
+.ac-wf-bar.is-pos { background: linear-gradient(90deg, #2ecc71, #7bed9f); }
+.ac-wf-bar.is-neg { background: linear-gradient(90deg, #e74c3c, #ff7b6b); }
+.ac-wf-val { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
