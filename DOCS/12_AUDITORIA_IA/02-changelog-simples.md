@@ -117,3 +117,5 @@
   fonte** de cada métrica (evita divergência de nome/fórmula). Regra: a UI nunca recalcula.
 - **P2-12 — Reserva de imposto (Gastos ? Impostos)**: nova linha **“A pagar (reservar)”** com o total
   de impostos lançados como **ainda não pagos**.
+- **P2-08 — Projeção de metas (Planejamento)**: para cada meta em aberto, estima em **quantos meses**
+  (e em que **mês/ano**) ela é atingida, no ritmo do **fluxo mensal líquido** do forecast.
