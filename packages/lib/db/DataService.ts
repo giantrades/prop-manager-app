@@ -23,6 +23,7 @@ import {
 } from './types';
 import {
   AccountsRepo,
+  CardsRepo,
   FirmCostsRepo,
   GoalsRepo,
   MetaRepo,
@@ -63,6 +64,7 @@ const ENTITY_TYPE_BY_STORE: Partial<Record<StoreName, DatastoreChangePayload['en
   payouts: 'payout',
   goals: 'goal',
   positions: 'position',
+  cards: 'card',
   meta: 'meta',
 };
 
@@ -85,6 +87,7 @@ export class DataService {
   readonly taxRecords: TaxRecordsRepo;
   readonly snapshotsNetworth: SnapshotsNetworthRepo;
   readonly firmCosts: FirmCostsRepo;
+  readonly cards: CardsRepo;
   readonly meta: MetaRepo;
 
   constructor(opts: DataServiceOptions) {
@@ -106,6 +109,7 @@ export class DataService {
     this.taxRecords = new TaxRecordsRepo(this);
     this.snapshotsNetworth = new SnapshotsNetworthRepo(this);
     this.firmCosts = new FirmCostsRepo(this);
+    this.cards = new CardsRepo(this);
     this.meta = new MetaRepo(this);
   }
 

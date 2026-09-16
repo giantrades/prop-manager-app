@@ -40,6 +40,7 @@ interface AppDbSchema extends DBSchema {
   tax_records: { key: string; value: Record<string, unknown> & { id: string } };
   snapshots_networth: { key: string; value: Record<string, unknown> & { id: string } };
   firm_costs: { key: string; value: Record<string, unknown> & { id: string } };
+  cards: { key: string; value: Record<string, unknown> & { id: string } };
   meta: { key: string; value: Record<string, unknown> & { id: string } };
 }
 
@@ -85,6 +86,7 @@ const STORE_DEFS: Record<StoreName, StoreDef> = {
   tax_records: { keyPath: 'id' },
   snapshots_networth: { keyPath: 'id' },
   firm_costs: { keyPath: 'id' },
+  cards: { keyPath: 'id' },
   meta: { keyPath: 'id' },
 };
 

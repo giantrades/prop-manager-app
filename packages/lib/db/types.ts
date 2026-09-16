@@ -3,7 +3,7 @@
 // Proibido snake_case aqui (só na borda Supabase, marcado // SUPABASE BOUNDARY).
 
 export const DB_NAME = 'app-db';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /** Nomes finais das stores do IndexedDB v3 (contrato 01-DATA_CONTRACT.md). */
 export type StoreName =
@@ -17,6 +17,7 @@ export type StoreName =
   | 'tax_records'
   | 'snapshots_networth'
   | 'firm_costs'
+  | 'cards'
   | 'meta';
 
 export const STORE_NAMES: StoreName[] = [
@@ -30,6 +31,7 @@ export const STORE_NAMES: StoreName[] = [
   'tax_records',
   'snapshots_networth',
   'firm_costs',
+  'cards',
   'meta',
 ];
 
@@ -220,6 +222,7 @@ export interface Trade extends SyncedRecord {
   // os campos obrigatórios já aprovados.
   stopPrice?: number; // risco inicial p/ R (null se não definido)
   multiplier?: number; // contract size (default 1)
+  strategyVersion?: string; // versão do playbook usada no trade (Strategy Versioning)
   // Execuções de fill (VWAP/MAE/MFE). Único campo — substitui `PartialExecutions`.
   executions?: TradeExecution[];
   // A2 — MAE/MFE reais (bridge futuro/manual). Quando presentes, `maeMfe()` os
@@ -319,6 +322,17 @@ export interface Meta extends SyncedRecord {
   value: unknown;
 }
 
+/** Cartão de crédito como entidade (limite/fechamento/vencimento). */
+export interface Card extends SyncedRecord {
+  name: string;
+  brand?: string;
+  accountId?: string;
+  currency: string;
+  creditLimit: number;
+  closingDay?: number;
+  dueDay?: number;
+}
+
 /** Payload exato de `datastore:change` (contrato 01-DATA_CONTRACT.md). */
 export interface DatastoreChangePayload {
   timestamp: number;
@@ -330,6 +344,7 @@ export interface DatastoreChangePayload {
     | 'payout'
     | 'goal'
     | 'position'
+    | 'card'
     | 'meta';
   entityIds?: string[];
 }

@@ -29,6 +29,7 @@ const STORE_BY_ENTITY = {
   payout: 'payouts',
   goal: 'goals',
   position: 'positions',
+  card: 'cards',
   meta: 'meta',
 };
 

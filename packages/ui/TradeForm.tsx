@@ -40,6 +40,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
     multiplier: trade?.multiplier ?? 1,
     stopPrice: trade?.stopPrice ?? '',
     strategyId: trade?.strategyId ?? '',
+    strategyVersion: trade?.strategyVersion ?? '',
     accountId: trade?.accountId ?? accounts[0]?.id ?? '',
     accounts: trade?.accounts ?? [],
     source: trade?.source ?? 'manual',
@@ -135,6 +136,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
         multiplier: Number(form.multiplier) || 1,
         stopPrice: form.stopPrice ? Number(form.stopPrice) : undefined,
         strategyId,
+        strategyVersion: form.strategyVersion?.trim() || undefined,
         accountId: form.accountId || undefined,
         executions: executions.length > 0 ? executions : undefined,
         resultNet: preview.pnl != null ? Number(preview.pnl.toFixed(2)) : 0,
@@ -235,6 +237,9 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                     {strategies.map((s) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
                     <option value="__new__">＋ Nova estratégia…</option>
                   </select>
+                </label>
+                <label className="tf-field"><span className="tf-label">Versão do playbook</span>
+                  <input className="tf-input" placeholder="ex.: v2" value={form.strategyVersion} onChange={(e) => set('strategyVersion', e.target.value)} />
                 </label>
                 {form.strategyId === '__new__' && (
                   <label className="tf-field"><span className="tf-label">Nome da nova estratégia</span>

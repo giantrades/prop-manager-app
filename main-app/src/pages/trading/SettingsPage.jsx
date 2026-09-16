@@ -9,6 +9,7 @@ import { supabase } from '@apps/supabase/client';
 import { importLegacyPayoutsFromStorage, dumpAppDb, restoreAppDb } from '@apps/lib/db';
 import SyncConflicts from '@apps/ui/SyncConflicts';
 import ConnectionsManager from './ConnectionsManager';
+import CardsManager from './CardsManager';
 import { useToast } from '@apps/ui/Toast';
 import { usePush } from '../../usePush';
 import { usePlatform } from '@apps/state';
@@ -238,8 +239,9 @@ export default function SettingsPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
       <ModuleTabs module="system" />
-      <ConnectionsCard />
-      <ActionRulesCard />
+          <ConnectionsCard />
+          <CardsManager />
+          <ActionRulesCard />
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">

@@ -25,6 +25,7 @@ const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   tax_records: 'tax_records',
   snapshots_networth: 'snapshots_networth',
   firm_costs: 'firm_costs',
+  cards: 'cards',
   meta: 'app_meta',
 };
 
@@ -58,6 +59,7 @@ const ENTITY_BY_STORE: Record<string, string> = {
   payout: 'payouts',
   goal: 'goals',
   position: 'positions',
+  card: 'cards',
   meta: 'meta',
 };
 
@@ -69,6 +71,7 @@ const STORE_ENTITY: Partial<Record<StoreName, string>> = {
   payouts: 'payout',
   goals: 'goal',
   positions: 'position',
+  cards: 'card',
 };
 
 // ---------------------------------------------------------------------------

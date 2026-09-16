@@ -5,6 +5,7 @@
 import type { DataService } from './DataService';
 import type {
   Account,
+  Card,
   FirmCost,
   Goal,
   Meta,
@@ -152,6 +153,12 @@ export class SnapshotsNetworthRepo extends BaseRepository<SnapshotNetworth> {
 export class FirmCostsRepo extends BaseRepository<FirmCost> {
   constructor(ds: DataService) {
     super(ds, 'firm_costs');
+  }
+}
+
+export class CardsRepo extends BaseRepository<Card> {
+  constructor(ds: DataService) {
+    super(ds, 'cards');
   }
 }
 
