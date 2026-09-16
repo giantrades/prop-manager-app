@@ -6,7 +6,6 @@ import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
 import { fmtMoney } from '@apps/ui/currency';
-import StatRow from '@apps/ui/StatRow';
 import { Activity, LineChart, CalendarDays } from 'lucide-react';
 import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
@@ -186,21 +185,14 @@ export default function ReportsPage() {
 
           <div className="dash-section">
             <div className="dash-title"><span><CalendarDays size={14} /> Mês a mês (12 meses)</span></div>
-            {(() => {
-              const max = Math.max(1, ...months.map((m) => Math.abs(m.balance)));
-              return months.slice().reverse().map((m) => (
-                <StatRow
-                  key={m.ym}
-                  icon={<CalendarDays size={14} />}
-                  color={m.balance >= 0 ? '#2ecc71' : '#e74c3c'}
-                  label={`${String(m.ym).slice(5, 7)}/${String(m.ym).slice(2, 4)}`}
-                  sub={`entrou ${fmtMoney(m.income, 'BRL')} · gastou ${fmtMoney(m.expenses, 'BRL')}`}
-                  barPct={(Math.abs(m.balance) / max) * 100}
-                  value={fmtMoney(m.balance, 'BRL')}
-                  valueClass={m.balance >= 0 ? 'dash-pos' : 'dash-neg'}
-                />
-              ));
-            })()}
+            {months.slice().reverse().map((m) => (
+              <div key={m.ym} className="rp-mrow">
+                <span className="rp-mym">{String(m.ym).slice(5, 7)}/{String(m.ym).slice(2, 4)}</span>
+                <span className="rp-min dash-pos">+{fmtMoney(m.income, 'BRL')}</span>
+                <span className="rp-mout dash-neg">−{fmtMoney(m.expenses, 'BRL')}</span>
+                <span className={`rp-mbal ${m.balance >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(m.balance, 'BRL')}</span>
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -210,6 +202,11 @@ export default function ReportsPage() {
 
 const RP_CSS = `
 .rp-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.rp-mrow { display: grid; grid-template-columns: 52px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rp-mrow:last-child { border-bottom: none; }
+.rp-mym { color: var(--muted, #a1a7b3); }
+.rp-min, .rp-mout, .rp-mbal { text-align: right; }
+.rp-mbal { font-weight: 700; }
 .dash-table-wrap { overflow-x: auto; }
 .dash-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .dash-table th, .dash-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.05); }

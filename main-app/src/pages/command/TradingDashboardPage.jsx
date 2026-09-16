@@ -1,7 +1,7 @@
 // Dashboard do módulo Trading (porta de entrada) — cards glass + evolução do PnL
 // acumulado com marcadores de payout/withdrawal + widgets (calendário, drawdown,
 // histograma). Sem seções redundantes. COMPOSIÇÃO pura dos motores.
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot, ReferenceLine,
 } from 'recharts';
@@ -20,7 +20,7 @@ import {
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
-import GlobalFilters from '../../GlobalFilters';
+import AccountPicker from '../../AccountPicker';
 
 function fmtPct(v) {
   if (v == null || Number.isNaN(v)) return '—';
@@ -43,13 +43,15 @@ function StatCard({ label, value, sub, color, glow }) {
 }
 
 export default function TradingDashboardPage() {
-  const { period, setPeriod, filters } = usePeriod();
+  const { period, setPeriod } = usePeriod();
+  const [acctSel, setAcctSel] = useState([]);
   const { loading, data } = useEngineData(async (f) => {
-    const [trades, payouts, propExts, riskSnap] = await Promise.all([
+    const [trades, payouts, propExts, riskSnap, accounts] = await Promise.all([
       f.ds.trades.list(),
       f.ds.payouts.list(),
       f.ds.propExtensions.list(),
       f.risk.snapshot(),
+      f.ds.accounts.list(),
     ]);
     // Rule Adherence — checklist do dia × PnL do dia (últimos 30 dias com trades).
     const template = await getChecklistTemplate(f.ds);
@@ -68,20 +70,19 @@ export default function TradingDashboardPage() {
       const done = total ? template.filter((item) => checks[item]).length : 0;
       adherenceDays.push({ date: d, adherence: total ? done / total : 0, pnl: Number((dayPnl.get(d) ?? 0).toFixed(2)) });
     }
-    return { trades, payouts, propExts, riskSnap, adherenceDays };
+    return { trades, payouts, propExts, riskSnap, adherenceDays, accounts };
   });
 
-  // Trades/payouts escopados ao período + filtros globais (conta/estratégia).
+  // Trades/payouts escopados ao período + contas selecionadas (comparação).
   const trades = useMemo(
     () => (data?.trades ?? []).filter((t) => inPeriod(t.exitDatetime || t.entryDatetime, period, [])
-      && (!filters.accountId || t.accountId === filters.accountId)
-      && (!filters.strategyId || t.strategyId === filters.strategyId)),
-    [data, period, filters],
+      && (acctSel.length === 0 || acctSel.includes(t.accountId))),
+    [data, period, acctSel],
   );
   const payouts = useMemo(
     () => (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, [])
-      && (!filters.accountId || (p.accountIds ?? []).includes(filters.accountId))),
-    [data, period, filters],
+      && (acctSel.length === 0 || (p.accountIds ?? []).some((id) => acctSel.includes(id)))),
+    [data, period, acctSel],
   );
 
   const stats = useMemo(() => {
@@ -153,12 +154,33 @@ export default function TradingDashboardPage() {
   const sessions = heatmapBySession(trades);
   const sessionMax = Math.max(1, ...sessions.map((s) => Math.abs(s.pnl)));
 
+  // Comparação entre contas selecionadas (quando >1).
+  const compare = useMemo(() => {
+    if (acctSel.length < 2) return [];
+    const nameById = new Map((data?.accounts ?? []).map((a) => [a.id, a.name]));
+    const map = new Map();
+    for (const t of trades) {
+      const e = map.get(t.accountId) ?? { id: t.accountId, name: nameById.get(t.accountId) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
+      e.trades += 1;
+      if ((Number(t.resultNet) || 0) > 0) e.wins += 1;
+      e.pnl += Number(t.resultNet) || 0;
+      if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
+      map.set(t.accountId, e);
+    }
+    return [...map.values()].map((e) => ({
+      ...e,
+      pnl: Number(e.pnl.toFixed(2)),
+      wr: e.trades > 0 ? (e.wins / e.trades) * 100 : null,
+      avgR: e.rN > 0 ? Number((e.rSum / e.rN).toFixed(2)) : null,
+    })).sort((a, b) => b.pnl - a.pnl);
+  }, [trades, acctSel, data]);
+
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
       <ModuleTabs module="trading" />
       <PeriodPicker period={period} onChange={setPeriod} />
-      <GlobalFilters />
+      <AccountPicker selected={acctSel} onChange={setAcctSel} />
 
       <div className="td-cards">
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />
@@ -168,6 +190,24 @@ export default function TradingDashboardPage() {
         <StatCard label="Total payouts" value={fmtMoney(stats.netPayouts, 'USD')} sub={`${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
         <StatCard label="Payout Yield" value={fmtPct(stats.payoutYield)} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
       </div>
+
+      {compare.length > 1 && (
+        <div className="td-widget">
+          <div className="td-chart-title">Comparação entre contas ({compare.length})</div>
+          <div className="td-cmp">
+            <div className="td-cmp-head"><span>Conta</span><span>N</span><span>WR</span><span>Avg R</span><span>PnL</span></div>
+            {compare.map((c) => (
+              <div key={c.id} className="td-cmp-row">
+                <span className="td-strat-name">{c.name}</span>
+                <span className="td-strat-n">{c.trades}</span>
+                <span>{c.wr != null ? `${c.wr.toFixed(0)}%` : '—'}</span>
+                <span>{c.avgR != null ? `${c.avgR}R` : '—'}</span>
+                <span className={c.pnl >= 0 ? 'dash-pos' : 'dash-neg'}>{fmtMoney(c.pnl, 'USD')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {series.length > 1 && (
         <div className="td-chart">
@@ -417,6 +457,11 @@ const TD_CSS = `
 .td-strat-row:last-child { border-bottom: none; }
 .td-strat-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-strat-n { color: var(--muted, #a1a7b3); }
+.td-cmp { display: flex; flex-direction: column; font-size: 12px; }
+.td-cmp-head, .td-cmp-row { display: grid; grid-template-columns: 1.6fr 0.6fr 0.8fr 0.8fr 1fr; gap: 8px; align-items: center; padding: 7px 4px; }
+.td-cmp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.td-cmp-row { border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums; }
+.td-cmp-row:last-child { border-bottom: none; }
 
 @media (max-width: 1000px) { .td-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .td-cards { grid-template-columns: 1fr; } .td-widgets { grid-template-columns: 1fr; } }

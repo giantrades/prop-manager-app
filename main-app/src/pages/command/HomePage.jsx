@@ -97,8 +97,10 @@ export default function HomePage() {
           </button>
         </div>
       </div>
-      <PeriodPicker period={period} onChange={setPeriod} />
-      {!hidden.includes('freshness') && <DataFreshness />}
+      <div className="hm-topbar">
+        <PeriodPicker period={period} onChange={setPeriod} />
+        {!hidden.includes('freshness') && <DataFreshness />}
+      </div>
       <nav className="hm-quick" aria-label="Ações rápidas">
         <NavLink to="/journal?new=1" className="hm-quick-btn"><BookOpen size={16} /> Novo trade</NavLink>
         <NavLink to="/expenses" className="hm-quick-btn"><Receipt size={16} /> Novo lançamento</NavLink>

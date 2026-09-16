@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePlatform, useFinance } from '@apps/state';
 import { getFxUSD } from '@apps/lib/db';
-import { Activity, RefreshCw, Wifi, WifiOff, LineChart, DollarSign, Clock } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, LineChart, DollarSign, Clock } from 'lucide-react';
 
 function age(iso) {
   if (!iso) return { text: '—', stale: true };
@@ -15,17 +15,6 @@ function age(iso) {
   if (s < 3600) return { text: `há ${Math.round(s / 60)} min`, stale: s > 900 };
   if (s < 86400) return { text: `há ${Math.round(s / 3600)} h`, stale: s > 21600 };
   return { text: `há ${Math.round(s / 86400)} d`, stale: true };
-}
-
-function StatusRow({ icon, label, value, sub, ok }) {
-  return (
-    <div className="df-row">
-      <span className={`df-ico ${ok == null ? '' : ok ? 'df-ok' : 'df-bad'}`}>{icon}</span>
-      <span className="df-name">{label}</span>
-      <span className="df-val">{value}</span>
-      {sub && <span className={`df-sub ${sub.stale ? 'df-bad' : ''}`}>{sub.text}</span>}
-    </div>
-  );
 }
 
 export default function DataFreshness() {
@@ -65,64 +54,39 @@ export default function DataFreshness() {
 
   const anyStale = (!quantOk && !!q) || syncAge.stale || fxAge.stale || priceAge.stale;
 
+  const Item = ({ icon, label, value, sub, ok }) => (
+    <span className="df-item">
+      <span className={`df-ico ${ok == null ? '' : ok ? 'df-ok' : 'df-bad'}`}>{icon}</span>
+      <span className="df-lbl">{label}</span>
+      <span className="df-val">{value}</span>
+      {sub && <span className={`df-sub ${sub.stale ? 'df-bad' : ''}`}>{sub.text}</span>}
+    </span>
+  );
+
   return (
-    <div className="dash-section df-root">
-      <div className="dash-title">
-        <span><Activity size={14} /> Frescor dos dados</span>
-        <button className="cmd-refresh" onClick={() => refreshStatuses()} aria-label="Atualizar status">
-          <RefreshCw size={13} /> Atualizar
-        </button>
-      </div>
-
-      <StatusRow
-        icon={q ? (quantOk ? <Wifi size={14} /> : <WifiOff size={14} />) : <WifiOff size={14} />}
-        label="Quantower / bridge"
-        value={q ? (quantOk ? 'conectado' : 'offline') : 'não configurado'}
-        ok={q ? quantOk : null}
-      />
-      <StatusRow
-        icon={<Clock size={14} />}
-        label="Última sync de trades"
-        value={lastSync ? 'ok' : '—'}
-        sub={syncAge}
-        ok={lastSync ? !syncAge.stale : null}
-      />
-      <StatusRow
-        icon={<LineChart size={14} />}
-        label="Preços"
-        value={prices ? `${prices.count} cotação(ões)` : '—'}
-        sub={priceAge}
-        ok={prices && prices.count > 0 ? !priceAge.stale : null}
-      />
-      <StatusRow
-        icon={<DollarSign size={14} />}
-        label="USD/BRL"
-        value={fx ? `R$ ${fx.rate.toFixed(4)}` : '—'}
-        sub={fxAge}
-        ok={fx ? !fxAge.stale : null}
-      />
-
-      {anyStale && (
-        <div className="df-warn" role="status">
-          Há dado possivelmente desatualizado. Atualize o bridge/preços em Sistema.
-        </div>
-      )}
+    <div className="df-inline" role="status" aria-label="Frescor dos dados">
+      <Item icon={q ? (quantOk ? <Wifi size={13} /> : <WifiOff size={13} />) : <WifiOff size={13} />} label="Bridge" value={q ? (quantOk ? 'conectado' : 'offline') : 'n/a'} ok={q ? quantOk : null} />
+      <Item icon={<Clock size={13} />} label="Sync" value={lastSync ? 'ok' : '—'} sub={syncAge} ok={lastSync ? !syncAge.stale : null} />
+      <Item icon={<LineChart size={13} />} label="Preços" value={prices ? `${prices.count}` : '—'} sub={priceAge} ok={prices && prices.count > 0 ? !priceAge.stale : null} />
+      <Item icon={<DollarSign size={13} />} label="USD/BRL" value={fx ? `R$ ${fx.rate.toFixed(3)}` : '—'} sub={fxAge} ok={fx ? !fxAge.stale : null} />
+      {anyStale && <span className="df-warn" title="Há dado possivelmente desatualizado">⚠</span>}
+      <button className="df-refresh" onClick={() => refreshStatuses()} aria-label="Atualizar status"><RefreshCw size={12} /></button>
     </div>
   );
 }
 
 const DF_CSS = `
-.df-root { gap: 4px; }
-.df-row { display: grid; grid-template-columns: 26px 1fr auto auto; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
-.df-row:last-of-type { border-bottom: none; }
-.df-ico { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--muted, #a1a7b3); }
+.df-inline { display: inline-flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); font-size: 12px; }
+.df-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.df-lbl { color: var(--muted, #a1a7b3); text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; }
+.df-ico { display: inline-flex; align-items: center; color: var(--muted, #a1a7b3); }
 .df-ico.df-ok { color: var(--green, #2ecc71); }
 .df-ico.df-bad { color: var(--red, #e74c3c); }
-.df-name { font-weight: 600; }
-.df-val { font-variant-numeric: tabular-nums; color: var(--muted, #a1a7b3); }
-.df-sub { font-size: 11px; color: var(--muted, #a1a7b3); min-width: 64px; text-align: right; }
+.df-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+.df-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
 .df-sub.df-bad { color: var(--yellow, #e1b12c); }
-.df-warn { margin-top: 6px; font-size: 12px; color: var(--yellow, #e1b12c); }
+.df-warn { color: var(--yellow, #e1b12c); font-weight: 800; }
+.df-refresh { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); cursor: pointer; }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('df-styles')) {
   const style = document.createElement('style');

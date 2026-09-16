@@ -5076,3 +5076,6 @@ select optgroup {
 .pl-sim-verdict { margin-top: 8px; font-size: 12px; font-weight: 700; }
 .pl-sim-verdict.is-ok { color: var(--green, #2ecc71); }
 .pl-sim-verdict.is-bad { color: var(--red, #e74c3c); }
+
+/* Home — barra superior (período + frescor dos dados na mesma linha) */
+.hm-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
