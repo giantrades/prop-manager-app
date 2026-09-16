@@ -17,8 +17,6 @@ export const pageLoaders = {
   '/live-positions': () => import('./pages/trading/LivePositionsPage.jsx'),
   '/import': () => import('./pages/trading/DataPage.jsx'),
   '/quantower': () => import('./pages/trading/QuantowerPage.jsx'),
-  '/risk': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.RiskPage })),
-  '/networth': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.NetWorthPage })),
   '/portfolio': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.PortfolioPage })),
   '/forecast': () => import('./pages/command/EngineViews.jsx').then((m) => ({ default: m.ForecastPage })),
   '/firms': () => import('./pages/trading/FirmsPage.jsx'),

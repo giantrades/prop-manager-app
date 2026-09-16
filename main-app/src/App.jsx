@@ -31,9 +31,6 @@ const GoalsManagePage = lazy(pageLoaders['/goals']);
 const LivePositionsPage = lazy(pageLoaders['/live-positions']);
 const DataPage = lazy(pageLoaders['/import']);
 const QuantowerPage = lazy(pageLoaders['/quantower']);
-const RiskPage = lazy(pageLoaders['/risk']);
-const NetWorthPage = lazy(pageLoaders['/networth']);
-const PortfolioPage = lazy(pageLoaders['/portfolio']);
   const ForecastPage = lazy(pageLoaders['/forecast']);
 const FirmPnlPage = lazy(pageLoaders['/firms']);const ExpensesPage = lazy(pageLoaders['/expenses']);
 const FinancialJournalPage = lazy(pageLoaders['/journal-events']);
@@ -234,8 +231,6 @@ export default function App() {
             <Route path="/trading" element={<TradingDashboardPage />} />
             <Route path="/investimentos" element={<InvestmentsDashboardPage />} />
             <Route path="/planejamento" element={<PlanningDashboardPage />} />
-            <Route path="/risk" element={<RiskPage />} />
-            <Route path="/networth" element={<NetWorthPage />} />
             <Route path="/portfolio" element={<PortfolioPage />} />
             <Route path="/live-positions" element={<LivePositionsPage />} />
             <Route path="/goals" element={<GoalsManagePage />} />
