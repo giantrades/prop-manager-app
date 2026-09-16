@@ -703,3 +703,46 @@ export function maeMfeSummary(trades: Trade[]): MaeMfeSummary {
   const avgMfe = Number((mfeSum / n).toFixed(4));
   return { count: n, avgMae, avgMfe, ratio: avgMae > 0 ? Number((avgMfe / avgMae).toFixed(2)) : null };
 }
+
+/** P1-08 — Rule Adherence: aderência ao checklist por dia × resultado do dia. */
+export interface AdherenceGroup {
+  days: number;
+  avgPnl: number;
+  winDays: number;
+}
+
+export interface AdherenceResult {
+  overall: number | null;
+  compliant: AdherenceGroup;
+  nonCompliant: AdherenceGroup;
+  threshold: number;
+}
+
+export function ruleAdherence(
+  days: Array<{ date: string; adherence: number; pnl: number }>,
+  threshold = 0.8,
+): AdherenceResult {
+  const comp: number[] = [];
+  const non: number[] = [];
+  let sumAdh = 0;
+  let winC = 0;
+  let winN = 0;
+  for (const d of days) {
+    const a = Number(d.adherence) || 0;
+    sumAdh += a;
+    if (a >= threshold) {
+      comp.push(d.pnl);
+      if (d.pnl > 0) winC += 1;
+    } else {
+      non.push(d.pnl);
+      if (d.pnl > 0) winN += 1;
+    }
+  }
+  const avg = (arr: number[]) => (arr.length ? Number((arr.reduce((s, x) => s + x, 0) / arr.length).toFixed(2)) : 0);
+  return {
+    overall: days.length ? Number((sumAdh / days.length).toFixed(3)) : null,
+    compliant: { days: comp.length, avgPnl: avg(comp), winDays: winC },
+    nonCompliant: { days: non.length, avgPnl: avg(non), winDays: winN },
+    threshold,
+  };
+}

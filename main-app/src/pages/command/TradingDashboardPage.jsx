@@ -16,6 +16,7 @@ import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, maeMfeSummary, allStrategyMetrics,
+  ruleAdherence, getChecklistTemplate, getDayCheck,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -49,7 +50,24 @@ export default function TradingDashboardPage() {
       f.ds.propExtensions.list(),
       f.risk.snapshot(),
     ]);
-    return { trades, payouts, propExts, riskSnap };
+    // Rule Adherence — checklist do dia × PnL do dia (últimos 30 dias com trades).
+    const template = await getChecklistTemplate(f.ds);
+    const dayPnl = new Map();
+    for (const t of trades) {
+      if (t.exitPrice == null) continue;
+      const d = String(t.exitDatetime || t.entryDatetime || '').slice(0, 10);
+      if (!d) continue;
+      dayPnl.set(d, (dayPnl.get(d) ?? 0) + (Number(t.resultNet) || 0));
+    }
+    const adherenceDays = [];
+    for (const d of [...dayPnl.keys()].sort().slice(-30)) {
+      let checks = {};
+      try { checks = await getDayCheck(f.ds, d); } catch { checks = {}; }
+      const total = template.length || 0;
+      const done = total ? template.filter((item) => checks[item]).length : 0;
+      adherenceDays.push({ date: d, adherence: total ? done / total : 0, pnl: Number((dayPnl.get(d) ?? 0).toFixed(2)) });
+    }
+    return { trades, payouts, propExts, riskSnap, adherenceDays };
   });
 
   // Trades/payouts escopados ao período selecionado.
@@ -110,7 +128,8 @@ export default function TradingDashboardPage() {
     weekday: heatmapByWeekday(trades),
     maemfe: maeMfeSummary(trades),
     strategies: allStrategyMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
-  }), [trades]);
+    adherence: ruleAdherence(data?.adherenceDays ?? []),
+  }), [trades, data]);
 
   if (loading || !data) {
     return (
@@ -240,6 +259,22 @@ export default function TradingDashboardPage() {
                     <span className="td-rbox-cell"><span className="td-dd-label">Máx</span><span className="td-rbox-v">{analytics.rbox.max}R</span></span>
                   </div>
                   <div className="td-dd-hint">{analytics.rbox.count} trades · média {analytics.rbox.mean}R · {analytics.rbox.outliers.length} outlier(s)</div>
+                </>
+              )}
+            </div>
+          ) },
+          { id: 'adherence', node: (
+            <div className="td-widget">
+              <div className="td-chart-title">Rule Adherence (checklist × resultado)</div>
+              {analytics.adherence.overall == null ? <div className="muted">Sem dias com trades + checklist.</div> : (
+                <>
+                  <div className="td-rbox">
+                    <span className="td-rbox-cell"><span className="td-dd-label">Aderência</span><span className="td-rbox-v">{Math.round(analytics.adherence.overall * 100)}%</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">Dias ≥80%</span><span className="td-rbox-v">{analytics.adherence.compliant.days}</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">PnL médio (ok)</span><span className={`td-rbox-v ${analytics.adherence.compliant.avgPnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(analytics.adherence.compliant.avgPnl, 'USD')}</span></span>
+                    <span className="td-rbox-cell"><span className="td-dd-label">PnL médio (fora)</span><span className={`td-rbox-v ${analytics.adherence.nonCompliant.avgPnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(analytics.adherence.nonCompliant.avgPnl, 'USD')}</span></span>
+                  </div>
+                  <div className="td-dd-hint">Dias com checklist ≥80%: {analytics.adherence.compliant.days} · abaixo: {analytics.adherence.nonCompliant.days}</div>
                 </>
               )}
             </div>
