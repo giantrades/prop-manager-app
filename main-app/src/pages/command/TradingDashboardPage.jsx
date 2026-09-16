@@ -102,6 +102,16 @@ export default function TradingDashboardPage() {
     }));
   }, [data, payouts, period]);
 
+  // Analytics (hooks SEMPRE antes de qualquer return antecipado).
+  const analytics = useMemo(() => ({
+    daily: dailyPnlSeries(trades),
+    expectancy: rollingExpectancy(trades, 20),
+    rbox: rBoxStats(trades),
+    weekday: heatmapByWeekday(trades),
+    maemfe: maeMfeSummary(trades),
+    strategies: allStrategyMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
+  }), [trades]);
+
   if (loading || !data) {
     return (
       <div className="cmd-page">
@@ -114,15 +124,6 @@ export default function TradingDashboardPage() {
 
   const pfLabel = stats.pf === 'n/a' ? '—' : stats.pf === 'infinity' ? '∞' : stats.pf.toFixed(2);
   const markers = series.filter((s) => s.payout > 0);
-
-  const analytics = useMemo(() => ({
-    daily: dailyPnlSeries(trades),
-    expectancy: rollingExpectancy(trades, 20),
-    rbox: rBoxStats(trades),
-    weekday: heatmapByWeekday(trades),
-    maemfe: maeMfeSummary(trades),
-    strategies: allStrategyMetrics(trades).sort((a, b) => b.expectancy - a.expectancy),
-  }), [trades]);
 
   const riskRows = (data?.riskSnap?.rows ?? []).filter((r) => r.account?.kind === 'prop');
   const weekdayMax = Math.max(1, ...analytics.weekday.map((w) => Math.abs(w.pnl)));
