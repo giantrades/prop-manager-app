@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { DataChainEngine } from '../DataChainEngine';
-import { MoneyService, splitByWeight, computePayoutSplitByWeight } from '../money';
+import { MoneyService, splitByWeight, computePayoutSplitByWeight, computeWalletSummary } from '../money';
 import { EventBus } from '../events';
 import type { Account, Payout, PropExtension, Trade } from '../types';
 
@@ -315,6 +315,18 @@ describe('Fase 3 — Money OS', () => {
   // -------------------------------------------------------------------------
   // Free Cash mensal
   // -------------------------------------------------------------------------
+  describe('saldo da plataforma (bridge) como fallback', () => {
+    it('walletSummary usa platformBalance quando não há lançamentos no ledger', () => {
+      const acc = {
+        id: 'w-b', kind: 'bank', name: 'Banco', currency: 'BRL', hidden: false, defaultWeight: 1,
+        platformAccountId: 'pid-1', platformBalance: 1234,
+        updatedAt: '2026-01-01T00:00:00Z', deviceId: 't', version: 0,
+      } as Account;
+      const rows = computeWalletSummary([acc], []);
+      expect(rows[0].balance).toBe(1234);
+    });
+  });
+
   describe('Free Cash mensal', () => {
     it('Free Cash = pessoal (income/payout/dividend) - expense (sem trades/custos/reserva)', async () => {
       const { ds, money } = ctx;

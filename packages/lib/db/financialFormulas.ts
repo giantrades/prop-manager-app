@@ -122,6 +122,12 @@ export function weightForAccount(trade: Trade, accountId: string): number {
   return 0;
 }
 
+/** Contas de um trade: as rateadas (`accounts[]`) ou a única (`accountId`). Vazio = sem conta. */
+export function tradeAccountIds(trade: Trade): string[] {
+  if (trade.accounts && trade.accounts.length > 0) return trade.accounts.map((a) => a.accountId);
+  return trade.accountId ? [trade.accountId] : [];
+}
+
 /**
  * Equity(account) = base + Σ PnL rateado por weight.
  * base = PropExtension.nominalSize quando kind=prop; senão 0 (balanço de conta

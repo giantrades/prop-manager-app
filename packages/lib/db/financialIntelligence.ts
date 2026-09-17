@@ -21,6 +21,7 @@ import type {
 import type { FirmPnlResult, FreeCashResult, WalletSummaryRow } from './money';
 import type { StrategyMetrics } from './strategies';
 import { allStrategyMetrics, MIN_SAMPLE } from './strategies';
+import { tradeNetPnl } from './financialFormulas';
 import { computeFirmPnl, monthlySeries, listCategories } from './money';
 import { periodMonths, inPeriod, computeFreeCashPeriod, expensesByCategoryPeriod, currentYm, shiftYm, ymToList, type Period } from './period';
 import { nowIso } from './dateUtils';
@@ -144,7 +145,13 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
   for (const t of trades) {
     if (t.exitPrice == null) continue;
     if (!inPeriod(t.exitDatetime || t.entryDatetime, period)) continue;
-    tradeByAccount.set(t.accountId, (tradeByAccount.get(t.accountId) ?? 0) + (Number(t.resultNet) || 0));
+    // Rateia por conta (`accounts[]`) quando houver; senão a conta única. PnL = realizado.
+    const pnl = tradeNetPnl(t);
+    if (t.accounts && t.accounts.length > 0) {
+      for (const a of t.accounts) tradeByAccount.set(a.accountId, (tradeByAccount.get(a.accountId) ?? 0) + pnl * a.weight);
+    } else if (t.accountId) {
+      tradeByAccount.set(t.accountId, (tradeByAccount.get(t.accountId) ?? 0) + pnl);
+    }
   }
   const accountPnl = accountsList
     .map((a) => {

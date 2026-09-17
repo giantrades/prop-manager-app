@@ -9,7 +9,7 @@ import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
-import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase } from '@apps/lib/db';
+import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
@@ -62,8 +62,11 @@ export default function AccountsDashboardPage() {
     const periodTxs = txs.filter((t) => inPeriod(t.date, period, txs));
     const balances = {};
     for (const a of accounts) balances[a.id] = computeAccountBalance(periodTxs, a.id);
-    const nominalByAccount = new Map(propExts.map((p) => [p.accountId, p.nominalSize || 0]));
-    const capital = propExts.reduce((s, p) => s + (p.nominalSize || 0), 0);
+    // Saldo exibido: ledger; se vazio, o saldo reportado pela plataforma (bridge).
+    const balOf = (a) => balances[a.id] || Number(a.platformBalance) || 0;
+    const acctById = new Map(accounts.map((a) => [a.id, a]));
+    const nominalByAccount = new Map(propExts.map((p) => [p.accountId, p.nominalSize || acctById.get(p.accountId)?.platformBalance || 0]));
+    const capital = propExts.reduce((s, p) => s + (p.nominalSize || acctById.get(p.accountId)?.platformBalance || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const grossPayouts = payouts.reduce((s, p) => s + (Number(p.gross) || 0), 0);
     const feesPayouts = payouts.reduce((s, p) => s + (Number(p.fee) || 0), 0);
@@ -73,11 +76,11 @@ export default function AccountsDashboardPage() {
     let liquidTotal = 0;
     const rows = [];
     for (const a of accounts) {
-      const total = a.kind === 'prop' ? (nominalByAccount.get(a.id) ?? 0) : convertMoney(balances[a.id] ?? 0, a.currency);
+      const total = a.kind === 'prop' ? (nominalByAccount.get(a.id) ?? 0) : convertMoney(balOf(a), a.currency);
       const e = perKind[a.kind] ?? { count: 0, total: 0 };
       e.count += 1; e.total += total; perKind[a.kind] = e;
-      if (LIQUID.includes(a.kind)) liquidTotal += convertMoney(balances[a.id] ?? 0, a.currency);
-      rows.push({ id: a.id, name: a.name, kind: a.kind, currency: a.currency, balance: balances[a.id] ?? 0, liquid: LIQUID.includes(a.kind) });
+      if (LIQUID.includes(a.kind)) liquidTotal += convertMoney(balOf(a), a.currency);
+      rows.push({ id: a.id, name: a.name, kind: a.kind, currency: a.currency, balance: balOf(a), liquid: LIQUID.includes(a.kind) });
     }
     const topBalances = rows.filter((r) => r.liquid).sort((a, b) => b.balance - a.balance).slice(0, 6);
     const pieData = Object.entries(perKind).filter(([, v]) => v.total > 0).map(([k, v]) => ({ label: KIND_META[k]?.label ?? k, value: v.total, color: KIND_META[k]?.color }));
@@ -88,7 +91,8 @@ export default function AccountsDashboardPage() {
     for (const t of (data?.trades ?? [])) {
       if (t.exitPrice == null) continue;
       if (!inPeriod(t.exitDatetime || t.entryDatetime, period, [])) continue;
-      tradesByAccount.set(t.accountId, (tradesByAccount.get(t.accountId) ?? 0) + 1);
+      // Conta única OU rateado (`accounts[]`); trade sem conta não entra em nenhuma.
+      for (const id of tradeAccountIds(t)) tradesByAccount.set(id, (tradesByAccount.get(id) ?? 0) + 1);
     }
     const payoutsByAccount = new Map();
     for (const p of payouts) {
@@ -107,7 +111,7 @@ export default function AccountsDashboardPage() {
         currency: a.currency,
         status: a.kind === 'prop' ? (phase ? phase.toUpperCase() : '—') : '—',
         level: rk?.status?.status ?? null,
-        value: a.kind === 'prop' ? (rk?.metrics?.equity ?? prop?.nominalSize ?? 0) : convertMoney(balances[a.id] ?? 0, a.currency),
+        value: a.kind === 'prop' ? (rk?.metrics?.equity ?? prop?.nominalSize ?? a.platformBalance ?? 0) : convertMoney(balOf(a), a.currency),
         ddPct: rk?.metrics?.maxDDUsed != null ? Math.round(rk.metrics.maxDDUsed * 100) : null,
         payouts: payoutsByAccount.get(a.id) ?? 0,
         trades: tradesByAccount.get(a.id) ?? 0,

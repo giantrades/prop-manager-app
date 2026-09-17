@@ -634,7 +634,9 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
   let cash = 0;
   for (const acc of input.accounts) {
     if (CASH_LIKE_KINDS.has(acc.kind)) {
-      cash += computeAccountBalance(input.transactions, acc.id);
+      // Saldo do ledger; conta ligada Ã  ponte sem lanÃ§amentos usa o saldo da PLATAFORMA.
+      const ledger = computeAccountBalance(input.transactions, acc.id);
+      cash += ledger || Number(acc.platformBalance) || 0;
     }
   }
 
@@ -1242,7 +1244,7 @@ export class WealthService {
   }
 }
 
-/** P1-16 — Performance relativa: portfólio vs CDI, ambos com base 100 no 1º ponto. */
+/** P1-16 ï¿½ Performance relativa: portfï¿½lio vs CDI, ambos com base 100 no 1ï¿½ ponto. */
 export interface RelativePoint {
   at: string;
   portfolio: number;

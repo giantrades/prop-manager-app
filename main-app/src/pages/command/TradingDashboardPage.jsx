@@ -19,6 +19,7 @@ import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
   strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck, tradeNetPnl,
+  tradeAccountIds, weightForAccount,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -186,12 +187,17 @@ export default function TradingDashboardPage() {
     const nameById = new Map((data?.accounts ?? []).map((a) => [a.id, a.name]));
     const map = new Map();
     for (const t of trades) {
-      const e = map.get(t.accountId) ?? { id: t.accountId, name: nameById.get(t.accountId) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
-      e.trades += 1;
-      if ((tradeNetPnl(t)) > 0) e.wins += 1;
-      e.pnl += tradeNetPnl(t);
-      if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
-      map.set(t.accountId, e);
+      const ids = tradeAccountIds(t);
+      const pnlTotal = tradeNetPnl(t);
+      for (const id of ids) {
+        const w = t.accounts && t.accounts.length ? weightForAccount(t, id) : 1;
+        const e = map.get(id) ?? { id, name: nameById.get(id) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
+        e.trades += 1;
+        if (pnlTotal > 0) e.wins += 1;
+        e.pnl += pnlTotal * w;
+        if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
+        map.set(id, e);
+      }
     }
     return [...map.values()].map((e) => ({
       ...e,
