@@ -252,6 +252,7 @@ export default function QuantowerPage() {
         {status && (status.online ? (
           <div className="qt-status" role="status">
             Bridge OK · v{status.version || status.bridgeVersion || '?'}
+            {status.build ? ` · build ${status.build}` : ''}
             {status.connections?.length ? ` · ${status.connections.length} conexão(ões)` : ''}
             {status.positionsCount != null ? ` · ${status.positionsCount} posição(ões)` : ''}
           </div>
