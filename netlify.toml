@@ -15,7 +15,25 @@
   to = "/index.html"
   status = 200
 
-  # ✅ ADICIONE ESTAS LINHAS:
+# ── Cache (evita "versão velha" presa no navegador/SW) ──────────────────────
+# Service worker NUNCA pode ser cacheado (senão o browser não pega update).
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# HTML sempre revalidado (referencia os chunks com hash novos).
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Assets com hash: cache imutável e longo.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 [[headers]]
   for = "/*"
   [headers.values]

@@ -209,7 +209,7 @@ export default function ReportsPage() {
 const RP_CSS = `
 .rp-widgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .rp-months { display: flex; flex-direction: column; min-height: 0; }
-.rp-months-scroll { max-height: 280px; overflow-y: auto; }
+.rp-months-scroll { max-height: 280px; overflow-y: auto; padding-right: 12px; scrollbar-gutter: stable; }
 .rp-mrow { display: grid; grid-template-columns: 52px 1fr 1fr 1fr; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; font-variant-numeric: tabular-nums; }
 .rp-mrow:last-child { border-bottom: none; }
 .rp-mym { color: var(--muted, #a1a7b3); }
