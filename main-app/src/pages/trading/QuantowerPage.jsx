@@ -23,6 +23,31 @@ export default function QuantowerPage() {
   const [copyResult, setCopyResult] = useState(null);
   const [livePositions, setLivePositions] = useState([]);
   const [lastRun, setLastRun] = useState(null);
+  const [autoSync, setAutoSync] = useState(() => {
+    try {
+      return {
+        enabled: localStorage.getItem('qt:autoSync') !== '0',
+        status: JSON.parse(localStorage.getItem('qt:autoSyncStatus') || 'null'),
+      };
+    } catch {
+      return { enabled: true, status: null };
+    }
+  });
+
+  // Auto-sync (BridgeAutoSync): ligado/desligado + resultado da última tentativa.
+  useEffect(() => {
+    const read = () => {
+      try {
+        setAutoSync({
+          enabled: localStorage.getItem('qt:autoSync') !== '0',
+          status: JSON.parse(localStorage.getItem('qt:autoSyncStatus') || 'null'),
+        });
+      } catch { /* noop */ }
+    };
+    window.addEventListener('qt:autosync:status', read);
+    const t = setInterval(read, 15000);
+    return () => { window.removeEventListener('qt:autosync:status', read); clearInterval(t); };
+  }, []);
 
   // Sync Center — resumo do último run de ingestão (escrito pelo ingest).
   useEffect(() => {
@@ -163,7 +188,33 @@ export default function QuantowerPage() {
 
   return (
     <div className="cmd-page">
-      <div className="cmd-page-head"><h1 className="cmd-page-title">Quantower Sync</h1></div>
+      <div className="cmd-page-head">
+        <h1 className="cmd-page-title">Quantower Sync</h1>
+        <button className="cmd-refresh" onClick={() => window.dispatchEvent(new Event('qt:autosync'))}>Sincronizar agora</button>
+      </div>
+      <div className="qt-sync" aria-label="Auto-sync">
+        <div className="qt-sync-title">Auto-sync (a cada 2 min) — {autoSync.enabled ? 'ligado' : 'DESLIGADO'}</div>
+        {autoSync.status ? (
+          <div className="qt-sync-grid">
+            <span className="qt-sync-k">Última tentativa</span><span className="qt-sync-v">{new Date(autoSync.status.at).toLocaleString('pt-BR')}</span>
+            {autoSync.status.ok ? (
+              <>
+                <span className="qt-sync-k">Trades recebidos</span><span className="qt-sync-v">{autoSync.status.fetched ?? 0}</span>
+                <span className="qt-sync-k">Criados</span><span className="qt-sync-v">{autoSync.status.created ?? 0}</span>
+                <span className="qt-sync-k">Atualizados</span><span className="qt-sync-v">{autoSync.status.updated ?? 0}</span>
+                <span className="qt-sync-k">Ignorados</span><span className="qt-sync-v">{autoSync.status.skipped ?? 0}</span>
+              </>
+            ) : (
+              <>
+                <span className="qt-sync-k">Erro</span><span className="qt-sync-v">{autoSync.status.code || 'erro'}</span>
+                <span className="qt-sync-k">Detalhe</span><span className="qt-sync-v">{autoSync.status.error}</span>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="qt-hint">Ainda não rodou. Ligue o auto-sync no menu <b>Platforms</b> (navbar) ou clique “Sincronizar agora”.</div>
+        )}
+      </div>
       {lastRun && (
         <div className="qt-sync" aria-label="Sync Center">
           <div className="qt-sync-title">Sync Center — último run</div>

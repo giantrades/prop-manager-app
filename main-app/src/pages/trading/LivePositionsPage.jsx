@@ -62,8 +62,10 @@ export default function LivePositionsPage() {
   const online = statuses.some((s) => s.online);
   const quantower = statuses.find((s) => s.platformId === 'quantower');
   // Ao vivo quando conectado; senão a ÚLTIMA leitura (fallback offline/remoto).
-  const positions = online && livePositions.length > 0 ? livePositions : (lastSnapshot?.positions ?? []);
-  const isStale = positions.length > 0 && !(online && livePositions.length > 0);
+  // Online = SEMPRE a leitura ao vivo (mesmo com 0 posições). O snapshot só entra quando
+  // o bridge está FORA — senão uma posição fechada "voltava" como fantasma pela última leitura.
+  const positions = online ? livePositions : (lastSnapshot?.positions ?? []);
+  const isStale = !online && positions.length > 0;
   const staleAgo = lastSnapshot?.at ? agoText(lastSnapshot.at) : null;
   const totals = useMemo(() => {
     const pnl = positions.reduce((s, p) => s + (p.netPnl ?? 0), 0);
@@ -382,60 +384,6 @@ export default function LivePositionsPage() {
           <div className="lp-h"><span className="lp-h-k">Posições</span><span className="lp-h-v">{livePositions.length}</span></div>
           <div className="lp-h"><span className="lp-h-k">Ordens</span><span className="lp-h-v">{orders.length}</span></div>
           <div className="lp-h"><span className="lp-h-k">Última sync</span><span className="lp-h-v">{lastSync ? new Date(lastSync).toLocaleString('pt-BR') : '—'}</span></div>
-        </div>
-      )}
-
-      {positions.length > 0 && (() => {
-        const notional = (p) => Math.abs((p.quantity || 0) * (p.currentPrice || 0));
-        const longs = positions.filter((p) => p.side === 'Long');
-        const shorts = positions.filter((p) => p.side === 'Short');
-        const longN = longs.reduce((s, p) => s + notional(p), 0);
-        const shortN = shorts.reduce((s, p) => s + notional(p), 0);
-        const maxN = Math.max(1, longN, shortN);
-        const bySym = new Map();
-        for (const p of positions) {
-          const e = bySym.get(p.symbol) ?? { symbol: p.symbol, long: 0, short: 0, pnl: 0 };
-          if (p.side === 'Long') e.long += p.quantity; else e.short += p.quantity;
-          e.pnl += Number(p.netPnl || 0);
-          bySym.set(p.symbol, e);
-        }
-        const rows = [...bySym.values()].sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
-        const maxPnl = Math.max(1, ...rows.map((r) => Math.abs(r.pnl)));
-        return (
-          <div className="dash-section">
-            <div className="dash-title">Exposure &amp; Position Heatmap</div>
-            <div className="lp-expo">
-              <div className="lp-expo-item"><span className="lp-h-k">Long</span><span className="lp-h-v">{longs.length}</span><span className="lp-expo-bar"><span className="lp-expo-fill lp-expo-long" style={{ width: `${(longN / maxN) * 100}%` }} /></span></div>
-              <div className="lp-expo-item"><span className="lp-h-k">Short</span><span className="lp-h-v">{shorts.length}</span><span className="lp-expo-bar"><span className="lp-expo-fill lp-expo-short" style={{ width: `${(shortN / maxN) * 100}%` }} /></span></div>
-            </div>
-            <div className="lp-heat">
-              {rows.map((r) => {
-                const pnl = r.pnl;
-                const intensity = Math.abs(pnl) / maxPnl;
-                const bg = pnl === 0 ? 'rgba(255,255,255,0.03)' : pnl > 0 ? `rgba(46,204,113,${0.12 + 0.5 * intensity})` : `rgba(231,76,60,${0.12 + 0.5 * intensity})`;
-                return (
-                  <div key={r.symbol} className="lp-heat-row" style={{ background: bg }}>
-                    <span className="lp-heat-sym">{r.symbol}</span>
-                    <span className="lp-heat-net">{r.long ? `L ${r.long}` : ''}{r.short ? ` S ${r.short}` : ''}</span>
-                    <span className={`lp-heat-pnl ${pnl >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(pnl)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
-
-      {positions.length > 0 && (
-        <div className="dash-cards">
-          <div className={`card ${totals.pnl >= 0 ? 'accent1' : 'accent2'}`}>
-            <h3>PnL aberto</h3>
-            <div className="stat">{fmtMoney(totals.pnl)}</div>
-            <div className="muted">líquido das posições</div>
-          </div>
-          <div className="card accent3"><h3>Long</h3><div className="stat">{totals.long}</div><div className="muted">posições</div></div>
-          <div className="card accent4"><h3>Short</h3><div className="stat">{totals.short}</div><div className="muted">posições</div></div>
-          <div className="card accent5"><h3>Ordens</h3><div className="stat">{orders.length}</div><div className="muted">pendentes</div></div>
         </div>
       )}
 

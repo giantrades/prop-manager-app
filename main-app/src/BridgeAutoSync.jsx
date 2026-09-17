@@ -50,6 +50,14 @@ export default function BridgeAutoSync() {
     let cancelled = false;
     let timer = null;
 
+    // Status visível (Sistema → Quantower): por que o auto-sync parou/ingeriu o quê.
+    const record = (status) => {
+      try {
+        localStorage.setItem('qt:autoSyncStatus', JSON.stringify(status));
+        window.dispatchEvent(new Event('qt:autosync:status'));
+      } catch { /* noop */ }
+    };
+
     const tick = async () => {
       const f = ref.current;
       if (!f || cancelled) return;
@@ -66,9 +74,9 @@ export default function BridgeAutoSync() {
         const from = new Date(Math.min(Date.parse(cursor) || 0, Date.now() - 30 * 86400000)).toISOString();
         const a = new QuantowerAdapter({ bridgeUrl, bridgeToken });
         const trades = await a.getTrades(from, undefined);
-        if (trades.length > 0) {
-          await ingestQuantowerTrades(f.ds, f.chain, trades);
-        }
+        const res = trades.length > 0
+          ? await ingestQuantowerTrades(f.ds, f.chain, trades)
+          : { created: 0, updated: 0, skipped: 0 };
         // Saldo das contas da plataforma (platformBalance + nominal de prop sem nominal).
         try {
           const accounts = await a.getAccounts();
@@ -77,11 +85,14 @@ export default function BridgeAutoSync() {
           /* sem contas agora — segue */
         }
         await writeCursor(f.ds, new Date().toISOString());
+        record({ at: new Date().toISOString(), ok: true, fetched: trades.length, ...res });
       } catch (e) {
         const status = e && typeof e === 'object' && 'status' in e ? e.status : undefined;
+        const code = status === 401 ? 'auth_failed' : 'bridge_offline';
+        record({ at: new Date().toISOString(), ok: false, error: e instanceof Error ? e.message : 'Bridge offline.', code });
         f.ds.bus.emit(EVENTS.QUANTOWER_ERROR, {
           message: e instanceof Error ? e.message : 'Bridge offline.',
-          code: status === 401 ? 'auth_failed' : 'bridge_offline',
+          code,
         });
       }
     };
