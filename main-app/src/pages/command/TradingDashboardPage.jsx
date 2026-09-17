@@ -177,6 +177,27 @@ export default function TradingDashboardPage() {
     adherence: ruleAdherence(data?.adherenceDays ?? []),
   }), [trades, data]);
 
+  // Comparação entre contas selecionadas (quando >1). Hook ANTES de qualquer return.
+  const compare = useMemo(() => {
+    if (acctSel.length < 2) return [];
+    const nameById = new Map((data?.accounts ?? []).map((a) => [a.id, a.name]));
+    const map = new Map();
+    for (const t of trades) {
+      const e = map.get(t.accountId) ?? { id: t.accountId, name: nameById.get(t.accountId) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
+      e.trades += 1;
+      if ((Number(t.resultNet) || 0) > 0) e.wins += 1;
+      e.pnl += Number(t.resultNet) || 0;
+      if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
+      map.set(t.accountId, e);
+    }
+    return [...map.values()].map((e) => ({
+      ...e,
+      pnl: Number(e.pnl.toFixed(2)),
+      wr: e.trades > 0 ? (e.wins / e.trades) * 100 : null,
+      avgR: e.rN > 0 ? Number((e.rSum / e.rN).toFixed(2)) : null,
+    })).sort((a, b) => b.pnl - a.pnl);
+  }, [trades, acctSel, data]);
+
   if (error && !data) {
     return (
       <div className="cmd-page">
@@ -203,27 +224,6 @@ export default function TradingDashboardPage() {
   const weekdayMax = Math.max(1, ...analytics.weekday.map((w) => Math.abs(w.pnl)));
   const sessions = heatmapBySession(trades);
   const sessionMax = Math.max(1, ...sessions.map((s) => Math.abs(s.pnl)));
-
-  // Comparação entre contas selecionadas (quando >1).
-  const compare = useMemo(() => {
-    if (acctSel.length < 2) return [];
-    const nameById = new Map((data?.accounts ?? []).map((a) => [a.id, a.name]));
-    const map = new Map();
-    for (const t of trades) {
-      const e = map.get(t.accountId) ?? { id: t.accountId, name: nameById.get(t.accountId) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
-      e.trades += 1;
-      if ((Number(t.resultNet) || 0) > 0) e.wins += 1;
-      e.pnl += Number(t.resultNet) || 0;
-      if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
-      map.set(t.accountId, e);
-    }
-    return [...map.values()].map((e) => ({
-      ...e,
-      pnl: Number(e.pnl.toFixed(2)),
-      wr: e.trades > 0 ? (e.wins / e.trades) * 100 : null,
-      avgR: e.rN > 0 ? Number((e.rSum / e.rN).toFixed(2)) : null,
-    })).sort((a, b) => b.pnl - a.pnl);
-  }, [trades, acctSel, data]);
 
   // B6/B7 — drill-down: abrir a entidade (dia/estratégia/conta) sem navegar.
   const openDay = (dayLabel) => {

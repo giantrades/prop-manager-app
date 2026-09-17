@@ -26,6 +26,8 @@ export default function LivePositionsPage() {
   const [pending, setPending] = useState(() => readQueue().length);
   const [editOrderId, setEditOrderId] = useState(null);
   const [orderEdit, setOrderEdit] = useState({ qty: '', price: '', sl: '', tp: '' });
+  const [partialId, setPartialId] = useState(null);
+  const [partialQty, setPartialQty] = useState('');
   const adapterRef = useRef(null);
   if (!adapterRef.current) {
     const { bridgeUrl, bridgeToken } = bridgePrefs();
@@ -131,6 +133,39 @@ export default function LivePositionsPage() {
     } finally { setBusy(null); }
   };
 
+  // Fechar PARCIAL: manda ordem a mercado oposta com qty menor (contas netting).
+  const startPartial = (p) => {
+    setPartialId(p.platformPositionId);
+    setPartialQty(String(Math.max(1, Math.floor((p.quantity ?? 0) / 2))));
+  };
+
+  const confirmPartial = async (p) => {
+    const qty = num(partialQty);
+    if (!qty) { toast('Informe a quantidade a fechar.', { type: 'warn' }); return; }
+    if (qty > (p.quantity ?? 0)) { toast(`Quantidade maior que a posição (${p.quantity}).`, { type: 'warn' }); return; }
+    setBusy(p.platformPositionId);
+    try {
+      const res = await submitOrQueue(adapter, {
+        kind: 'open',
+        payload: {
+          accountId: p.platformAccountId, symbol: p.symbol,
+          side: p.side === 'Long' ? 'sell' : 'buy', qty, sl: null, tp: null,
+          note: 'fechamento parcial',
+        },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast('Bridge offline — fechamento parcial na fila.', { type: 'warn' });
+      } else {
+        toast(`Fechamento parcial enviado — ${qty} de ${p.quantity} ${p.symbol}`);
+      }
+      setPartialId(null);
+      refreshStatuses();
+    } catch (err) {
+      toast(`Falha no fechamento parcial: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
   const cancelOrder = async (o) => {
     setBusy(o.platformOrderId);
     try {
@@ -151,25 +186,32 @@ export default function LivePositionsPage() {
   const placeOrder = async () => {
     const qty = num(form.qty);
     const price = num(form.price);
-    if (!form.accountId || !form.symbol.trim() || !qty || !price) {
-      toast('Preencha conta, símbolo, quantidade e preço.', { type: 'warn' });
+    const isMarket = form.type === 'market';
+    if (!form.accountId || !form.symbol.trim() || !qty || (!isMarket && !price)) {
+      toast(isMarket ? 'Preencha conta, símbolo e quantidade.' : 'Preencha conta, símbolo, quantidade e preço.', { type: 'warn' });
       return;
     }
     setBusy('new-order');
     try {
-      const res = await submitOrQueue(adapter, {
-        kind: 'place',
-        payload: {
-          accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price,
-          sl: num(form.sl), tp: num(form.tp),
-        },
-      });
+      const res = await submitOrQueue(adapter, isMarket
+        ? {
+            kind: 'open', // abrir a mercado (bridge /positions/open)
+            payload: { accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, sl: num(form.sl), tp: num(form.tp), note: 'mercado' },
+          }
+        : {
+            kind: 'place',
+            payload: {
+              accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price,
+              sl: num(form.sl), tp: num(form.tp),
+            },
+          });
+      const label = isMarket ? 'a mercado' : form.type;
       if (res.queued) {
         setPending(readQueue().length);
         toast(`Bridge offline — ordem ${form.symbol.toUpperCase()} na fila.`, { type: 'warn' });
         setForm((f) => ({ ...f, symbol: '', qty: '', price: '', sl: '', tp: '' }));
       } else {
-        toast(`Ordem ${form.type} enviada — ${form.symbol.toUpperCase()}`);
+        toast(`Ordem ${label} enviada — ${form.symbol.toUpperCase()}`);
         setForm((f) => ({ ...f, symbol: '', qty: '', price: '', sl: '', tp: '' }));
         loadOrders();
         refreshStatuses();
@@ -338,28 +380,42 @@ export default function LivePositionsPage() {
                 const tpVal = 'tp' in e ? e.tp : (p.tp ?? '');
                 const dirty = 'sl' in e || 'tp' in e;
                 const confirming = confirmId === p.platformPositionId;
+                const partial = partialId === p.platformPositionId;
                 return (
-                  <div key={p.platformPositionId} className="lp-row">
-                    <span className="lp-sym">{p.symbol}<span className="lp-acct">{p.accountName || p.connectionName || ''}</span></span>
-                    <span className={`lp-side ${p.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{p.side}</span>
-                    <span className="lp-num">{p.quantity}</span>
-                    <span className="lp-num">{fmtMoney(p.openPrice)}</span>
-                    <span className="lp-num">{fmtMoney(p.currentPrice)}</span>
-                    <span className={`lp-num ${(p.netPnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(p.netPnl)}</span>
-                    <input className="lp-input" type="number" step="0.00001" value={slVal} placeholder="SL" onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}`} />
-                    <input className="lp-input" type="number" step="0.00001" value={tpVal} placeholder="TP" onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}`} />
-                    <span className="lp-actions">
-                      <button className="ac3-btn ac3-btn-sm" disabled={!dirty || busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>
-                      {confirming ? (
-                        <>
-                          <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === p.platformPositionId} onClick={() => close(p)}>Confirmar</button>
-                          <button className="ac3-btn ac3-btn-sm" onClick={() => setConfirmId(null)} aria-label="Cancelar"><X size={13} /></button>
-                        </>
-                      ) : (
-                        <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => setConfirmId(p.platformPositionId)}>Fechar</button>
-                      )}
-                    </span>
-                  </div>
+                  <React.Fragment key={p.platformPositionId}>
+                    <div className="lp-row">
+                      <span className="lp-sym">{p.symbol}<span className="lp-acct">{p.accountName || p.connectionName || ''}</span></span>
+                      <span className={`lp-side ${p.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{p.side}</span>
+                      <span className="lp-num">{p.quantity}</span>
+                      <span className="lp-num">{fmtMoney(p.openPrice)}</span>
+                      <span className="lp-num">{fmtMoney(p.currentPrice)}</span>
+                      <span className={`lp-num ${(p.netPnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(p.netPnl)}</span>
+                      <input className="lp-input" type="number" step="0.00001" value={slVal} placeholder="SL" onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}`} />
+                      <input className="lp-input" type="number" step="0.00001" value={tpVal} placeholder="TP" onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}`} />
+                      <span className="lp-actions">
+                        <button className="ac3-btn ac3-btn-sm" disabled={!dirty || busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>
+                        <button className="ac3-btn ac3-btn-sm" onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId}>Parcial</button>
+                        {confirming ? (
+                          <>
+                            <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === p.platformPositionId} onClick={() => close(p)}>Confirmar</button>
+                            <button className="ac3-btn ac3-btn-sm" onClick={() => setConfirmId(null)} aria-label="Cancelar"><X size={13} /></button>
+                          </>
+                        ) : (
+                          <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => setConfirmId(p.platformPositionId)}>Fechar</button>
+                        )}
+                      </span>
+                    </div>
+                    {partial && (
+                      <div className="lp-partial" role="group" aria-label={`Fechar parcial ${p.symbol}`}>
+                        <span className="lp-partial-hint">Fechar parcialmente (ordem oposta a mercado — contas <b>netting</b>)</span>
+                        <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={partialQty} onChange={(ev) => setPartialQty(ev.target.value)} aria-label="Quantidade a fechar" />
+                        <span className="lp-actions">
+                          <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === p.platformPositionId} onClick={() => confirmPartial(p)}>Enviar</button>
+                          <button className="ac3-btn ac3-btn-sm" onClick={() => setPartialId(null)} aria-label="Cancelar"><X size={13} /></button>
+                        </span>
+                      </div>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -380,9 +436,10 @@ export default function LivePositionsPage() {
             <select className="lp-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} aria-label="Tipo da ordem">
               <option value="limit">Limit</option>
               <option value="stop">Stop</option>
+              <option value="market">Mercado</option>
             </select>
             <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} aria-label="Quantidade da ordem" />
-            <input className="lp-input" type="number" step="0.00001" placeholder="Preço" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} aria-label="Preço da ordem" />
+            <input className="lp-input" type="number" step="0.00001" placeholder={form.type === 'market' ? 'a mercado' : 'Preço'} value={form.price} disabled={form.type === 'market'} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} aria-label="Preço da ordem" />
             <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={form.sl} onChange={(e) => setForm((f) => ({ ...f, sl: e.target.value }))} aria-label="Stop loss da ordem" />
             <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={form.tp} onChange={(e) => setForm((f) => ({ ...f, tp: e.target.value }))} aria-label="Take profit da ordem" />
             <button className="ac3-btn ac3-btn-sm" disabled={busy === 'new-order'} onClick={placeOrder}>Enviar</button>
@@ -471,6 +528,9 @@ const LP_CSS = `
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
 .lp-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .lp-orderedit { display: grid; grid-template-columns: 0.8fr 1fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; padding: 8px 6px; margin: -2px 0 6px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px dashed rgba(124,92,255,0.35); }
+.lp-partial { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin: -2px 0 6px; border-radius: 10px; background: rgba(231,76,60,0.06); border: 1px dashed rgba(231,76,60,0.35); }
+.lp-partial-hint { font-size: 11px; color: var(--muted, #a1a7b3); flex: 1; min-width: 180px; }
+.lp-partial .lp-input { max-width: 110px; }
 @media (max-width: 900px) { .lp-orderedit { grid-template-columns: 1fr 1fr; } }
 .lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
 @media (max-width: 900px) {

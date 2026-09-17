@@ -11,9 +11,9 @@
  *   - Imagens/anexos de comprovante: cache-first com expiração longa (30 dias).
  *   - pushManager registrado vazio (para não exigir reinstall quando push chegar).
  */
-const CACHE = "financeos-shell-v2";
-const CACHE_ASSETS = "financeos-assets-v2";
-const CACHE_ATTACHMENTS = "financeos-attachments-v2";
+const CACHE = "financeos-shell-v3";
+const CACHE_ASSETS = "financeos-assets-v3";
+const CACHE_ATTACHMENTS = "financeos-attachments-v3";
 const DATA_READ_HINTS = ["/api/", "/accounts", "/trades", "/positions"];
 const BRIDGE_STATUS_PATHS = ["/status", "/health"];
 const ATTACHMENT_RE = /\.(png|jpe?g|gif|webp|pdf|svg)$/i;
@@ -149,15 +149,20 @@ async function networkOnlyWithTimeout(request, timeoutMs = SW_TIMEOUT_MS) {
   }
 }
 
+// Só memoriza resposta BOA (2xx, mesmo domínio). Nunca cacheia 404/erro/redirect —
+// era isso que "prendia" um chunk velho/erro e quebrava os imports dinâmicos.
+function putIfOk(cacheName, request, res) {
+  if (!res || !res.ok) return res;
+  const copy = res.clone();
+  caches.open(cacheName).then((cache) => cache.put(request, copy)).catch(() => {});
+  return res;
+}
+
 // stale-while-revalidate
 function staleWhileRevalidate(request) {
   return caches.match(request).then((cached) => {
     const network = fetch(request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy));
-        return res;
-      })
+      .then((res) => putIfOk(CACHE, request, res))
       .catch(() => cached);
     // `cached` é uma Response (não Promise): nunca chamar .then nela.
     if (cached) {
@@ -217,27 +222,19 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put("/index.html", copy));
-          return res;
-        })
+        .then((res) => putIfOk(CACHE, "/index.html", res))
         .catch(() => caches.match("/index.html"))
     );
     return;
   }
 
-  // App shell: cache-first.
+  // App shell: cache-first (mas só memoriza 2xx — chunk com hash novo é baixado fresco).
   if (isShellAsset(url)) {
     event.respondWith(
       caches.match(request).then(
         (hit) =>
           hit ||
-          fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-            return res;
-          })
+          fetch(request).then((res) => putIfOk(CACHE, request, res))
       )
     );
     return;
@@ -249,11 +246,7 @@ self.addEventListener("fetch", (event) => {
       caches.match(request).then(
         (hit) =>
           hit ||
-          fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE_ATTACHMENTS).then((cache) => cache.put(request, copy));
-            return res;
-          })
+          fetch(request).then((res) => putIfOk(CACHE_ATTACHMENTS, request, res))
       )
     );
     return;
