@@ -18,6 +18,21 @@ const FETCH_TIMEOUT_MS = 5000;
 const RETRY_DELAYS = [5000, 10000, 30000, 60000];
 
 /**
+ * Normaliza data vinda do bridge. O bridge serializa `DateTime` com `ToString("O")`;
+ * quando o Kind é Unspecified, a string vem SEM offset (ex.: "2026-09-18T01:00:00.000").
+ * O JS leria isso como hora LOCAL → o trade "anda" o offset pra frente e pode cair no
+ * dia seguinte (era o caso dos "trades de amanhã"). O bridge trabalha em UTC (query
+ * From/To usa UtcNow), então sem offset assumimos UTC: acrescenta 'Z'.
+ */
+function normIso(v) {
+  if (typeof v !== 'string' || !v) return null;
+  const s = v.trim();
+  if (!s || s.startsWith('0001')) return null; // DateTime.MinValue = sem data
+  const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/.test(s);
+  return hasTz ? s : `${s}Z`;
+}
+
+/**
  * Versão mínima do bridge que este adapter espera (handshake).
  * 04-BRIDGE_V2_SPEC.md: se o bridge reportar versão diferente, mostramos banner
  * "bridge desatualizada" em vez de chamar rotas de contrato desconhecido.
@@ -229,8 +244,8 @@ export class QuantowerAdapter extends BaseAdapter {
       quantity: t.quantity ?? 0,
       entryPrice: t.entryPrice ?? 0,
       exitPrice: t.exitPrice ?? 0,
-      entryDateTime: t.entryDateTime && !t.entryDateTime.startsWith('0001') ? t.entryDateTime : null,
-      exitDateTime: t.exitDateTime && !t.exitDateTime.startsWith('0001') ? t.exitDateTime : null,
+      entryDateTime: normIso(t.entryDateTime),
+      exitDateTime: normIso(t.exitDateTime),
       stopPrice: t.stopPrice ?? t.stopLoss ?? null,
       takePrice: t.takePrice ?? t.takeProfit ?? null,
       mae: t.mae ?? null,

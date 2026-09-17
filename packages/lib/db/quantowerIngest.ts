@@ -176,8 +176,26 @@ export async function ingestQuantowerTrades(
     byFp.set(fpOf(t), t);
   }
 
+  // Sanidade: nunca ingerir "fantasma". Sem entrada, sem saída (não é trade fechado)
+  // ou com data absurdamente no futuro → fora (eram os trades "de amanhã" sem conta
+  // que poluíam heat/calendário).
+  const farFuture = Date.now() + 24 * 3600 * 1000;
+  const isFuture = (v?: string | null) => {
+    if (!v) return false;
+    const ts = Date.parse(v);
+    return Number.isFinite(ts) && ts > farFuture;
+  };
+
   for (const q of trades) {
     if (!q.platformTradeId) {
+      skipped += 1;
+      continue;
+    }
+    if (!q.entryDateTime || isFuture(q.entryDateTime) || isFuture(q.exitDateTime)) {
+      skipped += 1;
+      continue;
+    }
+    if (!q.exitDateTime && !(typeof q.exitPrice === 'number' && q.exitPrice > 0)) {
       skipped += 1;
       continue;
     }

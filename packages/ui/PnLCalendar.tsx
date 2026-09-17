@@ -138,11 +138,11 @@ export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay,
         </div>
         <div className="pnlcal-sum-item">
           <span className="pnlcal-sum-label">Melhor dia</span>
-          <span className="pnlcal-sum-value">{data.bestDay ? `${data.bestDay.date.slice(8, 10)} • ${fmtMoney(data.bestDay.pnl, currency)}` : '—'}</span>
+          <span className="pnlcal-sum-value pnlcal-pos-t">{data.bestDay ? `${data.bestDay.date.slice(8, 10)} • ${fmtMoney(data.bestDay.pnl, currency)}` : '—'}</span>
         </div>
         <div className="pnlcal-sum-item">
           <span className="pnlcal-sum-label">Pior dia</span>
-          <span className="pnlcal-sum-value">{data.worstDay ? `${data.worstDay.date.slice(8, 10)} • ${fmtMoney(data.worstDay.pnl, currency)}` : '—'}</span>
+          <span className="pnlcal-sum-value pnlcal-neg-t">{data.worstDay ? `${data.worstDay.date.slice(8, 10)} • ${fmtMoney(data.worstDay.pnl, currency)}` : '—'}</span>
         </div>
       </div>
       {data.monthTrades === 0 ? (

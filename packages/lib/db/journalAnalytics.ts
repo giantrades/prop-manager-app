@@ -563,7 +563,8 @@ export function dailyPnlSeries(trades: Trade[]): DailyPnl[] {
   for (const t of closedTrades(trades)) {
     const stamp = t.exitDatetime || t.entryDatetime;
     if (!stamp) continue;
-    const date = String(stamp).slice(0, 10);
+    // Dia LOCAL (igual ao calendário) — nunca slice() em ISO UTC.
+    const date = formatDate(parseDate(stamp), 'yyyy-MM-dd');
     const e = map.get(date) ?? { date, pnl: 0, trades: 0, wins: 0, losses: 0 };
     const net = tradeNetPnl(t);
     e.pnl += net;
@@ -593,7 +594,7 @@ export function rollingExpectancy(trades: Trade[], window = 20): ExpectancyPoint
     for (let j = i - window + 1; j <= i; j += 1) sum += closed[j].resultR as number;
     out.push({
       index: i + 1,
-      date: String(closed[i].exitDatetime || closed[i].entryDatetime || '').slice(0, 10),
+      date: formatDate(parseDate(closed[i].exitDatetime || (closed[i].entryDatetime as string)), 'yyyy-MM-dd'),
       expectancy: Number((sum / window).toFixed(3)),
     });
   }
@@ -660,9 +661,11 @@ export function heatmapByWeekday(trades: Trade[]): WeekdayStat[] {
   for (const t of closedTrades(trades)) {
     const stamp = t.exitDatetime || t.entryDatetime;
     if (!stamp) continue;
-    const d = new Date(stamp);
+    const d = parseDate(stamp);
     if (Number.isNaN(d.getTime())) continue;
-    const wd = d.getUTCDay();
+    // Dia da semana LOCAL do trader (antes era getUTCDay → trade de segunda à noite
+    // aparecia na terça, sem nenhum dado de terça existir).
+    const wd = d.getDay();
     const e = map.get(wd) ?? { trades: 0, pnl: 0, wins: 0, rSum: 0, rCount: 0 };
     const net = tradeNetPnl(t);
     e.trades += 1;

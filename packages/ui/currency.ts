@@ -49,15 +49,38 @@ export function convertMoney(value: number, from?: string): number {
 
 const SYMBOL: Record<DisplayCurrency, string> = { USD: '$', BRL: 'R$' };
 
-/** Formata um valor monetário na moeda de exibição (compacto p/ >= 1000). */
+const groupSep = () => (state.currency === 'BRL' ? '.' : ',');
+const decSep = () => (state.currency === 'BRL' ? ',' : '.');
+
+/** Número com separador de milhar (localizado por moeda): 1234.5 → "1.234,50". */
+function groupNumber(abs: number, decimals: number): string {
+  const fixed = Math.abs(abs).toFixed(decimals);
+  const [int, dec] = fixed.split('.');
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
+  return dec ? `${grouped}${decSep()}${dec}` : grouped;
+}
+
+/**
+ * Formata um valor monetário na moeda de exibição — **valor COMPLETO** (sem "k"):
+ * é dinheiro de verdade, precisa ser lido exato em tabelas/calendário.
+ * Para rótulos curtos (eixos de gráfico) use `fmtMoneyCompact`.
+ */
 export function fmtMoney(value: unknown, from?: string, decimals = 2): string {
+  if (value == null || Number.isNaN(Number(value))) return '—';
+  const v = convertMoney(Number(value), from);
+  return `${v < 0 ? '-' : ''}${SYMBOL[state.currency]}${groupNumber(v, decimals)}`;
+}
+
+/** Versão compacta (1.2k/3.4M) — só para rótulos apertados (eixos). */
+export function fmtMoneyCompact(value: unknown, from?: string, decimals = 2): string {
   if (value == null || Number.isNaN(Number(value))) return '—';
   const v = convertMoney(Number(value), from);
   const symbol = SYMBOL[state.currency];
   const sign = v < 0 ? '-' : '';
   const abs = Math.abs(v);
-  if (abs >= 1000) return `${sign}${symbol}${(abs / 1000).toFixed(decimals)}k`;
-  return `${sign}${symbol}${abs.toFixed(decimals)}`;
+  if (abs >= 1e6) return `${sign}${symbol}${(abs / 1e6).toFixed(decimals)}M`;
+  if (abs >= 1e3) return `${sign}${symbol}${(abs / 1e3).toFixed(decimals)}k`;
+  return `${sign}${symbol}${groupNumber(abs, decimals)}`;
 }
 
 /** Símbolo da moeda de exibição ('$' ou 'R$'). */
@@ -68,12 +91,8 @@ export function displaySymbol(): string {
 /** Formata um valor que JÁ está na moeda de exibição (não converte de novo). */
 export function fmtDisplay(value: number | null | undefined, decimals = 2): string {
   if (value == null || Number.isNaN(Number(value))) return '—';
-  const symbol = SYMBOL[state.currency];
   const v = Number(value);
-  const sign = v < 0 ? '-' : '';
-  const abs = Math.abs(v);
-  if (abs >= 1000) return `${sign}${symbol}${(abs / 1000).toFixed(decimals)}k`;
-  return `${sign}${symbol}${abs.toFixed(decimals)}`;
+  return `${v < 0 ? '-' : ''}${SYMBOL[state.currency]}${groupNumber(v, decimals)}`;
 }
 
 /** Converte vários [valor, moedaDeOrigem] e soma na moeda de exibição. */

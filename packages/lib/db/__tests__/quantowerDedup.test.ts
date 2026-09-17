@@ -27,6 +27,22 @@ const BATCH = [
   },
 ];
 
+describe('anti-fantasma: trade sem entrada/saída ou com data no futuro não entra', () => {
+  it('ignora posição aberta, data futura e trade sem entrada', async () => {
+    const { ds, chain } = makeEngine();
+    const far = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+    const r = await ingestQuantowerTrades(ds, chain, [
+      { ...BATCH[0], platformTradeId: 'qt_open', exitDateTime: null, exitPrice: 0 },
+      { ...BATCH[0], platformTradeId: 'qt_future', entryDateTime: far, exitDateTime: far },
+      { ...BATCH[0], platformTradeId: 'qt_noentry', entryDateTime: null },
+      { ...BATCH[0], platformTradeId: 'qt_ok' },
+    ]);
+    expect(r.created).toBe(1);
+    expect(r.skipped).toBe(3);
+    expect(await ds.trades.list()).toHaveLength(1);
+  });
+});
+
 describe('contract size (multiplier) derivado do dinheiro da plataforma', () => {
   // O bridge não manda `multiplier`; ele é recuperado de grossPnl / (Δpreço × qty).
   const mnq = {
