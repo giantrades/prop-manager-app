@@ -227,6 +227,7 @@ export interface Trade extends SyncedRecord {
   // Opcionais usados pelas fórmulas (FINANCIAL_FORMULAS.md). Aditivos, não alteram
   // os campos obrigatórios já aprovados.
   stopPrice?: number; // risco inicial p/ R (null se não definido)
+  takePrice?: number; // alvo (TP) capturado da posição (null se não definido)
   multiplier?: number; // contract size (default 1)
   strategyVersion?: string; // versão do playbook usada no trade (Strategy Versioning)
   // Execuções de fill (VWAP/MAE/MFE). Único campo — substitui `PartialExecutions`.

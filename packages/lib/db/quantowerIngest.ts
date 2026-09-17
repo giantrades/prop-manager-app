@@ -86,6 +86,7 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   const entryDatetime = q.entryDateTime ?? nowIso();
   const exitPrice = q.exitPrice && q.exitPrice !== 0 ? q.exitPrice : undefined;
   const stopPrice = q.stopPrice != null && q.stopPrice !== 0 ? q.stopPrice : undefined;
+  const takePrice = q.takePrice != null && q.takePrice !== 0 ? q.takePrice : undefined;
   const entryPrice = q.entryPrice ?? 0;
   const qty = q.quantity ?? 0;
   // CONTRACT SIZE (multiplier): o bridge não envia. Deriva do dinheiro que a PLATAFORMA
@@ -122,6 +123,7 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     entryPrice,
     exitPrice,
     stopPrice,
+    takePrice,
     mae,
     mfe,
     multiplier,
@@ -278,7 +280,7 @@ export async function ingestQuantowerTrades(
       // `multiplier`/`resultR` entram na comparação: um re-sync passa a CORRIGIR o R
       // dos trades que já estavam gravados com o multiplier errado.
       const changed = ['symbol', 'direction', 'qty', 'entryPrice', 'exitPrice', 'entryDatetime',
-        'exitDatetime', 'resultNet', 'stopPrice', 'accountId', 'mae', 'mfe', 'multiplier', 'resultR']
+        'exitDatetime', 'resultNet', 'stopPrice', 'takePrice', 'accountId', 'mae', 'mfe', 'multiplier', 'resultR']
         .some((k) => (existing as unknown as Record<string, unknown>)[k] !== (merged as unknown as Record<string, unknown>)[k]);
       byQt.set(q.platformTradeId, merged);
       byFp.set(fpOf(merged), merged);

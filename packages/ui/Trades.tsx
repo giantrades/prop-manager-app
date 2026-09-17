@@ -184,7 +184,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                   <th scope="col" className="tr-checkcol">
                     <input type="checkbox" checked={allPageSelected} onChange={toggleAllPage} aria-label="Selecionar todos da página" />
                   </th>
-                  <th scope="col" onClick={() => toggleSort('entryDatetime')} className="tr-sortable">Data{sortMark('entryDatetime')}</th>
+                  <th scope="col" onClick={() => toggleSort('entryDatetime')} className="tr-sortable">Aberto → Fechado{sortMark('entryDatetime')}</th>
                   <th scope="col">Ativo</th>
                   <th scope="col">Lado</th>
                   <th scope="col" onClick={() => toggleSort('qty')} className="tr-sortable tr-num">Qtd{sortMark('qty')}</th>
@@ -205,9 +205,14 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                       <tr>
                         <td className="tr-checkcol"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Selecionar ${t.symbol}`} /></td>
                         <td>
-                          <div>{fmtDateShort(t.entryDatetime)}</div>
+                          {/* Horário de abertura → fechamento (com dia) e, abaixo, o tempo decorrido. */}
+                          <div className="tr-times" title={`Aberto ${fmtDate(t.entryDatetime)} → Fechado ${fmtDate(t.exitDatetime)}`}>
+                            <span>{fmtDateShort(t.entryDatetime)}</span>
+                            <span className="tr-arrow" aria-hidden="true">→</span>
+                            <span>{t.exitDatetime ? fmtDateShort(t.exitDatetime) : 'em aberto'}</span>
+                          </div>
                           {fmtDuration(t.entryDatetime, t.exitDatetime) && (
-                            <div className="tr-dur" title={`Fechado ${fmtDate(t.exitDatetime)}`}>→ {fmtDuration(t.entryDatetime, t.exitDatetime)}</div>
+                            <div className="tr-dur">({fmtDuration(t.entryDatetime, t.exitDatetime)})</div>
                           )}
                         </td>
                         <td className="tr-sym">{t.symbol}</td>
@@ -378,7 +383,9 @@ const TR_CSS = `
 .tr-replay-entry .tr-replay-dot { background: var(--yellow, #e1b12c); }
 .tr-replay-label { font-size: 10px; color: var(--muted, #a1a7b3); white-space: nowrap; }
 .tr-replay-price { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tr-dur { font-size: 10px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
+.tr-times { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tr-arrow { color: var(--muted, #a1a7b3); }
+.tr-dur { text-align: center; font-size: 10px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .tr-replay-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .tr-tt-label { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
 .tr-tt-val { font-weight: 700; }
