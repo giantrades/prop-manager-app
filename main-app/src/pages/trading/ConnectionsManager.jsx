@@ -6,7 +6,30 @@ import { usePlatform, useFinance, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm } from '@apps/lib/db';
-import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw } from 'lucide-react';
+import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw, EyeOff, RotateCcw } from 'lucide-react';
+
+// Cache local (device) das contas/conexões da ponte — mostra offline com "última leitura".
+const BRIDGE_CACHE_KEY = 'qt:bridgeAccountsCache';
+// Ocultos (não aparecem mais): conexões e contas da ponte, por id.
+const HIDDEN_CONNS_KEY = 'bridge:hiddenConnections';
+const HIDDEN_ACCTS_KEY = 'bridge:hiddenAccounts';
+
+function readBridgeCache() {
+  try {
+    const raw = localStorage.getItem(BRIDGE_CACHE_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    return v && Array.isArray(v.accounts) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writeBridgeCache(accounts) {
+  try {
+    localStorage.setItem(BRIDGE_CACHE_KEY, JSON.stringify({ at: new Date().toISOString(), accounts }));
+  } catch {
+    /* noop */
+  }
+}
 
 const KIND_OPTIONS = [
   { v: 'prop', label: 'Prop' },
@@ -39,6 +62,9 @@ export default function ConnectionsManager() {
   const [connFirmById, setConnFirmById] = useState({});
   const [demoAccountIds, setDemoAccountIds] = useState(new Set());
   const [demoDisabled, setDemoDisabled] = useState(false);
+  const [cachedAt, setCachedAt] = useState(null);
+  const [hiddenConns, setHiddenConns] = useState([]);
+  const [hiddenAccts, setHiddenAccts] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [newKind, setNewKind] = useState('prop');
@@ -56,20 +82,33 @@ export default function ConnectionsManager() {
     if (!f) return;
     setBusy(true);
     try {
-      const [accts, app, firmList, ids, disabled, connFirms] = await Promise.all([
+      const [accts, app, firmList, ids, disabled, connFirms, hConns, hAccts] = await Promise.all([
         adapterRef.current.getAccounts().catch(() => []),
         f.ds.accounts.list(),
         listFirms(f.ds),
         getDemoIds(f.ds),
         isDemoDisabled(f.ds),
         listConnectionFirms(f.ds),
+        f.ds.meta.getKey(HIDDEN_CONNS_KEY),
+        f.ds.meta.getKey(HIDDEN_ACCTS_KEY),
       ]);
-      setBridgeAccounts(accts ?? []);
+      // Ao vivo? cacheia. Senão, mostra a última leitura (bridge offline).
+      if (Array.isArray(accts) && accts.length > 0) {
+        setBridgeAccounts(accts);
+        writeBridgeCache(accts);
+        setCachedAt(null);
+      } else {
+        const cached = readBridgeCache();
+        setBridgeAccounts(cached?.accounts ?? []);
+        setCachedAt(cached?.at ?? null);
+      }
       setAppAccounts(app ?? []);
       setFirms(firmList ?? []);
       setDemoAccountIds(new Set(ids?.accounts ?? []));
       setDemoDisabled(disabled);
       setConnFirmById(connFirms ?? {});
+      setHiddenConns(Array.isArray(hConns?.value) ? hConns.value : []);
+      setHiddenAccts(Array.isArray(hAccts?.value) ? hAccts.value : []);
     } finally {
       setBusy(false);
     }
@@ -86,8 +125,11 @@ export default function ConnectionsManager() {
   const autoDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
   const showDemo = autoDemo;
   const online = !!quantower?.online || showDemo;
-  const connections = (quantower?.connections?.length ? quantower.connections : (showDemo ? DEMO_CONNECTIONS : []));
-  const effectiveBridge = bridgeAccounts.length ? bridgeAccounts : (showDemo ? DEMO_BRIDGE : []);
+  // Aplica os ocultos: conexões e contas da ponte que o usuário removeu da lista.
+  const connections = (quantower?.connections?.length ? quantower.connections : (showDemo ? DEMO_CONNECTIONS : []))
+    .filter((c) => !hiddenConns.includes(c.id));
+  const effectiveBridge = (bridgeAccounts.length ? bridgeAccounts : (showDemo ? DEMO_BRIDGE : []))
+    .filter((a) => !hiddenAccts.includes(a.platformAccountId) && !hiddenConns.includes(a.connectionId));
 
   const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
   const byConn = useMemo(() => {
@@ -162,9 +204,62 @@ export default function ConnectionsManager() {
       deviceId: f.ds.deviceId,
       version: 0,
     }, { source: 'local' });
+    // Prop: usa o BALANCE da ponte como capital nominal (senão a conta fica com 0).
+    const nominal = Number(bridgeAcc.balance);
+    if (newKind === 'prop' && nominal > 0) {
+      try {
+        await f.ds.propExtensions.put({
+          accountId: id,
+          nominalSize: nominal,
+          challengeCost: 0,
+          phase: 'funded',
+          target: nominal,
+          maxDD: Number((nominal * 0.1).toFixed(2)),
+          trailingDD: Number((nominal * 0.1).toFixed(2)),
+          dailyDD: Number((nominal * 0.05).toFixed(2)),
+          consistencyPct: 0,
+          minDays: 0,
+          payoutRules: { minProfit: 0, minDaysSincePayout: 0, feePct: 0, method: 'Rise' },
+          profitSplit: 0.8,
+          payoutFrequency: 'monthly',
+          updatedAt: new Date().toISOString(),
+          deviceId: f.ds.deviceId,
+          version: 0,
+        }, { source: 'local' });
+      } catch { /* noop */ }
+    }
     toast(`Conta criada: ${bridgeAcc.name}`);
     load();
   }, [connFirmById, load, newKind, toast]);
+
+  // Ocultar/exibir: conexões e contas da ponte que não quer mais ver.
+  const hideConnection = useCallback(async (connId) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const next = [...new Set([...hiddenConns, connId])];
+    await f.ds.meta.setKey(HIDDEN_CONNS_KEY, next);
+    setHiddenConns(next);
+    toast('Conexão ocultada.');
+  }, [hiddenConns, toast]);
+
+  const hideBridgeAccount = useCallback(async (platformAccountId) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const next = [...new Set([...hiddenAccts, platformAccountId])];
+    await f.ds.meta.setKey(HIDDEN_ACCTS_KEY, next);
+    setHiddenAccts(next);
+    toast('Conta da ponte ocultada.');
+  }, [hiddenAccts, toast]);
+
+  const unhideAll = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.ds.meta.setKey(HIDDEN_CONNS_KEY, []);
+    await f.ds.meta.setKey(HIDDEN_ACCTS_KEY, []);
+    setHiddenConns([]);
+    setHiddenAccts([]);
+    toast('Itens ocultos reexibidos.');
+  }, [toast]);
 
   // Define a firm da conexão e propaga para TODAS as contas vinculadas a ela.
   const setFirmForConnection = useCallback(async (connId, firmId) => {
@@ -223,8 +318,15 @@ export default function ConnectionsManager() {
 
       {!online && (
         <div className="cx-offline" role="status">
-          <span className="cx-dot off" /> Bridge offline — abra o Quantower e a ponte para ver as conexões.
+          <span className="cx-dot off" /> Bridge offline
+          {effectiveBridge.length > 0 && cachedAt ? ` — mostrando a última leitura (${new Date(cachedAt).toLocaleString('pt-BR')})` : ' — abra o Quantower e a ponte'}.
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }}><RefreshCw size={13} /> Atualizar</button>
+        </div>
+      )}
+
+      {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
+        <div className="cx-actions">
+          <button className="cmd-refresh" onClick={unhideAll}><RotateCcw size={13} /> Reexibir ocultos ({hiddenConns.length + hiddenAccts.length})</button>
         </div>
       )}
 
@@ -270,6 +372,7 @@ export default function ConnectionsManager() {
                         <option value="">— sem firm —</option>
                         {firms.map((f) => <option key={f.id} value={f.id}>{f.icon ? `${f.icon} ` : ''}{f.name}</option>)}
                       </select>
+                      <button className="cx-btn" onClick={() => hideConnection(c.id)} title="Ocultar esta conexão" aria-label="Ocultar conexão"><EyeOff size={13} /></button>
                     </div>
                     {c.bridge.length === 0 ? (
                       <div className="st-hint">Sem contas nesta conexão.</div>
@@ -295,6 +398,7 @@ export default function ConnectionsManager() {
                               <button className="cx-btn cx-btn-primary" onClick={() => createFor(b)} title="Criar conta no app"><Plus size={13} /></button>
                             </>
                           )}
+                          <button className="cx-btn" onClick={() => hideBridgeAccount(b.platformAccountId)} title="Ocultar esta conta da ponte" aria-label={`Ocultar ${b.name}`}><EyeOff size={13} /></button>
                         </div>
                       );
                     })}
@@ -343,7 +447,7 @@ const CX_CSS = `
 .cx-panel { border-top: 1px solid rgba(255,255,255,0.06); padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
 .cx-firm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 4px; }
 .cx-firm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
-.cx-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.cx-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .cx-row:last-child { border-bottom: none; }
 .cx-row-info { min-width: 0; display: flex; flex-direction: column; }
 .cx-row-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
