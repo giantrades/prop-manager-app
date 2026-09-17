@@ -22,8 +22,9 @@ export function usePwa() {
       (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) ||
         (typeof navigator !== 'undefined' && navigator.standalone === true),
     );
+    // Sem preventDefault: deixa o navegador oferecer a instalação sozinho (evitava o
+    // aviso "Banner not shown: beforeinstallprompt.preventDefault() called" no console).
     const onPrompt = (e) => {
-      e.preventDefault();
       setDeferred(e);
     };
     const onInstalled = () => {
