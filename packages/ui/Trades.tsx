@@ -3,19 +3,29 @@
 // novo: só agrega resultNet/resultR já calculados pelo motor).
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
-import { tradeReplay, tradeNetPnl } from '@apps/lib/db';
+import { tradeReplay, tradeNetPnl, formatDate, parseDate } from '@apps/lib/db';
 
 function fmtR(v) {
   if (v == null || Number.isNaN(v)) return 'n/a';
   return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`;
 }
+// Data/hora SEMPRE local (nunca slice() em ISO UTC).
 function fmtDate(iso) {
-  if (!iso) return '—';
-  return iso.slice(0, 16).replace('T', ' ');
+  return iso ? formatDate(parseDate(iso), 'dd/MM/yyyy HH:mm') : '—';
 }
 function fmtDateShort(iso) {
-  if (!iso) return '—';
-  return iso.slice(0, 10);
+  return iso ? formatDate(parseDate(iso), 'dd/MM HH:mm') : '—';
+}
+/** Duração do trade (abertura → fechamento), curta: "12m", "1h 05m". */
+function fmtDuration(fromIso, toIso) {
+  if (!fromIso || !toIso) return null;
+  const ms = parseDate(toIso).getTime() - parseDate(fromIso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h ${String(m).padStart(2, '0')}m` : `${h}h`;
 }
 
 function FirmBadge({ firm }) {
@@ -194,7 +204,12 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                     <React.Fragment key={t.id}>
                       <tr>
                         <td className="tr-checkcol"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Selecionar ${t.symbol}`} /></td>
-                        <td>{fmtDateShort(t.entryDatetime)}</td>
+                        <td>
+                          <div>{fmtDateShort(t.entryDatetime)}</div>
+                          {fmtDuration(t.entryDatetime, t.exitDatetime) && (
+                            <div className="tr-dur" title={`Fechado ${fmtDate(t.exitDatetime)}`}>→ {fmtDuration(t.entryDatetime, t.exitDatetime)}</div>
+                          )}
+                        </td>
                         <td className="tr-sym">{t.symbol}</td>
                         <td><span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></td>
                         <td className="tr-num">{t.qty}</td>
@@ -239,7 +254,10 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                     <span className="tr-symbol">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
                     <span className={`tr-num ${tradeNetPnl(t) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(tradeNetPnl(t))}</span>
                   </div>
-                  <div className="tr-card-meta">{fmtDateShort(t.entryDatetime)} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}</div>
+                  <div className="tr-card-meta">
+                    {fmtDateShort(t.entryDatetime)}
+                    {fmtDuration(t.entryDatetime, t.exitDatetime) ? ` → ${fmtDuration(t.entryDatetime, t.exitDatetime)}` : ''} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}
+                  </div>
                   <div className="tr-card-actions">
                     <button className="tr-btn tr-btn-sm tr-btn-ghost" onClick={() => setExpanded(isOpen ? null : t.id)}>{isOpen ? 'Ocultar' : 'Replay'}</button>
                     {onEdit && <button className="tr-btn tr-btn-sm" onClick={() => onEdit(t)}>Editar</button>}
@@ -269,6 +287,15 @@ function TradeReplayView({ trade }) {
   const maxAbs = Math.max(1, ...replay.points.map((p) => Math.abs(p.price - trade.entryPrice)));
   return (
     <div className="tr-replay" role="region" aria-label={`Replay de ${trade.symbol}`}>
+      {/* Horários executados: abertura → fechamento · duração (como no app antigo). */}
+      <div className="tr-replay-times">
+        <span className="tr-tt-label">Aberto</span><span className="tr-tt-val">{fmtDate(trade.entryDatetime)}</span>
+        <span className="tr-tt-arrow" aria-hidden="true">→</span>
+        <span className="tr-tt-label">Fechado</span><span className="tr-tt-val">{trade.exitDatetime ? fmtDate(trade.exitDatetime) : '—'}</span>
+        {fmtDuration(trade.entryDatetime, trade.exitDatetime) && (
+          <span className="tr-tt-dur" title="Tempo em mercado">⏱ {fmtDuration(trade.entryDatetime, trade.exitDatetime)}</span>
+        )}
+      </div>
       <div className="tr-replay-track">
         {replay.points.map((p, i) => (
           <div key={`${p.at}-${i}`} className={`tr-replay-pt tr-replay-${p.kind}`} title={`${p.label} — ${p.price} @ ${fmtDate(p.at)}`}>
@@ -281,6 +308,11 @@ function TradeReplayView({ trade }) {
       <div className="tr-replay-meta">
         <span>MAE <b style={{ color: 'var(--red)' }}>{replay.mae ?? '—'}</b></span>
         <span>MFE <b style={{ color: 'var(--green)' }}>{replay.mfe ?? '—'}</b></span>
+        <span>R <b>{fmtR(trade.resultR)}</b></span>
+        <span>Fees <b style={{ color: 'var(--red)' }}>{fmtMoney(-Math.abs(trade.fees || 0))}</b></span>
+        {trade.stopPrice != null && <span>Stop <b>{fmtMoney(trade.stopPrice)}</b></span>}
+        {trade.takePrice != null && <span>Alvo <b>{fmtMoney(trade.takePrice)}</b></span>}
+        {trade.multiplier != null && <span>Multiplier <b>{trade.multiplier}×</b></span>}
       </div>
       {replay.notes && <div className="tr-replay-notes">{replay.notes}</div>}
     </div>
@@ -346,7 +378,13 @@ const TR_CSS = `
 .tr-replay-entry .tr-replay-dot { background: var(--yellow, #e1b12c); }
 .tr-replay-label { font-size: 10px; color: var(--muted, #a1a7b3); white-space: nowrap; }
 .tr-replay-price { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.tr-replay-meta { display: flex; gap: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tr-dur { font-size: 10px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
+.tr-replay-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.tr-tt-label { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.tr-tt-val { font-weight: 700; }
+.tr-tt-arrow { color: var(--muted, #a1a7b3); }
+.tr-tt-dur { margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(124,92,255,0.12); border: 1px solid rgba(124,92,255,0.3); color: #b9a8ff; }
+.tr-replay-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .tr-replay-notes { font-size: 12px; color: var(--text, #e7eaf0); background: rgba(255,255,255,0.03); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
 .tr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tr-tag { font-size: 11px; padding: 2px 10px; border-radius: 999px; background: rgba(124,92,255,0.12); border: 1px solid rgba(124,92,255,0.3); color: var(--brand, #7c5cff); cursor: pointer; }
