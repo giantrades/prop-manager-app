@@ -443,6 +443,21 @@ a {
   background: rgba(34, 197, 94, 0.08);
 }
 
+.sb-sync-btn.sb-refresh {
+  color: #cfd6e4;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 9px;
+}
+
+.sb-sync-btn.sb-refresh:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 .sb-platform-row {
   display: flex;
   align-items: center;

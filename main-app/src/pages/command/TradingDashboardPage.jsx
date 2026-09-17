@@ -277,8 +277,10 @@ export default function TradingDashboardPage() {
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
       <ModuleTabs module="trading" />
       {error && <ActionableError stale error={error} onRetry={reload} label="o Trading" />}
-      <PeriodPicker period={period} onChange={setPeriod} />
-      <AccountPicker selected={acctSel} onChange={setAcctSel} />
+      <div className="td-toolbar">
+        <PeriodPicker period={period} onChange={setPeriod} />
+        <AccountPicker selected={acctSel} onChange={setAcctSel} />
+      </div>
 
       <div className="td-cards">
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />
@@ -534,6 +536,7 @@ export default function TradingDashboardPage() {
 }
 
 const TD_CSS = `
+.td-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .td-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .td-stat { position: relative; overflow: hidden; background: rgba(255,255,255,0.02); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
 .td-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; color: var(--muted, #a1a7b3); margin-bottom: 8px; }

@@ -404,7 +404,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
           <div className="sb-platform-dropdown-header">
             <h4>Platforms {streaming ? <span className="sb-live">LIVE</span> : null}</h4>
             <div className="sb-platform-actions">
-              <button className="sb-sync-btn" onClick={() => refreshStatuses()} title="Verificar conexão agora">↻</button>
+              <button className="sb-sync-btn sb-refresh" onClick={() => refreshStatuses()} title="Verificar conexão agora" aria-label="Verificar conexão agora">↻</button>
               <button
                 className={`sb-sync-btn${isRunning ? " running" : " stopped"}`}
                 onClick={isRunning ? stopSync : startSync}

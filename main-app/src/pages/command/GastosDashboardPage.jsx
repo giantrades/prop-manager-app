@@ -41,11 +41,9 @@ function CatIcon({ name, color, size = 16 }) {
 
 export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
-  const [quick, setQuick] = useState({ accountId: '', amount: '', category: 'moradia', note: '' });
-  const [quickBusy, setQuickBusy] = useState(false);
   const drawer = useEntityDrawer();
   const { period, setPeriod } = usePeriod();
-  const { loading, data, error, finance, reload } = useEngineData(async (f) => {
+  const { loading, data, error, reload } = useEngineData(async (f) => {
     const [txs, categories, budgets, savingsGoal, wallets, cards] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(), f.ds.cards.list(),
     ]);
@@ -167,27 +165,6 @@ export default function GastosDashboardPage() {
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
 
-  const quickAccounts = (data?.wallets ?? []).filter((w) => ['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind));
-  const quickAdd = async () => {
-    const amount = Number(String(quick.amount).replace(',', '.'));
-    if (!finance || !quick.accountId || !(amount > 0)) return;
-    setQuickBusy(true);
-    try {
-      const acc = quickAccounts.find((w) => w.account.id === quick.accountId)?.account;
-      await finance.money.recordExpense({
-        accountId: quick.accountId,
-        amount,
-        currency: acc?.currency || 'BRL',
-        category: quick.category,
-        note: quick.note || undefined,
-      });
-      setQuick((s) => ({ ...s, amount: '', note: '' }));
-      reload();
-    } finally {
-      setQuickBusy(false);
-    }
-  };
-
   const donut = (view?.groups ?? []).map((g) => ({
     id: g.categoryId, name: catName(g.categoryId), value: g.total,
     color: COLORS[catMeta(g.categoryId).color] || COLORS.gray,
@@ -220,21 +197,6 @@ export default function GastosDashboardPage() {
       <div className="gd-monthbar">
         <PeriodPicker period={period} onChange={setPeriod} />
       </div>
-
-      {quickAccounts.length > 0 && (
-        <div className="gd-quick" role="group" aria-label="Lançamento rápido">
-          <select className="gd-quick-input" value={quick.accountId} onChange={(e) => setQuick((s) => ({ ...s, accountId: e.target.value }))} aria-label="Conta">
-            <option value="">Conta…</option>
-            {quickAccounts.map((w) => (<option key={w.account.id} value={w.account.id}>{w.account.name}</option>))}
-          </select>
-          <input className="gd-quick-input" type="number" step="0.01" placeholder="Valor" value={quick.amount} onChange={(e) => setQuick((s) => ({ ...s, amount: e.target.value }))} aria-label="Valor" />
-          <select className="gd-quick-input" value={quick.category} onChange={(e) => setQuick((s) => ({ ...s, category: e.target.value }))} aria-label="Categoria">
-            {(data.categories ?? []).map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-          </select>
-          <input className="gd-quick-input" placeholder="Nota (opcional)" value={quick.note} onChange={(e) => setQuick((s) => ({ ...s, note: e.target.value }))} aria-label="Nota" />
-          <button className="gd-quick-btn" disabled={quickBusy || !quick.accountId || !quick.amount} onClick={quickAdd}>{quickBusy ? '…' : 'Adicionar'}</button>
-        </div>
-      )}
 
       {error && view && <ActionableError stale error={error} onRetry={reload} label="os Gastos" />}
       {error && !view ? (
@@ -512,11 +474,7 @@ export default function GastosDashboardPage() {
 }
 
 const GD_CSS = `
-.gd-quick { display: grid; grid-template-columns: 1.2fr 0.8fr 1.1fr 1.4fr auto; gap: 8px; align-items: center; }
-.gd-quick-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px 10px; color: var(--text, #e7eaf0); font-size: 12px; min-height: 40px; font-family: inherit; }
-.gd-quick-btn { padding: 8px 16px; border-radius: 10px; border: none; background: linear-gradient(135deg, #7c5cff, #6d4df2); color: #fff; font-weight: 700; font-size: 12px; cursor: pointer; min-height: 40px; }
-.gd-quick-btn:disabled { opacity: 0.5; cursor: default; }
-@media (max-width: 900px) { .gd-quick { grid-template-columns: 1fr 1fr; } }
+
 .gd-monthbar { display: flex; flex-direction: column; gap: 8px; }
 .gd-monthnav { display: flex; align-items: center; gap: 8px; }
 .gd-mnav { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }

@@ -3,7 +3,7 @@
 // contador e lista rolável. O pai controla o valor; a seleção é persistida na página.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
-import { Search, Check, X, ChevronDown, Wallet } from 'lucide-react';
+import { Search, Check, X, ChevronDown } from 'lucide-react';
 
 const KIND_LABEL = {
   prop: 'Prop', bank: 'Banco', wallet: 'Carteira', investment: 'Investimento',
@@ -58,10 +58,9 @@ export default function AccountPicker({ selected = [], onChange }) {
   return (
     <div className="ap-root" ref={rootRef}>
       <button className={`ap-btn${selected.length ? ' active' : ''}`} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">
-        <Wallet size={13} />
         <span className="ap-btn-label">{label}</span>
         {selected.length > 0 && accounts.length > 0 && <span className="ap-badge">{selected.length}/{accounts.length}</span>}
-        <ChevronDown size={13} className={`ap-chev${open ? ' open' : ''}`} />
+        <ChevronDown size={14} className={`ap-chev${open ? ' open' : ''}`} />
       </button>
       {open && (
         <div className="ap-panel" role="dialog" aria-label="Filtrar contas">
@@ -106,11 +105,11 @@ export default function AccountPicker({ selected = [], onChange }) {
 
 const AP_CSS = `
 .ap-root { position: relative; display: inline-block; align-self: flex-start; max-width: 100%; }
-.ap-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; min-height: 38px; cursor: pointer; }
+.ap-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; min-height: 38px; cursor: pointer; }
 .ap-btn:hover { background: rgba(255,255,255,0.07); }
-.ap-btn.active { border-color: rgba(124,92,255,0.55); background: rgba(124,92,255,0.14); }
+.ap-btn.active { border-color: rgba(124,92,255,0.45); }
 .ap-btn-label { white-space: nowrap; }
-.ap-badge { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: rgba(124,92,255,0.25); border: 1px solid rgba(124,92,255,0.5); color: #cbbcff; }
+.ap-badge { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: rgba(124,92,255,0.2); border: 1px solid rgba(124,92,255,0.45); color: #cbbcff; }
 .ap-chev { transition: transform 140ms ease; opacity: 0.7; }
 .ap-chev.open { transform: rotate(180deg); }
 .ap-panel { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: 340px; max-width: 92vw; max-height: 62vh; display: flex; flex-direction: column; background: linear-gradient(180deg, #171c27 0%, #12161f 100%); border: 1px solid #1f2734; border-radius: 14px; box-shadow: 0 18px 48px rgba(0,0,0,0.55); padding: 10px; }
