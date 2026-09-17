@@ -115,12 +115,12 @@ export default function RiskCenter({ snapshot, loading = false }) {
           <thead>
             <tr>
               <th>Conta</th>
-              <th>Equity</th>
-              <th>Peak</th>
-              <th>DD restante</th>
-              <th>Trailing</th>
+              <th className="rc-num">Equity</th>
+              <th className="rc-num">Peak</th>
+              <th className="rc-num">DD restante</th>
+              <th className="rc-num">Trailing</th>
               <th>Status</th>
-              <th>Eligible</th>
+              <th className="rc-num">Eligible</th>
             </tr>
           </thead>
           <tbody>
@@ -237,6 +237,7 @@ const RISK_CSS = `
 .rc-table th { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.5px; }
 .rc-table td { font-size: 12px; }
 .rc-num { font-variant-numeric: tabular-nums; }
+.rc-table th.rc-num, .rc-table td.rc-num { text-align: right; }
 .rc-acct-name { font-weight: 600; font-size: 13px; }
 .rc-acct-kind { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: capitalize; }
 .rc-live { color: var(--blue, #3498db); font-weight: 700; text-transform: none; }

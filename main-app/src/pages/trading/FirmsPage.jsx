@@ -17,10 +17,10 @@ export default function FirmsPage() {
   const finance = useFinance();
   const { toast } = useToast();
   const { loading, data, reload: load } = usePageData('firms', async (f) => {
-    const [firms, accounts, propExts, connFirms] = await Promise.all([
-      listFirms(f.ds), f.ds.accounts.list(), f.ds.propExtensions.list(), listConnectionFirms(f.ds),
+    const [firms, accounts, propExts, connFirms, payouts] = await Promise.all([
+      listFirms(f.ds), f.ds.accounts.list(), f.ds.propExtensions.list(), listConnectionFirms(f.ds), f.ds.payouts.list(),
     ]);
-    return { firms, accounts, propExts, connFirms };
+    return { firms, accounts, propExts, connFirms, payouts };
   });
   const firms = data?.firms ?? [];
   const accounts = data?.accounts ?? [];
@@ -102,7 +102,15 @@ export default function FirmsPage() {
             <div className="firm-grid">
               {firms.map((firm) => {
                 const firmAccounts = accounts.filter((a) => a.firmId === firm.id);
-                const capital = firmAccounts.reduce((s, a) => s + (propByAcct.get(a.id)?.nominalSize ?? 0), 0);
+                // Capital = nominal prop; sem regra prop, usa o saldo da plataforma (bridge).
+                const capital = firmAccounts.reduce(
+                  (s, a) => s + (propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || 0), 0,
+                );
+                const firmAcctIds = new Set(firmAccounts.map((a) => a.id));
+                const firmPayouts = (data?.payouts ?? []).filter((p) => (p.accountIds ?? []).some((id) => firmAcctIds.has(id)));
+                const payGross = firmPayouts.reduce((s, p) => s + (Number(p.gross) || 0), 0);
+                const payFee = firmPayouts.reduce((s, p) => s + (Number(p.fee) || 0), 0);
+                const payNet = firmPayouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
                 const firmConns = Object.entries(connFirms)
                   .filter(([, fid]) => fid === firm.id)
                   .map(([cid]) => ({ id: cid, name: connsById.get(cid)?.name || cid }));
@@ -117,9 +125,17 @@ export default function FirmsPage() {
                       <ChevronDown size={16} className={`firm-chev${open ? ' open' : ''}`} />
                     </button>
                     <div className="firm-meta">
-                      {firm.type} · {firmAccounts.length} conta(s)
-                      {capital > 0 ? ` · ${fmtMoney(capital, 'USD')}` : ''}
-                      {firmConns.length > 0 ? ` · ${connOnline ? 'conectada' : 'offline'}` : ''}
+                      {firm.type}
+                      {firmConns.length > 0 ? ` · conexão ${connOnline ? 'conectada' : 'offline'}` : ' · sem conexão'}
+                    </div>
+
+                    <div className="firm-stats">
+                      <div className="firm-stat"><span className="firm-stat-k">Contas</span><span className="firm-stat-v">{firmAccounts.length}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Capital</span><span className="firm-stat-v">{fmtMoney(capital, 'USD')}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Payouts</span><span className="firm-stat-v">{firmPayouts.length}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Gross</span><span className="firm-stat-v">{fmtMoney(payGross, 'USD')}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Fees</span><span className="firm-stat-v firm-red">- {fmtMoney(payFee, 'USD')}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Net</span><span className="firm-stat-v firm-green">{fmtMoney(payNet, 'USD')}</span></div>
                     </div>
 
                     {open && (
@@ -235,6 +251,12 @@ const FIRM_CSS = `
 .firm-icon-btn.active { border-color: var(--brand, #7c5cff); background: rgba(124,92,255,0.15); }
 .firm-name { font-size: 14px; font-weight: 700; flex: 1; }
 .firm-meta { font-size: 11px; color: var(--muted, #a1a7b3); }
+.firm-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.firm-stat { display: flex; flex-direction: column; gap: 1px; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); }
+.firm-stat-k { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.firm-stat-v { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.firm-green { color: var(--green, #2ecc71); }
+.firm-red { color: var(--red, #e74c3c); }
 .firm-profit { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .firm-actions { display: flex; gap: 6px; margin-top: auto; }
 .firm-card-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; text-align: left; padding: 0; }
@@ -257,7 +279,7 @@ const FIRM_CSS = `
 .firm-panel .cx-select { background: #111623; border: 1px solid #273044; color: var(--text, #e7eaf0); border-radius: 8px; padding: 6px 8px; font-size: 12px; min-height: 36px; }
 .cmd-empty { padding: 28px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 @media (max-width: 900px) { .firm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .firm-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .firm-grid { grid-template-columns: 1fr; } .firm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('firm-styles')) {
   const style = document.createElement('style');

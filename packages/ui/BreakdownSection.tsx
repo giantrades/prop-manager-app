@@ -70,7 +70,7 @@ export default function BreakdownSection({ trades = [], currency = 'R$', loading
           <table className="bd-table">
             <thead>
               <tr>
-                <th>Símbolo</th><th>n</th><th>PnL</th><th>WR</th><th>AvgR</th><th>PF</th><th>Expect.</th>
+                <th>Símbolo</th><th className="bd-num">n</th><th className="bd-num">PnL</th><th className="bd-num">WR</th><th className="bd-num">AvgR</th><th className="bd-num">PF</th><th className="bd-num">Expect.</th>
               </tr>
             </thead>
             <tbody>
@@ -111,6 +111,7 @@ const BD_CSS = `
 .bd-table th, .bd-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
 .bd-table th { font-size: 10px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.5px; }
 .bd-num { font-variant-numeric: tabular-nums; }
+.bd-table th.bd-num, .bd-table td.bd-num { text-align: right; }
 .bd-empty { padding: 16px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
 @media (max-width: 719px) { .bd-dirs { grid-template-columns: 1fr; } }
 @keyframes bd-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }

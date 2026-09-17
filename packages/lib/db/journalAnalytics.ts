@@ -476,14 +476,19 @@ export function drawdownAnalysis(trades: Trade[], initialFunding: number): Drawd
     .filter((t) => t.exitDatetime || t.entryDatetime)
     .slice()
     .sort((a, b) => String(a.exitDatetime || a.entryDatetime).localeCompare(String(b.exitDatetime || b.entryDatetime)));
+  const firstAt = (sorted[0]?.exitDatetime || sorted[0]?.entryDatetime) as string | undefined;
   let eq = start;
-  const series = sorted.map((t) => {
+  const series: Array<{ at: string; label: string; equity: number }> = [];
+  // Capital inicial como 1º ponto da curva: sem ele o pico começava na equity do 1º
+  // trade e um drawdown já no começo não era detectado (nem o %).
+  if (firstAt) series.push({ at: firstAt, label: 'início', equity: r2dd(start) });
+  for (const t of sorted) {
     eq += tradeNetPnl(t);
     const at = (t.exitDatetime || t.entryDatetime) as string;
-    const d = new Date(at);
+    const d = parseDate(at);
     const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return { at, label, equity: r2dd(eq) };
-  });
+    series.push({ at, label, equity: r2dd(eq) });
+  }
 
   const drawdowns: DrawdownInfo[] = [];
   if (series.length > 0) {

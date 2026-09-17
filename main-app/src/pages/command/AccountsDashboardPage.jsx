@@ -65,8 +65,14 @@ export default function AccountsDashboardPage() {
     // Saldo exibido: ledger; se vazio, o saldo reportado pela plataforma (bridge).
     const balOf = (a) => balances[a.id] || Number(a.platformBalance) || 0;
     const acctById = new Map(accounts.map((a) => [a.id, a]));
-    const nominalByAccount = new Map(propExts.map((p) => [p.accountId, p.nominalSize || acctById.get(p.accountId)?.platformBalance || 0]));
-    const capital = propExts.reduce((s, p) => s + (p.nominalSize || acctById.get(p.accountId)?.platformBalance || 0), 0);
+    const propByAcct = new Map(propExts.map((p) => [p.accountId, p]));
+    // Nominal da conta prop: regra prop > saldo da plataforma (bridge) > saldo do ledger.
+    const nominalOf = (a) => propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || Number(balances[a.id]) || 0;
+    const nominalByAccount = new Map(accounts.map((a) => [a.id, nominalOf(a)]));
+    // Capital gerido = nominal das contas prop. Se não há nenhuma prop (ou sem nominal),
+    // cai pro somatório dos saldos — nunca fica um "0" sem explicação.
+    const propCapital = accounts.filter((a) => a.kind === 'prop').reduce((s, a) => s + nominalOf(a), 0);
+    const capital = propCapital > 0 ? propCapital : accounts.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const grossPayouts = payouts.reduce((s, p) => s + (Number(p.gross) || 0), 0);
     const feesPayouts = payouts.reduce((s, p) => s + (Number(p.fee) || 0), 0);
@@ -128,6 +134,7 @@ export default function AccountsDashboardPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Contas</h1></div>
       <ModuleTabs module="contas" />
+      <p className="ad-intro">Resumo do seu dinheiro e das contas prop: <b>saldo</b>, <b>risco (DD)</b>, <b>payouts</b> e <b>atividade</b> no período selecionado. Para cadastrar/editar, use a aba <b>Contas</b>.</p>
       <PeriodPicker period={period} onChange={setPeriod} />
 
       {error && data && <ActionableError stale error={error} onRetry={reload} label="as Contas" />}
@@ -138,26 +145,34 @@ export default function AccountsDashboardPage() {
       ) : (
         <>
           <div className="ad-cards">
-            <StatCard label="Líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
-            <StatCard label="Capital gerido" value={fmtMoney(stats.capital, 'USD')} sub={`${stats.propCount} conta(s) prop`} color="#7c5cff" glow="rgba(124,92,255,0.15)" />
-            <StatCard label="Total payouts" value={fmtMoney(stats.netPayouts, 'USD')} sub={`${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
-            <StatCard label="Payout Yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
-            <StatCard label="Contas" value={String(stats.total)} sub="todas as contas" color="#f59e0b" glow="rgba(245,158,11,0.15)" />
+            <StatCard label="Saldo líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
+            <StatCard label="Capital gerido (prop)" value={fmtMoney(stats.capital, 'USD')} sub={stats.propCount > 0 ? `${stats.propCount} conta(s) prop · nominal ou saldo` : 'sem conta prop: soma dos saldos'} color="#7c5cff" glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Payouts recebidos" value={fmtMoney(stats.netPayouts, 'USD')} sub={`líquido no período · ${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
+            <StatCard label="Payout yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts ÷ capital gerido" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Contas" value={String(stats.total)} sub={`${stats.propCount} prop · ${Math.max(0, stats.total - stats.propCount)} outras`} color="#f59e0b" glow="rgba(245,158,11,0.15)" />
             <StatCard label="Firms" value={String((data.firms ?? []).length)} sub="empresas cadastradas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
           </div>
 
           <WidgetGrid storageKey="contas">
             <div className="dash-section" key="matrix" style={{ gridColumn: '1 / -1' }}>
               <div className="dash-title">
-                <span>Account Matrix</span>
+                <span>Situação das contas</span>
                 <NavLink className="dash-link" to="/accounts">gerenciar →</NavLink>
               </div>
+              <div className="ad-note">Uma linha por conta: <b>Equity/Saldo</b> hoje, <b>DD</b> (% do limite já usado), <b>Payouts</b> e <b>Trades</b> no período, e a data do último <b>Sync</b> com a plataforma.</div>
               {stats.matrix.length === 0 ? (
                 <div className="muted">Sem contas.</div>
               ) : (
                 <div className="ac-matrix">
                   <div className="ac-matrix-head">
-                    <span>Conta</span><span>Tipo</span><span>Status</span><span>Equity/Saldo</span><span>DD</span><span>Payouts</span><span>Trades</span><span>Sync</span>
+                    <span title="Nome da conta no app">Conta</span>
+                    <span title="Tipo da conta (prop, banco, carteira…)">Tipo</span>
+                    <span title="Fase da conta prop (challenge/funded/live/standby)">Status</span>
+                    <span className="ac-matrix-num" title="Equity calculada (inclui PnL) ou saldo atual">Equity/Saldo</span>
+                    <span className="ac-matrix-num" title="% do limite de drawdown já usado (Risk Center)">DD</span>
+                    <span className="ac-matrix-num" title="Payouts recebidos (líquido) no período">Payouts</span>
+                    <span className="ac-matrix-num" title="Trades fechados no período">Trades</span>
+                    <span title="Última sincronização com a plataforma">Sync</span>
                   </div>
                   {stats.matrix.map((r) => (
                     <div key={r.id} className="ac-matrix-row">
@@ -270,6 +285,8 @@ const AD_CSS = `
 .ad-kind-bar { display: block; height: 100%; border-radius: 999px; }
 .ad-kind-total { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
 
+.ad-intro { font-size: 12.5px; color: var(--muted, #a1a7b3); margin: 0 0 10px; line-height: 1.5; }
+.ad-note { font-size: 11px; color: var(--muted, #a1a7b3); margin: 4px 0 8px; line-height: 1.5; }
 .ac-matrix { display: flex; flex-direction: column; font-size: 12px; }
 .ac-matrix-head, .ac-matrix-row { display: grid; grid-template-columns: 1.4fr 1fr 0.8fr 1fr 0.6fr 0.9fr 0.6fr 0.9fr; gap: 8px; align-items: center; padding: 7px 4px; }
 .ac-matrix-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }

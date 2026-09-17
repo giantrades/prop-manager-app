@@ -217,9 +217,9 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                   <th scope="col">Contas / firm</th>
                   <th scope="col">Método</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Gross</th>
-                  <th scope="col">Fee</th>
-                  <th scope="col">Líquido</th>
+                  <th scope="col" className="py-num">Gross</th>
+                  <th scope="col" className="py-num">Fee</th>
+                  <th scope="col" className="py-num">Líquido</th>
                   <th scope="col" aria-label="Ações" />
                 </tr>
               </thead>
@@ -386,7 +386,7 @@ const PY_CSS = `
 .py-table th, .py-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .py-table thead th { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
 .py-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-.py-num { text-align: right; }
+.py-table th.py-num, .py-table td.py-num { text-align: right; }
 .py-pos { color: var(--green, #2ecc71); }
 .py-neg { color: var(--red, #e74c3c); }
 .py-acct-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; margin-right: 6px; white-space: nowrap; }

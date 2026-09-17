@@ -12,7 +12,7 @@ import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
 import {
   csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis,
-  rDistribution, durationStats, listFirms, rememberDeletedTrades, tradeFingerprint,
+  rDistribution, durationStats, listFirms, rememberDeletedTrades, tradeFingerprint, tradeNetPnl,
 } from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
 import TradeForm from '@apps/ui/TradeForm';
@@ -27,7 +27,8 @@ import { useToast } from '@apps/ui/Toast';
 
 // A4 — detalhe inline dos trades de um dia (drill-down do calendário).
 function DayTrades({ dateKey, trades, onClose, onEdit }) {
-  const dayPnl = trades.reduce((s, t) => s + (t.resultNet ?? 0), 0);
+  // Mesma fonte do calendário/demais widgets (`tradeNetPnl`), para o total do dia bater.
+  const dayPnl = trades.reduce((s, t) => s + tradeNetPnl(t), 0);
   return (
     <div className="jd-day" role="region" aria-label={`Trades do dia ${dateKey}`}>
       <div className="jd-day-head">
@@ -42,8 +43,8 @@ function DayTrades({ dateKey, trades, onClose, onEdit }) {
       {trades.map((t) => (
         <div key={t.id} className="jd-day-row">
           <span className="jd-day-sym">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
-          <span className="jd-day-num" style={{ color: (t.resultNet ?? 0) >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {(t.resultNet ?? 0).toFixed(2)}
+          <span className="jd-day-num" style={{ color: tradeNetPnl(t) >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {tradeNetPnl(t).toFixed(2)}
           </span>
           <span className="jd-day-num">{t.resultR != null ? `${Number(t.resultR).toFixed(2)}R` : '—'}</span>
           <button className="jd-tab" onClick={() => onEdit(t)}>Editar</button>

@@ -18,7 +18,11 @@ import {
   Tooltip,
   ReferenceDot,
 } from 'recharts';
-import { tradeNetPnl, winrate, profitFactor } from '@apps/lib/db';
+import { tradeNetPnl, winrate, profitFactor, formatDate, parseDate } from '@apps/lib/db';
+
+// Chave de dia LOCAL (mesma regra do calendarPnl/drawdown). Nunca `slice(0,10)` em ISO UTC,
+// senão o trade das 22h de SP cai no dia seguinte e os widgets divergem entre si.
+const dayKey = (v: string | undefined | null): string => (v ? formatDate(parseDate(v), 'yyyy-MM-dd') : '');
 
 
 function fmtPct(v) {
@@ -62,7 +66,7 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
     let cum = 0;
     const equity = closed.map((t) => {
       cum += tradeNetPnl(t);
-      return { at: (t.exitDatetime || t.entryDatetime).slice(0, 10), equity: Number(cum.toFixed(2)) };
+      return { at: dayKey(t.exitDatetime || t.entryDatetime), equity: Number(cum.toFixed(2)) };
     });
     // Drawdown (a partir do pico da equity acumulada).
     let peak = 0;
@@ -71,15 +75,15 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
       return { at: p.at, dd: Number((p.equity - peak).toFixed(2)) };
     });
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dayKey(new Date().toISOString());
     const todayPnl = closed
-      .filter((t) => (t.exitDatetime || t.entryDatetime).slice(0, 10) === today)
+      .filter((t) => dayKey(t.exitDatetime || t.entryDatetime) === today)
       .reduce((s, t) => s + tradeNetPnl(t), 0);
 
-    // Heat por dia da semana (PnL somado).
+    // Heat por dia da semana (PnL somado) — dia LOCAL, igual ao calendário.
     const byDow = [0, 0, 0, 0, 0, 0, 0];
     for (const t of closed) {
-      const d = new Date(t.exitDatetime || t.entryDatetime).getUTCDay();
+      const d = parseDate(t.exitDatetime || t.entryDatetime).getDay();
       byDow[d] += tradeNetPnl(t);
     }
     const maxAbs = Math.max(1, ...byDow.map((v) => Math.abs(v)));
@@ -104,7 +108,7 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
     const byDay = new Map();
     for (const p of payouts) {
       if (p.status === 'Pending') continue;
-      const key = String(p.date || '').slice(0, 10);
+      const key = dayKey(p.date);
       if (!key) continue;
       byDay.set(key, (byDay.get(key) ?? 0) + (p.net ?? 0));
     }

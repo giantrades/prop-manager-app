@@ -371,14 +371,14 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
           <thead>
             <tr>
               <th>Ativo</th>
-              <th>Qtd</th>
-              <th>Preço médio</th>
-              <th>Mark</th>
-              <th>Investido</th>
-              <th>Atual</th>
-              <th>PnL</th>
-              <th>Yield</th>
-              <th>Marca</th>
+              <th className="pf-num">Qtd</th>
+              <th className="pf-num">Preço médio</th>
+              <th className="pf-num">Mark</th>
+              <th className="pf-num">Investido</th>
+              <th className="pf-num">Atual</th>
+              <th className="pf-num">PnL</th>
+              <th className="pf-num">Yield</th>
+              <th className="pf-num">Marca</th>
             </tr>
           </thead>
           <tbody>
@@ -619,6 +619,7 @@ const PF_CSS = `
 .pf-table th { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.5px; }
 .pf-table td { font-size: 12px; }
 .pf-num { font-variant-numeric: tabular-nums; }
+.pf-table th.pf-num, .pf-table td.pf-num { text-align: right; }
 .pf-symbol { font-weight: 700; font-size: 13px; }
 .pf-acct { font-size: 11px; color: var(--muted, #a1a7b3); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pf-cur { font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: rgba(52,152,219,0.15); color: var(--blue, #3498db); }

@@ -130,7 +130,18 @@ export default function TradingDashboardPage() {
   );
 
   const stats = useMemo(() => {
-    const capital = (data?.propExts ?? []).reduce((s, p) => s + (p.nominalSize || 0), 0);
+    const accts = data?.accounts ?? [];
+    const byId = new Map(accts.map((a) => [a.id, a]));
+    const propExts = data?.propExts ?? [];
+    const propByAcct = new Map(propExts.map((p) => [p.accountId, p]));
+    // Nominal prop com fallback no saldo da plataforma (bridge) — senão fica 0 quando
+    // a conta veio da conexão e ainda não tem regra prop cadastrada.
+    const propCapital = accts
+      .filter((a) => a.kind === 'prop')
+      .reduce((s, a) => s + (propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || 0), 0);
+    const capital = propCapital > 0
+      ? propCapital
+      : propExts.reduce((s, p) => s + (p.nominalSize || Number(byId.get(p.accountId)?.platformBalance) || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const closed = trades.filter((t) => t.exitDatetime);
     const pnlTotal = closed.reduce((s, t) => s + tradeNetPnl(t), 0);

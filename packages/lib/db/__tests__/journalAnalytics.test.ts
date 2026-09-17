@@ -322,14 +322,25 @@ describe('journalAnalytics � drawdownAnalysis', () => {
       t('d2', -3000, '2026-09-05T12:00:00Z'),
       t('d3', 500, '2026-09-10T12:00:00Z'),
     ], 10000);
-    // equity: 11000, 8000, 8500
-    expect(r.series.map((s) => s.equity)).toEqual([11000, 8000, 8500]);
+    // equity: 10000 (capital inicial) -> 11000, 8000, 8500
+    expect(r.series.map((s) => s.equity)).toEqual([10000, 11000, 8000, 8500]);
     expect(r.drawdowns).toHaveLength(1);
     expect(r.drawdowns[0].recovered).toBe(false);
     expect(r.drawdowns[0].drawdownAbs).toBe(3000);
     expect(r.drawdowns[0].drawdownPct).toBeCloseTo(27.27, 1);
     expect(r.maxDD.drawdownAbs).toBe(3000);
     expect(r.atPeak).toBe(false);
+  });
+
+  it('captura drawdown j� no 1� trade (capital inicial entra como pico)', () => {
+    const r = drawdownAnalysis([
+      t('f1', -1000, '2026-09-01T12:00:00Z'),
+      t('f2', -500, '2026-09-02T12:00:00Z'),
+    ], 10000);
+    expect(r.drawdowns).toHaveLength(1);
+    expect(r.drawdowns[0].drawdownAbs).toBe(1500);
+    expect(r.maxDD.drawdownPct).toBeCloseTo(15, 1);
+    expect(r.drawdowns[0].recovered).toBe(false);
   });
 
   it('recupera��o fecha o drawdown e volta ao pico', () => {

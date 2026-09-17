@@ -49,7 +49,7 @@ export default function DrawdownSection({ trades = [], initialFunding = 0, curre
       <div className="dd-table-wrap">
         <table className="dd-table">
           <thead>
-            <tr><th scope="col">#</th><th scope="col">Período</th><th scope="col">Max DD</th><th scope="col">Duração</th><th scope="col">Recuperação</th></tr>
+            <tr><th scope="col">#</th><th scope="col">Período</th><th scope="col" className="dd-num">Max DD</th><th scope="col" className="dd-num">Duração</th><th scope="col" className="dd-num">Recuperação</th></tr>
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
@@ -58,9 +58,9 @@ export default function DrawdownSection({ trades = [], initialFunding = 0, curre
               <tr key={d.id}>
                 <td>{page * perPage + i + 1}</td>
                 <td>{d.startDate} — {d.recoveryDate || 'em curso'}</td>
-                <td className="dd-neg">{fmtMoney(-d.drawdownAbs, currency)} ({d.drawdownPct}%)</td>
-                <td>{d.durationDays}d</td>
-                <td>{d.recovered ? `${d.recoveryDays}d` : <span className="dd-ongoing">EM CURSO</span>}</td>
+                <td className="dd-num dd-neg">{fmtMoney(-d.drawdownAbs, currency)} ({d.drawdownPct}%)</td>
+                <td className="dd-num">{d.durationDays}d</td>
+                <td className="dd-num">{d.recovered ? `${d.recoveryDays}d` : <span className="dd-ongoing">EM CURSO</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -101,6 +101,7 @@ const DD_CSS = `
 .dd-table-wrap { overflow-x: auto; }
 .dd-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .dd-table th, .dd-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; }
+.dd-table th.dd-num, .dd-table td.dd-num { text-align: right; }
 .dd-table thead th { color: var(--muted, #a1a7b3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
 .dd-ongoing { background: #dc2626; color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 10px; font-weight: 700; }
 .dd-empty { color: var(--muted, #a1a7b3); }

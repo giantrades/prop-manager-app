@@ -177,11 +177,11 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                   <th scope="col" onClick={() => toggleSort('entryDatetime')} className="tr-sortable">Data{sortMark('entryDatetime')}</th>
                   <th scope="col">Ativo</th>
                   <th scope="col">Lado</th>
-                  <th scope="col" onClick={() => toggleSort('qty')} className="tr-sortable">Qtd{sortMark('qty')}</th>
-                  <th scope="col">Entrada</th>
-                  <th scope="col">Saída</th>
-                  <th scope="col" onClick={() => toggleSort('resultNet')} className="tr-sortable">PnL{sortMark('resultNet')}</th>
-                  <th scope="col" onClick={() => toggleSort('resultR')} className="tr-sortable">R{sortMark('resultR')}</th>
+                  <th scope="col" onClick={() => toggleSort('qty')} className="tr-sortable tr-num">Qtd{sortMark('qty')}</th>
+                  <th scope="col" className="tr-num">Entrada</th>
+                  <th scope="col" className="tr-num">Saída</th>
+                  <th scope="col" onClick={() => toggleSort('resultNet')} className="tr-sortable tr-num">PnL{sortMark('resultNet')}</th>
+                  <th scope="col" onClick={() => toggleSort('resultR')} className="tr-sortable tr-num">R{sortMark('resultR')}</th>
                   <th scope="col">Conta</th>
                   <th scope="col">Ações</th>
                 </tr>
@@ -316,7 +316,7 @@ const TR_CSS = `
 .tr-sortable { cursor: pointer; user-select: none; }
 .tr-sortable:hover { color: var(--text, #e7eaf0); }
 .tr-table tbody tr:hover { background: rgba(255,255,255,0.02); }
-.tr-num { text-align: right; }
+.tr-table th.tr-num, .tr-table td.tr-num { text-align: right; }
 .tr-pos { color: var(--green, #2ecc71); }
 .tr-neg { color: var(--red, #e74c3c); }
 .tr-sym { font-weight: 700; }
