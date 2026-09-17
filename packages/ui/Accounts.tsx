@@ -11,7 +11,7 @@ import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
   Pencil, Trash2, Plus, Copy, Gauge, X,
 } from 'lucide-react';
-import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR, isActiveProp, normalizePropPhase } from '@apps/lib/db';
+import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR, isActiveProp, normalizePropPhase, accountBalance } from '@apps/lib/db';
 
 const KINDS = ['prop', 'wallet', 'investment', 'bank', 'cash'];
 // Status de vida da conta (4 estados pedidos): Challenge, Funded, Live, Standby.
@@ -118,15 +118,17 @@ export default function Accounts({
 
   const summary = useMemo(() => {
     const prop = accounts.filter((a) => a.kind === 'prop');
-    const nominal = prop.reduce((s, a) => s + (props[a.id]?.nominalSize || a.platformBalance || 0), 0);
+    // BALANCE = plataforma (bridge) quando existe; ledger como fallback (regra única).
+    const balOf = (a) => accountBalance(a, balances[a.id]);
+    const balanceTotal = accounts.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
+    const propBalance = prop.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
     let liquidTotal = 0;
     for (const a of accounts) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
-      // Saldo do ledger; se vazio, usa o saldo da plataforma (bridge).
-      liquidTotal += convertMoney(balances[a.id] || a.platformBalance || 0, a.currency);
+      liquidTotal += convertMoney(balOf(a), a.currency);
     }
     const activeProp = prop.filter((a) => isActiveProp(props[a.id]?.phase));
-    return { total: accounts.length, propCount: prop.length, nominal, liquidTotal, activeProp: activeProp.length };
+    return { total: accounts.length, propCount: prop.length, balanceTotal, propBalance, liquidTotal, activeProp: activeProp.length };
   }, [accounts, props, balances]);
 
   // ---- Form (modal) ----
@@ -256,8 +258,8 @@ export default function Accounts({
       {/* Resumo */}
       <div className="ac3-summary">
         <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Capital gerido</span><span className="ac3-sum-value">{fmtMoney(summary.nominal)}</span><span className="ac3-sum-sub">nominal prop</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Líquido</span>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtMoney(summary.balanceTotal)}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance líquido</span>
           <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtDisplay(summary.liquidTotal)}</span>
           <span className="ac3-sum-sub">banco · carteira · cash · cripto</span>
         </div>
@@ -319,13 +321,15 @@ export default function Accounts({
 
                 <div className="ac3-card-metrics">
                   <div className="ac3-metric">
-                    <span className="ac3-metric-label">{a.kind === 'prop' ? 'Balance' : 'Saldo'}</span>
-                    <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize || a.platformBalance || 0) : (balances[a.id] || a.platformBalance || 0), curSymbol(a.currency))}</span>
+                    <span className="ac3-metric-label">Balance</span>
+                    <span className="ac3-metric-value" title={a.platformBalance != null ? 'Saldo reportado pela plataforma (Quantower)' : 'Saldo do ledger do app'}>
+                      {fmtMoney(accountBalance(a, balances[a.id]), curSymbol(a.currency))}
+                    </span>
                   </div>
-                  {a.platformAccountId && a.platformBalance != null && (
+                  {a.kind === 'prop' && p?.nominalSize > 0 && (
                     <div className="ac3-metric">
-                      <span className="ac3-metric-label">Plataforma</span>
-                      <span className="ac3-metric-value" title="Saldo reportado pela ponte (Quantower)">{fmtMoney(a.platformBalance, curSymbol(a.currency))}</span>
+                      <span className="ac3-metric-label">Nominal</span>
+                      <span className="ac3-metric-value">{fmtMoney(p.nominalSize, curSymbol(a.currency))}</span>
                     </div>
                   )}
                   {a.kind === 'prop' && (

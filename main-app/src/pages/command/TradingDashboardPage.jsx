@@ -19,7 +19,7 @@ import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
   strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck, tradeNetPnl,
-  tradeAccountIds, weightForAccount,
+  tradeAccountIds, weightForAccount, accountBalance,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -134,14 +134,13 @@ export default function TradingDashboardPage() {
     const byId = new Map(accts.map((a) => [a.id, a]));
     const propExts = data?.propExts ?? [];
     const propByAcct = new Map(propExts.map((p) => [p.accountId, p]));
-    // Nominal prop com fallback no saldo da plataforma (bridge) — senão fica 0 quando
-    // a conta veio da conexão e ainda não tem regra prop cadastrada.
+    // BALANCE prop = plataforma (bridge) manda; nominal prop é fallback.
     const propCapital = accts
       .filter((a) => a.kind === 'prop')
-      .reduce((s, a) => s + (propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || 0), 0);
+      .reduce((s, a) => s + accountBalance(a, propByAcct.get(a.id)?.nominalSize || 0), 0);
     const capital = propCapital > 0
       ? propCapital
-      : propExts.reduce((s, p) => s + (p.nominalSize || Number(byId.get(p.accountId)?.platformBalance) || 0), 0);
+      : propExts.reduce((s, p) => s + (Number(byId.get(p.accountId)?.platformBalance) || p.nominalSize || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const closed = trades.filter((t) => t.exitDatetime);
     const pnlTotal = closed.reduce((s, t) => s + tradeNetPnl(t), 0);
@@ -303,7 +302,7 @@ export default function TradingDashboardPage() {
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />
         <StatCard label="Winrate" value={fmtPct(stats.wr)} sub="trades fechados" color="#f59e0b" glow="rgba(245,158,11,0.15)" />
         <StatCard label="Profit factor" value={pfLabel} sub="ganhos / perdas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
-        <StatCard label="Capital (nominal)" value={fmtMoney(stats.capital, 'USD')} sub="contas prop" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
+        <StatCard label="Balance prop" value={fmtMoney(stats.capital, 'USD')} sub="plataforma quando disponível" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
         <StatCard label="Total payouts" value={fmtMoney(stats.netPayouts, 'USD')} sub={`${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
         <StatCard label="Payout Yield" value={fmtPct(stats.payoutYield)} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
       </div>

@@ -5,7 +5,7 @@ import { useFinance, usePlatform } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import { listFirms, saveFirm, deleteFirm, listConnectionFirms, FIRM_TYPES, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
+import { listFirms, saveFirm, deleteFirm, listConnectionFirms, FIRM_TYPES, DEFAULT_FIRM_COLOR, accountBalance } from '@apps/lib/db';
 import { fmtMoney } from '@apps/ui/currency';
 import { Building2, Pencil, Trash2, Plus, X, ChevronDown, Unlink } from 'lucide-react';
 
@@ -102,9 +102,9 @@ export default function FirmsPage() {
             <div className="firm-grid">
               {firms.map((firm) => {
                 const firmAccounts = accounts.filter((a) => a.firmId === firm.id);
-                // Capital = nominal prop; sem regra prop, usa o saldo da plataforma (bridge).
+                // BALANCE = plataforma (bridge) manda; nominal prop é só fallback.
                 const capital = firmAccounts.reduce(
-                  (s, a) => s + (propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || 0), 0,
+                  (s, a) => s + accountBalance(a, propByAcct.get(a.id)?.nominalSize || 0), 0,
                 );
                 const firmAcctIds = new Set(firmAccounts.map((a) => a.id));
                 const firmPayouts = (data?.payouts ?? []).filter((p) => (p.accountIds ?? []).some((id) => firmAcctIds.has(id)));
@@ -131,7 +131,7 @@ export default function FirmsPage() {
 
                     <div className="firm-stats">
                       <div className="firm-stat"><span className="firm-stat-k">Contas</span><span className="firm-stat-v">{firmAccounts.length}</span></div>
-                      <div className="firm-stat"><span className="firm-stat-k">Capital</span><span className="firm-stat-v">{fmtMoney(capital, 'USD')}</span></div>
+                      <div className="firm-stat"><span className="firm-stat-k">Balance</span><span className="firm-stat-v">{fmtMoney(capital, 'USD')}</span></div>
                       <div className="firm-stat"><span className="firm-stat-k">Payouts</span><span className="firm-stat-v">{firmPayouts.length}</span></div>
                       <div className="firm-stat"><span className="firm-stat-k">Gross</span><span className="firm-stat-v">{fmtMoney(payGross, 'USD')}</span></div>
                       <div className="firm-stat"><span className="firm-stat-k">Fees</span><span className="firm-stat-v firm-red">- {fmtMoney(payFee, 'USD')}</span></div>

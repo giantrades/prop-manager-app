@@ -4,12 +4,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
-import { useFinance } from '@apps/state';
+import { useFinance, usePlatform } from '@apps/state';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade } from '@apps/lib/db';
 
 export default function QuantowerPage() {
   const finance = useFinance();
+  // Fonte única do liga/desliga do auto-sync (mesmo botão do menu Platforms na navbar).
+  const { isRunning, startSync, stopSync } = usePlatform();
   const [bridgeUrl, setBridgeUrl] = useState(() => localStorage.getItem('qt:bridgeUrl') || import.meta.env.VITE_BRIDGE_URL || 'http://127.0.0.1:8787');
   const [bridgeToken, setBridgeToken] = useState(() => localStorage.getItem('qt:bridgeToken') || import.meta.env.VITE_BRIDGE_TOKEN || '');
   const [status, setStatus] = useState(null);
@@ -193,7 +195,12 @@ export default function QuantowerPage() {
         <button className="cmd-refresh" onClick={() => window.dispatchEvent(new Event('qt:autosync'))}>Sincronizar agora</button>
       </div>
       <div className="qt-sync" aria-label="Auto-sync">
-        <div className="qt-sync-title">Auto-sync (a cada 2 min) — {autoSync.enabled ? 'ligado' : 'DESLIGADO'}</div>
+        <div className="qt-sync-title">
+          <span>Auto-sync (a cada 2 min) — {isRunning ? 'ligado' : 'DESLIGADO'}</span>
+          <button className={isRunning ? 'cmd-refresh' : 'cmd-refresh qt-on'} onClick={() => (isRunning ? stopSync() : startSync())}>
+            {isRunning ? 'Desligar' : 'Ligar auto-sync'}
+          </button>
+        </div>
         {autoSync.status ? (
           <div className="qt-sync-grid">
             <span className="qt-sync-k">Última tentativa</span><span className="qt-sync-v">{new Date(autoSync.status.at).toLocaleString('pt-BR')}</span>
@@ -213,7 +220,7 @@ export default function QuantowerPage() {
             )}
           </div>
         ) : (
-          <div className="qt-hint">Ainda não rodou. Ligue o auto-sync no menu <b>Platforms</b> (navbar) ou clique “Sincronizar agora”.</div>
+          <div className="qt-hint">Ainda não rodou. Clique <b>Ligar auto-sync</b> (ou <b>Platforms → Start</b> na navbar) e depois <b>Sincronizar agora</b> para forçar um ciclo.</div>
         )}
       </div>
       {lastRun && (

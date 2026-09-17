@@ -89,7 +89,11 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   // [PATCH C] MAE/MFE reais do bridge — `maeMfe()` os prefere ao proxy via fills.
   const mae = typeof q.mae === 'number' ? q.mae : undefined;
   const mfe = typeof q.mfe === 'number' ? q.mfe : undefined;
-  const resultNet = q.netPnl ?? 0;
+  // `hasNet`: a plataforma REPORTou o PnL (mesmo 0 = breakeven). Sem isso, um 0 real
+  // era sobrescrito pela fórmula (que pode errar sem o multiplier) — e o valor errado
+  // ficava gravado, contaminando todos os widgets.
+  const hasNet = typeof q.netPnl === 'number' && Number.isFinite(q.netPnl);
+  const resultNet = hasNet ? (q.netPnl as number) : 0;
   const trade = {
     id: `qt_${q.platformTradeId}`,
     accountId,
@@ -115,8 +119,8 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     resultNet,
     resultR: null as number | null,
   };
-  // Se o bridge não trouxe netPnl, deriva via fórmula única (para Equity funcionar).
-  if (!resultNet && exitPrice != null) {
+  // Se o bridge NÃO trouxe netPnl, deriva via fórmula única (para Equity funcionar).
+  if (!hasNet && exitPrice != null) {
     const computed = tradePnl(trade as Trade);
     if (computed !== 0) trade.resultNet = Number(computed.toFixed(2));
   }

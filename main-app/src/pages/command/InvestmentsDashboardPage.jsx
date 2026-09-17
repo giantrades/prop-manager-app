@@ -17,6 +17,7 @@ import Portfolio from '@apps/ui/Portfolio';
 import {
   applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries,
   dividendHistory, dividendIncomeByMonth, dividendByAsset, getAnnouncedDividends, upcomingDividends,
+  tradeNetPnl,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -67,7 +68,7 @@ export default function InvestmentsDashboardPage() {
     const entradas = sum(['income', 'payout_in', 'rebate']);
     const gastos = sum(['expense']);
     const custos = sum(['challenge_cost', 'reset_fee', 'monthly_fee']);
-    const tradingPnl = trades.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const tradingPnl = trades.reduce((s, t) => s + tradeNetPnl(t), 0);
     const r2 = (n) => Number(n.toFixed(2));
     return { entradas: r2(entradas), gastos: r2(gastos), custos: r2(custos), tradingPnl: r2(tradingPnl), variacao: r2(entradas - gastos - custos + tradingPnl) };
   }, [data, period]);

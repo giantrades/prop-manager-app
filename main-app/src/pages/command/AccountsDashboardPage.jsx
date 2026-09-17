@@ -9,7 +9,7 @@ import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
 import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
-import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds } from '@apps/lib/db';
+import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds, accountBalance } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
@@ -62,30 +62,25 @@ export default function AccountsDashboardPage() {
     const periodTxs = txs.filter((t) => inPeriod(t.date, period, txs));
     const balances = {};
     for (const a of accounts) balances[a.id] = computeAccountBalance(periodTxs, a.id);
-    // Saldo exibido: ledger; se vazio, o saldo reportado pela plataforma (bridge).
-    const balOf = (a) => balances[a.id] || Number(a.platformBalance) || 0;
-    const acctById = new Map(accounts.map((a) => [a.id, a]));
-    const propByAcct = new Map(propExts.map((p) => [p.accountId, p]));
-    // Nominal da conta prop: regra prop > saldo da plataforma (bridge) > saldo do ledger.
-    const nominalOf = (a) => propByAcct.get(a.id)?.nominalSize || Number(a.platformBalance) || Number(balances[a.id]) || 0;
-    const nominalByAccount = new Map(accounts.map((a) => [a.id, nominalOf(a)]));
-    // Capital gerido = nominal das contas prop. Se não há nenhuma prop (ou sem nominal),
-    // cai pro somatório dos saldos — nunca fica um "0" sem explicação.
-    const propCapital = accounts.filter((a) => a.kind === 'prop').reduce((s, a) => s + nominalOf(a), 0);
-    const capital = propCapital > 0 ? propCapital : accounts.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
+    // BALANCE da conta — fonte ÚNICA de todos os widgets: plataforma (bridge) manda;
+    // o ledger (derivado) é só fallback quando a plataforma nunca reportou a conta.
+    const balOf = (a) => accountBalance(a, balances[a.id]);
+    const acctValue = (a) => convertMoney(balOf(a), a.currency); // converte p/ a moeda do app
+    const capital = accounts.reduce((s, a) => s + acctValue(a), 0);
+    const propBalance = accounts.filter((a) => a.kind === 'prop').reduce((s, a) => s + acctValue(a), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const grossPayouts = payouts.reduce((s, p) => s + (Number(p.gross) || 0), 0);
     const feesPayouts = payouts.reduce((s, p) => s + (Number(p.fee) || 0), 0);
-    const payoutYield = capital > 0 ? netPayouts / capital : 0;
+    const payoutYield = propBalance > 0 ? netPayouts / propBalance : 0;
 
     const perKind = {};
     let liquidTotal = 0;
     const rows = [];
     for (const a of accounts) {
-      const total = a.kind === 'prop' ? (nominalByAccount.get(a.id) ?? 0) : convertMoney(balOf(a), a.currency);
+      const total = acctValue(a);
       const e = perKind[a.kind] ?? { count: 0, total: 0 };
       e.count += 1; e.total += total; perKind[a.kind] = e;
-      if (LIQUID.includes(a.kind)) liquidTotal += convertMoney(balOf(a), a.currency);
+      if (LIQUID.includes(a.kind)) liquidTotal += total;
       rows.push({ id: a.id, name: a.name, kind: a.kind, currency: a.currency, balance: balOf(a), liquid: LIQUID.includes(a.kind) });
     }
     const topBalances = rows.filter((r) => r.liquid).sort((a, b) => b.balance - a.balance).slice(0, 6);
@@ -117,7 +112,7 @@ export default function AccountsDashboardPage() {
         currency: a.currency,
         status: a.kind === 'prop' ? (phase ? phase.toUpperCase() : '—') : '—',
         level: rk?.status?.status ?? null,
-        value: a.kind === 'prop' ? (rk?.metrics?.equity ?? prop?.nominalSize ?? a.platformBalance ?? 0) : convertMoney(balOf(a), a.currency),
+        value: acctValue(a),
         ddPct: rk?.metrics?.maxDDUsed != null ? Math.round(rk.metrics.maxDDUsed * 100) : null,
         payouts: payoutsByAccount.get(a.id) ?? 0,
         trades: tradesByAccount.get(a.id) ?? 0,
@@ -125,7 +120,7 @@ export default function AccountsDashboardPage() {
       };
     }).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
-    return { total: accounts.length, capital, netPayouts, payoutYield, perKind, liquidTotal, topBalances, pieData, propCount: perKind.prop?.count ?? 0, payoutsCount: payouts.length, matrix, waterfall: { gross: grossPayouts, fees: feesPayouts, net: netPayouts } };
+    return { total: accounts.length, capital, propBalance, netPayouts, payoutYield, perKind, liquidTotal, topBalances, pieData, propCount: perKind.prop?.count ?? 0, payoutsCount: payouts.length, matrix, waterfall: { gross: grossPayouts, fees: feesPayouts, net: netPayouts } };
   }, [data, period]);
 
   const maxKind = Math.max(1, ...Object.values(stats.perKind).map((v) => v.total));
@@ -145,12 +140,12 @@ export default function AccountsDashboardPage() {
       ) : (
         <>
           <div className="ad-cards">
-            <StatCard label="Saldo líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
-            <StatCard label="Capital gerido (prop)" value={fmtMoney(stats.capital, 'USD')} sub={stats.propCount > 0 ? `${stats.propCount} conta(s) prop · nominal ou saldo` : 'sem conta prop: soma dos saldos'} color="#7c5cff" glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Balance total" value={fmtMoney(stats.capital, 'USD')} sub="soma das contas · plataforma quando disponível" color="#7c5cff" glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Balance prop" value={fmtMoney(stats.propBalance, 'USD')} sub={`${stats.propCount} conta(s) prop`} color="#a78bfa" glow="rgba(167,139,250,0.15)" />
+            <StatCard label="Balance líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
             <StatCard label="Payouts recebidos" value={fmtMoney(stats.netPayouts, 'USD')} sub={`líquido no período · ${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
-            <StatCard label="Payout yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts ÷ capital gerido" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Payout yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts ÷ balance prop" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
             <StatCard label="Contas" value={String(stats.total)} sub={`${stats.propCount} prop · ${Math.max(0, stats.total - stats.propCount)} outras`} color="#f59e0b" glow="rgba(245,158,11,0.15)" />
-            <StatCard label="Firms" value={String((data.firms ?? []).length)} sub="empresas cadastradas" color="#22d3ee" glow="rgba(34,211,238,0.15)" />
           </div>
 
           <WidgetGrid storageKey="contas">
@@ -159,7 +154,7 @@ export default function AccountsDashboardPage() {
                 <span>Situação das contas</span>
                 <NavLink className="dash-link" to="/accounts">gerenciar →</NavLink>
               </div>
-              <div className="ad-note">Uma linha por conta: <b>Equity/Saldo</b> hoje, <b>DD</b> (% do limite já usado), <b>Payouts</b> e <b>Trades</b> no período, e a data do último <b>Sync</b> com a plataforma.</div>
+              <div className="ad-note">Uma linha por conta: <b>Balance</b> (o que a plataforma reporta; ledger se não houver), <b>DD</b> (% do limite já usado), <b>Payouts</b> e <b>Trades</b> no período, e a data do último <b>Sync</b>.</div>
               {stats.matrix.length === 0 ? (
                 <div className="muted">Sem contas.</div>
               ) : (
@@ -168,7 +163,7 @@ export default function AccountsDashboardPage() {
                     <span title="Nome da conta no app">Conta</span>
                     <span title="Tipo da conta (prop, banco, carteira…)">Tipo</span>
                     <span title="Fase da conta prop (challenge/funded/live/standby)">Status</span>
-                    <span className="ac-matrix-num" title="Equity calculada (inclui PnL) ou saldo atual">Equity/Saldo</span>
+                    <span className="ac-matrix-num" title="Balance: saldo reportado pela plataforma; senão saldo do ledger">Balance</span>
                     <span className="ac-matrix-num" title="% do limite de drawdown já usado (Risk Center)">DD</span>
                     <span className="ac-matrix-num" title="Payouts recebidos (líquido) no período">Payouts</span>
                     <span className="ac-matrix-num" title="Trades fechados no período">Trades</span>

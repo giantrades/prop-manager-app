@@ -81,9 +81,13 @@ export function tradeR(trade: Trade, opts?: { stopPrice?: number; multiplier?: n
  * não divergir entre telas (heatmap/calendário/drawdown x lista).
  */
 export function tradeNetPnl(trade: Trade): number {
-  return typeof trade.resultNet === 'number' && Number.isFinite(trade.resultNet)
-    ? trade.resultNet
-    : tradePnl(trade);
+  const raw = trade?.resultNet as unknown;
+  // Aceita número OU string numérica (CSV/bridge antigo). Vazio/null/NaN cai na fórmula.
+  if (raw !== null && raw !== undefined && raw !== '') {
+    const n = typeof raw === 'number' ? raw : Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return tradePnl(trade);
 }
 
 /**
@@ -277,8 +281,10 @@ export function computePayoutEligibility(input: EligibilityInput): EligibilityRe
 // ---------------------------------------------------------------------------
 
 export function winrate(trades: Trade[]): number {
-  const wins = trades.filter((t) => t.resultNet > 0).length;
-  const losses = trades.filter((t) => t.resultNet < 0).length;
+  // `tradeNetPnl` (não `t.resultNet` cru): resultadoNet ausente/string virava 0 e
+  // distorcia o WR — e `+= undefined` em profitFactor gerava NaN.
+  const wins = trades.filter((t) => tradeNetPnl(t) > 0).length;
+  const losses = trades.filter((t) => tradeNetPnl(t) < 0).length;
   if (wins + losses === 0) return 0;
   return Number((wins / (wins + losses)).toFixed(6));
 }
@@ -289,8 +295,9 @@ export function profitFactor(trades: Trade[]): ProfitFactor {
   let grossWin = 0;
   let grossLoss = 0;
   for (const t of trades) {
-    if (t.resultNet > 0) grossWin += t.resultNet;
-    else if (t.resultNet < 0) grossLoss += Math.abs(t.resultNet);
+    const pnl = tradeNetPnl(t);
+    if (pnl > 0) grossWin += pnl;
+    else if (pnl < 0) grossLoss += Math.abs(pnl);
   }
   if (grossLoss === 0 && grossWin === 0) return 'n/a';
   if (grossLoss === 0) return 'infinity'; // renderizar como "∞", nunca JS Infinity cru

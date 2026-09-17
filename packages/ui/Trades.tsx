@@ -3,7 +3,7 @@
 // novo: só agrega resultNet/resultR já calculados pelo motor).
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
-import { tradeReplay } from '@apps/lib/db';
+import { tradeReplay, tradeNetPnl } from '@apps/lib/db';
 
 function fmtR(v) {
   if (v == null || Number.isNaN(v)) return 'n/a';
@@ -88,8 +88,8 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
 
   const stats = useMemo(() => {
     const total = filtered.length;
-    const wins = filtered.filter((t) => (t.resultNet ?? 0) > 0).length;
-    const pnl = filtered.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const wins = filtered.filter((t) => tradeNetPnl(t) > 0).length;
+    const pnl = filtered.reduce((s, t) => s + tradeNetPnl(t), 0);
     const avgR = total > 0 ? filtered.reduce((s, t) => s + (Number(t.resultR) || 0), 0) / total : 0;
     return { total, wr: total > 0 ? (wins / total) * 100 : 0, pnl, avgR };
   }, [filtered]);
@@ -200,7 +200,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                         <td className="tr-num">{t.qty}</td>
                         <td className="tr-num">{fmtMoney(t.entryPrice)}</td>
                         <td className="tr-num">{t.exitPrice != null ? fmtMoney(t.exitPrice) : '—'}</td>
-                        <td className={`tr-num ${(t.resultNet ?? 0) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(t.resultNet)}</td>
+                        <td className={`tr-num ${tradeNetPnl(t) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(tradeNetPnl(t))}</td>
                         <td className="tr-num">{fmtR(t.resultR)}</td>
                         <td className="tr-acct"><FirmBadge firm={firmOf(t)} /> {acct}</td>
                         <td className="tr-actions">
@@ -237,7 +237,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                   <div className="tr-card-head">
                     <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Selecionar ${t.symbol}`} />
                     <span className="tr-symbol">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
-                    <span className={`tr-num ${(t.resultNet ?? 0) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(t.resultNet)}</span>
+                    <span className={`tr-num ${tradeNetPnl(t) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(tradeNetPnl(t))}</span>
                   </div>
                   <div className="tr-card-meta">{fmtDateShort(t.entryDatetime)} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}</div>
                   <div className="tr-card-actions">

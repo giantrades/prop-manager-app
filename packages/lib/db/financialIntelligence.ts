@@ -122,7 +122,7 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
     const stamp = t.exitDatetime || t.entryDatetime;
     if (!stamp) continue;
     const key = stamp.slice(0, 7);
-    byMonth.set(key, (byMonth.get(key) ?? 0) + (Number(t.resultNet) || 0));
+    byMonth.set(key, (byMonth.get(key) ?? 0) + tradeNetPnl(t));
   }
   const allTradeMonths = [...byMonth.keys()].sort();
   const tradingCum = new Map<string, number>();
@@ -196,7 +196,7 @@ export async function buildCommandSnapshot(finance: FinanceServices, period: Per
     const prevPeriod: Period = { mode: 'range', from: prevWindow.from, to: prevWindow.to };
     const sumTrades = (arr) => arr.reduce((s, t) => {
       if (t.exitPrice == null || !inPeriod(t.exitDatetime || t.entryDatetime, prevPeriod)) return s;
-      return s + (Number(t.resultNet) || 0);
+      return s + tradeNetPnl(t);
     }, 0);
     const payoutsPrev = pendingPayouts.reduce((s, p) => (inPeriod(p.date || p.updatedAt, prevPeriod) ? s + (Number(p.net) || 0) : s), 0);
     previous = {

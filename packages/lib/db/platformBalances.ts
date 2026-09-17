@@ -11,6 +11,20 @@ export interface BridgeAccountLike {
 }
 
 /**
+ * BALANCE da conta — valor único usado por TODOS os widgets de Contas/Firms.
+ * Fonte: `platformBalance` (o que a PLATAFORMA reporta, via bridge) quando existe;
+ * senão o fallback (ledger/derivado). Nada de fórmula nova: é só precedência.
+ */
+export function accountBalance(
+  account: { platformBalance?: number } | null | undefined,
+  fallback = 0,
+): number {
+  const p = account?.platformBalance;
+  if (typeof p === 'number' && Number.isFinite(p)) return p;
+  return Number(fallback) || 0;
+}
+
+/**
  * Grava `platformBalance` nas contas associadas (match por `platformAccountId`) e usa o
  * saldo como capital nominal de conta prop que ainda não tem um. Só escreve o que mudou.
  * @returns quantas contas foram atualizadas.

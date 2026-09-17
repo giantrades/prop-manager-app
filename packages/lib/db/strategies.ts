@@ -56,8 +56,8 @@ export function weightedTradePnl(trade: Trade, accountId?: string): number {
 function breakdown(trades: Trade[], direction: 'long' | 'short'): DirectionBreakdown {
   const subset = trades.filter((t) => t.direction === direction);
   const n = subset.length;
-  const wins = subset.filter((t) => t.resultNet > 0).length;
-  const losses = subset.filter((t) => t.resultNet < 0).length;
+  const wins = subset.filter((t) => tradeNetPnl(t) > 0).length;
+  const losses = subset.filter((t) => tradeNetPnl(t) < 0).length;
   const winRate = wins + losses > 0 ? wins / (wins + losses) : 0;
   const rs = subset.map((t) => t.resultR).filter((r): r is number => r != null);
   const avgR = rs.length > 0 ? rs.reduce((s, r) => s + r, 0) / rs.length : 0;
@@ -77,8 +77,8 @@ export function strategyMetrics(strategyId: string, trades: Trade[]): StrategyMe
 function computeStrategyMetrics(strategyId: string, subset: Trade[]): StrategyMetrics {
   const n = subset.length;
 
-  const wins = subset.filter((t) => t.resultNet > 0).length;
-  const losses = subset.filter((t) => t.resultNet < 0).length;
+  const wins = subset.filter((t) => tradeNetPnl(t) > 0).length;
+  const losses = subset.filter((t) => tradeNetPnl(t) < 0).length;
   const winRate = wins + losses > 0 ? wins / (wins + losses) : 0;
 
   const rs = subset.map((t) => t.resultR).filter((r): r is number => r != null);
@@ -86,8 +86,8 @@ function computeStrategyMetrics(strategyId: string, subset: Trade[]): StrategyMe
 
   const pf = profitFactor(subset);
 
-  const grossWin = subset.filter((t) => t.resultNet > 0).reduce((s, t) => s + t.resultNet, 0);
-  const grossLoss = subset.filter((t) => t.resultNet < 0).reduce((s, t) => s + Math.abs(t.resultNet), 0);
+  const grossWin = subset.filter((t) => tradeNetPnl(t) > 0).reduce((s, t) => s + tradeNetPnl(t), 0);
+  const grossLoss = subset.filter((t) => tradeNetPnl(t) < 0).reduce((s, t) => s + Math.abs(tradeNetPnl(t)), 0);
   const expectancy = wins + losses > 0
     ? (wins / (wins + losses)) * (grossWin / Math.max(wins, 1)) -
       (losses / (wins + losses)) * (grossLoss / Math.max(losses, 1))

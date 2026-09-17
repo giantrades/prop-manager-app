@@ -7,7 +7,7 @@ import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
 import { fmtMoney } from '@apps/ui/currency';
 import { Activity, LineChart, CalendarDays } from 'lucide-react';
-import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod } from '@apps/lib/db';
+import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod, tradeNetPnl } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
@@ -44,7 +44,7 @@ export default function ReportsPage() {
     const entradas = sumKinds(['income', 'payout_in', 'rebate']);
     const gastos = sumKinds(['expense']);
     const custos = sumKinds(['challenge_cost', 'reset_fee', 'monthly_fee']);
-    const tradingPnl = trades.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const tradingPnl = trades.reduce((s, t) => s + tradeNetPnl(t), 0);
     const payoutNet = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const r2 = (n) => Number(n.toFixed(2));
     return {
