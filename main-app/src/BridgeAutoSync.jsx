@@ -58,7 +58,12 @@ export default function BridgeAutoSync() {
       const bridgeToken = localStorage.getItem(TOKEN_KEY) || import.meta.env.VITE_BRIDGE_TOKEN || '';
       if (!bridgeUrl) return;
       try {
-        const from = await readCursor(f.ds);
+        // Janela com FOLGA de 30 dias (mínimo): a reconstrução do trade no bridge precisa
+        // do fill de ENTRADA, que pode ser anterior ao último cursor. Sem folga, um trade
+        // que fecha agora vinha só com o fill de saída → mal reconstruído/não pego.
+        // (Overlap não gera escrita à toa: o ingest ignora update idêntico.)
+        const cursor = await readCursor(f.ds);
+        const from = new Date(Math.min(Date.parse(cursor) || 0, Date.now() - 30 * 86400000)).toISOString();
         const a = new QuantowerAdapter({ bridgeUrl, bridgeToken });
         const trades = await a.getTrades(from, undefined);
         if (trades.length > 0) {

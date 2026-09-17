@@ -183,10 +183,18 @@ export async function ingestQuantowerTrades(
         mae: trade.mae ?? existing.mae,
         mfe: trade.mfe ?? existing.mfe,
       };
-      await ds.trades.put(merged, { source: 'quantower' });
-      await chain.syncTrade(merged);
+      // Nada mudou? Não reescreve (evita churn/sync desnecessário em janelas de overlap).
+      const changed = ['symbol', 'direction', 'qty', 'entryPrice', 'exitPrice', 'entryDatetime',
+        'exitDatetime', 'resultNet', 'stopPrice', 'accountId', 'mae', 'mfe']
+        .some((k) => (existing as unknown as Record<string, unknown>)[k] !== (merged as unknown as Record<string, unknown>)[k]);
       byQt.set(q.platformTradeId, merged);
       byFp.set(fpOf(merged), merged);
+      if (!changed) {
+        skipped += 1;
+        continue;
+      }
+      await ds.trades.put(merged, { source: 'quantower' });
+      await chain.syncTrade(merged);
       updated += 1;
     } else {
       // put() carimba updatedAt/deviceId/version; os campos abaixo são sobrescritos lá.

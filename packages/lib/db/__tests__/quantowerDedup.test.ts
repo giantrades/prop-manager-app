@@ -28,15 +28,26 @@ const BATCH = [
 ];
 
 describe('A8 — dedup no re-sync', () => {
-  it('ingerir o mesmo lote 2x: 2º é só update, sem duplicar, PnL intacto', async () => {
+  it('ingerir o mesmo lote 2x: 2º não duplica nem reescreve (sem mudança)', async () => {
     const { ds, chain } = makeEngine();
     const r1 = await ingestQuantowerTrades(ds, chain, BATCH);
     expect(r1).toMatchObject({ created: 2, updated: 0 });
     const r2 = await ingestQuantowerTrades(ds, chain, BATCH);
-    expect(r2).toMatchObject({ created: 0, updated: 2, skipped: 0 });
+    // idêntico => skipped (não reescreve nem duplica).
+    expect(r2).toMatchObject({ created: 0, updated: 0, skipped: 2 });
     const all = await ds.trades.list();
     expect(all).toHaveLength(2);
     expect(all.find((t) => t.quantowerId === 'qt_1')?.resultNet).toBe(100);
+  });
+
+  it('re-sync com valor DIFERENTE atualiza o trade (não cria novo)', async () => {
+    const { ds, chain } = makeEngine();
+    await ingestQuantowerTrades(ds, chain, BATCH);
+    const r = await ingestQuantowerTrades(ds, chain, [{ ...BATCH[0], netPnl: 250 }]);
+    expect(r).toMatchObject({ created: 0, updated: 1 });
+    const all = await ds.trades.list();
+    expect(all).toHaveLength(2);
+    expect(all.find((t) => t.quantowerId === 'qt_1')?.resultNet).toBe(250);
   });
 
   it('sem platformTradeId => skipped, nunca cria órfão sem id', async () => {
