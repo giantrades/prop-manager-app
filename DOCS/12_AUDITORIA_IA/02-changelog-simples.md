@@ -130,6 +130,13 @@
   alterar/cancelar/fechar ordem **não se perde** — entra numa **fila** e aparece um aviso
   “N na fila · Enviar agora”. Quando a ponte volta, a fila é **reexecutada em ordem**, sem duplicar
   (mesmo `clientOrderId`). Erros de verdade (ex.: dados inválidos) **não** entram na fila.
+- **Editar ordem pendente**: botão **Editar** em cada ordem — muda quantidade/preço/SL/TP e confirma
+  (substitui a ordem: cancela e recria). Funciona também na fila offline.
+- **Streaming das posições (LIVE)**: com o bridge atualizado, Positions & Orders mostra um selo **LIVE**
+  e as posições/ordens atualizam em **~1,5s** (em vez de 60s). No celular, com o app aberto + botão
+  **“Manter tela ligada”**; fechado, continuam os **alertas por push**.
+- **Proventos**: **widget no resumo de Investimentos** e **histórico/calendário** na aba Proventos.
+  Decisão: **sem** “projeção automática” (era estimativa do app) — recebidos e anunciados são manuais.
 
 ## Como ler o status
 - `01-backlog.md` → checklist por item (`[x]` feito / `[ ]` pendente).

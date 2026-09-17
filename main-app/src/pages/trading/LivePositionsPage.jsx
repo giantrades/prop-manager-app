@@ -24,6 +24,8 @@ export default function LivePositionsPage() {
   const [accounts, setAccounts] = useState([]);
   const [form, setForm] = useState({ accountId: '', symbol: '', side: 'buy', type: 'limit', qty: '', price: '', sl: '', tp: '' });
   const [pending, setPending] = useState(() => readQueue().length);
+  const [editOrderId, setEditOrderId] = useState(null);
+  const [orderEdit, setOrderEdit] = useState({ qty: '', price: '', sl: '', tp: '' });
   const adapterRef = useRef(null);
   if (!adapterRef.current) {
     const { bridgeUrl, bridgeToken } = bridgePrefs();
@@ -174,6 +176,49 @@ export default function LivePositionsPage() {
       }
     } catch (err) {
       toast(`Falha ao enviar ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
+  // Editar ordem = SUBSTITUIR (o bridge não tem rota de modify de ordem): cancelar + recolocar.
+  const startEditOrder = (o) => {
+    setEditOrderId(o.platformOrderId);
+    setOrderEdit({
+      qty: String(o.remainingQuantity ?? o.quantity ?? ''),
+      price: String(o.price ?? ''),
+      sl: '',
+      tp: '',
+    });
+  };
+
+  const saveOrderEdit = async (o) => {
+    const qty = num(orderEdit.qty);
+    const price = num(orderEdit.price);
+    if (!qty || !price) {
+      toast('Preencha quantidade e preço.', { type: 'warn' });
+      return;
+    }
+    setBusy(o.platformOrderId);
+    try {
+      const type = (o.type || '').toLowerCase().includes('stop') ? 'stop' : 'limit';
+      const cancel = await submitOrQueue(adapter, { kind: 'cancel', payload: { platformOrderId: o.platformOrderId } });
+      const place = await submitOrQueue(adapter, {
+        kind: 'place',
+        payload: {
+          accountId: o.platformAccountId, symbol: o.symbol, side: o.side === 'Long' ? 'buy' : 'sell',
+          qty, type, price, sl: num(orderEdit.sl), tp: num(orderEdit.tp),
+        },
+      });
+      if (cancel.queued || place.queued) {
+        setPending(readQueue().length);
+        toast('Bridge offline — edição (cancelar+recolocar) na fila.', { type: 'warn' });
+      } else {
+        toast(`Ordem substituída — ${o.symbol}`);
+      }
+      setEditOrderId(null);
+      loadOrders();
+      refreshStatuses();
+    } catch (err) {
+      toast(`Falha ao editar ${o.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
   };
 
@@ -351,18 +396,33 @@ export default function LivePositionsPage() {
                 <span>Símbolo</span><span>Lado</span><span>Tipo</span><span>Qtd</span><span>Preço</span><span>Status</span><span>Conta</span><span>Ações</span>
               </div>
               {orders.map((o) => (
-                <div key={o.platformOrderId} className="lp-row lp-ordrow">
-                  <span className="lp-sym">{o.symbol}</span>
-                  <span className={`lp-side ${o.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{o.side}</span>
-                  <span className="lp-num">{o.type || '—'}</span>
-                  <span className="lp-num">{o.remainingQuantity ?? o.quantity}</span>
-                  <span className="lp-num">{fmtMoney(o.price)}</span>
-                  <span className="lp-num">{o.status || '—'}</span>
-                  <span className="lp-acct">{o.accountName || ''}</span>
-                  <span className="lp-actions">
-                    <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
-                  </span>
-                </div>
+                <React.Fragment key={o.platformOrderId}>
+                  <div className="lp-row lp-ordrow">
+                    <span className="lp-sym">{o.symbol}</span>
+                    <span className={`lp-side ${o.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{o.side}</span>
+                    <span className="lp-num">{o.type || '—'}</span>
+                    <span className="lp-num">{o.remainingQuantity ?? o.quantity}</span>
+                    <span className="lp-num">{fmtMoney(o.price)}</span>
+                    <span className="lp-num">{o.status || '—'}</span>
+                    <span className="lp-acct">{o.accountName || ''}</span>
+                    <span className="lp-actions">
+                      <button className="ac3-btn ac3-btn-sm" onClick={() => startEditOrder(o)}>Editar</button>
+                      <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
+                    </span>
+                  </div>
+                  {editOrderId === o.platformOrderId && (
+                    <div className="lp-orderedit">
+                      <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={orderEdit.qty} onChange={(e) => setOrderEdit((s) => ({ ...s, qty: e.target.value }))} aria-label="Quantidade" />
+                      <input className="lp-input" type="number" step="0.00001" placeholder="Preço" value={orderEdit.price} onChange={(e) => setOrderEdit((s) => ({ ...s, price: e.target.value }))} aria-label="Preço" />
+                      <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={orderEdit.sl} onChange={(e) => setOrderEdit((s) => ({ ...s, sl: e.target.value }))} aria-label="Stop loss" />
+                      <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={orderEdit.tp} onChange={(e) => setOrderEdit((s) => ({ ...s, tp: e.target.value }))} aria-label="Take profit" />
+                      <span className="lp-actions">
+                        <button className="ac3-btn ac3-btn-sm" disabled={busy === o.platformOrderId} onClick={() => saveOrderEdit(o)}>Salvar</button>
+                        <button className="ac3-btn ac3-btn-sm" onClick={() => setEditOrderId(null)} aria-label="Cancelar edição"><X size={13} /></button>
+                      </span>
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           )}
@@ -410,6 +470,8 @@ const LP_CSS = `
 .lp-input { width: 100%; min-width: 64px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text, #e7eaf0); font-size: 12px; padding: 7px 8px; min-height: 38px; font-family: inherit; }
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
 .lp-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.lp-orderedit { display: grid; grid-template-columns: 0.8fr 1fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; padding: 8px 6px; margin: -2px 0 6px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px dashed rgba(124,92,255,0.35); }
+@media (max-width: 900px) { .lp-orderedit { grid-template-columns: 1fr 1fr; } }
 .lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
 @media (max-width: 900px) {
   .lp-row { grid-template-columns: 1fr 1fr 1fr; }

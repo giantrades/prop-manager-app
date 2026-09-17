@@ -50,7 +50,7 @@ function fmtPct(value) {
  * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
  * @param {boolean} [props.loading]
  */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, onFetchDividends, loading = false, only = null }) {
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
   const show = (k) => !only || only.includes(k);
   const [calYm, setCalYm] = React.useState(() => new Date().toISOString().slice(0, 7));
   const symbolById = React.useMemo(() => Object.fromEntries((positions || []).map((p) => [p.id, p.symbol])), [positions]);
@@ -231,19 +231,12 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
       {/* B1 — proventos anunciados (data-com) */}
       {show('income') && (onSaveDividendEvent || announced.length > 0) && (
         <div className="pf-section">
-          <div className="pf-section-title" style={{ justifyContent: 'space-between' }}>
-            <span>Próximos proventos ({announced.length})</span>
-            {onFetchDividends && (
-              <button className="pf-mark-btn" onClick={onFetchDividends} title="Busca o histórico no Yahoo e projeta o próximo por cadência (estimado)">
-                Buscar (Yahoo)
-              </button>
-            )}
-          </div>
+          <div className="pf-section-title">Próximos proventos ({announced.length})</div>
           {announced.length === 0 ? (
             <div className="pf-empty" role="status">Nenhum provento anunciado.</div>
           ) : announced.map((e) => (
             <div key={e.id} className="pf-alert-row">
-              <span className="pf-alert-sym">{e.symbol}{String(e.note || '').includes('estimado') ? <span className="pf-est" title="Projeção por cadência (Yahoo) — confirme na data"> est.</span> : null}</span>
+              <span className="pf-alert-sym">{e.symbol}</span>
               <span className="pf-alert-cond">ex {String(e.exDate).slice(8, 10)}/{String(e.exDate).slice(5, 7)}{e.amountPerShare != null ? ` • ${fmtMoney(e.amountPerShare, currency)}/ação` : ''}</span>
               <span className="pf-alert-actions">
                 {onReceiveDividend && (
@@ -659,7 +652,6 @@ const PF_CSS = `
 /* #4 — proventos (histórico + calendário) */
 .pf-div-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
 .pf-div-stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); }
-.pf-est { font-size: 10px; font-weight: 700; color: var(--yellow, #e1b12c); margin-left: 4px; }
 .pf-div-assets { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .pf-div-asset-row { display: grid; grid-template-columns: 88px 1fr auto; gap: 10px; align-items: center; font-size: 12px; }
 .pf-div-bar { height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }

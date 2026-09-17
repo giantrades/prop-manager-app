@@ -84,10 +84,9 @@
       `dividendCalendar` (puros) + na aba Proventos do Portfolio: **Histórico de proventos** (total,
       média/mês, barras por mês, ranking por ativo) e **Calendário de renda** (recebido × anunciado,
       navegação por mês). Testes em `expenses.test.ts`.
-      **+ Yahoo**: proxy estendido (`?type=dividends`) e botão **"Buscar (Yahoo)"** que puxa o
-      **histórico** e **projeta o próximo** por cadência (mediana), rotulado `est.` (estimado).
-      Ressalva honesta: o Yahoo gratuito **não** dá a próxima data-com (`quoteSummary` = 401 sem crumb);
-      recebidos continuam **manuais/import** (confiável). Widget **Proventos** no dashboard de Investimentos.
+      Widget **Proventos** no dashboard de Investimentos. **Decisão**: sem automação de "anunciados" —
+      o Yahoo só dá histórico e a projeção por cadência era palpite do app; **recebidos e anunciados são
+      manuais** (botões "+ provento" / "Anunciar provento"), que é o confiável.
 - [x] **AccountPicker melhorado (Trading)** (#5): busca + seleção múltipla escalável (20+ contas), ordenação
       por tipo/nome, "todas (filtradas)", contador e fechar por Esc/clique-fora; seleção persistida em
       `ui:filters` (meta) e na URL (`?accounts=`). **Gastos segue sem filtro de conta (geral).**
@@ -96,6 +95,9 @@
       na fila). `LivePositionsPage` usa a fila em modificar SL/TP, fechar, cancelar e nova ordem + banner
       "N na fila" com "Enviar agora"; flush automático ao reconectar. `closePosition` passou a aceitar
       `clientOrderId`. Testes em `packages/utils/__tests__/orderQueue.test.js`.
+      **+ Editar ordem**: botão "Editar" em cada ordem pendente faz **substituir** (cancelar + recolocar
+      com qty/preço/SL/TP), via fila quando offline. Também: **streaming SSE** (`/stream` no bridge +
+      `EventSource` + indicador LIVE) e **SL/TP no form de nova ordem**.
 - [ ] **Sync cross-device a validar**: `cards` e `app_meta` (onConflict composto `user_id,id`) e
       `trades.strategy_version`.
 - [ ] **Backup antes/depois do bump `DB_VERSION=4`** (store `cards` nova).
