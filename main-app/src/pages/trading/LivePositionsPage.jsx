@@ -421,15 +421,15 @@ export default function LivePositionsPage() {
                       <input className="lp-input" type="number" step="0.00001" value={slVal} placeholder="SL" onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}`} />
                       <input className="lp-input" type="number" step="0.00001" value={tpVal} placeholder="TP" onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}`} />
                       <span className="lp-actions">
-                        <button className="ac3-btn ac3-btn-sm" disabled={!dirty || busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>
-                        <button className="ac3-btn ac3-btn-sm" onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId}>Parcial</button>
+                        {dirty && <button className="lp-btn lp-btn-primary" disabled={busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>}
+                        <button className={`lp-btn${partial ? ' lp-btn-on' : ''}`} onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId} aria-expanded={partial}>Parcial</button>
                         {confirming ? (
                           <>
-                            <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === p.platformPositionId} onClick={() => close(p)}>Confirmar</button>
-                            <button className="ac3-btn ac3-btn-sm" onClick={() => setConfirmId(null)} aria-label="Cancelar"><X size={13} /></button>
+                            <button className="lp-btn lp-btn-danger" disabled={busy === p.platformPositionId} onClick={() => close(p)}>Confirmar</button>
+                            <button className="lp-btn lp-btn-ico" onClick={() => setConfirmId(null)} aria-label="Cancelar"><X size={13} /></button>
                           </>
                         ) : (
-                          <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => setConfirmId(p.platformPositionId)}>Fechar</button>
+                          <button className="lp-btn lp-btn-danger" onClick={() => setConfirmId(p.platformPositionId)}>Fechar</button>
                         )}
                       </span>
                     </div>
@@ -438,8 +438,8 @@ export default function LivePositionsPage() {
                         <span className="lp-partial-hint">Fechar parcialmente (ordem oposta a mercado — contas <b>netting</b>)</span>
                         <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={partialQty} onChange={(ev) => setPartialQty(ev.target.value)} aria-label="Quantidade a fechar" />
                         <span className="lp-actions">
-                          <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === p.platformPositionId} onClick={() => confirmPartial(p)}>Enviar</button>
-                          <button className="ac3-btn ac3-btn-sm" onClick={() => setPartialId(null)} aria-label="Cancelar"><X size={13} /></button>
+                          <button className="lp-btn lp-btn-danger" disabled={busy === p.platformPositionId} onClick={() => confirmPartial(p)}>Enviar</button>
+                          <button className="lp-btn lp-btn-ico" onClick={() => setPartialId(null)} aria-label="Cancelar"><X size={13} /></button>
                         </span>
                       </div>
                     )}
@@ -493,8 +493,8 @@ export default function LivePositionsPage() {
                     <span className="lp-num">{o.status || '—'}</span>
                     <span className="lp-acct">{firmOf(o) && <FirmChip firm={firmOf(o)} />}{accountNameOf(o)}</span>
                     <span className="lp-actions">
-                      <button className="ac3-btn ac3-btn-sm" onClick={() => startEditOrder(o)}>Editar</button>
-                      <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
+                      <button className="lp-btn" onClick={() => startEditOrder(o)}>Editar</button>
+                      <button className="lp-btn lp-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
                     </span>
                   </div>
                   {editOrderId === o.platformOrderId && (
@@ -504,8 +504,8 @@ export default function LivePositionsPage() {
                       <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={orderEdit.sl} onChange={(e) => setOrderEdit((s) => ({ ...s, sl: e.target.value }))} aria-label="Stop loss" />
                       <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={orderEdit.tp} onChange={(e) => setOrderEdit((s) => ({ ...s, tp: e.target.value }))} aria-label="Take profit" />
                       <span className="lp-actions">
-                        <button className="ac3-btn ac3-btn-sm" disabled={busy === o.platformOrderId} onClick={() => saveOrderEdit(o)}>Salvar</button>
-                        <button className="ac3-btn ac3-btn-sm" onClick={() => setEditOrderId(null)} aria-label="Cancelar edição"><X size={13} /></button>
+                        <button className="lp-btn lp-btn-primary" disabled={busy === o.platformOrderId} onClick={() => saveOrderEdit(o)}>Salvar</button>
+                        <button className="lp-btn lp-btn-ico" onClick={() => setEditOrderId(null)} aria-label="Cancelar edição"><X size={13} /></button>
                       </span>
                     </div>
                   )}
@@ -551,7 +551,7 @@ const LP_CSS = `
 .lp-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 18px 0 8px; }
 .lp-empty { display: flex; align-items: center; gap: 8px; padding: 28px; justify-content: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 .lp-list { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
-.lp-row { display: grid; grid-template-columns: 1.5fr 0.6fr 0.5fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 0.9fr auto; gap: 8px; align-items: center; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+.lp-row { display: grid; grid-template-columns: 1.5fr 0.6fr 0.5fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 0.9fr auto; gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
 .lp-firm { display: inline-flex; align-items: center; margin-right: 5px; font-size: 10px; font-weight: 700; }
 .lp-firm img { width: 12px; height: 12px; object-fit: contain; border-radius: 3px; }
 .lp-ordrow { grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.9fr 0.9fr 1.1fr auto; }
@@ -562,7 +562,16 @@ const LP_CSS = `
 .lp-num { font-variant-numeric: tabular-nums; }
 .lp-input { width: 100%; min-width: 64px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text, #e7eaf0); font-size: 12px; padding: 7px 8px; min-height: 38px; font-family: inherit; }
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
-.lp-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.lp-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; justify-content: flex-end; }
+/* Botões de linha: compactos, para caber no grid da tabela (antes usavam .ac3-btn, 40px de altura). */
+.lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); cursor: pointer; white-space: nowrap; font-family: inherit; }
+.lp-btn:hover:not(:disabled) { filter: brightness(1.14); }
+.lp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.lp-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(124,92,255,0.25); }
+.lp-btn-danger { color: #ff6b5b; border-color: rgba(231,76,60,0.4); }
+.lp-btn-danger:hover:not(:disabled) { background: rgba(231,76,60,0.14); border-color: rgba(231,76,60,0.6); }
+.lp-btn-on { background: rgba(124,92,255,0.16); border-color: rgba(124,92,255,0.45); color: var(--text, #e7eaf0); }
+.lp-btn-ico { padding: 4px 7px; min-width: 30px; }
 .lp-orderedit { display: grid; grid-template-columns: 0.8fr 1fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; padding: 8px 6px; margin: -2px 0 6px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px dashed rgba(124,92,255,0.35); }
 .lp-partial { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin: -2px 0 6px; border-radius: 10px; background: rgba(231,76,60,0.06); border: 1px dashed rgba(231,76,60,0.35); }
 .lp-partial-hint { font-size: 11px; color: var(--muted, #a1a7b3); flex: 1; min-width: 180px; }

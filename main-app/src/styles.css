@@ -1701,6 +1701,84 @@ select optgroup {
 .gd-bar-ok { background: linear-gradient(90deg, #2ecc71, #7bed9f) !important; }
 .gd-bar-over { background: linear-gradient(90deg, #e74c3c, #ff7b6b) !important; }
 
+/* Contas (.ac3-*) — global: usado por Accounts, Firms e Positions & Orders. Antes
+   era injetado pelo chunk da Accounts e chegava sem estilo nas outras páginas. */
+.ac3-root { display: flex; flex-direction: column; gap: 14px; }
+.ac3-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 12px; }
+.ac3-sum-card { display: flex; flex-direction: column; gap: 4px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.ac3-sum-add { justify-content: center; align-items: center; }
+.ac3-sum-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); }
+.ac3-sum-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ac3-sum-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
+.ac3-pos { color: var(--green, #2ecc71); }
+.ac3-neg { color: var(--red, #e74c3c); }
+
+.ac3-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ac3-search { position: relative; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.ac3-search svg { position: absolute; left: 12px; color: var(--muted, #a1a7b3); }
+.ac3-search .ac3-input { padding-left: 34px; }
+.ac3-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ac3-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); font-size: 12px; font-weight: 600; cursor: pointer; min-height: 40px; }
+.ac3-chip.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); color: var(--text, #e7eaf0); }
+
+.ac3-grid-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ac3-card { display: flex; flex-direction: column; gap: 12px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-top: 3px solid #2a3246; border-radius: 16px; padding: 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
+.ac3-card-head { display: flex; align-items: flex-start; gap: 10px; }
+.ac3-card-icon { width: 36px; min-width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid; background: rgba(255,255,255,0.03); }
+.ac3-card-title { flex: 1; min-width: 0; }
+.ac3-card-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.ac3-card-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
+.ac3-mini-badge { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); }
+.ac3-card-metrics { display: flex; gap: 16px; }
+.ac3-metric { display: flex; flex-direction: column; gap: 2px; }
+.ac3-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.ac3-metric-value { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ac3-card-actions { display: flex; gap: 6px; margin-top: auto; }
+
+.ac3-pill { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; padding: 3px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.ac3-pill-safe { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.45); background: rgba(46,204,113,0.1); }
+.ac3-pill-warn { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.45); background: rgba(225,177,44,0.1); }
+.ac3-pill-stop { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.45); background: rgba(231,76,60,0.1); }
+.ac3-pill-muted { color: var(--muted, #a1a7b3); border-color: rgba(255,255,255,0.15); }
+
+.ac3-btn { padding: 9px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.ac3-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.ac3-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ac3-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border-color: transparent; color: #fff; font-weight: 700; box-shadow: 0 6px 16px rgba(124,92,255,0.28); }
+.ac3-btn-sm { padding: 6px 10px; min-height: 40px; font-size: 12px; border-radius: 8px; }
+.ac3-btn-danger { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.3); }
+.ac3-btn-danger:hover:not(:disabled) { background: rgba(231,76,60,0.12); border-color: rgba(231,76,60,0.5); color: #ff8a7a; }
+.ac3-icon { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: transparent; border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); cursor: pointer; }
+
+.ac3-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(7,9,14,0.72); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ac3-sheet { width: 100%; max-width: 720px; max-height: 92vh; overflow-y: auto; background: linear-gradient(180deg, #171c27 0%, #12161f 100%); border: 1px solid #1f2734; border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.55); }
+.ac3-sheet-head { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; background: rgba(23,28,39,0.96); backdrop-filter: blur(6px); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.ac3-sheet-title { font-size: 15px; font-weight: 800; }
+.ac3-form-body { padding: 16px 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.ac3-template { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: rgba(52,152,219,0.07); border: 1px solid rgba(52,152,219,0.25); }
+.ac3-warn { font-size: 12px; color: var(--yellow, #e1b12c); }
+.ac3-kind-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.ac3-kind-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.09); color: var(--muted, #a1a7b3); font-size: 12px; font-weight: 600; cursor: pointer; min-height: 40px; }
+.ac3-kind-btn.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.45); color: var(--text, #e7eaf0); }
+.ac3-prop { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 12px; background: rgba(124,92,255,0.05); border: 1px solid rgba(124,92,255,0.2); }
+.ac3-prop-title { font-size: 13px; font-weight: 800; }
+.ac3-hint { font-size: 11px; color: var(--muted, #a1a7b3); margin: 8px 0 0; }
+.ac3-advanced { padding: 4px 0; }
+.ac3-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ac3-newfirm { display: flex; gap: 8px; align-items: center; padding: 10px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px solid rgba(124,92,255,0.22); }
+.ac3-newfirm .ac3-input { flex: 1; }
+.ac3-field { display: flex; flex-direction: column; gap: 4px; }
+.ac3-label { font-size: 11px; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
+.ac3-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 9px 12px; color: var(--text, #e7eaf0); font-size: 13px; min-height: 40px; width: 100%; font-family: inherit; }
+.ac3-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
+.ac3-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted, #a1a7b3); min-height: 40px; }
+.ac3-check input { width: 18px; height: 18px; accent-color: var(--brand, #7c5cff); }
+.ac3-form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px; }
+.ac3-empty { padding: 32px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
+
+@media (max-width: 900px) { .ac3-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ac3-grid-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .ac3-summary { grid-template-columns: 1fr; } .ac3-grid-cards { grid-template-columns: 1fr; } .ac3-grid { grid-template-columns: 1fr; } }
+
 /* AccountPicker (Trading) — antes injetado no chunk lazy; agora global (sempre estilizado). */
 .ap-root { position: relative; display: inline-block; align-self: flex-start; max-width: 100%; }
 .ap-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; min-height: 38px; cursor: pointer; }
