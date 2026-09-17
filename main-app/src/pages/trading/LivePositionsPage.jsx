@@ -21,6 +21,18 @@ function FirmChip({ firm }) {
   return <span className="lp-firm" title={firm.name} style={{ color: firm.color }}>{firm.name}</span>;
 }
 
+/** "há X min" a partir de um ISO (module-level: hoisted, sem risco de TDZ). */
+function agoText(iso) {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return 'agora';
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.floor(h / 24)}d`;
+}
+
 export default function LivePositionsPage() {
   const { livePositions, statuses, lastSync, refreshStatuses, streaming, lastSnapshot } = usePlatform();
   const { toast } = useToast();
@@ -151,16 +163,6 @@ export default function LivePositionsPage() {
   }, [online]);
 
   const setEdit = (id, k, v) => setEdits((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), [k]: v } }));
-  const agoText = (iso) => {
-    const ms = Date.now() - Date.parse(iso);
-    if (!Number.isFinite(ms) || ms < 0) return 'agora';
-    const min = Math.floor(ms / 60000);
-    if (min < 1) return 'agora';
-    if (min < 60) return `há ${min} min`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `há ${h}h`;
-    return `há ${Math.floor(h / 24)}d`;
-  };
   const num = (v) => { const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 
   const saveSl = async (p) => {
