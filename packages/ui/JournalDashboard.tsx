@@ -18,7 +18,7 @@ import {
   Tooltip,
   ReferenceDot,
 } from 'recharts';
-import { tradePnl, winrate, profitFactor } from '@apps/lib/db';
+import { tradeNetPnl, winrate, profitFactor } from '@apps/lib/db';
 
 
 function fmtPct(v) {
@@ -45,15 +45,15 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
       .filter((t) => t.exitPrice != null)
       .sort((a, b) => (a.exitDatetime || a.entryDatetime).localeCompare(b.exitDatetime || b.entryDatetime));
 
-    const wins = closed.filter((t) => (t.resultNet ?? tradePnl(t)) > 0).length;
-    const losses = closed.filter((t) => (t.resultNet ?? tradePnl(t)) < 0).length;
+    const wins = closed.filter((t) => tradeNetPnl(t) > 0).length;
+    const losses = closed.filter((t) => tradeNetPnl(t) < 0).length;
     const wr = winrate(closed);
     const pf = profitFactor(closed);
 
     const rs = closed.map((t) => t.resultR).filter((r) => r != null);
     const avgR = rs.length ? rs.reduce((s, r) => s + r, 0) / rs.length : 0;
-    const grossWin = closed.filter((t) => (t.resultNet ?? 0) > 0).reduce((s, t) => s + (t.resultNet ?? 0), 0);
-    const grossLoss = closed.filter((t) => (t.resultNet ?? 0) < 0).reduce((s, t) => s + Math.abs(t.resultNet ?? 0), 0);
+    const grossWin = closed.filter((t) => tradeNetPnl(t) > 0).reduce((s, t) => s + tradeNetPnl(t), 0);
+    const grossLoss = closed.filter((t) => tradeNetPnl(t) < 0).reduce((s, t) => s + Math.abs(tradeNetPnl(t)), 0);
     const expectancy = wins + losses > 0
       ? (wins / (wins + losses)) * (grossWin / Math.max(wins, 1)) - (losses / (wins + losses)) * (grossLoss / Math.max(losses, 1))
       : 0;
@@ -61,7 +61,7 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
     // Equity curve (PnL acumulado).
     let cum = 0;
     const equity = closed.map((t) => {
-      cum += tradePnl(t);
+      cum += tradeNetPnl(t);
       return { at: (t.exitDatetime || t.entryDatetime).slice(0, 10), equity: Number(cum.toFixed(2)) };
     });
     // Drawdown (a partir do pico da equity acumulada).
@@ -74,13 +74,13 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
     const today = new Date().toISOString().slice(0, 10);
     const todayPnl = closed
       .filter((t) => (t.exitDatetime || t.entryDatetime).slice(0, 10) === today)
-      .reduce((s, t) => s + tradePnl(t), 0);
+      .reduce((s, t) => s + tradeNetPnl(t), 0);
 
     // Heat por dia da semana (PnL somado).
     const byDow = [0, 0, 0, 0, 0, 0, 0];
     for (const t of closed) {
       const d = new Date(t.exitDatetime || t.entryDatetime).getUTCDay();
-      byDow[d] += tradePnl(t);
+      byDow[d] += tradeNetPnl(t);
     }
     const maxAbs = Math.max(1, ...byDow.map((v) => Math.abs(v)));
 

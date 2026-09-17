@@ -5,7 +5,7 @@
 // Fonte: DOCS/10_MODULES/00-trading-journal.md (J1â€“J7).
 
 import type { Trade } from './types';
-import { tradePnl, winrate, profitFactor, type ProfitFactor } from './financialFormulas';
+import { tradeNetPnl, winrate, profitFactor, type ProfitFactor } from './financialFormulas';
 import { parseDate, formatDate } from './dateUtils';
 import { MIN_SAMPLE } from './strategies';
 
@@ -48,7 +48,7 @@ export function calendarPnl(trades: Trade[], year: number, month: number): Month
     if (!stamp) continue;
     const key = formatDate(parseDate(stamp), 'yyyy-MM-dd');
     if (!key.startsWith(prefix)) continue;
-    const pnl = tradePnl(t);
+    const pnl = tradeNetPnl(t);
     const d = byDate.get(key) ?? { date: key, pnl: 0, trades: 0, wins: 0, losses: 0 };
     d.pnl = r2(d.pnl + pnl);
     d.trades += 1;
@@ -111,13 +111,13 @@ export function weeklyReview(trades: Trade[], refDate?: string | Date): WeeklyRe
     const key = formatDate(parseDate(stamp), 'yyyy-MM-dd');
     return key >= startKey && key <= endKey;
   });
-  const wins = week.filter((t) => (t.resultNet ?? tradePnl(t)) > 0).length;
-  const losses = week.filter((t) => (t.resultNet ?? tradePnl(t)) < 0).length;
+  const wins = week.filter((t) => tradeNetPnl(t) > 0).length;
+  const losses = week.filter((t) => tradeNetPnl(t) < 0).length;
   const byDate = new Map<string, DayPnl>();
   for (const t of week) {
     const stamp = (t.exitDatetime || t.entryDatetime) as string;
     const key = formatDate(parseDate(stamp), 'yyyy-MM-dd');
-    const pnl = tradePnl(t);
+    const pnl = tradeNetPnl(t);
     const d = byDate.get(key) ?? { date: key, pnl: 0, trades: 0, wins: 0, losses: 0 };
     d.pnl = r2(d.pnl + pnl);
     d.trades += 1;
@@ -131,7 +131,7 @@ export function weeklyReview(trades: Trade[], refDate?: string | Date): WeeklyRe
     weekStart: startKey,
     weekEnd: endKey,
     trades: week.length,
-    pnl: r2(week.reduce((s, t) => s + tradePnl(t), 0)),
+    pnl: r2(week.reduce((s, t) => s + tradeNetPnl(t), 0)),
     wins,
     losses,
     winrate: winrate(week),
@@ -224,14 +224,14 @@ function avgRof(trades: Trade[]): number | null {
   return Number((rs.reduce((s, r) => s + r, 0) / rs.length).toFixed(2));
 }
 
-/** Expectancy = WR*avgW âˆ’ LR*avgL sobre resultNet (mesma definiÃ§Ã£o do dashboard). */
+/** Expectancy = WR*avgW âˆ’ LR*avgL sobre o PnL realizado (tradeNetPnl). */
 function expectancyOf(trades: Trade[]): number {
-  const wins = trades.filter((t) => (t.resultNet ?? 0) > 0);
-  const losses = trades.filter((t) => (t.resultNet ?? 0) < 0);
+  const wins = trades.filter((t) => tradeNetPnl(t) > 0);
+  const losses = trades.filter((t) => tradeNetPnl(t) < 0);
   const n = wins.length + losses.length;
   if (!n) return 0;
-  const avgW = wins.reduce((s, t) => s + (t.resultNet ?? 0), 0) / Math.max(wins.length, 1);
-  const avgL = Math.abs(losses.reduce((s, t) => s + (t.resultNet ?? 0), 0)) / Math.max(losses.length, 1);
+  const avgW = wins.reduce((s, t) => s + tradeNetPnl(t), 0) / Math.max(wins.length, 1);
+  const avgL = Math.abs(losses.reduce((s, t) => s + tradeNetPnl(t), 0)) / Math.max(losses.length, 1);
   return Number(((wins.length / n) * avgW - (losses.length / n) * avgL).toFixed(2));
 }
 
@@ -247,13 +247,13 @@ export interface GroupStat {
 }
 
 function groupStat(trades: Trade[]): GroupStat {
-  const wins = trades.filter((t) => (t.resultNet ?? tradePnl(t)) > 0).length;
-  const losses = trades.filter((t) => (t.resultNet ?? tradePnl(t)) < 0).length;
+  const wins = trades.filter((t) => tradeNetPnl(t) > 0).length;
+  const losses = trades.filter((t) => tradeNetPnl(t) < 0).length;
   return {
     trades: trades.length,
     wins,
     losses,
-    pnl: r2(trades.reduce((s, t) => s + tradePnl(t), 0)),
+    pnl: r2(trades.reduce((s, t) => s + tradeNetPnl(t), 0)),
     avgR: avgRof(trades),
     winrate: winrate(trades),
     profitFactor: profitFactor(trades),
@@ -478,7 +478,7 @@ export function drawdownAnalysis(trades: Trade[], initialFunding: number): Drawd
     .sort((a, b) => String(a.exitDatetime || a.entryDatetime).localeCompare(String(b.exitDatetime || b.entryDatetime)));
   let eq = start;
   const series = sorted.map((t) => {
-    eq += Number(t.resultNet) || 0;
+    eq += tradeNetPnl(t);
     const at = (t.exitDatetime || t.entryDatetime) as string;
     const d = new Date(at);
     const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -560,7 +560,7 @@ export function dailyPnlSeries(trades: Trade[]): DailyPnl[] {
     if (!stamp) continue;
     const date = String(stamp).slice(0, 10);
     const e = map.get(date) ?? { date, pnl: 0, trades: 0, wins: 0, losses: 0 };
-    const net = Number(t.resultNet) || 0;
+    const net = tradeNetPnl(t);
     e.pnl += net;
     e.trades += 1;
     if (net > 0) e.wins += 1;
@@ -659,7 +659,7 @@ export function heatmapByWeekday(trades: Trade[]): WeekdayStat[] {
     if (Number.isNaN(d.getTime())) continue;
     const wd = d.getUTCDay();
     const e = map.get(wd) ?? { trades: 0, pnl: 0, wins: 0, rSum: 0, rCount: 0 };
-    const net = Number(t.resultNet) || 0;
+    const net = tradeNetPnl(t);
     e.trades += 1;
     e.pnl += net;
     if (net > 0) e.wins += 1;
@@ -704,7 +704,7 @@ export function maeMfeSummary(trades: Trade[]): MaeMfeSummary {
   return { count: n, avgMae, avgMfe, ratio: avgMae > 0 ? Number((avgMfe / avgMae).toFixed(2)) : null };
 }
 
-/** P1-08 — Rule Adherence: aderência ao checklist por dia × resultado do dia. */
+/** P1-08 ï¿½ Rule Adherence: aderï¿½ncia ao checklist por dia ï¿½ resultado do dia. */
 export interface AdherenceGroup {
   days: number;
   avgPnl: number;

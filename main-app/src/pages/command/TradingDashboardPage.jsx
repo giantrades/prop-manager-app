@@ -18,7 +18,7 @@ import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
-  strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck,
+  strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck, tradeNetPnl,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -71,7 +71,7 @@ export default function TradingDashboardPage() {
       if (t.exitPrice == null) continue;
       const d = String(t.exitDatetime || t.entryDatetime || '').slice(0, 10);
       if (!d) continue;
-      dayPnl.set(d, (dayPnl.get(d) ?? 0) + (Number(t.resultNet) || 0));
+      dayPnl.set(d, (dayPnl.get(d) ?? 0) + (tradeNetPnl(t)));
     }
     const adherenceDays = [];
     for (const d of [...dayPnl.keys()].sort().slice(-30)) {
@@ -132,7 +132,7 @@ export default function TradingDashboardPage() {
     const capital = (data?.propExts ?? []).reduce((s, p) => s + (p.nominalSize || 0), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
     const closed = trades.filter((t) => t.exitDatetime);
-    const pnlTotal = closed.reduce((s, t) => s + (Number(t.resultNet) || 0), 0);
+    const pnlTotal = closed.reduce((s, t) => s + tradeNetPnl(t), 0);
     const payoutYield = capital > 0 ? netPayouts / capital : 0;
     const pf = profitFactor(trades);
     return { trades, netPayouts, capital, payoutYield, wr: winrate(trades), pf, pnlTotal, payoutsCount: payouts.length };
@@ -146,7 +146,7 @@ export default function TradingDashboardPage() {
       const stamp = t.exitDatetime || t.entryDatetime;
       if (!stamp) continue;
       const ym = String(stamp).slice(0, 7);
-      pnlByMonth.set(ym, (pnlByMonth.get(ym) ?? 0) + (Number(t.resultNet) || 0));
+      pnlByMonth.set(ym, (pnlByMonth.get(ym) ?? 0) + (tradeNetPnl(t)));
     }
     const allMonths = [...pnlByMonth.keys()].sort();
     const cumByMonth = new Map();
@@ -188,8 +188,8 @@ export default function TradingDashboardPage() {
     for (const t of trades) {
       const e = map.get(t.accountId) ?? { id: t.accountId, name: nameById.get(t.accountId) ?? '—', trades: 0, wins: 0, pnl: 0, rSum: 0, rN: 0 };
       e.trades += 1;
-      if ((Number(t.resultNet) || 0) > 0) e.wins += 1;
-      e.pnl += Number(t.resultNet) || 0;
+      if ((tradeNetPnl(t)) > 0) e.wins += 1;
+      e.pnl += tradeNetPnl(t);
       if (t.resultR != null) { e.rSum += t.resultR; e.rN += 1; }
       map.set(t.accountId, e);
     }
@@ -242,8 +242,8 @@ export default function TradingDashboardPage() {
         { k: 'Trades', v: String(dayTrades.length) },
         ...dayTrades.slice(0, 12).map((t) => ({
           k: `${t.symbol} · ${t.direction === 'short' ? 'Short' : 'Long'}`,
-          v: fmtMoney(t.resultNet ?? 0, 'USD'),
-          color: (t.resultNet ?? 0) >= 0 ? 'var(--green)' : 'var(--red)',
+          v: fmtMoney(tradeNetPnl(t), 'USD'),
+          color: tradeNetPnl(t) >= 0 ? 'var(--green)' : 'var(--red)',
         })),
       ],
     });

@@ -6,7 +6,7 @@
 
 import type { DataService } from './DataService';
 import type { Trade } from './types';
-import { tradePnl, tradeR, profitFactor, type ProfitFactor } from './financialFormulas';
+import { tradeNetPnl, tradeR, profitFactor, type ProfitFactor } from './financialFormulas';
 
 export interface StrategyMetrics {
   strategyId: string;
@@ -41,14 +41,14 @@ export const MIN_SAMPLE = 20;
  */
 export function weightedTradePnl(trade: Trade, accountId?: string): number {
   if (!trade.accounts || trade.accounts.length === 0) {
-    return tradePnl(trade);
+    return tradeNetPnl(trade);
   }
   const totalWeight = trade.accounts.reduce((s, a) => s + a.weight, 0) || 1;
   // PnL total já é o do trade; rateia proporcionalmente ao weight da conta-alvo.
   // Para estratégia, somamos o PnL por conta ponderado pela fração do trade.
   let sum = 0;
   for (const a of trade.accounts) {
-    sum += tradePnl(trade) * (a.weight / totalWeight);
+    sum += tradeNetPnl(trade) * (a.weight / totalWeight);
   }
   return accountId ? sum : sum; // agregação da estratégia soma tudo
 }

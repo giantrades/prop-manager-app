@@ -11,7 +11,7 @@ import type { Account, AccountKind, PropExtension, PropPhase, LegacyPropPhase } 
 import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
 import {
-  tradePnl,
+  tradeNetPnl,
   weightForAccount,
   computePayoutEligibility,
   type EligibilityResult,
@@ -311,7 +311,7 @@ export function accountTradeStats(
   let pnl = 0;
   const byDay = new Map<string, number>();
   for (const t of mine) {
-    const contrib = r2acct(tradePnl(t) * weightForAccount(t, accountId));
+    const contrib = r2acct(tradeNetPnl(t) * weightForAccount(t, accountId));
     pnl = r2acct(pnl + contrib);
     if (contrib > 0) wins += 1;
     else if (contrib < 0) losses += 1;

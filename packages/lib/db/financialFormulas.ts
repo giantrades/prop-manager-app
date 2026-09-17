@@ -75,6 +75,18 @@ export function tradeR(trade: Trade, opts?: { stopPrice?: number; multiplier?: n
 }
 
 /**
+ * PnL realizado do trade: prefere `resultNet` (o que a PLATAFORMA/ledger computou —
+ * já líquido e correto mesmo sem `multiplier`) e cai na fórmula `tradePnl` só se
+ * `resultNet` não for um número. Fonte ÚNICA para todos os widgets do journal, para
+ * não divergir entre telas (heatmap/calendário/drawdown x lista).
+ */
+export function tradeNetPnl(trade: Trade): number {
+  return typeof trade.resultNet === 'number' && Number.isFinite(trade.resultNet)
+    ? trade.resultNet
+    : tradePnl(trade);
+}
+
+/**
  * VWAP de uma lista de execuções (fills). Campo único `Trade.executions`.
  * Usado para derivar `entryPrice`/`exitPrice` de trades com execuções parciais.
  * Retorna null se não houver execuções com quantidade.

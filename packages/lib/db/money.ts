@@ -12,7 +12,7 @@
 
 import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
-import { tradePnl } from './financialFormulas';
+import { tradeNetPnl } from './financialFormulas';
 import { nowIso, parseDate, startOfDay, compareIso } from './dateUtils';
 import type {
   Account,
@@ -1749,7 +1749,7 @@ export class MoneyService {
     for (const t of trades) {
       const ym = (t.exitDatetime ?? t.entryDatetime).slice(0, 7);
       if (ym !== yearMonth) continue;
-      const pnl = t.resultNet ?? tradePnl(t);
+      const pnl = tradeNetPnl(t);
       if (isDayTrade(t)) dayNet += pnl;
       else swingNet += pnl;
     }
@@ -1784,7 +1784,7 @@ export class MoneyService {
     for (const t of trades) {
       const ym = (t.exitDatetime ?? t.entryDatetime).slice(0, 7);
       if (compareIso(`${ym}-01T00:00:00Z`, `${yearMonth}-01T00:00:00Z`) >= 0) continue;
-      const pnl = t.resultNet ?? tradePnl(t);
+      const pnl = tradeNetPnl(t);
       if (modality === 'day' ? isDayTrade(t) : !isDayTrade(t)) cumulative += pnl;
     }
     return Math.max(0, -cumulative);

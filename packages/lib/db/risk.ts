@@ -14,7 +14,7 @@ import {
 } from './accountModel';
 import { EVENTS } from './events';
 import type { Account, PropExtension, Trade } from './types';
-import { tradePnl } from './financialFormulas';
+import { tradeNetPnl } from './financialFormulas';
 import { nowIso } from './dateUtils';
 
 export interface AccountRiskRow {
@@ -85,9 +85,9 @@ export class RiskService {
       let totalProfit = 0;
       const byDay = new Map<string, number>();
       for (const t of trades) {
-        totalProfit += tradePnl(t);
+        totalProfit += tradeNetPnl(t);
         const day = t.exitDatetime?.slice(0, 10) ?? t.entryDatetime.slice(0, 10);
-        byDay.set(day, (byDay.get(day) ?? 0) + tradePnl(t));
+        byDay.set(day, (byDay.get(day) ?? 0) + tradeNetPnl(t));
       }
       for (const v of byDay.values()) if (v > bestSingleDayProfit) bestSingleDayProfit = v;
       const consistency = totalProfit > 0 ? bestSingleDayProfit / totalProfit : null;
@@ -233,7 +233,7 @@ export class RiskService {
       const day = t.exitDatetime?.slice(0, 10) ?? t.entryDatetime.slice(0, 10);
       if (day !== today) continue;
       if (t.exitPrice == null) continue;
-      const pnl = tradePnl(t);
+      const pnl = tradeNetPnl(t);
       pnlToday += pnl;
       if (pnl > 0) win += 1;
       else if (pnl < 0) loss += 1;

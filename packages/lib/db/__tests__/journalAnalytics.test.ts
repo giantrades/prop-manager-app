@@ -15,6 +15,7 @@ import {
   tradeReplay,
   drawdownAnalysis,
 } from '../journalAnalytics';
+import { tradeNetPnl } from '../financialFormulas';
 import type { Trade } from '../types';
 
 function trade(over: Partial<Trade> & { id: string }): Trade {
@@ -202,6 +203,12 @@ describe('J2â€“J7 â€” anÃ¡lises (cÃ¡lculo Ã  mÃ£o)', () => {
 describe('J10â€“J11 â€” MAE/MFE e review semanal (cÃ¡lculo Ã  mÃ£o)', () => {
   const base = { symbol: 'XAUUSD', direction: 'long', qty: 1, entryPrice: 100, commission: 0, swap: 0, rebate: 0, fees: 0 } as const;
 
+  it('tradeNetPnl prefere resultNet; cai na fÃ³rmula sem resultNet (nÃ£o distorce sem multiplier)', () => {
+    expect(tradeNetPnl(trade({ id: 'n1', exitPrice: 110, resultNet: 42 }))).toBe(42);
+    const t = trade({ id: 'n2', exitPrice: 110, resultNet: undefined as unknown as number });
+    expect(tradeNetPnl(t)).toBe(10);
+  });
+
   it('J10 maeMfe via fills: long fills [102,105,98] x2 => MFE 10, MAE -4', () => {
     const t = trade({
       ...base, id: 'M1', exitPrice: 105,
@@ -306,10 +313,10 @@ describe('B1 â€” tradeReplay (sequÃªncia temporal)', () => {
 });
 
 
-describe('journalAnalytics — drawdownAnalysis', () => {
+describe('journalAnalytics ï¿½ drawdownAnalysis', () => {
   const t = (id: string, net: number, at: string) => trade({ id, resultNet: net, exitDatetime: at, entryDatetime: at });
 
-  it('detecta drawdown peak->trough e marca não recuperado', () => {
+  it('detecta drawdown peak->trough e marca nï¿½o recuperado', () => {
     const r = drawdownAnalysis([
       t('d1', 1000, '2026-09-01T12:00:00Z'),
       t('d2', -3000, '2026-09-05T12:00:00Z'),
@@ -325,19 +332,19 @@ describe('journalAnalytics — drawdownAnalysis', () => {
     expect(r.atPeak).toBe(false);
   });
 
-  it('recuperação fecha o drawdown e volta ao pico', () => {
+  it('recuperaï¿½ï¿½o fecha o drawdown e volta ao pico', () => {
     const r = drawdownAnalysis([
       t('r1', 1000, '2026-09-01T12:00:00Z'),
       t('r2', -2000, '2026-09-03T12:00:00Z'),
       t('r3', 2500, '2026-09-08T12:00:00Z'),
     ], 10000);
-    // equity: 11000, 9000, 11500 -> DD recuperado no 3º
+    // equity: 11000, 9000, 11500 -> DD recuperado no 3ï¿½
     expect(r.drawdowns[0].recovered).toBe(true);
     expect(r.recoveryRate).toBe(100);
     expect(r.atPeak).toBe(true);
   });
 
-  it('sem trades retorna série vazia e máximos zerados', () => {
+  it('sem trades retorna sï¿½rie vazia e mï¿½ximos zerados', () => {
     const r = drawdownAnalysis([], 5000);
     expect(r.series).toHaveLength(0);
     expect(r.maxDD.drawdownPct).toBe(0);

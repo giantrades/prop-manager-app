@@ -7,7 +7,7 @@ import {
   computeEquity,
   computePayoutEligibility,
   drawdownExceeded,
-  tradePnl,
+  tradeNetPnl,
   computeMaxDrawdown,
   computeTrailingDrawdown,
   computeDailyDrawdown,
@@ -163,7 +163,7 @@ export class DataChainEngine {
     points.push({ at: relevant[0]?.entryDatetime ?? nowIso(), equity: Number(equity.toFixed(2)) });
     for (const t of relevant) {
       const w = t.accounts?.find((a) => a.accountId === accountId)?.weight ?? (t.accountId === accountId ? 1 : 0);
-      equity += tradePnl(t) * w;
+      equity += tradeNetPnl(t) * w;
       points.push({ at: t.exitDatetime ?? t.entryDatetime, equity: Number(equity.toFixed(2)) });
     }
     return points;
@@ -207,12 +207,12 @@ export class DataChainEngine {
     let bestSingleDayProfit = 0;
     let totalProfit = 0;
     for (const t of relevant) {
-      totalProfit += tradePnl(t);
+      totalProfit += tradeNetPnl(t);
     }
     const byDay = new Map<string, number>();
     for (const t of relevant) {
       const day = t.exitDatetime?.slice(0, 10) ?? t.entryDatetime.slice(0, 10);
-      byDay.set(day, (byDay.get(day) ?? 0) + tradePnl(t));
+      byDay.set(day, (byDay.get(day) ?? 0) + tradeNetPnl(t));
     }
     for (const v of byDay.values()) if (v > bestSingleDayProfit) bestSingleDayProfit = v;
 
