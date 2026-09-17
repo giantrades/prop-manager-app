@@ -169,7 +169,21 @@ export default function QuantowerPage() {
           <button className="qt-btn" onClick={handleCheck} disabled={busy}>Verificar conexão</button>
           <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
         </div>
-        {status && <div className="qt-status" role="status">Bridge OK · v{status.version || status.bridgeVersion || '?'}</div>}
+        {status && (status.online ? (
+          <div className="qt-status" role="status">
+            Bridge OK · v{status.version || status.bridgeVersion || '?'}
+            {status.connections?.length ? ` · ${status.connections.length} conexão(ões)` : ''}
+            {status.positionsCount != null ? ` · ${status.positionsCount} posição(ões)` : ''}
+          </div>
+        ) : (
+          <div className="qt-error" role="alert">
+            {status.code === 'auth_failed'
+              ? 'Token de bridge inválido ou ausente — confira o Token (Sistema → Quantower).'
+              : status.code === 'bridge_stale_version'
+                ? `Bridge desatualizada (v${status.version}) — recompile o QuantowerBridge.cs.`
+                : (status.error || 'Bridge offline — verifique se a estratégia QuantowerBridge está em Run no Quantower.')}
+          </div>
+        ))}
         {error && <div className="qt-error" role="alert">{error}</div>}
       </div>
 
