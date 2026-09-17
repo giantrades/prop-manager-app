@@ -13,6 +13,7 @@ export * from './repositories';
 export * from './DataService';
 export * from './DataChainEngine';
 export * from './importPayouts';
+export * from './platformBalances';
 export * from './syncEngine';
 export * from './multiTab';
 export * from './accountModel';

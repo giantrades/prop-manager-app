@@ -5,7 +5,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlatform, useFinance, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm, ingestQuantowerTrades } from '@apps/lib/db';
+import {
+  listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm,
+  ingestQuantowerTrades, syncPlatformBalances, clearDeletedTrades,
+} from '@apps/lib/db';
 import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw, EyeOff, RotateCcw } from 'lucide-react';
 
 // Cache local (device) das contas/conexões da ponte — mostra offline com "última leitura".
@@ -110,29 +113,10 @@ export default function ConnectionsManager() {
       setHiddenConns(Array.isArray(hConns?.value) ? hConns.value : []);
       setHiddenAccts(Array.isArray(hAccts?.value) ? hAccts.value : []);
 
-      // [balance] Ao vivo: grava o saldo da PLATAFORMA nas contas associadas e usa como
-      // capital nominal (prop) quando ainda não houver. Só escreve o que mudou.
-      if (Array.isArray(accts) && accts.length > 0 && (app ?? []).length > 0) {
-        const balByPid = new Map(accts.map((b) => [b.platformAccountId, Number(b.balance) || 0]));
-        for (const a of app) {
-          if (!a.platformAccountId) continue;
-          const bal = balByPid.get(a.platformAccountId);
-          if (bal == null) continue;
-          const needBal = Number(a.platformBalance ?? NaN) !== bal;
-          let propNeed = null;
-          if (a.kind === 'prop') {
-            propNeed = await f.ds.propExtensions.byAccountId(a.id).catch(() => null);
-          }
-          const needNominal = a.kind === 'prop' && propNeed && !(Number(propNeed.nominalSize) > 0) && bal > 0;
-          if (!needBal && !needNominal) continue;
-          await f.ds.accounts.put(
-            { ...a, platformBalance: bal, platformBalanceAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-            { source: 'local' },
-          );
-          if (needNominal) {
-            await f.ds.propExtensions.put({ ...propNeed, nominalSize: bal, updatedAt: new Date().toISOString() }, { source: 'local' });
-          }
-        }
+      // [balance] Ao vivo: grava o saldo da PLATAFORMA nas contas associadas (e vira
+      // capital nominal de prop sem nominal). O mesmo passe também roda no auto-sync.
+      if (Array.isArray(accts) && accts.length > 0) {
+        await syncPlatformBalances(f.ds, accts).catch(() => {});
       }
     } finally {
       setBusy(false);
@@ -321,6 +305,14 @@ export default function ConnectionsManager() {
     }
   }, [appByPlatformId, load, toast]);
 
+  // Limpa o histórico de exclusão (um próximo sync pode reimportar trades apagados).
+  const clearDeleted = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    await clearDeletedTrades(f.ds);
+    toast('Histórico de exclusão limpo — o próximo sync pode reimportar trades apagados.');
+  }, [toast]);
+
   const unhideAll = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
@@ -396,6 +388,7 @@ export default function ConnectionsManager() {
 
       <div className="cx-actions">
         <button className="cmd-refresh" onClick={relinkTrades} disabled={busy}><Link2 size={13} /> Religar trades sem conta</button>
+        <button className="cmd-refresh" onClick={clearDeleted} disabled={busy}><RotateCcw size={13} /> Limpar histórico de exclusão</button>
         {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
           <button className="cmd-refresh" onClick={unhideAll}><RotateCcw size={13} /> Reexibir ocultos ({hiddenConns.length + hiddenAccts.length})</button>
         )}

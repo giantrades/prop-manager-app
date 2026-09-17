@@ -67,6 +67,15 @@ export async function rememberDeletedTrades(ds: DataService, keys: string[]): Pr
   }
 }
 
+/** Limpa o histórico de exclusão: um próximo sync pode reimportar tudo novamente. */
+export async function clearDeletedTrades(ds: DataService): Promise<void> {
+  try {
+    await ds.meta.setKey(DELETED_TRADES_KEY, []);
+  } catch {
+    /* noop */
+  }
+}
+
 /**
  * Mapeia um trade Quantower para o schema app-db v3 (Trade). O `id` é prefixado
  * `qt_` (nunca colide com UUID manual). `resultNet` usa o `netPnl` do bridge; `fees`

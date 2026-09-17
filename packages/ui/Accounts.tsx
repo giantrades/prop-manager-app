@@ -322,6 +322,12 @@ export default function Accounts({
                     <span className="ac3-metric-label">{a.kind === 'prop' ? 'Balance' : 'Saldo'}</span>
                     <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize || a.platformBalance || 0) : (balances[a.id] || a.platformBalance || 0), curSymbol(a.currency))}</span>
                   </div>
+                  {a.platformAccountId && a.platformBalance != null && (
+                    <div className="ac3-metric">
+                      <span className="ac3-metric-label">Plataforma</span>
+                      <span className="ac3-metric-value" title="Saldo reportado pela ponte (Quantower)">{fmtMoney(a.platformBalance, curSymbol(a.currency))}</span>
+                    </div>
+                  )}
                   {a.kind === 'prop' && (
                     <div className="ac3-metric">
                       <span className="ac3-metric-label">Custo</span>

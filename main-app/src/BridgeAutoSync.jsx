@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react';
 import { useFinance } from '@apps/state';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { ingestQuantowerTrades, EVENTS } from '@apps/lib/db';
+import { ingestQuantowerTrades, syncPlatformBalances, EVENTS } from '@apps/lib/db';
 
 const AUTO_KEY = 'qt:autoSync';
 const URL_KEY = 'qt:bridgeUrl';
@@ -63,6 +63,13 @@ export default function BridgeAutoSync() {
         const trades = await a.getTrades(from, undefined);
         if (trades.length > 0) {
           await ingestQuantowerTrades(f.ds, f.chain, trades);
+        }
+        // Saldo das contas da plataforma (platformBalance + nominal de prop sem nominal).
+        try {
+          const accounts = await a.getAccounts();
+          await syncPlatformBalances(f.ds, accounts);
+        } catch {
+          /* sem contas agora — segue */
         }
         await writeCursor(f.ds, new Date().toISOString());
       } catch (e) {
