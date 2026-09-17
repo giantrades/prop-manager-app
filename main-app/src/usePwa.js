@@ -44,11 +44,17 @@ export function usePwa() {
         swReloading = true;
         window.location.reload();
       });
+      let checkTimer = null;
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (!reg) return;
         regRef = reg;
         // Procura versão nova logo na abertura (não espera o ciclo do browser).
         reg.update().catch(() => {});
+        // Procura de novo ao voltar para a aba e a cada 30 min (PWA fica muito aberto).
+        const check = () => reg.update().catch(() => {});
+        const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+        document.addEventListener('visibilitychange', onVisible);
+        checkTimer = setInterval(check, 30 * 60 * 1000);
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing;
           if (!sw) return;
@@ -58,6 +64,7 @@ export function usePwa() {
             }
           });
         });
+        void checkTimer;
       }).catch(() => {});
     }
     return () => {

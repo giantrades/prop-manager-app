@@ -376,6 +376,9 @@ a {
   position: fixed;
   left: calc(var(--sb-expanded) + 10px);
   width: 270px;
+  max-width: calc(100vw - var(--sb-expanded) - 20px);
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
   background: #131925;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
@@ -386,6 +389,9 @@ a {
   color: var(--text);
   animation: sb-fade-in 0.15s ease;
 }
+
+.sb-platform-actions { display: inline-flex; align-items: center; gap: 6px; }
+.sb-live { font-size: 9px; font-weight: 800; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 999px; background: rgba(46,204,113,0.16); border: 1px solid rgba(46,204,113,0.5); color: #2ecc71; }
 
 @keyframes sb-fade-in {
   from {
@@ -1676,6 +1682,6 @@ select optgroup {
   color: #e7eaf0;
 }
 
-/* Gastos — orçado x realizado: barra verde (dentro) / vermelha (estourou) */
+/* Gastos ï¿½ orï¿½ado x realizado: barra verde (dentro) / vermelha (estourou) */
 .gd-bar-ok { background: linear-gradient(90deg, #2ecc71, #7bed9f) !important; }
 .gd-bar-over { background: linear-gradient(90deg, #e74c3c, #ff7b6b) !important; }

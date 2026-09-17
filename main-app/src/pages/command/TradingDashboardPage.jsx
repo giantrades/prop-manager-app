@@ -1,7 +1,7 @@
 // Dashboard do módulo Trading (porta de entrada) — cards glass + evolução do PnL
 // acumulado com marcadores de payout/withdrawal + widgets (calendário, drawdown,
 // histograma). Sem seções redundantes. COMPOSIÇÃO pura dos motores.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot, ReferenceLine,
@@ -52,6 +52,8 @@ export default function TradingDashboardPage() {
     const url = searchParams.get('accounts');
     return url ? url.split(',').filter(Boolean) : [];
   });
+  // Só persiste DEPOIS de hidratar (evita apagar a seleção salva antes de ler).
+  const hydratedRef = useRef(!!searchParams.get('accounts'));
   const [stratByVersion, setStratByVersion] = useState(false);
   const drawer = useEntityDrawer();
   const { loading, data, error, reload, finance } = useEngineData(async (f) => {
@@ -84,22 +86,23 @@ export default function TradingDashboardPage() {
 
   // #3 — seleção de contas persistida (meta `ui:filters`) + refletida na URL (?accounts=).
   useEffect(() => {
-    if (acctSel.length) return; // URL já trouxe contas
+    if (hydratedRef.current) return undefined; // URL já trouxe (ou já hidratou)
+    if (!finance?.ds) return undefined;
     let alive = true;
     (async () => {
-      if (!finance?.ds) return;
       try {
         const rec = await finance.ds.meta.getKey('ui:filters');
         const ids = Array.isArray(rec?.value?.accounts) ? rec.value.accounts : [];
         if (alive && ids.length) setAcctSel(ids);
       } catch { /* noop */ }
+      finally { hydratedRef.current = true; }
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finance]);
 
   useEffect(() => {
-    if (!finance?.ds) return undefined;
+    if (!finance?.ds || !hydratedRef.current) return undefined;
     const t = setTimeout(() => {
       finance.ds.meta.setKey('ui:filters', { accounts: acctSel }).catch(() => {});
       setSearchParams((prev) => {

@@ -105,7 +105,7 @@ export default function AccountPicker({ selected = [], onChange }) {
 }
 
 const AP_CSS = `
-.ap-root { position: relative; display: inline-block; }
+.ap-root { position: relative; display: inline-block; align-self: flex-start; max-width: 100%; }
 .ap-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; min-height: 38px; cursor: pointer; }
 .ap-btn:hover { background: rgba(255,255,255,0.07); }
 .ap-btn.active { border-color: rgba(124,92,255,0.55); background: rgba(124,92,255,0.14); }

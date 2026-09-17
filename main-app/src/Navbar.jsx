@@ -86,7 +86,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
     protonSupported,
   } = useDrive();
   const { currency, setCurrency, rate } = useCurrency();
-  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync } =
+  const { statuses, liveCount, lastSync, isRunning, startSync, stopSync, refreshStatuses, streaming } =
     usePlatform();
   const { actions, addManualAction, removeManualAction } = useCommandSnapshot();
   const { unread, markRead, markAllRead, dismiss, snooze } = useReadNotifications(actions);
@@ -102,7 +102,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const [isHovered, setIsHovered] = useState(false);
   const [platformOpen, setPlatformOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [platformDropdownTop, setPlatformDropdownTop] = useState(240);
+  const [platformDropdownBottom, setPlatformDropdownBottom] = useState(240);
 
   const platformItemRef = useRef(null);
   const platformDropdownRef = useRef(null);
@@ -211,7 +211,8 @@ export default function Navbar({ isPinned, onTogglePin }) {
   const togglePlatform = () => {
     if (!platformOpen && platformItemRef.current) {
       const rect = platformItemRef.current.getBoundingClientRect();
-      setPlatformDropdownTop(rect.top);
+      // Abre PARA CIMA (o item fica no rodapé): bottom = distância até o topo do item.
+      setPlatformDropdownBottom(Math.max(8, window.innerHeight - rect.top + 8));
     }
     setPlatformOpen((p) => !p);
   };
@@ -398,16 +399,19 @@ export default function Navbar({ isPinned, onTogglePin }) {
         <div
           ref={platformDropdownRef}
           className="sb-platform-dropdown"
-          style={{ top: platformDropdownTop }}
+          style={{ bottom: platformDropdownBottom }}
         >
           <div className="sb-platform-dropdown-header">
-            <h4>Platforms</h4>
-            <button
-              className={`sb-sync-btn${isRunning ? " running" : " stopped"}`}
-              onClick={isRunning ? stopSync : startSync}
-            >
-              {isRunning ? "⏸ Stop" : "▶ Start"}
-            </button>
+            <h4>Platforms {streaming ? <span className="sb-live">LIVE</span> : null}</h4>
+            <div className="sb-platform-actions">
+              <button className="sb-sync-btn" onClick={() => refreshStatuses()} title="Verificar conexão agora">↻</button>
+              <button
+                className={`sb-sync-btn${isRunning ? " running" : " stopped"}`}
+                onClick={isRunning ? stopSync : startSync}
+              >
+                {isRunning ? "⏸ Stop" : "▶ Start"}
+              </button>
+            </div>
           </div>
 
           {statuses.length === 0 ? (
@@ -430,7 +434,7 @@ export default function Navbar({ isPinned, onTogglePin }) {
                 </span>
                 <div className="sb-platform-info">
                   <div className="sb-platform-name">
-                    {s.platformId}
+                    {s.platformId === "quantower" ? "Quantower" : s.platformId}
                     <span
                       className="sb-platform-dot"
                       style={{
@@ -440,15 +444,15 @@ export default function Navbar({ isPinned, onTogglePin }) {
                   </div>
                   {s.online ? (
                     <div className="sb-platform-detail">
-                      {s.connections?.length || 0} conn ·{" "}
-                      {s.positionsCount || 0} positions
+                      Conectado · {s.connections?.length || 0} conexão(ões) ·{" "}
+                      {s.positionsCount || 0} posição(ões)
                     </div>
                   ) : (
                     <div
                       className="sb-platform-detail"
                       style={{ color: "#ef4444" }}
                     >
-                      Offline — check connection
+                      Offline — abra o Quantower e rode o bridge
                     </div>
                   )}
                 </div>

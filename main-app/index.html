@@ -28,6 +28,42 @@
             .catch((err) => console.warn("[pwa] sw register:", err));
         });
       }
+      // Auto-heal de cache velho: se o bundle em execução for de um build antigo (SW
+      // controlando + hash do bundle diferente do último visto), desregistra o SW,
+      // limpa os caches do app e recarrega UMA vez. Roda sempre com HTML fresco.
+      (function () {
+        try {
+          var tag = document.querySelector('script[type="module"][src*="/assets/"]');
+          var src = tag && tag.getAttribute("src");
+          if (!src) return; // dev
+          var seen = localStorage.getItem("sw:build");
+          if (seen === src) return;
+          // Sem SW controlando = primeira visita: só registra e segue (sem reload).
+          if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+            localStorage.setItem("sw:build", src);
+            return;
+          }
+          localStorage.setItem("sw:build", src);
+          var last = Number(sessionStorage.getItem("sw:resetAt") || 0);
+          if (Date.now() - last < 10 * 60 * 1000) return; // anti-loop
+          sessionStorage.setItem("sw:resetAt", String(Date.now()));
+          var done = function () { window.location.reload(); };
+          var clearCaches = window.caches
+            ? caches.keys().then(function (ks) {
+                return Promise.all(
+                  ks.filter(function (k) { return k.indexOf("financeos-") === 0; })
+                    .map(function (k) { return caches.delete(k); }),
+                );
+              })
+            : Promise.resolve();
+          Promise.all([
+            navigator.serviceWorker.getRegistrations().then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.unregister(); }));
+            }),
+            clearCaches,
+          ]).then(done, done);
+        } catch (e) { /* noop */ }
+      })();
     </script>
   </body>
 </html>
