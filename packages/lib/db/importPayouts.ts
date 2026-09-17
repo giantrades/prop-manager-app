@@ -43,9 +43,22 @@ export function readLegacyPayouts(): LegacyPayout[] {
   if (typeof localStorage === 'undefined') return [];
   const raw = localStorage.getItem(LEGACY_LS_KEY);
   if (!raw) return [];
+  return readPayoutsFromJson(raw);
+}
+
+/**
+ * Extrai payouts de um JSON qualquer (backup antigo/arquivo). Aceita:
+ *  - `{ payouts: [...] }`
+ *  - `{ data: { payouts: [...] } }`  (formato do backup do app antigo)
+ *  - `[ ... ]` (array direto)
+ */
+export function readPayoutsFromJson(raw: string): LegacyPayout[] {
   try {
     const data = JSON.parse(raw);
-    return Array.isArray(data.payouts) ? (data.payouts as LegacyPayout[]) : [];
+    if (Array.isArray(data)) return data as LegacyPayout[];
+    if (Array.isArray(data?.payouts)) return data.payouts as LegacyPayout[];
+    if (Array.isArray(data?.data?.payouts)) return data.data.payouts as LegacyPayout[];
+    return [];
   } catch {
     return [];
   }

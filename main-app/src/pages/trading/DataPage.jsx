@@ -4,7 +4,10 @@
 import React, { useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
-import { importLegacyPayoutsFromStorage, seedDemoData, clearDemoData, getDemoIds } from '@apps/lib/db';
+import {
+  importLegacyPayoutsFromStorage, importPayouts, readLegacyPayouts, readPayoutsFromJson,
+  seedDemoData, clearDemoData, getDemoIds,
+} from '@apps/lib/db';
 
 export default function DataPage() {
   const finance = useFinance();
@@ -16,13 +19,43 @@ export default function DataPage() {
     if (!finance) return;
     setBusy(true);
     setError(null);
+    setResult(null);
     try {
+      const found = readLegacyPayouts().length;
+      if (found === 0) {
+        setError('Nenhum payout no app antigo DESTE navegador (chave "propmanager-data-v1"). Se você limpou os dados do site, use o backup .json abaixo.');
+        return;
+      }
       const res = await importLegacyPayoutsFromStorage(finance.ds, finance.chain);
-      setResult({ type: 'payouts', count: res.importedCount, skipped: res.skippedCount });
+      setResult({ type: 'payouts', count: res.importedCount, skipped: res.skippedCount, found });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[import] falha', err);
       setError('Falha ao importar payouts.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Importa payouts de um backup .json (app antigo) quando o localStorage já não tem.
+  const handleImportFile = async (file) => {
+    if (!finance || !file) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const text = await file.text();
+      const payouts = readPayoutsFromJson(text);
+      if (!payouts.length) {
+        setError('O arquivo não tem payouts (esperado um JSON com "payouts": [...] ).');
+        return;
+      }
+      const res = await importPayouts(finance.ds, finance.chain, payouts);
+      setResult({ type: 'payouts', count: res.importedCount, skipped: res.skippedCount, found: payouts.length });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[import file] falha', err);
+      setError('Falha ao ler/importar o arquivo.');
     } finally {
       setBusy(false);
     }
@@ -75,9 +108,21 @@ export default function DataPage() {
       <div className="dp-card">
         <div className="dp-title">Importar payouts do app antigo</div>
         <p className="dp-desc">Lê os 2 payouts de <code>propmanager-data-v1</code> e cria <code>Payout</code> seed + transações <code>payout_in</code>/<code>fee</code> no <code>app-db v3</code>. Nada de trades/contas/goals antigos.</p>
-        <button className="dp-btn dp-btn-primary" onClick={handleImport} disabled={busy || !finance}>
-          {busy ? 'Importando…' : 'Importar payouts'}
-        </button>
+        <div className="dp-row">
+          <button className="dp-btn dp-btn-primary" onClick={handleImport} disabled={busy || !finance}>
+            {busy ? 'Importando…' : 'Importar payouts'}
+          </button>
+          <label className={`dp-btn${busy ? ' dp-btn-disabled' : ''}`}>
+            Importar de backup .json
+            <input
+              type="file"
+              accept=".json,application/json"
+              style={{ display: 'none' }}
+              disabled={busy || !finance}
+              onChange={(e) => { handleImportFile(e.target.files?.[0]); e.target.value = ''; }}
+            />
+          </label>
+        </div>
 
         <div className="dp-sep" />
 
@@ -100,7 +145,7 @@ export default function DataPage() {
                 ? (result.trades || result.accounts)
                   ? <>Dados demo apagados: <b>{result.trades} trades</b> · <b>{result.accounts} contas</b>.</>
                   : <>Não havia dados demo para apagar.</>
-                : <>Importados: <b>{result.count}</b> · Pulados: <b>{result.skipped}</b>.</>}
+                : <>Payouts encontrados: <b>{result.found ?? '—'}</b> · Importados: <b>{result.count}</b> · Pulados: <b>{result.skipped}</b>.</>}
           </div>
         )}
         {error && <div className="dp-error" role="alert">{error}</div>}
