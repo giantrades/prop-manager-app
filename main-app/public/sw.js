@@ -11,9 +11,9 @@
  *   - Imagens/anexos de comprovante: cache-first com expiração longa (30 dias).
  *   - pushManager registrado vazio (para não exigir reinstall quando push chegar).
  */
-const CACHE = "financeos-shell-v3";
-const CACHE_ASSETS = "financeos-assets-v3";
-const CACHE_ATTACHMENTS = "financeos-attachments-v3";
+const CACHE = "financeos-shell-v4";
+const CACHE_ASSETS = "financeos-assets-v4";
+const CACHE_ATTACHMENTS = "financeos-attachments-v4";
 const DATA_READ_HINTS = ["/api/", "/accounts", "/trades", "/positions"];
 const BRIDGE_STATUS_PATHS = ["/status", "/health"];
 const ATTACHMENT_RE = /\.(png|jpe?g|gif|webp|pdf|svg)$/i;
@@ -116,15 +116,10 @@ function isDataRead(url) {
   return DATA_READ_HINTS.some((p) => url.pathname.includes(p));
 }
 
-function isShellAsset(url) {
-  return (
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith("/assets/") ||
-      url.pathname.startsWith("/icons/") ||
-      url.pathname === "/manifest.webmanifest" ||
-      url.pathname === "/favicon32x32.png")
-  );
-}
+// NÃO interceptamos mais /assets/* aqui: os chunks têm hash e cache imutável no CDN, então
+// o próprio navegador (HTTP cache) cuida. Interceptar causava os avisos de "preload …
+// cross-world service worker mismatch" e, pior, cacheava o index.html (SPA fallback) como
+// se fosse o .js quando um chunk antigo faltava → "MIME text/html" e erro de módulo.
 
 async function networkOnlyWithTimeout(request, timeoutMs = SW_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -224,18 +219,6 @@ self.addEventListener("fetch", (event) => {
       fetch(request)
         .then((res) => putIfOk(CACHE, "/index.html", res))
         .catch(() => caches.match("/index.html"))
-    );
-    return;
-  }
-
-  // App shell: cache-first (mas só memoriza 2xx — chunk com hash novo é baixado fresco).
-  if (isShellAsset(url)) {
-    event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((res) => putIfOk(CACHE, request, res))
-      )
     );
     return;
   }

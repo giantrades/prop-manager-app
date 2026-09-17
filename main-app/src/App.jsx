@@ -15,28 +15,46 @@ import { PALETTE_ROUTES } from "./navConfig";
 // UX foundation: code-split por rota — o chunk inicial carrega só shell.
 // Páginas pesadas (charts) vão para chunks sob demanda.
 // Chunks por rota (fonte única em routeLoaders.js — usada no lazy e no prefetch).
-const HomePage = lazy(pageLoaders['/']);
-const GastosDashboardPage = lazy(pageLoaders['/gastos']);
-const AccountsDashboardPage = lazy(pageLoaders['/contas']);
-const TradingDashboardPage = lazy(pageLoaders['/trading']);
-const InvestmentsDashboardPage = lazy(pageLoaders['/investimentos']);
-const PlanningDashboardPage = lazy(pageLoaders['/planejamento']);
 
-const JournalPage = lazy(pageLoaders['/journal']);
-const PlaybookPage = lazy(pageLoaders['/playbook']);
-const AccountsPage = lazy(pageLoaders['/accounts']);
-const PayoutsPage = lazy(pageLoaders['/payouts']);
-const SettingsPage = lazy(pageLoaders['/settings']);
-const GoalsManagePage = lazy(pageLoaders['/goals']);
-const LivePositionsPage = lazy(pageLoaders['/live-positions']);
-const DataPage = lazy(pageLoaders['/import']);
-const QuantowerPage = lazy(pageLoaders['/quantower']);
-const PortfolioPage = lazy(pageLoaders['/portfolio']);
-const ForecastPage = lazy(pageLoaders['/forecast']);
-const FirmPnlPage = lazy(pageLoaders['/firms']);
-const ExpensesPage = lazy(pageLoaders['/expenses']);
-const FinancialJournalPage = lazy(pageLoaders['/journal-events']);
-const ReportsPage = lazy(pageLoaders['/reports']);
+// Recarrega UMA vez quando um chunk falha (um deploy novo removeu o chunk antigo que
+// este bundle em memória ainda referencia → "MIME text/html"/"Failed to fetch module").
+const CHUNK_RELOAD_KEY = 'chunkReloadAt';
+function lazyRetry(loader) {
+  return lazy(() => loader().catch((err) => {
+    try {
+      const now = Date.now();
+      const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+      if (now - last > 15000) {
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+        window.location.reload();
+      }
+    } catch { /* noop */ }
+    throw err;
+  }));
+}
+
+const HomePage = lazyRetry(pageLoaders['/']);
+const GastosDashboardPage = lazyRetry(pageLoaders['/gastos']);
+const AccountsDashboardPage = lazyRetry(pageLoaders['/contas']);
+const TradingDashboardPage = lazyRetry(pageLoaders['/trading']);
+const InvestmentsDashboardPage = lazyRetry(pageLoaders['/investimentos']);
+const PlanningDashboardPage = lazyRetry(pageLoaders['/planejamento']);
+
+const JournalPage = lazyRetry(pageLoaders['/journal']);
+const PlaybookPage = lazyRetry(pageLoaders['/playbook']);
+const AccountsPage = lazyRetry(pageLoaders['/accounts']);
+const PayoutsPage = lazyRetry(pageLoaders['/payouts']);
+const SettingsPage = lazyRetry(pageLoaders['/settings']);
+const GoalsManagePage = lazyRetry(pageLoaders['/goals']);
+const LivePositionsPage = lazyRetry(pageLoaders['/live-positions']);
+const DataPage = lazyRetry(pageLoaders['/import']);
+const QuantowerPage = lazyRetry(pageLoaders['/quantower']);
+const PortfolioPage = lazyRetry(pageLoaders['/portfolio']);
+const ForecastPage = lazyRetry(pageLoaders['/forecast']);
+const FirmPnlPage = lazyRetry(pageLoaders['/firms']);
+const ExpensesPage = lazyRetry(pageLoaders['/expenses']);
+const FinancialJournalPage = lazyRetry(pageLoaders['/journal-events']);
+const ReportsPage = lazyRetry(pageLoaders['/reports']);
 
 function RouteFallback() {
   return (

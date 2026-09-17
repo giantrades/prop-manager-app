@@ -111,7 +111,7 @@ export const MODULES = [
     children: [
       { to: "/settings", label: "Settings", icon: Settings, keywords: "configurações moeda backup" },
       { to: "/quantower", label: "Quantower", icon: Zap, keywords: "sync bridge live" },
-      { to: "/import", label: "Importar", icon: Database, keywords: "csv dados" },
+      { to: "/import", label: "Dados Teste", icon: Database, keywords: "demo dados teste" },
     ],
   },
 ];
