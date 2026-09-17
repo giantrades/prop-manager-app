@@ -10,7 +10,10 @@ import ModuleTabs from '../../ModuleTabs';
 import { PlaybookPanel } from './PlaybookPage';
 import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
-import { csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis, rDistribution, durationStats, listFirms } from '@apps/lib/db';
+import {
+  csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis,
+  rDistribution, durationStats, listFirms, rememberDeletedTrades, tradeFingerprint,
+} from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
 import TradeForm from '@apps/ui/TradeForm';
 import JournalDashboard from '@apps/ui/JournalDashboard';
@@ -203,15 +206,28 @@ export default function JournalPage() {
     [load],
   );
 
+  // Lápide: ao excluir, grava id/impressão digital para o sync NÃO reimportar.
+  const tombstone = useCallback(async (f, ids) => {
+    const keys = [];
+    for (const id of ids) {
+      const t = trades.find((x) => x.id === id);
+      if (!t) continue;
+      if (t.quantowerId) keys.push(t.quantowerId);
+      keys.push(tradeFingerprint(t));
+    }
+    if (keys.length) await rememberDeletedTrades(f.ds, keys);
+  }, [trades]);
+
   const handleDelete = useCallback(
     async (tradeId) => {
-      if (!financeRef.current) return;
       const f = financeRef.current;
+      if (!f) return;
+      await tombstone(f, [tradeId]);
       await f.chain.deleteTrade(tradeId);
       await f.ds.trades.remove(tradeId);
       load();
     },
-    [load],
+    [load, tombstone],
   );
 
   // Exclusão em lote (seleção múltipla na tabela de trades).
@@ -219,6 +235,7 @@ export default function JournalPage() {
     async (tradeIds) => {
       const f = financeRef.current;
       if (!f || !Array.isArray(tradeIds) || tradeIds.length === 0) return;
+      await tombstone(f, tradeIds);
       for (const id of tradeIds) {
         try {
           await f.chain.deleteTrade(id);
@@ -229,7 +246,7 @@ export default function JournalPage() {
       }
       load();
     },
-    [load],
+    [load, tombstone],
   );
 
   // J8 — Exportar análise (resumo do mês + breakdowns). Só formata; números vêm do motor.

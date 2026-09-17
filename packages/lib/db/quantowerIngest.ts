@@ -39,6 +39,34 @@ export interface IngestResult {
   skipped: number;
 }
 
+// Trades que o usuário APAGOU: guardamos a "lápide" (id da plataforma ou impressão
+// digital) para o sync NÃO reimportar o que foi excluído de propósito.
+const DELETED_TRADES_KEY = 'bridge:deletedTrades';
+
+export function tradeFingerprint(t: { symbol?: string; entryDatetime?: string; exitDatetime?: string; qty?: number; entryPrice?: number; exitPrice?: number }): string {
+  return `${t.symbol ?? ''}|${t.entryDatetime ?? ''}|${t.exitDatetime ?? ''}|${t.qty ?? ''}|${t.entryPrice ?? ''}|${t.exitPrice ?? ''}`;
+}
+
+export async function getDeletedTradeKeys(ds: DataService): Promise<Set<string>> {
+  try {
+    const rec = await ds.meta.getKey(DELETED_TRADES_KEY);
+    return new Set(Array.isArray(rec?.value) ? (rec.value as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Registra lápides de trades excluídos (id da plataforma e/ou impressão digital). */
+export async function rememberDeletedTrades(ds: DataService, keys: string[]): Promise<void> {
+  const cur = await getDeletedTradeKeys(ds);
+  for (const k of keys) if (k) cur.add(k);
+  try {
+    await ds.meta.setKey(DELETED_TRADES_KEY, [...cur].slice(-5000));
+  } catch {
+    /* noop */
+  }
+}
+
 /**
  * Mapeia um trade Quantower para o schema app-db v3 (Trade). O `id` é prefixado
  * `qt_` (nunca colide com UUID manual). `resultNet` usa o `netPnl` do bridge; `fees`
@@ -107,8 +135,9 @@ export async function ingestQuantowerTrades(
 
   // Dedup: por `quantowerId` E por impressão digital (símbolo+entrada+saída+qtd+preços).
   // A impressão digital evita duplicar quando o id do bridge muda entre leituras.
-  const fpOf = (t: { symbol?: string; entryDatetime?: string; exitDatetime?: string; qty?: number; entryPrice?: number; exitPrice?: number }) =>
-    `${t.symbol ?? ''}|${t.entryDatetime ?? ''}|${t.exitDatetime ?? ''}|${t.qty ?? ''}|${t.entryPrice ?? ''}|${t.exitPrice ?? ''}`;
+  const fpOf = tradeFingerprint;
+  // Lápides: nunca reimportar trade que o usuário apagou.
+  const deleted = await getDeletedTradeKeys(ds);
   const existingAll = await ds.trades.list();
   const byQt = new Map<string, Trade>();
   const byFp = new Map<string, Trade>();
@@ -131,6 +160,10 @@ export async function ingestQuantowerTrades(
 
     const trade = quantowerToTrade(q, accountId);
     const fp = fpOf(trade);
+    if (deleted.has(q.platformTradeId) || deleted.has(fp)) {
+      skipped += 1;
+      continue;
+    }
     const existing = byQt.get(q.platformTradeId) ?? byFp.get(fp);
     if (existing) {
       // Preserva MAE/MFE já conhecidos quando o bridge desta rodada não os enviou.

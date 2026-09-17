@@ -64,6 +64,10 @@ export interface Account extends SyncedRecord {
   platformAccountId?: string;
   platformName?: string;
   lastPlatformSync?: string;
+  // Saldo informado pela PLATAFORMA (bridge) — referência; o saldo do app é derivado do
+  // ledger. Atualizado a cada leitura das conexões (aditivo, sincroniza).
+  platformBalance?: number;
+  platformBalanceAt?: string;
   // Firms — vínculo com uma empresa (cor propaga no app). Aditivo.
   firmId?: string;
 }

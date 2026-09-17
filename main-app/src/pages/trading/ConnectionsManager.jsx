@@ -109,6 +109,31 @@ export default function ConnectionsManager() {
       setConnFirmById(connFirms ?? {});
       setHiddenConns(Array.isArray(hConns?.value) ? hConns.value : []);
       setHiddenAccts(Array.isArray(hAccts?.value) ? hAccts.value : []);
+
+      // [balance] Ao vivo: grava o saldo da PLATAFORMA nas contas associadas e usa como
+      // capital nominal (prop) quando ainda não houver. Só escreve o que mudou.
+      if (Array.isArray(accts) && accts.length > 0 && (app ?? []).length > 0) {
+        const balByPid = new Map(accts.map((b) => [b.platformAccountId, Number(b.balance) || 0]));
+        for (const a of app) {
+          if (!a.platformAccountId) continue;
+          const bal = balByPid.get(a.platformAccountId);
+          if (bal == null) continue;
+          const needBal = Number(a.platformBalance ?? NaN) !== bal;
+          let propNeed = null;
+          if (a.kind === 'prop') {
+            propNeed = await f.ds.propExtensions.byAccountId(a.id).catch(() => null);
+          }
+          const needNominal = a.kind === 'prop' && propNeed && !(Number(propNeed.nominalSize) > 0) && bal > 0;
+          if (!needBal && !needNominal) continue;
+          await f.ds.accounts.put(
+            { ...a, platformBalance: bal, platformBalanceAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { source: 'local' },
+          );
+          if (needNominal) {
+            await f.ds.propExtensions.put({ ...propNeed, nominalSize: bal, updatedAt: new Date().toISOString() }, { source: 'local' });
+          }
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -169,6 +194,8 @@ export default function ConnectionsManager() {
       ...app,
       platformAccountId: bridgeAcc.platformAccountId,
       platformName: 'quantower',
+      platformBalance: Number(bridgeAcc.balance) || 0,
+      platformBalanceAt: new Date().toISOString(),
       firmId: connFirmById[bridgeAcc.connectionId] || app.firmId,
       institution: app.institution || bridgeAcc.connectionName || undefined,
       updatedAt: new Date().toISOString(),
@@ -200,6 +227,8 @@ export default function ConnectionsManager() {
       defaultWeight: 1,
       platformAccountId: bridgeAcc.platformAccountId,
       platformName: 'quantower',
+      platformBalance: Number(bridgeAcc.balance) || 0,
+      platformBalanceAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       deviceId: f.ds.deviceId,
       version: 0,

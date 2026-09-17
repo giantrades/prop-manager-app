@@ -118,11 +118,12 @@ export default function Accounts({
 
   const summary = useMemo(() => {
     const prop = accounts.filter((a) => a.kind === 'prop');
-    const nominal = prop.reduce((s, a) => s + (props[a.id]?.nominalSize ?? 0), 0);
+    const nominal = prop.reduce((s, a) => s + (props[a.id]?.nominalSize || a.platformBalance || 0), 0);
     let liquidTotal = 0;
     for (const a of accounts) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
-      liquidTotal += convertMoney(balances[a.id] ?? 0, a.currency);
+      // Saldo do ledger; se vazio, usa o saldo da plataforma (bridge).
+      liquidTotal += convertMoney(balances[a.id] || a.platformBalance || 0, a.currency);
     }
     const activeProp = prop.filter((a) => isActiveProp(props[a.id]?.phase));
     return { total: accounts.length, propCount: prop.length, nominal, liquidTotal, activeProp: activeProp.length };
@@ -319,7 +320,7 @@ export default function Accounts({
                 <div className="ac3-card-metrics">
                   <div className="ac3-metric">
                     <span className="ac3-metric-label">{a.kind === 'prop' ? 'Balance' : 'Saldo'}</span>
-                    <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize ?? 0) : (balances[a.id] ?? 0), curSymbol(a.currency))}</span>
+                    <span className="ac3-metric-value">{fmtMoney(a.kind === 'prop' ? (p?.nominalSize || a.platformBalance || 0) : (balances[a.id] || a.platformBalance || 0), curSymbol(a.currency))}</span>
                   </div>
                   {a.kind === 'prop' && (
                     <div className="ac3-metric">

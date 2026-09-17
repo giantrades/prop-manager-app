@@ -4,7 +4,7 @@ import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { DataChainEngine } from '../DataChainEngine';
 import { EventBus } from '../events';
-import { ingestQuantowerTrades, quantowerToTrade } from '../quantowerIngest';
+import { ingestQuantowerTrades, quantowerToTrade, rememberDeletedTrades } from '../quantowerIngest';
 
 function makeEngine() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -44,6 +44,19 @@ describe('A8 — dedup no re-sync', () => {
     const r = await ingestQuantowerTrades(ds, chain, [{ ...BATCH[0], platformTradeId: '' }]);
     expect(r).toMatchObject({ created: 0, skipped: 1 });
     expect(await ds.trades.list()).toHaveLength(0);
+  });
+
+  it('trade apagado (lápide) NÃO volta no re-sync', async () => {
+    const { ds, chain } = makeEngine();
+    await ingestQuantowerTrades(ds, chain, BATCH);
+    const all = await ds.trades.list();
+    const t1 = all.find((t) => t.quantowerId === 'qt_1');
+    await rememberDeletedTrades(ds, [t1.id, 'qt_1']);
+    await ds.trades.remove(t1.id);
+    const r = await ingestQuantowerTrades(ds, chain, BATCH);
+    expect(r.skipped).toBeGreaterThanOrEqual(1);
+    const after = await ds.trades.list();
+    expect(after.find((t) => t.quantowerId === 'qt_1')).toBeUndefined();
   });
 });
 
