@@ -187,7 +187,7 @@ export default function QuantowerPage() {
           </label>
         </div>
         <div className="qt-actions">
-          <button className="qt-btn" onClick={handleCheck} disabled={busy}>Verificar conexão</button>
+          <button className="qt-btn" onClick={handleCheck} disabled={busy}>{busy ? 'Testando…' : 'Testar conexão'}</button>
           <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
         </div>
         {status && (status.online ? (
@@ -203,6 +203,7 @@ export default function QuantowerPage() {
               : status.code === 'bridge_stale_version'
                 ? `Bridge desatualizada (v${status.version}) — recompile o QuantowerBridge.cs.`
                 : (status.error || 'Bridge offline — verifique se a estratégia QuantowerBridge está em Run no Quantower.')}
+            <div className="qt-err-code">código: {status.code || 'bridge_offline'} · url: {bridgeUrl}</div>
           </div>
         ))}
         {error && <div className="qt-error" role="alert">{error}</div>}
@@ -305,6 +306,7 @@ const QT_CSS = `
 .qt-btn-primary { background: var(--brand, #7c5cff); border-color: var(--brand, #7c5cff); color: #fff; }
 .qt-status { padding: 10px 12px; border-radius: 10px; background: rgba(46,204,113,0.1); border: 1px solid rgba(46,204,113,0.25); color: var(--green, #2ecc71); font-size: 13px; }
 .qt-error { padding: 10px 12px; border-radius: 10px; background: rgba(231,76,60,0.12); border: 1px solid rgba(231,76,60,0.3); color: var(--red, #e74c3c); font-size: 13px; }
+.qt-err-code { margin-top: 4px; font-size: 10px; color: var(--muted, #a1a7b3); font-family: monospace; }
 .qt-result { display: flex; gap: 18px; font-size: 13px; padding: 12px; border-radius: 10px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.2); }
 .qt-list { display: flex; flex-direction: column; gap: 8px; }
 .qt-list-title { font-size: 12px; font-weight: 700; color: var(--muted, #a1a7b3); text-transform: uppercase; letter-spacing: 0.4px; }
