@@ -7,9 +7,9 @@ import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import {
   listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm,
-  ingestQuantowerTrades, syncPlatformBalances, clearDeletedTrades,
+  ingestQuantowerTrades, syncPlatformBalances, clearDeletedTrades, pruneUnknownTrades,
 } from '@apps/lib/db';
-import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw, EyeOff, RotateCcw } from 'lucide-react';
+import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw, EyeOff, RotateCcw, Trash2 } from 'lucide-react';
 
 // Cache local (device) das contas/conexões da ponte — mostra offline com "última leitura".
 const BRIDGE_CACHE_KEY = 'qt:bridgeAccountsCache';
@@ -281,6 +281,28 @@ export default function ConnectionsManager() {
     }
   }, [load, toast]);
 
+  // Remove do app os trades que a PLATAFORMA não devolve mais (fantasma de conexões/
+  // contas antigas): lê a janela de 90 dias da ponte e apaga o que não está lá.
+  const pruneGhostTrades = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      const since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
+      const list = await adapterRef.current.getTrades(since, undefined);
+      const res = await pruneUnknownTrades(f.ds, f.chain, list, since);
+      toast(res.removed > 0
+        ? `${res.removed} trade(s) fantasma removido(s) (${list.length} lidos da ponte).`
+        : `Nada a remover — todos os trades dos últimos 90 dias existem na ponte (${list.length} lidos).`,
+      { type: res.removed > 0 ? 'ok' : 'warn' });
+      load();
+    } catch (e) {
+      toast(`Falha ao limpar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }, [load, toast]);
+
   // Religa trades que entraram SEM conta (não associados) usando o platformAccountId.
   const relinkTrades = useCallback(async () => {
     const f = financeRef.current;
@@ -485,6 +507,7 @@ export default function ConnectionsManager() {
           <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
           <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
           <button className="cmd-refresh" onClick={syncTrades} disabled={busy}><RefreshCw size={13} /> Sincronizar trades</button>
+          <button className="cmd-refresh" onClick={pruneGhostTrades} disabled={busy} title="Apaga trades dos últimos 90 dias que a plataforma não devolve mais"><Trash2 size={13} /> Remover trades que não existem na plataforma</button>
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }} disabled={busy}><RefreshCw size={13} /> Atualizar</button>
         </div>
       )}

@@ -4,7 +4,7 @@ import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { DataChainEngine } from '../DataChainEngine';
 import { EventBus } from '../events';
-import { ingestQuantowerTrades, quantowerToTrade, rememberDeletedTrades } from '../quantowerIngest';
+import { ingestQuantowerTrades, quantowerToTrade, rememberDeletedTrades, pruneUnknownTrades } from '../quantowerIngest';
 
 function makeEngine() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -26,6 +26,38 @@ const BATCH = [
     exitDateTime: '2026-09-09T11:00:00Z', netPnl: 40, fee: 0.5,
   },
 ];
+
+describe('prune de trades fantasma (não existem mais na plataforma)', () => {
+  it('remove só o que a ponte não devolve, dentro da janela, e grava lápide', async () => {
+    const { ds, chain } = makeEngine();
+    await ingestQuantowerTrades(ds, chain, BATCH); // 2 trades da ponte
+    // Trade "fantasma" de uma conexão antiga (a ponte não devolve mais).
+    await ds.trades.put({
+      id: 'ghost', symbol: 'MGC', direction: 'long', entryDatetime: '2026-09-08T10:00:00Z',
+      exitDatetime: '2026-09-08T11:00:00Z', qty: 1, entryPrice: 1, exitPrice: 2,
+      commission: 0, fees: 0, swap: 0, resultNet: -114.72, resultR: null,
+      source: 'quantower', quantowerId: 'qt_ghost', updatedAt: '', deviceId: 'd', version: 0,
+    } as never, { source: 'quantower' });
+
+    const r = await pruneUnknownTrades(ds, chain, BATCH, '2026-09-01T00:00:00Z');
+    expect(r.removed).toBe(1);
+    const left = await ds.trades.list();
+    expect(left.map((t) => t.id).sort()).toEqual(['qt_qt_1', 'qt_qt_2']);
+  });
+
+  it('não toca em trade fora da janela (histórico antigo preservado)', async () => {
+    const { ds, chain } = makeEngine();
+    await ds.trades.put({
+      id: 'old', symbol: 'ES', direction: 'long', entryDatetime: '2025-01-02T10:00:00Z',
+      exitDatetime: '2025-01-02T11:00:00Z', qty: 1, entryPrice: 1, exitPrice: 2,
+      commission: 0, fees: 0, swap: 0, resultNet: 10, resultR: null,
+      source: 'quantower', quantowerId: 'qt_old', updatedAt: '', deviceId: 'd', version: 0,
+    } as never, { source: 'quantower' });
+    const r = await pruneUnknownTrades(ds, chain, BATCH, '2026-09-01T00:00:00Z');
+    expect(r.removed).toBe(0);
+    expect(await ds.trades.list()).toHaveLength(1);
+  });
+});
 
 describe('anti-fantasma: trade sem entrada/saída ou com data no futuro não entra', () => {
   it('ignora posição aberta, data futura e trade sem entrada', async () => {

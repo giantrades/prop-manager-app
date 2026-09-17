@@ -149,6 +149,58 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   return trade;
 }
 
+export interface PruneResult {
+  removed: number;
+  scanned: number;
+}
+
+/**
+ * Remove do app os trades de ponte que a PLATAFORMA não devolve mais (dentro da janela
+ * lida) — os "fantasma" de conexões/contas antigas que ficaram gravados e poluíam
+ * calendário/heat/review. Segurança: só considera trades de origem `quantower` (ou com
+ * `quantowerId`) e só dentro da janela (`sinceIso`), para nunca apagar histórico que a
+ * ponte não lê por limite de período. Grava lápide (senão o próximo sync reimporta).
+ */
+export async function pruneUnknownTrades(
+  ds: DataService,
+  chain: DataChainEngine,
+  bridgeTrades: QuantowerTrade[],
+  sinceIso: string,
+): Promise<PruneResult> {
+  const knownId = new Set<string>();
+  const knownFp = new Set<string>();
+  for (const q of bridgeTrades) {
+    if (q.platformTradeId) knownId.add(q.platformTradeId);
+    knownFp.add(tradeFingerprint(quantowerToTrade(q) as Trade));
+  }
+  const since = Date.parse(sinceIso);
+  const all = await ds.trades.list();
+  const victims = all.filter((t) => {
+    if (t.source !== 'quantower' && !t.quantowerId) return false;
+    const stamp = t.exitDatetime || t.entryDatetime;
+    if (!stamp || !Number.isFinite(since) || Date.parse(stamp) < since) return false;
+    if (t.quantowerId && knownId.has(t.quantowerId)) return false;
+    if (knownFp.has(tradeFingerprint(t))) return false;
+    return true;
+  });
+  if (victims.length === 0) return { removed: 0, scanned: all.length };
+  const keys: string[] = [];
+  for (const t of victims) {
+    if (t.quantowerId) keys.push(t.quantowerId);
+    keys.push(tradeFingerprint(t));
+  }
+  await rememberDeletedTrades(ds, keys);
+  for (const t of victims) {
+    try {
+      await chain.deleteTrade(t.id);
+    } catch {
+      /* ledger: segue para o remove */
+    }
+    await ds.trades.remove(t.id);
+  }
+  return { removed: victims.length, scanned: all.length };
+}
+
 /**
  * Ingere trades Quantower no app-db v3. Resolve `accountId` por `platformAccountId`
  * (quando a conta interna tem o mapeamento); senão deixa sem conta (UI mostra como
