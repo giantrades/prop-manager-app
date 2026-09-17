@@ -27,6 +27,30 @@ const BATCH = [
   },
 ];
 
+describe('contract size (multiplier) derivado do dinheiro da plataforma', () => {
+  // O bridge não manda `multiplier`; ele é recuperado de grossPnl / (Δpreço × qty).
+  const mnq = {
+    platformTradeId: 'qt_mnq', symbol: 'MNQ', side: 'Long', quantity: 1,
+    entryPrice: 20000, exitPrice: 20010, entryDateTime: '2026-09-08T10:00:00Z',
+    exitDateTime: '2026-09-08T11:00:00Z', grossPnl: 20, netPnl: 18, fee: 2, stopPrice: 19990,
+  };
+
+  it('deriva MNQ ×2 e o R fica certo (18/20 = 0.9R)', () => {
+    const t = quantowerToTrade(mnq);
+    expect(t.multiplier).toBe(2);
+    expect(t.resultNet).toBe(18);
+    expect(t.resultR).toBe(0.9);
+  });
+
+  it('respeita o multiplier quando o bridge enviar', () => {
+    expect(quantowerToTrade({ ...mnq, multiplier: 20 }).multiplier).toBe(20);
+  });
+
+  it('sem grossPnl não inventa multiplier (fica undefined)', () => {
+    expect(quantowerToTrade({ ...mnq, grossPnl: undefined }).multiplier).toBeUndefined();
+  });
+});
+
 describe('A8 — dedup no re-sync', () => {
   it('ingerir o mesmo lote 2x: 2º não duplica nem reescreve (sem mudança)', async () => {
     const { ds, chain } = makeEngine();

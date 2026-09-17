@@ -86,6 +86,23 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   const entryDatetime = q.entryDateTime ?? nowIso();
   const exitPrice = q.exitPrice && q.exitPrice !== 0 ? q.exitPrice : undefined;
   const stopPrice = q.stopPrice != null && q.stopPrice !== 0 ? q.stopPrice : undefined;
+  const entryPrice = q.entryPrice ?? 0;
+  const qty = q.quantity ?? 0;
+  // CONTRACT SIZE (multiplier): o bridge não envia. Deriva do dinheiro que a PLATAFORMA
+  // reportou → grossPnl / (variação de preço × qty). Sem isso, o R (e o fallback de PnL)
+  // ficava errado por um fator fixo em futuros (MNQ ×2, MES ×5, NQ ×20, ES ×50…).
+  const multiplier = (() => {
+    if (typeof q.multiplier === 'number' && Number.isFinite(q.multiplier) && q.multiplier > 0) return q.multiplier;
+    const gross = Number(q.grossPnl);
+    if (!Number.isFinite(gross) || gross === 0 || exitPrice == null || qty === 0) return undefined;
+    const dirSign = direction === 'short' ? -1 : 1;
+    const denom = (exitPrice - entryPrice) * dirSign * qty;
+    if (!Number.isFinite(denom) || Math.abs(denom) < 1e-9) return undefined;
+    const m = Math.abs(gross / denom);
+    if (!Number.isFinite(m) || m <= 0) return undefined;
+    const snapped = Math.abs(m - Math.round(m)) < 0.02 ? Math.round(m) : m; // 1.9998 → 2
+    return Number(snapped.toFixed(4));
+  })();
   // [PATCH C] MAE/MFE reais do bridge — `maeMfe()` os prefere ao proxy via fills.
   const mae = typeof q.mae === 'number' ? q.mae : undefined;
   const mfe = typeof q.mfe === 'number' ? q.mfe : undefined;
@@ -101,13 +118,13 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     direction,
     entryDatetime,
     exitDatetime: q.exitDateTime ?? undefined,
-    qty: q.quantity ?? 0,
-    entryPrice: q.entryPrice ?? 0,
+    qty,
+    entryPrice,
     exitPrice,
     stopPrice,
     mae,
     mfe,
-    multiplier: q.multiplier ?? undefined,
+    multiplier,
     commission: 0,
     swap: 0,
     rebate: 0,
@@ -188,8 +205,10 @@ export async function ingestQuantowerTrades(
         mfe: trade.mfe ?? existing.mfe,
       };
       // Nada mudou? Não reescreve (evita churn/sync desnecessário em janelas de overlap).
+      // `multiplier`/`resultR` entram na comparação: um re-sync passa a CORRIGIR o R
+      // dos trades que já estavam gravados com o multiplier errado.
       const changed = ['symbol', 'direction', 'qty', 'entryPrice', 'exitPrice', 'entryDatetime',
-        'exitDatetime', 'resultNet', 'stopPrice', 'accountId', 'mae', 'mfe']
+        'exitDatetime', 'resultNet', 'stopPrice', 'accountId', 'mae', 'mfe', 'multiplier', 'resultR']
         .some((k) => (existing as unknown as Record<string, unknown>)[k] !== (merged as unknown as Record<string, unknown>)[k]);
       byQt.set(q.platformTradeId, merged);
       byFp.set(fpOf(merged), merged);
