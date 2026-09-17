@@ -42,7 +42,28 @@ export default function QuantowerPage() {
   const savePrefs = useCallback(() => {
     localStorage.setItem('qt:bridgeUrl', bridgeUrl);
     localStorage.setItem('qt:bridgeToken', bridgeToken);
-  }, [bridgeUrl, bridgeToken]);
+    // Token compartilhado (sync, só o usuário vê): evita recolar em cada aparelho.
+    try {
+      if (bridgeToken) finance?.ds?.meta.setKey('bridgeTokenShared', bridgeToken);
+    } catch { /* noop */ }
+  }, [bridgeUrl, bridgeToken, finance]);
+
+  // Preenche o token no aparelho novo a partir do meta (a URL é por aparelho).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (localStorage.getItem('qt:bridgeToken')) return;
+        const rec = await finance?.ds?.meta.getKey('bridgeTokenShared');
+        const t = rec?.value;
+        if (alive && typeof t === 'string' && t) {
+          setBridgeToken(t);
+          localStorage.setItem('qt:bridgeToken', t);
+        }
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+  }, [finance]);
 
   const adapter = useCallback(() => new QuantowerAdapter({ bridgeUrl, bridgeToken }), [bridgeUrl, bridgeToken]);
 

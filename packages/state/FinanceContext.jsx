@@ -45,6 +45,7 @@ export function FinanceProvider({ children, adapter = null }) {
     let cancelled = false;
     let syncEngine = null;
     let offChange = null;
+    let offDemo = null;
     let unsubCloud = null;
     let pullTimer = null;
 
@@ -61,24 +62,23 @@ export function FinanceProvider({ children, adapter = null }) {
       const wealth = new WealthService(ds);
       const risk = new RiskService(ds, chain);
 
-      // Demo mode (VITE_DEMO_MODE=1):
-      //  - banco vazio e demo ainda ativo => popula com o seed;
-      //  - usuário já cadastrou conta própria => remove os dados demo e desliga o modo.
-      if (import.meta.env?.VITE_DEMO_MODE === '1') {
-        try {
-          const { seedDemoData, isDemoDisabled, hasUserData, clearDemoData } = await import('@apps/lib/db');
-          if (!(await isDemoDisabled(ds))) {
-            const existingAccounts = await ds.accounts.list();
-            if (existingAccounts.length === 0) {
-              await seedDemoData(ds, chain);
-            } else if (await hasUserData(ds)) {
-              await clearDemoData(ds);
-            }
+      // Demo:
+      //  - VITE_DEMO_MODE=1 + banco vazio => popula com o seed (demo automático);
+      //  - usuário já cadastrou conta própria (qualquer build, inclusive o botão
+      //    "Ver exemplo") => remove os dados de demonstração e desliga o modo.
+      try {
+        const { seedDemoData, isDemoDisabled, hasUserData, clearDemoData, getDemoIds } = await import('@apps/lib/db');
+        if (!(await isDemoDisabled(ds))) {
+          const existingAccounts = await ds.accounts.list();
+          if (import.meta.env?.VITE_DEMO_MODE === '1' && existingAccounts.length === 0) {
+            await seedDemoData(ds, chain);
+          } else if ((await getDemoIds(ds)) && (await hasUserData(ds))) {
+            await clearDemoData(ds);
           }
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error('[demo] seed falhou', e);
         }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[demo] falhou', e);
       }
 
       // Sync Supabase (T7.8/T13): só sincroniza se houver usuário logado; senão no-op.
@@ -104,6 +104,19 @@ export function FinanceProvider({ children, adapter = null }) {
           // Meta: só sincroniza chaves na whitelist (firms/conexões).
           if (payload.entityType === 'meta' && !isSyncedMetaKey(rec.key)) continue;
           syncEngine?.enqueue(payload.entityType, rec);
+        }
+      });
+
+      // Ao criar a PRIMEIRA conta própria (durante a sessão), remove o demo na hora.
+      offDemo = ds.bus.on('datastore:change', async (payload) => {
+        try {
+          if (payload?.entityType && payload.entityType !== 'account') return;
+          const { isDemoDisabled, hasUserData, clearDemoData, getDemoIds } = await import('@apps/lib/db');
+          if (await isDemoDisabled(ds)) return;
+          if (!(await getDemoIds(ds))) return;
+          if (await hasUserData(ds)) await clearDemoData(ds);
+        } catch {
+          /* noop */
         }
       });
 
@@ -166,6 +179,7 @@ export function FinanceProvider({ children, adapter = null }) {
     return () => {
       cancelled = true;
       offChange?.();
+      offDemo?.();
       syncEngine?.dispose?.();
       if (pullTimer) clearTimeout(pullTimer);
       if (unsubCloud) {
