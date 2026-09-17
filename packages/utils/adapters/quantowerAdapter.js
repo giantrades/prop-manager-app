@@ -295,6 +295,8 @@ export class QuantowerAdapter extends BaseAdapter {
       status: o.status || '',
       platformAccountId: o.accountId || '',
       accountName: o.accountName || '',
+      connectionId: o.connectionId || '',
+      connectionName: o.connectionName || '',
     }));
   }
 

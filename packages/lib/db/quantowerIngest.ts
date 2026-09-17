@@ -103,6 +103,18 @@ export async function ingestQuantowerTrades(
   let updated = 0;
   let skipped = 0;
 
+  // Dedup: por `quantowerId` E por impressão digital (símbolo+entrada+saída+qtd+preços).
+  // A impressão digital evita duplicar quando o id do bridge muda entre leituras.
+  const fpOf = (t: { symbol?: string; entryDatetime?: string; exitDatetime?: string; qty?: number; entryPrice?: number; exitPrice?: number }) =>
+    `${t.symbol ?? ''}|${t.entryDatetime ?? ''}|${t.exitDatetime ?? ''}|${t.qty ?? ''}|${t.entryPrice ?? ''}|${t.exitPrice ?? ''}`;
+  const existingAll = await ds.trades.list();
+  const byQt = new Map<string, Trade>();
+  const byFp = new Map<string, Trade>();
+  for (const t of existingAll) {
+    if (t.quantowerId) byQt.set(t.quantowerId, t);
+    byFp.set(fpOf(t), t);
+  }
+
   for (const q of trades) {
     if (!q.platformTradeId) {
       skipped += 1;
@@ -116,18 +128,21 @@ export async function ingestQuantowerTrades(
     }
 
     const trade = quantowerToTrade(q, accountId);
-    const existing = await ds.trades.byQuantowerId(q.platformTradeId);
-    if (existing.length > 0) {
+    const fp = fpOf(trade);
+    const existing = byQt.get(q.platformTradeId) ?? byFp.get(fp);
+    if (existing) {
       // Preserva MAE/MFE já conhecidos quando o bridge desta rodada não os enviou.
       const merged: Trade = {
-        ...existing[0],
+        ...existing,
         ...trade,
-        id: existing[0].id,
-        mae: trade.mae ?? existing[0].mae,
-        mfe: trade.mfe ?? existing[0].mfe,
+        id: existing.id,
+        mae: trade.mae ?? existing.mae,
+        mfe: trade.mfe ?? existing.mfe,
       };
       await ds.trades.put(merged, { source: 'quantower' });
       await chain.syncTrade(merged);
+      byQt.set(q.platformTradeId, merged);
+      byFp.set(fpOf(merged), merged);
       updated += 1;
     } else {
       // put() carimba updatedAt/deviceId/version; os campos abaixo são sobrescritos lá.
@@ -136,6 +151,8 @@ export async function ingestQuantowerTrades(
         { source: 'quantower' },
       );
       await chain.syncTrade(rec);
+      byQt.set(q.platformTradeId, rec);
+      byFp.set(fpOf(rec), rec);
       created += 1;
     }
   }

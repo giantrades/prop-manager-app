@@ -1206,6 +1206,8 @@ namespace QuantowerBridge
                 string connName = "";
                 string symbol = "";
                 string side = "";
+                string accountId = "";
+                string accountName = "";
 
                 try
                 {
@@ -1214,6 +1216,11 @@ namespace QuantowerBridge
                     connName = conn?.Name ?? "";
                     symbol = order.Symbol?.Name ?? "";
                     side = order.Side.ToString();
+                    if (order.Account != null)
+                    {
+                        accountId = order.Account.Id ?? "";
+                        accountName = order.Account.Name ?? "";
+                    }
                 }
                 catch { }
 
@@ -1229,6 +1236,8 @@ namespace QuantowerBridge
                     orderTypeId = order.OrderTypeId,
                     status = order.Status.ToString(),
                     positionId = order.PositionId ?? "",
+                    accountId,
+                    accountName,
                     connectionId = order.ConnectionId ?? "",
                     connectionName = connName
                 });

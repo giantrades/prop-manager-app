@@ -20,6 +20,7 @@ function fmtDateShort(iso) {
 
 function FirmBadge({ firm }) {
   if (!firm) return null;
+  if (firm.logo) return <span className="tr-firm-badge tr-firm-logo" title={firm.name}><img src={firm.logo} alt={firm.name} /></span>;
   if (firm.icon) return <span className="tr-firm-badge" title={firm.name}>{firm.icon}</span>;
   return (
     <span className="tr-firm-badge" title={firm.name} style={{ background: firm.color, color: '#fff' }}>
@@ -35,16 +36,18 @@ function FirmBadge({ firm }) {
  * @param {Array<{id:string;name:string;color:string;icon?:string}>} [props.firms]
  * @param {(trade:object)=>void} [props.onEdit]
  * @param {(tradeId:string)=>void} [props.onDelete]
+ * @param {(tradeIds:string[])=>void} [props.onDeleteMany]
  * @param {()=>void} [props.onNew]
  * @param {boolean} [props.loading]
  */
-export default function Trades({ trades = [], accounts = [], firms = [], onEdit, onDelete, onNew, loading = false }) {
+export default function Trades({ trades = [], accounts = [], firms = [], onEdit, onDelete, onDeleteMany, onNew, loading = false }) {
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState('');
   const [sortKey, setSortKey] = useState('entryDatetime');
   const [sortDir, setSortDir] = useState('desc');
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const perPage = 15;
 
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
@@ -95,6 +98,22 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
   const pageClamped = Math.min(page, totalPages);
   const pageRows = filtered.slice((pageClamped - 1) * perPage, pageClamped * perPage);
 
+  // Seleção em lote (excluir vários de uma vez).
+  const toggleSel = (id: string) => setSelected((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const pageIds = pageRows.map((t) => t.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleAllPage = () => setSelected((prev) => {
+    const n = new Set(prev);
+    if (allPageSelected) pageIds.forEach((id) => n.delete(id));
+    else pageIds.forEach((id) => n.add(id));
+    return n;
+  });
+  const clearSel = () => setSelected(new Set());
+
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('desc'); }
@@ -132,6 +151,18 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
         {onNew && <button className="tr-btn tr-btn-primary" onClick={onNew}>+ Novo trade</button>}
       </div>
 
+      {selected.size > 0 && (
+        <div className="tr-bulk" role="region" aria-label="Ações em lote">
+          <span className="tr-bulk-count">{selected.size} selecionado(s)</span>
+          {onDeleteMany && (
+            <button className="tr-btn tr-btn-sm tr-btn-danger" onClick={() => { onDeleteMany([...selected]); clearSel(); }}>
+              Excluir selecionados
+            </button>
+          )}
+          <button className="tr-btn tr-btn-sm" onClick={clearSel}>Limpar seleção</button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="tr-empty" role="status">Nenhum trade encontrado.</div>
       ) : (
@@ -140,6 +171,9 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
             <table className="tr-table">
               <thead>
                 <tr>
+                  <th scope="col" className="tr-checkcol">
+                    <input type="checkbox" checked={allPageSelected} onChange={toggleAllPage} aria-label="Selecionar todos da página" />
+                  </th>
                   <th scope="col" onClick={() => toggleSort('entryDatetime')} className="tr-sortable">Data{sortMark('entryDatetime')}</th>
                   <th scope="col">Ativo</th>
                   <th scope="col">Lado</th>
@@ -159,6 +193,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                   return (
                     <React.Fragment key={t.id}>
                       <tr>
+                        <td className="tr-checkcol"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Selecionar ${t.symbol}`} /></td>
                         <td>{fmtDateShort(t.entryDatetime)}</td>
                         <td className="tr-sym">{t.symbol}</td>
                         <td><span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></td>
@@ -176,7 +211,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                       </tr>
                       {isOpen && (
                         <tr className="tr-expand">
-                          <td colSpan={10}>
+                          <td colSpan={11}>
                             <TradeReplayView trade={t} />
                             {tagsOf(t).length > 0 && (
                               <div className="tr-tags" style={{ marginTop: 8 }}>
@@ -200,6 +235,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
               return (
                 <div key={t.id} className="tr-card">
                   <div className="tr-card-head">
+                    <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Selecionar ${t.symbol}`} />
                     <span className="tr-symbol">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
                     <span className={`tr-num ${(t.resultNet ?? 0) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(t.resultNet)}</span>
                   </div>
@@ -287,6 +323,11 @@ const TR_CSS = `
 .tr-acct { font-size: 11px; }
 .tr-actions { display: flex; gap: 6px; }
 .tr-firm-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 4px; font-size: 9px; font-weight: 700; vertical-align: middle; margin-right: 4px; }
+.tr-firm-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
+.tr-checkcol { width: 34px; text-align: center; }
+.tr-checkcol input { width: 15px; height: 15px; cursor: pointer; }
+.tr-bulk { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.3); }
+.tr-bulk-count { font-size: 12px; font-weight: 700; }
 .tr-expand td { background: rgba(7,16,35,0.5); }
 
 .tr-dir { font-size: 10px; padding: 2px 8px; border-radius: 999px; text-transform: capitalize; }

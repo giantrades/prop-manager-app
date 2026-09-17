@@ -4,14 +4,22 @@
 // (`placeOrder`). Nada de storage próprio: a fonte é a plataforma.
 import { fmtMoney } from '@apps/ui/currency';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePlatform, bridgePrefs } from '@apps/state';
+import { usePlatform, bridgePrefs, useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
+import { listFirms, listConnectionFirms } from '@apps/lib/db';
 import ModuleTabs from '../../ModuleTabs';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
 import { useWakeLock } from '../../useWakeLock';
 import { Activity, RefreshCw, X, Clock, Zap, ZapOff } from 'lucide-react';
 
+/** Selo da firm (logo > ícone > nome colorido) para as linhas de posição/ordem. */
+function FirmChip({ firm }) {
+  if (!firm) return null;
+  if (firm.logo) return <span className="lp-firm" title={firm.name}><img src={firm.logo} alt={firm.name} /></span>;
+  if (firm.icon) return <span className="lp-firm" title={firm.name}>{firm.icon}</span>;
+  return <span className="lp-firm" title={firm.name} style={{ color: firm.color }}>{firm.name}</span>;
+}
 
 export default function LivePositionsPage() {
   const { livePositions, statuses, lastSync, refreshStatuses, streaming, lastSnapshot } = usePlatform();
@@ -28,6 +36,10 @@ export default function LivePositionsPage() {
   const [orderEdit, setOrderEdit] = useState({ qty: '', price: '', sl: '', tp: '' });
   const [partialId, setPartialId] = useState(null);
   const [partialQty, setPartialQty] = useState('');
+  const [appAccounts, setAppAccounts] = useState([]);
+  const [firms, setFirms] = useState([]);
+  const [connFirms, setConnFirms] = useState({});
+  const finance = useFinance();
   const adapterRef = useRef(null);
   if (!adapterRef.current) {
     const { bridgeUrl, bridgeToken } = bridgePrefs();
@@ -47,6 +59,48 @@ export default function LivePositionsPage() {
     const short = positions.filter((p) => p.side === 'Short').length;
     return { pnl, long, short };
   }, [positions]);
+
+  // Contas/firms do app: para mostrar conta + firm em cada posição/ordem.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!finance?.ds) return;
+      try {
+        const [accs, fs, cf] = await Promise.all([
+          finance.ds.accounts.list(), listFirms(finance.ds), listConnectionFirms(finance.ds),
+        ]);
+        if (!alive) return;
+        setAppAccounts(accs ?? []);
+        setFirms(fs ?? []);
+        setConnFirms(cf ?? {});
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+  }, [finance]);
+
+  const appByPlatform = useMemo(() => {
+    const m = new Map();
+    for (const a of appAccounts) if (a.platformAccountId) m.set(a.platformAccountId, a);
+    return m;
+  }, [appAccounts]);
+  const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
+  const firmOf = useCallback((p) => {
+    const app = p.platformAccountId ? appByPlatform.get(p.platformAccountId) : null;
+    const firmId = app?.firmId || (p.connectionId ? connFirms[p.connectionId] : undefined);
+    return firmId ? firmById.get(firmId) : null;
+  }, [appByPlatform, connFirms, firmById]);
+  const accountNameOf = useCallback((p) => (
+    p.accountName || (p.platformAccountId ? appByPlatform.get(p.platformAccountId)?.name : '') || p.connectionName || '—'
+  ), [appByPlatform]);
+  // Preço integral (sem abreviar) — forex com até 5 casas, resto 2.
+  const fmtPrice = (v) => (v == null || Number.isNaN(Number(v)))
+    ? '—'
+    : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+  // Variação % da posição = PnL / notional (qtd × preço de abertura).
+  const varPct = (p) => {
+    const cost = Math.abs((p.quantity ?? 0) * (p.openPrice ?? 0));
+    return cost > 0 ? ((p.netPnl ?? 0) / cost) * 100 : null;
+  };
 
   const loadOrders = useCallback(async () => {
     if (!online) return;
@@ -393,7 +447,7 @@ export default function LivePositionsPage() {
           ) : (
             <div className="lp-list">
               <div className="lp-row lp-head" aria-hidden="true">
-                <span>Símbolo</span><span>Lado</span><span>Qtd</span><span>Abertura</span><span>Atual</span><span>PnL</span><span>SL</span><span>TP</span><span>Ações</span>
+                <span>Símbolo / Conta</span><span>Lado</span><span>Qtd</span><span>Abertura</span><span>Atual</span><span>PnL</span><span>Var %</span><span>SL</span><span>TP</span><span>Ações</span>
               </div>
               {positions.map((p) => {
                 const e = edits[p.platformPositionId] ?? {};
@@ -402,15 +456,18 @@ export default function LivePositionsPage() {
                 const dirty = 'sl' in e || 'tp' in e;
                 const confirming = confirmId === p.platformPositionId;
                 const partial = partialId === p.platformPositionId;
+                const firm = firmOf(p);
+                const vp = varPct(p);
                 return (
                   <React.Fragment key={p.platformPositionId}>
                     <div className="lp-row">
-                      <span className="lp-sym">{p.symbol}<span className="lp-acct">{p.accountName || p.connectionName || ''}</span></span>
+                      <span className="lp-sym">{p.symbol}<span className="lp-acct">{firm && <FirmChip firm={firm} />}{accountNameOf(p)}</span></span>
                       <span className={`lp-side ${p.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{p.side}</span>
                       <span className="lp-num">{p.quantity}</span>
-                      <span className="lp-num">{fmtMoney(p.openPrice)}</span>
-                      <span className="lp-num">{fmtMoney(p.currentPrice)}</span>
+                      <span className="lp-num">{fmtPrice(p.openPrice)}</span>
+                      <span className="lp-num">{fmtPrice(p.currentPrice)}</span>
                       <span className={`lp-num ${(p.netPnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(p.netPnl)}</span>
+                      <span className={`lp-num ${vp == null ? '' : vp >= 0 ? 'dash-pos' : 'dash-neg'}`}>{vp != null ? `${vp.toFixed(2)}%` : '—'}</span>
                       <input className="lp-input" type="number" step="0.00001" value={slVal} placeholder="SL" onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}`} />
                       <input className="lp-input" type="number" step="0.00001" value={tpVal} placeholder="TP" onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}`} />
                       <span className="lp-actions">
@@ -473,7 +530,7 @@ export default function LivePositionsPage() {
           ) : (
             <div className="lp-list">
               <div className="lp-row lp-ordrow lp-head" aria-hidden="true">
-                <span>Símbolo</span><span>Lado</span><span>Tipo</span><span>Qtd</span><span>Preço</span><span>Status</span><span>Conta</span><span>Ações</span>
+                <span>Símbolo</span><span>Lado</span><span>Tipo</span><span>Qtd</span><span>Preço</span><span>Status</span><span>Conta / Firm</span><span>Ações</span>
               </div>
               {orders.map((o) => (
                 <React.Fragment key={o.platformOrderId}>
@@ -482,9 +539,9 @@ export default function LivePositionsPage() {
                     <span className={`lp-side ${o.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{o.side}</span>
                     <span className="lp-num">{o.type || '—'}</span>
                     <span className="lp-num">{o.remainingQuantity ?? o.quantity}</span>
-                    <span className="lp-num">{fmtMoney(o.price)}</span>
+                    <span className="lp-num">{fmtPrice(o.price)}</span>
                     <span className="lp-num">{o.status || '—'}</span>
-                    <span className="lp-acct">{o.accountName || ''}</span>
+                    <span className="lp-acct">{firmOf(o) && <FirmChip firm={firmOf(o)} />}{accountNameOf(o)}</span>
                     <span className="lp-actions">
                       <button className="ac3-btn ac3-btn-sm" onClick={() => startEditOrder(o)}>Editar</button>
                       <button className="ac3-btn ac3-btn-sm ac3-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
@@ -544,7 +601,9 @@ const LP_CSS = `
 .lp-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 18px 0 8px; }
 .lp-empty { display: flex; align-items: center; gap: 8px; padding: 28px; justify-content: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 .lp-list { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
-.lp-row { display: grid; grid-template-columns: 1.4fr 0.7fr 0.6fr 0.9fr 0.9fr 0.9fr 0.9fr 0.9fr auto; gap: 8px; align-items: center; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+.lp-row { display: grid; grid-template-columns: 1.5fr 0.6fr 0.5fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 0.9fr auto; gap: 8px; align-items: center; padding: 8px 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+.lp-firm { display: inline-flex; align-items: center; margin-right: 5px; font-size: 10px; font-weight: 700; }
+.lp-firm img { width: 12px; height: 12px; object-fit: contain; border-radius: 3px; }
 .lp-ordrow { grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.9fr 0.9fr 1.1fr auto; }
 .lp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .lp-sym { font-weight: 700; display: flex; flex-direction: column; }

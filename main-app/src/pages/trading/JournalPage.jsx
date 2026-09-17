@@ -214,6 +214,24 @@ export default function JournalPage() {
     [load],
   );
 
+  // Exclusão em lote (seleção múltipla na tabela de trades).
+  const handleDeleteMany = useCallback(
+    async (tradeIds) => {
+      const f = financeRef.current;
+      if (!f || !Array.isArray(tradeIds) || tradeIds.length === 0) return;
+      for (const id of tradeIds) {
+        try {
+          await f.chain.deleteTrade(id);
+        } catch {
+          /* trade já removido do ledger — segue */
+        }
+        await f.ds.trades.remove(id);
+      }
+      load();
+    },
+    [load],
+  );
+
   // J8 — Exportar análise (resumo do mês + breakdowns). Só formata; números vêm do motor.
   const handleExportAnalysis = useCallback(() => {
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -357,6 +375,7 @@ export default function JournalPage() {
               firms={firms}
               loading={loading}
               onNew={() => setShowForm(true)}
+              onDeleteMany={handleDeleteMany}
               onEdit={(t) => { setEditing(t); setShowForm(true); }}
               onDelete={handleDelete}
             />
