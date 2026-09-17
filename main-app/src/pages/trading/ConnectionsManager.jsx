@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlatform, useFinance, bridgePrefs } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
-import { listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm } from '@apps/lib/db';
+import { listFirms, getDemoIds, isDemoDisabled, listConnectionFirms, setConnectionFirm, ingestQuantowerTrades } from '@apps/lib/db';
 import { Landmark, Plus, Link2, Unlink, Wand2, RefreshCw, EyeOff, RotateCcw } from 'lucide-react';
 
 // Cache local (device) das contas/conexões da ponte — mostra offline com "última leitura".
@@ -251,6 +251,23 @@ export default function ConnectionsManager() {
     toast('Conta da ponte ocultada.');
   }, [hiddenAccts, toast]);
 
+  // Sincroniza os trades da ponte direto daqui (mesmo ingest do Quantower).
+  const syncTrades = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      const list = await adapterRef.current.getAllTrades();
+      const res = await ingestQuantowerTrades(f.ds, f.chain, list);
+      toast(`Trades sincronizados — criados ${res.created}, atualizados ${res.updated}, ignorados ${res.skipped}.`);
+      load();
+    } catch (e) {
+      toast(`Falha ao sincronizar trades: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }, [load, toast]);
+
   const unhideAll = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
@@ -420,6 +437,7 @@ export default function ConnectionsManager() {
           </label>
           <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
           <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
+          <button className="cmd-refresh" onClick={syncTrades} disabled={busy}><RefreshCw size={13} /> Sincronizar trades</button>
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }} disabled={busy}><RefreshCw size={13} /> Atualizar</button>
         </div>
       )}

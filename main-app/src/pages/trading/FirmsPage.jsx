@@ -1,12 +1,13 @@
 // Firms — cadastro de empresas/corretoras (nome, tipo, cor, ícone, logo). A cor/ícone
 // propagam para contas, listas e gráficos. Persistido em `meta`.
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { useFinance } from '@apps/state';
+import { useFinance, usePlatform } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import ModuleTabs from '../../ModuleTabs';
 import usePageData from '../../usePageData';
-import { listFirms, saveFirm, deleteFirm, FIRM_TYPES, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
-import { Building2, Pencil, Trash2, Plus, X } from 'lucide-react';
+import { listFirms, saveFirm, deleteFirm, listConnectionFirms, FIRM_TYPES, DEFAULT_FIRM_COLOR } from '@apps/lib/db';
+import { fmtMoney } from '@apps/ui/currency';
+import { Building2, Pencil, Trash2, Plus, X, ChevronDown, Unlink } from 'lucide-react';
 
 function emptyFirm() {
   return { name: '', type: 'Futures', color: DEFAULT_FIRM_COLOR, icon: '', logo: null, notes: '' };
@@ -16,22 +17,28 @@ export default function FirmsPage() {
   const finance = useFinance();
   const { toast } = useToast();
   const { loading, data, reload: load } = usePageData('firms', async (f) => {
-    const [firms, accounts] = await Promise.all([listFirms(f.ds), f.ds.accounts.list()]);
-    return { firms, accounts };
+    const [firms, accounts, propExts, connFirms] = await Promise.all([
+      listFirms(f.ds), f.ds.accounts.list(), f.ds.propExtensions.list(), listConnectionFirms(f.ds),
+    ]);
+    return { firms, accounts, propExts, connFirms };
   });
   const firms = data?.firms ?? [];
   const accounts = data?.accounts ?? [];
+  const connFirms = data?.connFirms ?? {};
+  const { statuses } = usePlatform();
+  const connOnline = statuses.some((s) => s.online);
+  const connsById = useMemo(() => {
+    const m = new Map();
+    for (const s of statuses) for (const c of (s.connections || [])) m.set(c.id, c);
+    return m;
+  }, [statuses]);
+  const propByAcct = useMemo(() => new Map((data?.propExts ?? []).map((p) => [p.accountId, p])), [data]);
 
   const financeRef = useRef(finance);
   financeRef.current = finance;
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
-
-  const countByFirm = useMemo(() => {
-    const acc = {};
-    for (const a of accounts) if (a.firmId) acc[a.firmId] = (acc[a.firmId] ?? 0) + 1;
-    return acc;
-  }, [accounts]);
+  const [openId, setOpenId] = useState(null);
 
   const onSave = useCallback(async () => {
     const f = financeRef.current;
@@ -54,6 +61,18 @@ export default function FirmsPage() {
     await deleteFirm(f.ds, id);
     load();
   }, [load]);
+
+  // Vincula/desvincula uma conta a uma firm (dentro do painel da firm).
+  const setAccountFirm = useCallback(async (account, firmId) => {
+    const f = financeRef.current;
+    if (!f || !account) return;
+    await f.ds.accounts.put(
+      { ...account, firmId: firmId || undefined, updatedAt: new Date().toISOString() },
+      { source: 'local' },
+    );
+    toast(firmId ? `${account.name} vinculada.` : `${account.name} desvinculada.`);
+    load();
+  }, [load, toast]);
 
   const setLogo = (file) => {
     if (!file) return;
@@ -81,20 +100,74 @@ export default function FirmsPage() {
             <div className="cmd-empty" role="status">Nenhuma empresa cadastrada. Crie a primeira para colorir contas e gráficos.</div>
           ) : (
             <div className="firm-grid">
-              {firms.map((firm) => (
-                  <div key={firm.id} className="firm-card" style={{ borderTopColor: firm.color }}>
-                    <div className="firm-card-head">
+              {firms.map((firm) => {
+                const firmAccounts = accounts.filter((a) => a.firmId === firm.id);
+                const capital = firmAccounts.reduce((s, a) => s + (propByAcct.get(a.id)?.nominalSize ?? 0), 0);
+                const firmConns = Object.entries(connFirms)
+                  .filter(([, fid]) => fid === firm.id)
+                  .map(([cid]) => ({ id: cid, name: connsById.get(cid)?.name || cid }));
+                const unassigned = accounts.filter((a) => a.firmId !== firm.id);
+                const open = openId === firm.id;
+                return (
+                  <div key={firm.id} className={`firm-card${open ? ' open' : ''}`} style={{ borderTopColor: firm.color }}>
+                    <button type="button" className="firm-card-head firm-card-btn" onClick={() => setOpenId(open ? null : firm.id)} aria-expanded={open}>
                       <span className="firm-dot" style={{ background: firm.color }} />
                       {firm.icon ? <span className="firm-icon">{firm.icon}</span> : firm.logo ? <img className="firm-logo" src={firm.logo} alt={firm.name} /> : <Building2 size={18} style={{ color: firm.color }} />}
-                      <div className="firm-name">{firm.name}</div>
+                      <span className="firm-name">{firm.name}</span>
+                      <ChevronDown size={16} className={`firm-chev${open ? ' open' : ''}`} />
+                    </button>
+                    <div className="firm-meta">
+                      {firm.type} · {firmAccounts.length} conta(s)
+                      {capital > 0 ? ` · ${fmtMoney(capital, 'USD')}` : ''}
+                      {firmConns.length > 0 ? ` · ${connOnline ? 'conectada' : 'offline'}` : ''}
                     </div>
-                    <div className="firm-meta">{firm.type} · {countByFirm[firm.id] ?? 0} conta(s)</div>
-                    <div className="firm-actions">
-                      <button className="cmd-refresh" onClick={() => setForm({ ...firm })} aria-label={`Editar ${firm.name}`}><Pencil size={14} /></button>
-                      <button className="cmd-refresh" onClick={() => onDelete(firm.id)} aria-label={`Excluir ${firm.name}`}><Trash2 size={14} /></button>
-                    </div>
+
+                    {open && (
+                      <div className="firm-panel">
+                        <div className="firm-sec">
+                          <span className="firm-sec-title">Conexão (Quantower)</span>
+                          {firmConns.length === 0 ? (
+                            <span className="firm-hint">Nenhuma conexão vinculada. Em Sistema → Conexões, defina “Firm da conexão”.</span>
+                          ) : firmConns.map((c) => (
+                            <div key={c.id} className="firm-conn">
+                              <span className={`cx-dot ${connOnline ? 'on' : 'off'}`} /> {c.name} · {connOnline ? 'conectada' : 'offline'}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="firm-sec">
+                          <span className="firm-sec-title">Contas desta firm ({firmAccounts.length})</span>
+                          {firmAccounts.length === 0 ? (
+                            <span className="firm-hint">Nenhuma conta vinculada a esta firm.</span>
+                          ) : firmAccounts.map((a) => (
+                            <div key={a.id} className="firm-row">
+                              <span className="firm-row-name">{a.name}</span>
+                              <span className="firm-row-kind">{a.kind}</span>
+                              <button className="cx-btn" onClick={() => setAccountFirm(a, undefined)} title="Desvincular da firm" aria-label={`Desvincular ${a.name}`}><Unlink size={13} /></button>
+                            </div>
+                          ))}
+                          {unassigned.length > 0 && (
+                            <select
+                              className="cx-select"
+                              value=""
+                              onChange={(e) => { const a = accounts.find((x) => x.id === e.target.value); if (a) setAccountFirm(a, firm.id); }}
+                              aria-label="Vincular conta a esta firm"
+                            >
+                              <option value="">Vincular conta…</option>
+                              {unassigned.map((a) => (<option key={a.id} value={a.id}>{a.name}{a.firmId ? ' (outra firm)' : ''}</option>))}
+                            </select>
+                          )}
+                        </div>
+
+                        <div className="firm-actions">
+                          <button className="cmd-refresh" onClick={() => setForm({ ...firm })}><Pencil size={14} /> Editar</button>
+                          <button className="cmd-refresh" onClick={() => onDelete(firm.id)}><Trash2 size={14} /> Excluir</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -164,6 +237,24 @@ const FIRM_CSS = `
 .firm-meta { font-size: 11px; color: var(--muted, #a1a7b3); }
 .firm-profit { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .firm-actions { display: flex; gap: 6px; margin-top: auto; }
+.firm-card-btn { width: 100%; background: transparent; border: none; color: inherit; cursor: pointer; text-align: left; padding: 0; }
+.firm-card.open { border-color: rgba(124,92,255,0.4); }
+.firm-chev { transition: transform 140ms ease; opacity: 0.7; }
+.firm-chev.open { transform: rotate(180deg); }
+.firm-panel { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); }
+.firm-sec { display: flex; flex-direction: column; gap: 6px; }
+.firm-sec-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.firm-hint { font-size: 11px; color: var(--muted, #a1a7b3); }
+.firm-conn { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.firm-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.firm-row:last-child { border-bottom: none; }
+.firm-row-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.firm-row-kind { font-size: 10px; color: var(--muted, #a1a7b3); }
+.firm-conn .cx-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.firm-conn .cx-dot.on { background: var(--green, #2ecc71); }
+.firm-conn .cx-dot.off { background: var(--red, #e74c3c); }
+.firm-panel .cx-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); cursor: pointer; }
+.firm-panel .cx-select { background: #111623; border: 1px solid #273044; color: var(--text, #e7eaf0); border-radius: 8px; padding: 6px 8px; font-size: 12px; min-height: 36px; }
 .cmd-empty { padding: 28px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 @media (max-width: 900px) { .firm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .firm-grid { grid-template-columns: 1fr; } }
