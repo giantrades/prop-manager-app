@@ -66,6 +66,21 @@ export const INCOME_KINDS: ReadonlySet<TransactionKind> = new Set([
   'dividend',
 ]);
 
+/**
+ * "Dinheiro pessoal" (Gastos gerais / Mobills): o que o usuário REALMENTE ganha e gasta.
+ * Exclui o que vem de TRADING (comissões/swaps/fees/rebates e custos de firm) — aquilo é
+ * dinheiro da plataforma/conta, não o caixa pessoal — e a reserva de imposto (que tem
+ * widget próprio). Assim card = gráfico = lista de lançamentos.
+ */
+export const PERSONAL_INCOME_KINDS: ReadonlySet<TransactionKind> = new Set([
+  'payout_in',
+  'income',
+  'dividend',
+]);
+export const PERSONAL_EXPENSE_KINDS: ReadonlySet<TransactionKind> = new Set([
+  'expense',
+]);
+
 /** Kinds neutros (movimentação de ativo, não consumo). */
 export const NEUTRAL_KINDS: ReadonlySet<TransactionKind> = new Set([
   'transfer',
@@ -639,8 +654,10 @@ export interface FreeCashResult {
 }
 
 /**
- * Free Cash = Income - Expenses. Income = Σ(INCOME_KINDS); Expenses =
- * Σ(expense + tax_reserve + fee + commission + swap + challenge/reset/monthly).
+ * Free Cash = Income - Expenses, restrito ao DINHEIRO PESSOAL (PERSONAL_*_KINDS):
+ * Income = income + payout_in + dividend; Expenses = expense.
+ * Comissões/swaps/fees/rebates e custos de firm (challenge/reset/monthly) NÃO entram —
+ * são dinheiro da plataforma, não o caixa pessoal (evita card ≠ gráfico ≠ lista).
  * Transfer/buy/sell são neutros (movimentação de ativo, não consumo).
  * D1 — títulos ainda NÃO pagos (`paid === false`) ficam fora do caixa (são "a pagar");
  * entram quando quitados. Legado sem o campo continua contando (pago).
@@ -652,8 +669,8 @@ export function computeFreeCash(transactions: Transaction[], yearMonth: string):
     const ym = t.date.slice(0, 7);
     if (ym !== yearMonth) continue;
     if (t.paid === false) continue;
-    if (INCOME_KINDS.has(t.kind)) income += t.amount;
-    else if (COST_KINDS.has(t.kind)) expenses += Math.abs(t.amount);
+    if (PERSONAL_INCOME_KINDS.has(t.kind)) income += t.amount;
+    else if (PERSONAL_EXPENSE_KINDS.has(t.kind)) expenses += Math.abs(t.amount);
   }
   return { income: r2(income), expenses: r2(expenses), freeCash: r2(income - expenses) };
 }
@@ -848,7 +865,7 @@ export interface IncomeGroup {
 export function incomeByKind(transactions: Transaction[], yearMonth: string): IncomeGroup[] {
   const map = new Map<string, { total: number; count: number }>();
   for (const t of transactions) {
-    if (!INCOME_KINDS.has(t.kind) || t.date.slice(0, 7) !== yearMonth) continue;
+    if (!PERSONAL_INCOME_KINDS.has(t.kind) || t.date.slice(0, 7) !== yearMonth) continue;
     const e = map.get(t.kind) ?? { total: 0, count: 0 };
     e.total = r2(e.total + t.amount);
     e.count += 1;

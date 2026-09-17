@@ -316,7 +316,7 @@ describe('Fase 3 — Money OS', () => {
   // Free Cash mensal
   // -------------------------------------------------------------------------
   describe('Free Cash mensal', () => {
-    it('Free Cash = income (payout+rebate) - expenses', async () => {
+    it('Free Cash = pessoal (income/payout/dividend) - expense (sem trades/custos/reserva)', async () => {
       const { ds, money } = ctx;
       await money.addTransaction({ accountId: 'w-usd', kind: 'payout_in', amount: 2560, currency: 'USD', date: '2026-01-15T00:00:00Z' });
       await money.addTransaction({ accountId: 'w-usd', kind: 'rebate', amount: 42, currency: 'USD', date: '2026-01-16T00:00:00Z' });
@@ -327,9 +327,10 @@ describe('Fase 3 — Money OS', () => {
       await money.addTransaction({ accountId: 'w-usd', kind: 'payout_in', amount: 9999, currency: 'USD', date: '2026-02-01T00:00:00Z' });
 
       const fc = await money.freeCash('2026-01');
-      expect(fc.income).toBeCloseTo(2560 + 42, 1);
-      expect(fc.expenses).toBeCloseTo(700 + 384, 1);
-      expect(fc.freeCash).toBeCloseTo(2602 - 1084, 1);
+      // rebate (42) é de trading -> fora; tax_reserve (384) tem widget próprio -> fora.
+      expect(fc.income).toBeCloseTo(2560, 1);
+      expect(fc.expenses).toBeCloseTo(700, 1);
+      expect(fc.freeCash).toBeCloseTo(2560 - 700, 1);
     });
   });
 

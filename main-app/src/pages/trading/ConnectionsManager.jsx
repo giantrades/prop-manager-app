@@ -268,6 +268,30 @@ export default function ConnectionsManager() {
     }
   }, [load, toast]);
 
+  // Religa trades que entraram SEM conta (não associados) usando o platformAccountId.
+  const relinkTrades = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      const trades = await f.ds.trades.list();
+      const orphan = trades.filter((t) => !t.accountId && t.platformAccountId);
+      let n = 0;
+      for (const t of orphan) {
+        const acc = appByPlatformId.get(t.platformAccountId);
+        if (!acc) continue;
+        await f.ds.trades.put({ ...t, accountId: acc.id, updatedAt: new Date().toISOString() }, { source: 'local' });
+        n += 1;
+      }
+      toast(n > 0 ? `${n} trade(s) religados à conta.` : 'Nenhum trade sem conta para religar.', { type: n > 0 ? 'ok' : 'warn' });
+      load();
+    } catch (e) {
+      toast(`Falha ao religar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }, [appByPlatformId, load, toast]);
+
   const unhideAll = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
@@ -341,11 +365,12 @@ export default function ConnectionsManager() {
         </div>
       )}
 
-      {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
-        <div className="cx-actions">
+      <div className="cx-actions">
+        <button className="cmd-refresh" onClick={relinkTrades} disabled={busy}><Link2 size={13} /> Religar trades sem conta</button>
+        {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
           <button className="cmd-refresh" onClick={unhideAll}><RotateCcw size={13} /> Reexibir ocultos ({hiddenConns.length + hiddenAccts.length})</button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showDemo && (
         <div className="cx-offline" role="status">

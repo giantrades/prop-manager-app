@@ -122,8 +122,9 @@ export async function importPayouts(
       skippedCount += 1;
       continue;
     }
-    // Payout seed (preserva toda a info legada).
-    await dataService.payouts.put(payout, { source: 'restore' });
+    // Payout seed (preserva toda a info legada). `source: 'local'` faz SINCRONIZAR
+    // (com 'restore' o push era ignorado e o payout se perderia ao limpar o navegador).
+    await dataService.payouts.put(payout, { source: 'local' });
     // Transactions de payout_in + fee via chain (wallet inflow).
     const result = await chain.applyPayout(payout, { destinationAccountId: opts?.destinationAccountId });
     transactionIds.push(...result.transactionIds);

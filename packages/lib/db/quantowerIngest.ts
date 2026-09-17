@@ -73,6 +73,8 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     fees: q.fee ?? 0,
     source: 'quantower' as const,
     quantowerId: q.platformTradeId,
+    // Guarda o id da plataforma para permitir religar a conta depois (relink).
+    platformAccountId: q.platformAccountId,
     resultNet,
     resultR: null as number | null,
   };
