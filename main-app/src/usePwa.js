@@ -3,6 +3,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+// Guarda de módulo: recarrega UMA vez quando o novo SW assume (evita loop).
+let swReloading = false;
+
 export function usePwa() {
   const [deferred, setDeferred] = useState(null);
   const [installed, setInstalled] = useState(false);
@@ -35,9 +38,17 @@ export function usePwa() {
     window.addEventListener('offline', onOffline);
     let regRef = null;
     if ('serviceWorker' in navigator) {
+      // Auto-update: quando o novo SW assume o controle, recarrega sozinho (uma vez).
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swReloading) return;
+        swReloading = true;
+        window.location.reload();
+      });
       navigator.serviceWorker.getRegistration().then((reg) => {
         if (!reg) return;
         regRef = reg;
+        // Procura versão nova logo na abertura (não espera o ciclo do browser).
+        reg.update().catch(() => {});
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing;
           if (!sw) return;

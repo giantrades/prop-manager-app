@@ -7,11 +7,26 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
+import { useFinance } from './FinanceContext';
 
 const AUTO_KEY = 'qt:autoSync';
 const URL_KEY = 'qt:bridgeUrl';
 const TOKEN_KEY = 'qt:bridgeToken';
 const LAST_SYNC_KEY = 'qt:lastSync';
+// Última leitura de posições (fallback offline/remoto): local + meta sincronizado.
+const SNAP_KEY = 'qt:lastPositions';
+const SNAP_META_KEY = 'lastPositions';
+const SNAP_META_THROTTLE_MS = 5 * 60 * 1000;
+
+function readLocalSnap() {
+  try {
+    const raw = localStorage.getItem(SNAP_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    return v && Array.isArray(v.positions) ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 export function bridgePrefs() {
   return {
@@ -34,9 +49,44 @@ export function usePlatform() {
   const [lastSync, setLastSync] = useState(() => localStorage.getItem(LAST_SYNC_KEY));
   const [liveCount, setLiveCount] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  const [lastSnapshot, setLastSnapshot] = useState(() => readLocalSnap());
   const adapterRef = useRef(null);
   const streamRef = useRef(null);
+  const finance = useFinance();
+  const financeRef = useRef(finance);
+  financeRef.current = finance;
+  const snapMetaAtRef = useRef(0);
   if (!adapterRef.current) adapterRef.current = makeAdapter();
+
+  // Persiste a última leitura boa: localStorage (device) + meta (sincroniza p/ o celular).
+  const persistSnapshot = useCallback((positions) => {
+    if (!Array.isArray(positions) || positions.length === 0) return;
+    const snap = { at: new Date().toISOString(), positions };
+    try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch { /* noop */ }
+    setLastSnapshot(snap);
+    const now = Date.now();
+    const f = financeRef.current;
+    if (f?.ds && now - snapMetaAtRef.current > SNAP_META_THROTTLE_MS) {
+      snapMetaAtRef.current = now;
+      try { f.ds.meta.setKey(SNAP_META_KEY, snap).catch(() => {}); } catch { /* noop */ }
+    }
+  }, []);
+
+  // Sem snapshot local (ex.: celular novo), hidrata do meta sincronizado.
+  useEffect(() => {
+    if (lastSnapshot) return undefined;
+    let alive = true;
+    (async () => {
+      const f = financeRef.current;
+      if (!f?.ds) return;
+      try {
+        const rec = await f.ds.meta.getKey(SNAP_META_KEY);
+        const v = rec?.value;
+        if (alive && v && Array.isArray(v.positions)) setLastSnapshot(v);
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+  }, [finance, lastSnapshot]);
 
   const refreshStatuses = useCallback(async () => {
     const a = adapterRef.current;
@@ -57,11 +107,12 @@ export function usePlatform() {
       ]);
       setLivePositions(positions);
       setLiveCount(positions.length);
+      persistSnapshot(positions);
     } catch {
       setStatuses([{ platformId: 'quantower', online: false, connections: [], positionsCount: 0 }]);
     }
     setLastSync(localStorage.getItem(LAST_SYNC_KEY));
-  }, []);
+  }, [persistSnapshot]);
 
   // SSE: só em página segura quando a URL também é https (evita mixed content).
   const openStream = useCallback(() => {
@@ -81,13 +132,14 @@ export function usePlatform() {
         if (Array.isArray(d.positions)) {
           setLivePositions(d.positions);
           setLiveCount(d.positions.length);
+          persistSnapshot(d.positions);
         }
         window.dispatchEvent(new CustomEvent('qt:stream', { detail: d }));
       } catch { /* payload inválido */ }
     };
     es.onerror = () => setStreaming(false); // EventSource reconecta sozinho
     streamRef.current = es;
-  }, []);
+  }, [persistSnapshot]);
 
   const closeStream = useCallback(() => {
     try { streamRef.current?.close(); } catch { /* noop */ }
@@ -124,6 +176,6 @@ export function usePlatform() {
 
   return {
     statuses, livePositions, isRunning, startSync, stopSync, lastSync, liveCount,
-    refreshStatuses, streaming,
+    refreshStatuses, streaming, lastSnapshot,
   };
 }

@@ -14,7 +14,7 @@ import { Activity, RefreshCw, X, Clock, Zap, ZapOff } from 'lucide-react';
 
 
 export default function LivePositionsPage() {
-  const { livePositions, statuses, lastSync, refreshStatuses, streaming } = usePlatform();
+  const { livePositions, statuses, lastSync, refreshStatuses, streaming, lastSnapshot } = usePlatform();
   const { toast } = useToast();
   const wake = useWakeLock();
   const [edits, setEdits] = useState({});
@@ -37,12 +37,16 @@ export default function LivePositionsPage() {
 
   const online = statuses.some((s) => s.online);
   const quantower = statuses.find((s) => s.platformId === 'quantower');
+  // Ao vivo quando conectado; senão a ÚLTIMA leitura (fallback offline/remoto).
+  const positions = online && livePositions.length > 0 ? livePositions : (lastSnapshot?.positions ?? []);
+  const isStale = positions.length > 0 && !(online && livePositions.length > 0);
+  const staleAgo = lastSnapshot?.at ? agoText(lastSnapshot.at) : null;
   const totals = useMemo(() => {
-    const pnl = livePositions.reduce((s, p) => s + (p.netPnl ?? 0), 0);
-    const long = livePositions.filter((p) => p.side === 'Long').length;
-    const short = livePositions.filter((p) => p.side === 'Short').length;
+    const pnl = positions.reduce((s, p) => s + (p.netPnl ?? 0), 0);
+    const long = positions.filter((p) => p.side === 'Long').length;
+    const short = positions.filter((p) => p.side === 'Short').length;
     return { pnl, long, short };
-  }, [livePositions]);
+  }, [positions]);
 
   const loadOrders = useCallback(async () => {
     if (!online) return;
@@ -93,6 +97,16 @@ export default function LivePositionsPage() {
   }, [online]);
 
   const setEdit = (id, k, v) => setEdits((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), [k]: v } }));
+  const agoText = (iso) => {
+    const ms = Date.now() - Date.parse(iso);
+    if (!Number.isFinite(ms) || ms < 0) return 'agora';
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${min} min`;
+    const h = Math.floor(min / 60);
+    if (h < 24) return `há ${h}h`;
+    return `há ${Math.floor(h / 24)}d`;
+  };
   const num = (v) => { const n = Number(String(v).replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 
   const saveSl = async (p) => {
@@ -286,7 +300,7 @@ export default function LivePositionsPage() {
       <div className="lp-status" role="status">
         <span className={`lp-dot ${online ? 'on' : 'off'}`} />
         <span>{online ? 'Plataforma conectada' : 'Plataforma offline — abra o bridge'}</span>
-        <span className="lp-muted">{livePositions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
+        <span className="lp-muted">{positions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
         <span className={`lp-live ${streaming ? 'on' : ''}`} title={streaming ? 'Streaming ao vivo (SSE)' : 'Atualizando por polling'}>{streaming ? 'LIVE' : 'polling'}</span>
       </div>
 
@@ -295,6 +309,13 @@ export default function LivePositionsPage() {
           <Clock size={14} />
           <span>{pending} operação(ões) na fila (bridge offline).</span>
           <button className="ac3-btn ac3-btn-sm" disabled={!online} onClick={flush}>Enviar agora</button>
+        </div>
+      )}
+
+      {isStale && (
+        <div className="lp-stale" role="status">
+          <Clock size={14} />
+          <span>Sem bridge — mostrando a <b>última leitura</b>{staleAgo ? ` (${staleAgo})` : ''}. <b>Não é ao vivo.</b></span>
         </div>
       )}
 
@@ -308,15 +329,15 @@ export default function LivePositionsPage() {
         </div>
       )}
 
-      {online && livePositions.length > 0 && (() => {
+      {positions.length > 0 && (() => {
         const notional = (p) => Math.abs((p.quantity || 0) * (p.currentPrice || 0));
-        const longs = livePositions.filter((p) => p.side === 'Long');
-        const shorts = livePositions.filter((p) => p.side === 'Short');
+        const longs = positions.filter((p) => p.side === 'Long');
+        const shorts = positions.filter((p) => p.side === 'Short');
         const longN = longs.reduce((s, p) => s + notional(p), 0);
         const shortN = shorts.reduce((s, p) => s + notional(p), 0);
         const maxN = Math.max(1, longN, shortN);
         const bySym = new Map();
-        for (const p of livePositions) {
+        for (const p of positions) {
           const e = bySym.get(p.symbol) ?? { symbol: p.symbol, long: 0, short: 0, pnl: 0 };
           if (p.side === 'Long') e.long += p.quantity; else e.short += p.quantity;
           e.pnl += Number(p.netPnl || 0);
@@ -349,7 +370,7 @@ export default function LivePositionsPage() {
         );
       })()}
 
-      {online && livePositions.length > 0 && (
+      {positions.length > 0 && (
         <div className="dash-cards">
           <div className={`card ${totals.pnl >= 0 ? 'accent1' : 'accent2'}`}>
             <h3>PnL aberto</h3>
@@ -362,19 +383,19 @@ export default function LivePositionsPage() {
         </div>
       )}
 
-      {!online ? (
+      {positions.length === 0 && !online ? (
         <div className="lp-empty" role="status"><Activity size={18} /> Sem conexão. Configure o bridge em Sistema → Quantower.</div>
       ) : (
         <>
           <h2 className="lp-section">Posições</h2>
-          {livePositions.length === 0 ? (
+          {positions.length === 0 ? (
             <div className="lp-empty" role="status">Nenhuma posição aberta agora.</div>
           ) : (
             <div className="lp-list">
               <div className="lp-row lp-head" aria-hidden="true">
                 <span>Símbolo</span><span>Lado</span><span>Qtd</span><span>Abertura</span><span>Atual</span><span>PnL</span><span>SL</span><span>TP</span><span>Ações</span>
               </div>
-              {livePositions.map((p) => {
+              {positions.map((p) => {
                 const e = edits[p.platformPositionId] ?? {};
                 const slVal = 'sl' in e ? e.sl : (p.sl ?? '');
                 const tpVal = 'tp' in e ? e.tp : (p.tp ?? '');
@@ -421,6 +442,8 @@ export default function LivePositionsPage() {
             </div>
           )}
 
+          {online && (
+            <>
           <h2 className="lp-section">Ordens</h2>
 
           <div className="lp-neworder">
@@ -483,6 +506,8 @@ export default function LivePositionsPage() {
               ))}
             </div>
           )}
+            </>
+          )}
         </>
       )}
     </div>
@@ -509,6 +534,8 @@ const LP_CSS = `
 .lp-muted { color: var(--muted, #a1a7b3); margin-left: auto; }
 .lp-queue { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 10px 14px; border-radius: 12px; background: rgba(225,177,44,0.08); border: 1px solid rgba(225,177,44,0.35); color: var(--text, #e7eaf0); }
 .lp-queue span { flex: 1; }
+.lp-stale { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 9px 14px; border-radius: 12px; background: rgba(225,177,44,0.08); border: 1px solid rgba(225,177,44,0.35); color: var(--text, #e7eaf0); }
+.lp-stale span { flex: 1; }
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
 .lp-dot.off { background: var(--red, #e74c3c); }
