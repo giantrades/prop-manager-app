@@ -208,6 +208,7 @@ export default function QuantowerPage() {
               <>
                 <span className="qt-sync-k">Erro</span><span className="qt-sync-v">{autoSync.status.code || 'erro'}</span>
                 <span className="qt-sync-k">Detalhe</span><span className="qt-sync-v">{autoSync.status.error}</span>
+                {autoSync.status.url && <><span className="qt-sync-k">URL</span><span className="qt-sync-v">{autoSync.status.url}</span></>}
               </>
             )}
           </div>

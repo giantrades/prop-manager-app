@@ -61,10 +61,18 @@ export default function BridgeAutoSync() {
     const tick = async () => {
       const f = ref.current;
       if (!f || cancelled) return;
-      if (localStorage.getItem(AUTO_KEY) === '0') return;
-      const bridgeUrl = localStorage.getItem(URL_KEY) || import.meta.env.VITE_BRIDGE_URL || '';
+      if (localStorage.getItem(AUTO_KEY) === '0') {
+        record({ at: new Date().toISOString(), ok: false, code: 'disabled', error: 'Auto-sync desligado (menu Platforms → Start).' });
+        return;
+      }
+      // Mesmo default do `bridgePrefs()`: 127.0.0.1 só funciona no PC. No celular, a URL
+      // precisa ser a do Tailscale — por isso a URL vai no status (fica visível no card).
+      const bridgeUrl = localStorage.getItem(URL_KEY) || import.meta.env.VITE_BRIDGE_URL || 'http://127.0.0.1:8787';
       const bridgeToken = localStorage.getItem(TOKEN_KEY) || import.meta.env.VITE_BRIDGE_TOKEN || '';
-      if (!bridgeUrl) return;
+      if (!bridgeUrl) {
+        record({ at: new Date().toISOString(), ok: false, code: 'no_bridge_url', error: 'Sem URL da ponte (Sistema → Quantower).' });
+        return;
+      }
       try {
         // Janela com FOLGA de 30 dias (mínimo): a reconstrução do trade no bridge precisa
         // do fill de ENTRADA, que pode ser anterior ao último cursor. Sem folga, um trade
@@ -85,11 +93,11 @@ export default function BridgeAutoSync() {
           /* sem contas agora — segue */
         }
         await writeCursor(f.ds, new Date().toISOString());
-        record({ at: new Date().toISOString(), ok: true, fetched: trades.length, ...res });
+        record({ at: new Date().toISOString(), ok: true, url: bridgeUrl, fetched: trades.length, ...res });
       } catch (e) {
         const status = e && typeof e === 'object' && 'status' in e ? e.status : undefined;
         const code = status === 401 ? 'auth_failed' : 'bridge_offline';
-        record({ at: new Date().toISOString(), ok: false, error: e instanceof Error ? e.message : 'Bridge offline.', code });
+        record({ at: new Date().toISOString(), ok: false, url: bridgeUrl, error: e instanceof Error ? e.message : 'Bridge offline.', code });
         f.ds.bus.emit(EVENTS.QUANTOWER_ERROR, {
           message: e instanceof Error ? e.message : 'Bridge offline.',
           code,
