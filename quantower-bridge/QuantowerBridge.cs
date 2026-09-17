@@ -132,7 +132,7 @@ namespace QuantowerBridge
 
                 // Carrega (ou gera) o token da bridge — nunca hardcoded.
                 _bridgeToken = LoadOrCreateToken();
-                FileLog($"🔑 Bridge token carregado (hash={ComputeSha1Hash(_bridgeToken).Substring(0, 8)}…).");
+                FileLog($"🔑 Bridge token carregado (hash={TradeHelpers.ComputeSha1Hash(_bridgeToken).Substring(0, 8)}…).");
 
                 _cts = new CancellationTokenSource();
                 _listener = new HttpListener();
@@ -677,8 +677,8 @@ namespace QuantowerBridge
                     Quantity = req.Qty,
                     TimeInForce = TimeInForce.Day,
                     OrderTypeId = OrderType.Market,
-                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Price) : null,
-                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Price) : null
+                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Absolute) : null,
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Absolute) : null
                 };
                 var result = Core.Instance.PlaceOrder(orderParams);
                 if (!IsSuccess(result))
@@ -805,8 +805,8 @@ namespace QuantowerBridge
                     OrderTypeId = isLimit ? OrderType.Limit : OrderType.Stop,
                     Price = isLimit ? req.Price : -1,
                     TriggerPrice = isLimit ? -1 : req.Price,
-                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Price) : null,
-                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Price) : null
+                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Absolute) : null,
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Absolute) : null
                 };
                 var result = Core.Instance.PlaceOrder(orderParams);
                 if (!IsSuccess(result))
@@ -861,7 +861,7 @@ namespace QuantowerBridge
         private static bool IsSuccess(TradingOperationResult result)
         {
             return result != null &&
-                string.Equals(result.Status?.ToString(), "Success", StringComparison.OrdinalIgnoreCase);
+                string.Equals(result.Status.ToString(), "Success", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ErrorJson(string code, string message, bool retryable)
