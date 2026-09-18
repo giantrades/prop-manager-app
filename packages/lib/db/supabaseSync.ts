@@ -284,24 +284,11 @@ export function createSupabaseSync(
         }
       }
     }
-    // RECONCILIAÇÃO de exclusões: linha que veio de OUTRO aparelho (deviceId diferente)
-    // e não existe mais na nuvem foi apagada lá → apaga aqui também (senão cada aparelho
-    // ficaria com uma cópia "fantasma"). Só toca em registros de outro device; os locais
-    // (deste device) podem simplesmente ainda não ter subido.
-    for (const [store, ids] of remoteIdsByStore) {
-      if (store === 'meta') continue;
-      try {
-        const locals = (await ds.list(store as StoreName)) as unknown as Array<Record<string, unknown>>;
-        for (const rec of locals) {
-          const key = String(rec[keyPathFor(store as StoreName)] ?? rec.id ?? '');
-          if (!key || ids.has(key)) continue;
-          if (rec.deviceId === ds.deviceId) continue; // local: pode não ter subido ainda
-          await ds.remove(store as StoreName, key, { source: 'sync:pull' });
-        }
-      } catch {
-        /* noop */
-      }
-    }
+    // ATENÇÃO: NÃO apagar local por ausência no remoto. Já causou perda de dados quando o
+    // `deviceId` não era estável (registros do próprio usuário pareciam "de outro aparelho"
+    // e eram removidos por não estarem na nuvem ainda). Exclusão propaga pelo `remove()`
+    // (quem apaga manda o DELETE); o outro aparelho resolve no próximo push/pull do registro.
+    void remoteIdsByStore;
     ds.bus.emit(EVENTS.SYNC_PULLED, { count: applied, entityCounts, durationMs: Date.now() - startedAt });
     return { applied, conflicts };
   };

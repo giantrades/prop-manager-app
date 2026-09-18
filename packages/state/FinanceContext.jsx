@@ -17,10 +17,34 @@ import {
   createSupabaseSync,
   makeSupabaseSyncEngine,
   isSyncedMetaKey,
+  EVENTS,
 } from '@apps/lib/db';
 import { supabase } from '@apps/supabase/client';
 
 const FinanceContext = createContext(undefined);
+
+// ---------------------------------------------------------------------------
+// Status da nuvem (visível na UI): último pull/push e erro. Store de módulo para não
+// recriar o objeto `finance` a cada atualização.
+// ---------------------------------------------------------------------------
+let _cloudStatus = null;
+const _cloudListeners = new Set();
+function publishCloudStatus(patch) {
+  _cloudStatus = { ...(_cloudStatus ?? {}), ...patch, at: new Date().toISOString() };
+  for (const l of _cloudListeners) {
+    try { l(_cloudStatus); } catch { /* noop */ }
+  }
+}
+/** Status do sync com a nuvem (reativo). */
+export function useCloudStatus() {
+  const [s, setS] = useState(_cloudStatus);
+  useEffect(() => {
+    _cloudListeners.add(setS);
+    setS(_cloudStatus);
+    return () => { _cloudListeners.delete(setS); };
+  }, []);
+  return s;
+}
 
 const STORE_BY_ENTITY = {
   account: 'accounts',
@@ -55,7 +79,21 @@ export function FinanceProvider({ children, adapter = null }) {
         const { createProductionAdapter } = await import('@apps/lib/db');
         dsAdapter = await createProductionAdapter();
       }
-      const ds = new DataService({ adapter: dsAdapter });
+      // deviceId ESTÁVEL por aparelho (antes era gerado a cada boot: os registros do
+      // próprio usuário pareciam de "outro device" e a reconciliação chegou a apagá-los).
+      let deviceId;
+      try {
+        deviceId = localStorage.getItem('appdb:deviceId') || undefined;
+        if (!deviceId) {
+          deviceId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+            ? crypto.randomUUID()
+            : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+          localStorage.setItem('appdb:deviceId', deviceId);
+        }
+      } catch {
+        deviceId = undefined;
+      }
+      const ds = new DataService({ adapter: dsAdapter, deviceId });
       const chain = new DataChainEngine(ds);
       const money = new MoneyService(ds, chain);
       const wealth = new WealthService(ds);
@@ -88,6 +126,12 @@ export function FinanceProvider({ children, adapter = null }) {
       };
       const supabaseSync = createSupabaseSync(supabase, ds, getUserId);
       syncEngine = makeSupabaseSyncEngine(supabaseSync);
+
+      // Espelha o estado do sync para a UI (Settings → Sincronização).
+      ds.bus.on(EVENTS.SYNC_PULLED, (p) => publishCloudStatus({ applied: p?.count ?? 0, entityCounts: p?.entityCounts ?? {}, error: null }));
+      ds.bus.on(EVENTS.SYNC_PUSHED, (p) => publishCloudStatus({ pushed: p?.count ?? 0, error: null }));
+      ds.bus.on(EVENTS.SYNC_ERROR, (p) => publishCloudStatus({ error: p?.message ?? 'erro no sync', phase: p?.phase ?? null }));
+      publishCloudStatus({ userId: (await getUserId()) ? 'ok' : 'sem-login' });
 
       // Enfileira mudanças locais (ignora pull/restore pra não re-push em loop).
       offChange = ds.bus.on('datastore:change', async (payload) => {

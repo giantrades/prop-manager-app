@@ -158,6 +158,15 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
             {allTags.map((g) => (<option key={g} value={g}>#{g}</option>))}
           </select>
         )}
+        {onDeleteMany && filtered.length > 0 && (
+          <button
+            className="tr-btn tr-btn-sm"
+            onClick={() => setSelected(new Set(filtered.map((t) => t.id)))}
+            title="Seleciona todos os trades filtrados (não só a página)"
+          >
+            Selecionar todos ({filtered.length})
+          </button>
+        )}
         {onNew && <button className="tr-btn tr-btn-primary" onClick={onNew}>+ Novo trade</button>}
       </div>
 

@@ -3,7 +3,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
-import { useFinance } from '@apps/state';
+import { useFinance, useCloudStatus } from '@apps/state';
 import { useCurrency } from '@apps/state';
 import { supabase } from '@apps/supabase/client';
 import { dumpAppDb, restoreAppDb } from '@apps/lib/db';
@@ -185,6 +185,7 @@ function PushSettingsCard() {
 export default function SettingsPage() {
   const finance = useFinance();
   const { currency, setCurrency, rate, setRate } = useCurrency();
+  const cloudStatus = useCloudStatus();
   const fileRef = useRef(null);
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -310,7 +311,43 @@ export default function SettingsPage() {
         <div className="st-card">
           <div className="st-title">Sincronização (nuvem)</div>
           <p className="st-hint">Se outro aparelho mostrou dados estranhos/legados, reenvie este (o do PC) como fonte da verdade. Os outros aparelhos puxam isso no próximo sync.</p>
+          {cloudStatus && (
+            <div className="st-hint" aria-live="polite">
+              {cloudStatus.userId === 'sem-login' ? <b>Sessão: SEM LOGIN (o sync não roda)</b> : <span>Sessão: logada ✓</span>}
+              {cloudStatus.at ? ` · último evento ${new Date(cloudStatus.at).toLocaleTimeString('pt-BR')}` : ''}
+              {typeof cloudStatus.applied === 'number' ? ` · puxados ${cloudStatus.applied}` : ''}
+              {typeof cloudStatus.pushed === 'number' ? ` · enviados ${cloudStatus.pushed}` : ''}
+              {cloudStatus.error ? <> · <b className="st-err">erro: {cloudStatus.error}</b></> : ''}
+            </div>
+          )}
           <div className="st-actions">
+            <button className="st-btn" disabled={busy} onClick={async () => {
+              try {
+                const f = finance;
+                if (!f?.cloud) { toast('Sync da nuvem indisponível.', { type: 'error' }); return; }
+                const pulled = await f.cloud.pull();
+                const pushed = await f.cloud.pushAll();
+                toast(`Sincronizado — puxados ${pulled?.applied ?? 0}, enviados ${pushed?.count ?? 0}.`);
+              } catch (e) {
+                toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+              }
+            }}>Sincronizar agora (pull + push)</button>
+            <button className="st-btn st-btn-danger" disabled={busy} onClick={async () => {
+              // Destrutivo: limpa o banco LOCAL deste aparelho e recarrega da nuvem.
+              // Útil quando ESTE aparelho tem lixo (ex.: dados legados puxados antes).
+              if (!window.confirm('Limpar os dados LOCAIS deste aparelho e recarregar da nuvem? Os dados que já subiram não são afetados.')) return;
+              try {
+                const f = finance;
+                if (!f?.ds) { toast('DataService indisponível.', { type: 'error' }); return; }
+                for (const store of ['trades', 'accounts', 'prop_extensions', 'transactions', 'positions', 'payouts', 'goals', 'tax_records', 'snapshots_networth', 'firm_costs', 'cards']) {
+                  try { await f.ds.clearStore(store); } catch { /* store vazia/ausente */ }
+                }
+                const pulled = await f.cloud?.pull?.();
+                toast(`Dados locais limpos e recarregados da nuvem (${pulled?.applied ?? 0} registro(s)).`);
+              } catch (e) {
+                toast(`Falha ao limpar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+              }
+            }}>Limpar dados DESTE aparelho (recarrega da nuvem)</button>
             <button className="st-btn" disabled={busy} onClick={async () => {
               try {
                 const res = await finance?.cloud?.pushAll?.();
@@ -350,6 +387,7 @@ const ST_CSS = `
 .st-title { font-size: 14px; font-weight: 800; }
 .st-row { display: flex; gap: 8px; align-items: center; }
 .st-rate { font-size: 12px; color: var(--muted, #a1a7b3); }
+.st-err { color: var(--red, #e74c3c); }
 .st-field { display: flex; flex-direction: column; gap: 6px; max-width: 260px; }
 .st-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
 .st-input { background: #111623; border: 1px solid #273044; border-radius: 10px; padding: 10px 12px; color: var(--text, #e7eaf0); font-size: 14px; min-height: 42px; width: 100%; font-family: inherit; font-variant-numeric: tabular-nums; }
