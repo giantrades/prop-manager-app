@@ -228,7 +228,9 @@ export default function InvestmentsDashboardPage() {
                           label={p.symbol}
                           sub={`${p.qty} un. · ${fmtPct(p.pnlPercent)}`}
                           barPct={((p.marketValue ?? 0) / max) * 100}
-                          value={fmtMoney(p.marketValue, 'BRL')}
+                          // marketValue está na moeda do ativo; formatar com a dela (era 'BRL'
+                          // fixo e um ativo USD saía convertido errado).
+                          value={fmtMoney(p.marketValue, p.currency || 'BRL')}
                           onClick={() => openPosition(p)}
                         />
                       ));

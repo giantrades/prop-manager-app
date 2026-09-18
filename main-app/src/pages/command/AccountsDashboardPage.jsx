@@ -140,8 +140,8 @@ export default function AccountsDashboardPage() {
       ) : (
         <>
           <div className="ad-cards">
-            <StatCard label="Balance total" value={fmtMoney(stats.capital, 'USD')} sub="soma das contas · plataforma quando disponível" color="#7c5cff" glow="rgba(124,92,255,0.15)" />
-            <StatCard label="Balance prop" value={fmtMoney(stats.propBalance, 'USD')} sub={`${stats.propCount} conta(s) prop`} color="#a78bfa" glow="rgba(167,139,250,0.15)" />
+            <StatCard label="Balance total" value={fmtDisplay(stats.capital)} sub="soma das contas · plataforma quando disponível" color="#7c5cff" glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Balance prop" value={fmtDisplay(stats.propBalance)} sub={`${stats.propCount} conta(s) prop`} color="#a78bfa" glow="rgba(167,139,250,0.15)" />
             <StatCard label="Balance líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
             <StatCard label="Payouts recebidos" value={fmtMoney(stats.netPayouts, 'USD')} sub={`líquido no período · ${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
             <StatCard label="Payout yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts ÷ balance prop" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
@@ -174,7 +174,10 @@ export default function AccountsDashboardPage() {
                       <span className="ac-matrix-name">{r.name}</span>
                       <span className="ac-matrix-kind">{KIND_META[r.kind]?.label ?? r.kind}</span>
                       <span className={`ac-matrix-status ${r.level === 'STOP' ? 'is-stop' : r.level === 'WARN' ? 'is-warn' : r.status !== '—' ? 'is-ok' : ''}`}>{r.status}</span>
-                      <span className="ac-matrix-num">{fmtMoney(r.value, r.currency === 'USD' ? '$' : 'R$')}</span>
+                      {/* `r.value` já está na moeda de EXIBIÇÃO (acctValue faz convertMoney):
+                          usar fmtDisplay evita converter de novo (antes, conta em BRL com
+                          exibição em USD era dividida pelo câmbio duas vezes). */}
+                      <span className="ac-matrix-num">{fmtDisplay(r.value)}</span>
                       <span className="ac-matrix-num">{r.ddPct != null ? `${r.ddPct}%` : '—'}</span>
                       <span className="ac-matrix-num">{fmtMoney(r.payouts, 'USD')}</span>
                       <span className="ac-matrix-num">{r.trades}</span>
