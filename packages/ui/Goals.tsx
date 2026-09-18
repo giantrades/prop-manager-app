@@ -25,7 +25,7 @@ const KIND_META = {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function Goals({ goals = [], currency = 'R$', loading = false }) {
+export default function Goals({ goals = [], currency = 'USD', loading = false }) {
   if (loading) {
     return (
       <div className="gl-root gl-loading" role="status" aria-live="polite">

@@ -17,7 +17,7 @@ import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tool
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function Forecast({ forecast = null, safeAvailable = null, currency = 'R$', loading = false }) {
+export default function Forecast({ forecast = null, safeAvailable = null, currency = 'USD', loading = false }) {
   if (loading) {
     return (
       <div className="fc-root fc-loading" role="status" aria-live="polite">

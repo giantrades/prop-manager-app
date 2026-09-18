@@ -188,17 +188,17 @@ export default function InvestmentsDashboardPage() {
               <h3>Patrimônio</h3>
               {/* netWorth/components vêm em BRL (convenção do motor) — declarar a moeda
                   faz o fmtMoney converter para a moeda de EXIBIÇÃO, não tratar como USD. */}
-              <div className="stat">{fmtMoney(data.nw.netWorth, 'BRL')}</div>
-              <div className="muted">cash {fmtMoney(data.nw.components.cash, 'BRL')}</div>
+              <div className="stat">{fmtMoney(data.nw.netWorth, 'USD')}</div>
+              <div className="muted">cash {fmtMoney(data.nw.components.cash, 'USD')}</div>
             </div>
             <div className={`card ${pf.totalPnl >= 0 ? 'accent1' : 'accent2'}`}>
               <h3>Investido</h3>
-              <div className="stat">{fmtMoney(pf.totalValue, 'BRL')}</div>
-              <div className="muted">custo {fmtMoney(pf.totalCost, 'BRL')}</div>
+              <div className="stat">{fmtMoney(pf.totalValue, 'USD')}</div>
+              <div className="muted">custo {fmtMoney(pf.totalCost, 'USD')}</div>
             </div>
             <div className={`card ${pf.totalPnl >= 0 ? 'accent1' : 'accent2'}`}>
               <h3>PnL</h3>
-              <div className="stat">{fmtMoney(pf.totalPnl, 'BRL')}</div>
+              <div className="stat">{fmtMoney(pf.totalPnl, 'USD')}</div>
               <div className="muted">{fmtPct(pf.pnlPercent)}</div>
             </div>
             <div className="card accent4">
@@ -230,7 +230,7 @@ export default function InvestmentsDashboardPage() {
                           barPct={((p.marketValue ?? 0) / max) * 100}
                           // marketValue está na moeda do ativo; formatar com a dela (era 'BRL'
                           // fixo e um ativo USD saía convertido errado).
-                          value={fmtMoney(p.marketValue, 'BRL')}
+                          value={fmtMoney(p.marketValue, 'USD')}
                           onClick={() => openPosition(p)}
                         />
                       ));
@@ -261,8 +261,8 @@ export default function InvestmentsDashboardPage() {
                 <div className="dash-section">
                   <div className="dash-title"><span><Coins size={14} /> Proventos</span><NavLink className="dash-link" to="/portfolio">abrir →</NavLink></div>
                   <div className="dash-cards" style={{ marginBottom: 10 }}>
-                    <div className="card accent1"><h3>Recebido</h3><div className="stat">{fmtMoney(dividend.total, 'BRL')}</div><div className="muted">{dividend.count} provento(s)</div></div>
-                    <div className="card accent3"><h3>Média/mês</h3><div className="stat">{fmtMoney(dividend.avgMonth, 'BRL')}</div><div className="muted">{dividend.byAsset.length} ativo(s)</div></div>
+                    <div className="card accent1"><h3>Recebido</h3><div className="stat">{fmtMoney(dividend.total, 'USD')}</div><div className="muted">{dividend.count} provento(s)</div></div>
+                    <div className="card accent3"><h3>Média/mês</h3><div className="stat">{fmtMoney(dividend.avgMonth, 'USD')}</div><div className="muted">{dividend.byAsset.length} ativo(s)</div></div>
                     <div className="card accent4"><h3>Próximos</h3><div className="stat">{data.announced?.length ?? 0}</div><div className="muted">anunciados</div></div>
                   </div>
                   {dividend.monthly.length > 1 ? (
@@ -271,7 +271,7 @@ export default function InvestmentsDashboardPage() {
                         <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                         <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                         <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
-                        <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'BRL')} />
+                        <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                         <Bar dataKey="amount" name="Proventos" fill="#2ecc71" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -279,7 +279,7 @@ export default function InvestmentsDashboardPage() {
                   {dividend.byAsset.length > 0 && (
                     <div style={{ marginTop: 10 }}>
                       {dividend.byAsset.slice(0, 4).map((a) => (
-                        <StatRow key={a.positionId} icon={<Coins size={14} />} color="#2ecc71" label={a.symbol} sub={`${a.count} provento(s)`} barPct={dividend.total > 0 ? (a.amount / dividend.total) * 100 : 0} value={fmtMoney(a.amount, 'BRL')} />
+                        <StatRow key={a.positionId} icon={<Coins size={14} />} color="#2ecc71" label={a.symbol} sub={`${a.count} provento(s)`} barPct={dividend.total > 0 ? (a.amount / dividend.total) * 100 : 0} value={fmtMoney(a.amount, 'USD')} />
                       ))}
                     </div>
                   )}
@@ -332,7 +332,7 @@ export default function InvestmentsDashboardPage() {
                       <div key={r.label} className="ac-wf-row">
                         <span className="ac-wf-label">{r.label}</span>
                         <span className="ac-wf-bar-wrap"><span className={`ac-wf-bar ${r.v < 0 ? 'is-neg' : 'is-pos'}`} style={{ width: `${Math.round((Math.abs(r.v) / max) * 100)}%` }} /></span>
-                        <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v, 'BRL')}</span>
+                        <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v, 'USD')}</span>
                       </div>
                     ));
                   })()}

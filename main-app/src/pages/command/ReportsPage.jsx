@@ -102,22 +102,22 @@ export default function ReportsPage() {
           <div className="dash-cards">
             <div className="card accent3">
               <h3>Patrimônio atual</h3>
-              <div className="stat">{fmtMoney(data.nw.netWorth, 'BRL')}</div>
+              <div className="stat">{fmtMoney(data.nw.netWorth, 'USD')}</div>
               <div className="muted">derivado</div>
             </div>
             <div className="card accent1">
               <h3>Entrou no período</h3>
-              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).income, 'BRL')}</div>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).income, 'USD')}</div>
               <div className="muted">seleção de período</div>
             </div>
             <div className="card accent2">
               <h3>Gastou no período</h3>
-              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).expenses, 'BRL')}</div>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).expenses, 'USD')}</div>
               <div className="muted">seleção de período</div>
             </div>
             <div className={`card ${(periodView?.freeCash ?? data.freeCash).freeCash >= 0 ? 'accent1' : 'accent2'}`}>
               <h3>Saldo do período</h3>
-              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).freeCash, 'BRL')}</div>
+              <div className="stat">{fmtMoney((periodView?.freeCash ?? data.freeCash).freeCash, 'USD')}</div>
               <div className="muted">entradas − gastos</div>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function ReportsPage() {
                   <div key={r.label} className="ac-wf-row">
                     <span className="ac-wf-label">{r.label}</span>
                     <span className="ac-wf-bar-wrap"><span className={`ac-wf-bar ${r.v < 0 ? 'is-neg' : 'is-pos'}`} style={{ width: `${Math.round((Math.abs(r.v) / max) * 100)}%` }} /></span>
-                    <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v, 'BRL')}</span>
+                    <span className={`ac-wf-val ${r.v < 0 ? 'dash-neg' : 'dash-pos'}`}>{fmtMoney(r.v, 'USD')}</span>
                   </div>
                 ));
               })()}
@@ -154,7 +154,7 @@ export default function ReportsPage() {
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} tickFormatter={(v) => String(v).slice(5, 7) + '/' + String(v).slice(2, 4)} />
                   <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'BRL')} />
+                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="income" name="Entradas" fill="#2ecc71" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expenses" name="Gastos" fill="#e74c3c" radius={[4, 4, 0, 0]} />
@@ -177,7 +177,7 @@ export default function ReportsPage() {
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="at" tick={{ fontSize: 10, fill: '#a1a7b3' }} minTickGap={28} />
                     <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={56} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'BRL')} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                     <Area type="monotone" dataKey="valor" stroke="#7c5cff" strokeWidth={2} fill="url(#rp-grad)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -192,9 +192,9 @@ export default function ReportsPage() {
                 {months.slice().reverse().map((m) => (
                   <div key={m.ym} className="rp-mrow">
                     <span className="rp-mym">{String(m.ym).slice(5, 7)}/{String(m.ym).slice(2, 4)}</span>
-                    <span className="rp-min dash-pos">+{fmtMoney(m.income, 'BRL')}</span>
-                    <span className="rp-mout dash-neg">−{fmtMoney(m.expenses, 'BRL')}</span>
-                    <span className={`rp-mbal ${m.balance >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(m.balance, 'BRL')}</span>
+                    <span className="rp-min dash-pos">+{fmtMoney(m.income, 'USD')}</span>
+                    <span className="rp-mout dash-neg">−{fmtMoney(m.expenses, 'USD')}</span>
+                    <span className={`rp-mbal ${m.balance >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(m.balance, 'USD')}</span>
                   </div>
                 ))}
               </div>

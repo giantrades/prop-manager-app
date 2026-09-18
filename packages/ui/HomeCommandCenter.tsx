@@ -22,7 +22,7 @@ function fmtPct(value) {
 }
 const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
 const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
-function Delta({ current, previous, currency = 'BRL' }) {
+function Delta({ current, previous, currency = 'USD' }) {
   if (previous == null || !Number.isFinite(current) || !Number.isFinite(previous)) return null;
   const diff = current - previous;
   if (diff === 0) return <span className="hc-delta hc-delta-flat">=</span>;
@@ -83,17 +83,17 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const acctPnl = snapshot.accountPnl ?? [];
 
   const header = [
-    { label: 'Net Worth', value: fmtMoney(nw.netWorth, 'BRL') },
-    { label: 'Cash', value: fmtMoney(nw.components.cash, 'BRL') },
-    { label: 'Invest', value: fmtMoney(nw.components.investments, 'BRL') },
-    { label: 'Pendente', value: fmtMoney(nw.components.receivables, 'BRL') },
+    { label: 'Net Worth', value: fmtMoney(nw.netWorth, 'USD') },
+    { label: 'Cash', value: fmtMoney(nw.components.cash, 'USD') },
+    { label: 'Invest', value: fmtMoney(nw.components.investments, 'USD') },
+    { label: 'Pendente', value: fmtMoney(nw.components.receivables, 'USD') },
   ];
 
   return (
     <div className="hc-root">
       <div className="hc-hero">
         <div className="hc-hero-label">Patrimônio líquido (derivado)</div>
-        <div className="hc-hero-value">{fmtMoney(nw.netWorth, 'BRL')}</div>
+        <div className="hc-hero-value">{fmtMoney(nw.netWorth, 'USD')}</div>
         <div className="hc-hero-grid">
           {header.map((h) => (
             <div key={h.label} className="hc-hero-cell">
@@ -135,9 +135,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
 
         {!hide('money') && (<Widget key="money" id="money" title="Gastos" to="/gastos" hide={hide}>
           <div className="hc-stats">
-            <div className="hc-stat"><span className="hc-stat-label">Entrou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--green)' }}>{fmtMoney(snapshot.freeCash?.income, 'BRL')}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'BRL')}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'BRL')} <Delta current={snapshot.freeCash?.freeCash ?? 0} previous={snapshot.previous?.freeCash ?? null} /></span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Entrou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--green)' }}>{fmtMoney(snapshot.freeCash?.income, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Gastou (mês)</span><span className="hc-stat-value" style={{ color: 'var(--red)' }}>{fmtMoney(snapshot.freeCash?.expenses, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Saldo</span><span className="hc-stat-value">{fmtMoney(snapshot.freeCash?.freeCash, 'USD')} <Delta current={snapshot.freeCash?.freeCash ?? 0} previous={snapshot.previous?.freeCash ?? null} /></span></div>
           </div>
           {expensePie.length > 0 ? (
             <div className="hc-pie">
@@ -146,12 +146,12 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                   <Pie data={expensePie} dataKey="value" nameKey="name" innerRadius={40} outerRadius={64} paddingAngle={2}>
                     {expensePie.map((d) => <Cell key={d.name} fill={d.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
+                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'USD')} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="hc-legend">
                 {expensePie.slice(0, 5).map((d) => (
-                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{fmtMoney(d.value, 'BRL')}</span></div>
+                  <div key={d.name} className="hc-legend-row"><span className="hc-dot" style={{ background: d.color }} />{d.name}<span className="hc-legend-val">{fmtMoney(d.value, 'USD')}</span></div>
                 ))}
               </div>
             </div>
@@ -160,9 +160,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
 
         {!hide('investments') && (<Widget key="investments" id="investments" title="Patrimônio por classe" to="/investimentos" hide={hide}>
           <div className="hc-stats">
-            <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth, 'BRL')}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue, 'BRL')}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl, 'BRL')} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue, 'USD')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl, 'USD')} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
           </div>
           {classPie.length > 0 ? (
             <div className="hc-pie">
@@ -171,7 +171,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                   <Pie data={classPie} dataKey="value" nameKey="name" innerRadius={46} outerRadius={70} paddingAngle={2}>
                     {classPie.map((d) => <Cell key={d.name} fill={d.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
+                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'USD')} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="hc-legend">

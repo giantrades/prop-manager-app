@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { TrendingUp, Landmark, Home, Wallet, Plus } from 'lucide-react';
 
 function emptyPos(accountId) {
-  return { accountId, symbol: '', qty: 1, avgPrice: 0, lastMarkPrice: '', currency: 'BRL', assetKind: 'equity' };
+  return { accountId, symbol: '', qty: 1, avgPrice: 0, lastMarkPrice: '', currency: 'USD', assetKind: 'equity' };
 }
 
 const ASSET_KINDS = [

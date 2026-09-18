@@ -8,7 +8,7 @@ import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
-import { fmtMoney, convertMoney, fmtDisplay, displaySymbol } from '@apps/ui/currency';
+import { fmtMoney } from '@apps/ui/currency';
 import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds, accountBalance } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -66,7 +66,9 @@ export default function AccountsDashboardPage() {
     // o ledger (derivado) é só fallback quando a plataforma nunca reportou a conta.
     const balOf = (a) => accountBalance(a, balances[a.id]);
     // Contas são tratadas como USD (padrão do app): a navbar converte para BRL multiplicando.
-    const acctValue = (a) => convertMoney(balOf(a), 'USD');
+    // Valor CRU em USD (sem converter no memo: a conversão é na formatação/render,
+    // senão o memo congela o valor e a navbar não multiplica ao trocar a moeda).
+    const acctValue = (a) => balOf(a);
     const capital = accounts.reduce((s, a) => s + acctValue(a), 0);
     const propBalance = accounts.filter((a) => a.kind === 'prop').reduce((s, a) => s + acctValue(a), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
@@ -140,9 +142,9 @@ export default function AccountsDashboardPage() {
       ) : (
         <>
           <div className="ad-cards">
-            <StatCard label="Balance total" value={fmtDisplay(stats.capital)} sub="soma das contas · plataforma quando disponível" color="#7c5cff" glow="rgba(124,92,255,0.15)" />
-            <StatCard label="Balance prop" value={fmtDisplay(stats.propBalance)} sub={`${stats.propCount} conta(s) prop`} color="#a78bfa" glow="rgba(167,139,250,0.15)" />
-            <StatCard label="Balance líquido" value={fmtDisplay(stats.liquidTotal)} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
+            <StatCard label="Balance total" value={fmtMoney(stats.capital, 'USD')} sub="soma das contas · plataforma quando disponível" color="#7c5cff" glow="rgba(124,92,255,0.15)" />
+            <StatCard label="Balance prop" value={fmtMoney(stats.propBalance, 'USD')} sub={`${stats.propCount} conta(s) prop`} color="#a78bfa" glow="rgba(167,139,250,0.15)" />
+            <StatCard label="Balance líquido" value={fmtMoney(stats.liquidTotal, 'USD')} sub="banco · carteira · cripto · dinheiro" color="#3b82f6" glow="rgba(59,130,246,0.15)" />
             <StatCard label="Payouts recebidos" value={fmtMoney(stats.netPayouts, 'USD')} sub={`líquido no período · ${stats.payoutsCount} payout(s)`} color="#10b981" glow="rgba(16,185,129,0.15)" />
             <StatCard label="Payout yield" value={`${(stats.payoutYield * 100).toFixed(2)}%`} sub="payouts ÷ balance prop" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
             <StatCard label="Contas" value={String(stats.total)} sub={`${stats.propCount} prop · ${Math.max(0, stats.total - stats.propCount)} outras`} color="#f59e0b" glow="rgba(245,158,11,0.15)" />
@@ -174,10 +176,9 @@ export default function AccountsDashboardPage() {
                       <span className="ac-matrix-name">{r.name}</span>
                       <span className="ac-matrix-kind">{KIND_META[r.kind]?.label ?? r.kind}</span>
                       <span className={`ac-matrix-status ${r.level === 'STOP' ? 'is-stop' : r.level === 'WARN' ? 'is-warn' : r.status !== '—' ? 'is-ok' : ''}`}>{r.status}</span>
-                      {/* `r.value` já está na moeda de EXIBIÇÃO (acctValue faz convertMoney):
-                          usar fmtDisplay evita converter de novo (antes, conta em BRL com
-                          exibição em USD era dividida pelo câmbio duas vezes). */}
-                      <span className="ac-matrix-num">{fmtDisplay(r.value)}</span>
+                      {/* `r.value` é o valor CRU em USD; `fmtMoney(..., 'USD')` converte na
+                          hora (multiplica quando a navbar está em BRL). */}
+                      <span className="ac-matrix-num">{fmtMoney(r.value, 'USD')}</span>
                       <span className="ac-matrix-num">{r.ddPct != null ? `${r.ddPct}%` : '—'}</span>
                       <span className="ac-matrix-num">{fmtMoney(r.payouts, 'USD')}</span>
                       <span className="ac-matrix-num">{r.trades}</span>
@@ -217,7 +218,7 @@ export default function AccountsDashboardPage() {
             <div className="dash-section" key="pie">
               {/* pieData já está na moeda de EXIBIÇÃO (convertido em acctValue): passar a
                   moeda de exibição como origem evita a dupla conversão (÷câmbio). */}
-              <AllocationPie title="Distribuição por tipo" data={stats.pieData} currency={displaySymbol()} emptyLabel="Sem contas com saldo." />
+              <AllocationPie title="Distribuição por tipo" data={stats.pieData} currency="USD" emptyLabel="Sem contas com saldo." />
             </div>
 
             <div className="dash-section" key="bykind">
@@ -236,7 +237,7 @@ export default function AccountsDashboardPage() {
                     <span className="ad-kind-name">{meta.label}</span>
                     <span className="ad-kind-count">{v.count}</span>
                     <span className="ad-kind-bar-wrap"><span className="ad-kind-bar" style={{ width: `${Math.round((v.total / maxKind) * 100)}%`, background: meta.color }} /></span>
-                    <span className="ad-kind-total">{fmtDisplay(v.total)}</span>
+                    <span className="ad-kind-total">{fmtMoney(v.total, 'USD')}</span>
                   </div>
                 );
               })}

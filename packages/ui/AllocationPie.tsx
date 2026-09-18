@@ -14,7 +14,7 @@ const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#f7931a', '#e74c3c
  * @param {number} [props.size]
  * @param {string} [props.emptyLabel]
  */
-export default function AllocationPie({ title = null, data = [], currency = 'R$', size = 168, emptyLabel = 'Sem dados.' }) {
+export default function AllocationPie({ title = null, data = [], currency = 'USD', size = 168, emptyLabel = 'Sem dados.' }) {
   const items = (data || []).filter((d) => d && d.value > 0);
   const total = items.reduce((s, d) => s + d.value, 0);
   if (items.length === 0) return <div className="ap-empty">{emptyLabel}</div>;

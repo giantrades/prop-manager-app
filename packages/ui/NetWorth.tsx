@@ -19,7 +19,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function NetWorth({ netWorth = null, snapshots = [], currency = 'R$', loading = false }) {
+export default function NetWorth({ netWorth = null, snapshots = [], currency = 'USD', loading = false }) {
   if (loading) {
     return (
       <div className="nw-root nw-loading" role="status" aria-live="polite">

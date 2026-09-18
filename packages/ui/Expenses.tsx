@@ -156,7 +156,7 @@ export default function Expenses({
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer,
-  currency = 'R$', loading = false,
+  currency = 'USD', loading = false,
 }) {
   const now = new Date();
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
@@ -331,7 +331,7 @@ export default function Expenses({
       if (parts >= 2 && onAddInstallments) {
         // D2 — parcelamento: N parcelas mensais (contas a pagar).
         onAddInstallments({
-          accountId: form.accountId, currency: 'BRL', totalAmount: amt, count: parts,
+          accountId: form.accountId, currency: 'USD', totalAmount: amt, count: parts,
           category: form.category, card: base.card, cardId: base.cardId, note: base.note,
           firstDate: base.dueDate ?? base.date,
         });
@@ -354,7 +354,7 @@ export default function Expenses({
     const amt = Number(transfer.amount);
     if (!(amt > 0) || !transfer.from || !transfer.to || transfer.from === transfer.to) return;
     onTransfer?.({
-      fromAccountId: transfer.from, toAccountId: transfer.to, amount: amt, currency: 'BRL',
+      fromAccountId: transfer.from, toAccountId: transfer.to, amount: amt, currency: 'USD',
       date: transfer.date ? new Date(transfer.date).toISOString() : undefined,
       note: transfer.note.trim() || undefined,
     });

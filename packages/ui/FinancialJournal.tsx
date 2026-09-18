@@ -25,7 +25,7 @@ const TYPE_META = {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function FinancialJournal({ events = [], onConfirm, onDelete, currency = 'R$', loading = false }) {
+export default function FinancialJournal({ events = [], onConfirm, onDelete, currency = 'USD', loading = false }) {
   if (loading) {
     return (
       <div className="fj-root fj-loading" role="status" aria-live="polite">

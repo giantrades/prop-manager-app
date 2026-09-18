@@ -50,7 +50,7 @@ function fmtPct(value) {
  * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
  * @param {boolean} [props.loading]
  */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'R$', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'USD', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
   const show = (k) => !only || only.includes(k);
   const [calYm, setCalYm] = React.useState(() => new Date().toISOString().slice(0, 7));
   const symbolById = React.useMemo(() => Object.fromEntries((positions || []).map((p) => [p.id, p.symbol])), [positions]);

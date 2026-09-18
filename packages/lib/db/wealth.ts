@@ -1085,7 +1085,7 @@ export class WealthService {
       this.ds.positions.list(),
       this.ds.payouts.list(),
     ]);
-    const fxRec = await getFxUSD(this.ds).catch(() => null);
+    // BASE USD: sem conversão interna (a exibição converte na navbar). fx = 1 (no-op).
     return computeNetWorth({
       accounts,
       transactions,
@@ -1093,7 +1093,7 @@ export class WealthService {
       payouts,
       markPriceMaxAgeDays: this.maxAge(),
       now: this.now(),
-      fxUSD: fxRec?.rate ?? null,
+      fxUSD: 1,
     });
   }
 

@@ -121,7 +121,7 @@ export function PortfolioPage() {
       f.ds.accounts.list(),
     ]);
     const fx = fxRec?.rate > 0 ? fxRec.rate : null;
-    const portfolio = await f.wealth.portfolio(fx != null ? { fxUSD: fx } : {});
+    const portfolio = await f.wealth.portfolio({ fxUSD: 1 }); // base USD: sem conversão interna
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
     return {
       portfolio, allocation, dca: computeDcaFromTransactions(txs), history, cdi,
@@ -162,8 +162,8 @@ export function PortfolioPage() {
         const q = map.get(normalizeSymbol(p.symbol));
         if (!q) continue;
         // A5/A6 — marca na moeda da posição; converte pela taxa quando difere (nunca inventa).
-        const posCur = p.currency ?? 'BRL';
-        const qCur = q.currency ?? 'BRL';
+        const posCur = p.currency ?? 'USD';
+        const qCur = q.currency ?? 'USD';
         let price = q.price;
         if (qCur !== posCur) {
           if (fx == null) {
@@ -551,7 +551,7 @@ function AssetSalesSection({ finance }) {
     await finance.money.recordTradeAsset(form.side, {
       accountId: form.accountId,
       amount: qty * price,
-      currency: 'BRL',
+      currency: 'USD',
       date: form.date ? new Date(form.date).toISOString() : undefined,
       asset: { symbol: form.symbol.trim().toUpperCase(), qty, price },
       note: `${form.side === 'sell' ? 'Venda' : 'Compra'} ${form.symbol.trim().toUpperCase()}`,
@@ -567,7 +567,7 @@ function AssetSalesSection({ finance }) {
     await finance.money.recordTaxReserve({
       accountId,
       amount: Number((sale.gain * 0.15).toFixed(2)),
-      currency: 'BRL',
+      currency: 'USD',
       note: `IR swing ${ym} ${sale.symbol}`,
     });
     load();
@@ -705,22 +705,22 @@ export function ForecastPage() {
       <div className="dash-cards">
         <div className="card accent3">
           <h3>Caixa hoje</h3>
-          <div className="stat">{fmtMoney(data?.cash ?? forecast?.today, 'BRL')}</div>
+          <div className="stat">{fmtMoney(data?.cash ?? forecast?.today, 'USD')}</div>
           <div className="muted">cash derivado</div>
         </div>
         <div className={`card ${net >= 0 ? 'accent1' : 'accent2'}`}>
           <h3>Fluxo mensal</h3>
-          <div className="stat">{fmtMoney(net, 'BRL')}</div>
+          <div className="stat">{fmtMoney(net, 'USD')}</div>
           <div className="muted">líquido/mês</div>
         </div>
         <div className="card accent4">
           <h3>Safe Available</h3>
-          <div className="stat">{fmtMoney(data?.safeAvailable, 'BRL')}</div>
+          <div className="stat">{fmtMoney(data?.safeAvailable, 'USD')}</div>
           <div className="muted">posso comprar isso?</div>
         </div>
         <div className="card accent5">
           <h3>Em 90 dias</h3>
-          <div className="stat">{fmtMoney(forecast?.d90, 'BRL')}</div>
+          <div className="stat">{fmtMoney(forecast?.d90, 'USD')}</div>
           <div className="muted">projeção</div>
         </div>
       </div>
@@ -831,11 +831,11 @@ export function ExpensesPage() {
     const f = financeRef.current;
     if (!f) return;
     if (input.kind === 'income') {
-      await f.money.recordIncome({ accountId: input.accountId, amount: input.amount, currency: 'BRL', date: input.date, note: input.note });
+      await f.money.recordIncome({ accountId: input.accountId, amount: input.amount, currency: 'USD', date: input.date, note: input.note });
     } else {
       // #1 — repassa TODOS os campos do form (cartão/contas a pagar/parcela/anexos/tags).
       await f.money.recordExpense({
-        accountId: input.accountId, amount: input.amount, currency: 'BRL',
+        accountId: input.accountId, amount: input.amount, currency: 'USD',
         category: input.category, date: input.date, note: input.note, recurrence: input.recurrence,
         attachments: input.attachments, paid: input.paid, dueDate: input.dueDate,
         card: input.card, cardId: input.cardId, tags: input.tags, installments: input.installments,
@@ -913,12 +913,12 @@ export function ExpensesPage() {
     for (const en of entries) {
       if (en.kind === 'income') {
         await f.money.recordIncome({
-          accountId, amount: Math.abs(en.amount), currency: 'BRL',
+          accountId, amount: Math.abs(en.amount), currency: 'USD',
           date: en.date, note: en.description,
         });
       } else {
         await f.money.recordExpense({
-          accountId, amount: Math.abs(en.amount), currency: 'BRL',
+          accountId, amount: Math.abs(en.amount), currency: 'USD',
           category: en.categoryId ?? undefined, date: en.date, note: en.description,
         });
       }

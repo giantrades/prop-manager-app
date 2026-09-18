@@ -29,7 +29,7 @@ export default function CardsManager() {
     await finance.ds.cards.put({
       ...form,
       id,
-      currency: form.currency || 'BRL',
+      currency: 'USD',
       creditLimit: Number(form.creditLimit) || 0,
       closingDay: form.closingDay ? Number(form.closingDay) : undefined,
       dueDay: form.dueDay ? Number(form.dueDay) : undefined,
@@ -80,7 +80,7 @@ export default function CardsManager() {
           <button className="cmd-refresh" onClick={() => setForm(null)} aria-label="Cancelar"><X size={13} /></button>
         </div>
       ) : (
-        <button className="cmd-refresh" onClick={() => setForm({ name: '', currency: 'BRL', creditLimit: 0 })}><Plus size={13} /> Novo cartão</button>
+        <button className="cmd-refresh" onClick={() => setForm({ name: '', currency: 'USD', creditLimit: 0 })}><Plus size={13} /> Novo cartão</button>
       )}
     </div>
   );

@@ -5,7 +5,7 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/00-DOMAIN_MODEL.md + DOCS/04_STAGE3_TRADING_OS.
 // Ver DOCS/11_PAGE_MAP.md.
 
-import { fmtMoney, convertMoney, fmtDisplay } from './currency';
+import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
@@ -116,12 +116,12 @@ export default function Accounts({
     const prop = accounts.filter((a) => a.kind === 'prop');
     // BALANCE = plataforma (bridge) quando existe; ledger como fallback (regra única).
     const balOf = (a) => accountBalance(a, balances[a.id]);
-    const balanceTotal = accounts.reduce((s, a) => s + convertMoney(balOf(a), 'USD'), 0);
-    const propBalance = prop.reduce((s, a) => s + convertMoney(balOf(a), 'USD'), 0);
+    const balanceTotal = accounts.reduce((s, a) => s + balOf(a), 0);
+    const propBalance = prop.reduce((s, a) => s + balOf(a), 0);
     let liquidTotal = 0;
     for (const a of accounts) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
-      liquidTotal += convertMoney(balOf(a), 'USD');
+      liquidTotal += balOf(a);
     }
     const activeProp = prop.filter((a) => isActiveProp(props[a.id]?.phase));
     return { total: accounts.length, propCount: prop.length, balanceTotal, propBalance, liquidTotal, activeProp: activeProp.length };
@@ -254,9 +254,9 @@ export default function Accounts({
       {/* Resumo */}
       <div className="ac3-summary">
         <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtDisplay(summary.balanceTotal)}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtMoney(summary.balanceTotal, 'USD')}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Balance líquido</span>
-          <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtDisplay(summary.liquidTotal)}</span>
+          <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtMoney(summary.liquidTotal, 'USD')}</span>
           <span className="ac3-sum-sub">banco · carteira · cash · cripto</span>
         </div>
         <div className="ac3-sum-card ac3-sum-add">

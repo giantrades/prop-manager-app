@@ -12,7 +12,7 @@ import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { useEntityDrawer } from '@apps/ui/EntityDrawer';
-import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
+import { fmtMoney } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown, Briefcase,
   GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Activity,
@@ -77,7 +77,7 @@ export default function GastosDashboardPage() {
     let balanceTotal = 0;
     for (const w of (data.wallets ?? [])) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(w.account.kind)) continue;
-      balanceTotal += convertMoney(w.balance ?? 0, w.currency);
+      balanceTotal += w.balance ?? 0; // cru (USD); conversão só na formatação
     }
     // Cartões de crédito: fatura no período + fatura ABERTA (por fechamento) + uso do limite.
     const cardById = new Map((data.cards ?? []).map((c) => [c.id, c]));
@@ -177,7 +177,7 @@ export default function GastosDashboardPage() {
     subtitle: `${meta?.name ?? 'Lançamento'}${t.paid === false ? ' · pendente' : ''}`,
     href: '/expenses',
     rows: [
-      { k: 'Valor', v: fmtMoney(t.amount, 'R$'), color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' },
+      { k: 'Valor', v: fmtMoney(t.amount, 'USD'), color: t.amount >= 0 ? 'var(--green)' : 'var(--red)' },
       { k: 'Data', v: String(t.date || '').slice(0, 10) || '—' },
       { k: 'Conta', v: (data?.wallets ?? []).find((w) => w.account.id === t.accountId)?.account.name ?? '—' },
       ...(t.card ? [{ k: 'Cartão', v: t.card }] : []),
@@ -208,27 +208,27 @@ export default function GastosDashboardPage() {
           {/* Saldo em contas (topo, estilo Mobills) */}
           <div className="gd-balance">
             <span className="gd-label">Saldo em contas</span>
-            <span className={`gd-balance-value ${view.balanceTotal >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtDisplay(view.balanceTotal)}</span>
+            <span className={`gd-balance-value ${view.balanceTotal >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(view.balanceTotal, 'USD')}</span>
             <span className="gd-sub">soma das carteiras/contas (na moeda do app)</span>
           </div>
 
           {/* KPIs */}
           <div className="gd-cards">
-            <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'R$')}</span><span className="gd-sub">{view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span></div>
-            <div className="gd-card gd-out"><span className="gd-ico-badge gd-neg"><TrendingDown size={15} /></span><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'R$')}</span><span className="gd-sub">{view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span></div>
-            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-ico-badge"><Wallet size={15} /></span><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'R$')}</span><span className="gd-sub">entrou − gastou</span></div>
-            <div className="gd-card gd-warn"><span className="gd-ico-badge gd-warn-t"><Landmark size={15} /></span><span className="gd-label">A pagar</span><span className="gd-value">{fmtMoney(view.pending.payable, 'R$')}</span><span className="gd-sub">{view.pending.count} título(s){view.pending.overdue ? ` · ${view.pending.overdue} atrasado(s)` : ''}</span></div>
+            <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'USD')}</span><span className="gd-sub">{view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span></div>
+            <div className="gd-card gd-out"><span className="gd-ico-badge gd-neg"><TrendingDown size={15} /></span><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'USD')}</span><span className="gd-sub">{view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span></div>
+            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-ico-badge"><Wallet size={15} /></span><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'USD')}</span><span className="gd-sub">entrou − gastou</span></div>
+            <div className="gd-card gd-warn"><span className="gd-ico-badge gd-warn-t"><Landmark size={15} /></span><span className="gd-label">A pagar</span><span className="gd-value">{fmtMoney(view.pending.payable, 'USD')}</span><span className="gd-sub">{view.pending.count} título(s){view.pending.overdue ? ` · ${view.pending.overdue} atrasado(s)` : ''}</span></div>
             <div className={`gd-card ${view.budget > 0 && view.spentBudget > view.budget ? 'gd-out' : 'gd-budget'}`}>
               <span className="gd-ico-badge"><PiggyBank size={15} /></span>
               <span className="gd-label">Orçamento</span>
               <span className="gd-value">{view.budget > 0 ? `${Math.round((view.spentBudget / view.budget) * 100)}%` : '—'}</span>
-              <span className="gd-sub">{view.budget > 0 ? `${fmtMoney(view.spentBudget, 'R$')} / ${fmtMoney(view.budget, 'R$')}` : 'sem metas'}</span>
+              <span className="gd-sub">{view.budget > 0 ? `${fmtMoney(view.spentBudget, 'USD')} / ${fmtMoney(view.budget, 'USD')}` : 'sem metas'}</span>
             </div>
             <div className="gd-card">
               <span className="gd-ico-badge"><Activity size={15} /></span>
               <span className="gd-label">{view.worstRise ? 'Maior alta vs mês passado' : 'Maior categoria'}</span>
               <span className="gd-value gd-sm">{view.worstRise ? `${catName(view.worstRise.categoryId)} ▲${view.worstRise.deltaPct}%` : (view.groups[0] ? catName(view.groups[0].categoryId) : '—')}</span>
-              <span className="gd-sub">{view.worstRise ? 'subiu vs mês passado' : (view.groups[0] ? fmtMoney(view.groups[0].total, 'R$') : '')}</span>
+              <span className="gd-sub">{view.worstRise ? 'subiu vs mês passado' : (view.groups[0] ? fmtMoney(view.groups[0].total, 'USD') : '')}</span>
             </div>
           </div>
 
@@ -248,7 +248,7 @@ export default function GastosDashboardPage() {
                       >
                         {donutShown.map((d) => <Cell key={d.id} fill={d.color} cursor="pointer" opacity={focusCat && focusCat !== d.id ? 0.35 : 1} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'R$')} />
+                      <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="gd-legend">
@@ -260,7 +260,7 @@ export default function GastosDashboardPage() {
                           <CatIcon name={catMeta(d.id).icon} color={catMeta(d.id).color} />
                           <span className="gd-legend-name">{d.name}</span>
                           <span className="gd-legend-pct">{Math.round((d.value / total) * 100)}%</span>
-                          <span className="gd-legend-val">{fmtMoney(d.value, 'R$')}</span>
+                          <span className="gd-legend-val">{fmtMoney(d.value, 'USD')}</span>
                         </button>
                       );
                     })}
@@ -286,7 +286,7 @@ export default function GastosDashboardPage() {
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                   <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                   <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={52} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'R$')} />
+                  <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area type="monotone" dataKey="Entradas" stroke="#2ecc71" fill="url(#gd-in)" strokeWidth={2} />
                   <Area type="monotone" dataKey="Gastos" stroke="#e74c3c" fill="url(#gd-out)" strokeWidth={2} />
@@ -324,7 +324,7 @@ export default function GastosDashboardPage() {
                   <div key={b.categoryId} className="gd-kind-row">
                     <span className="gd-row-ico"><CatIcon name={catMeta(b.categoryId).icon} color={catMeta(b.categoryId).color} /></span>
                     <span className="gd-row-name">{catName(b.categoryId)}</span>
-                    <span className="gd-row-sub">{fmtMoney(b.spent, 'R$')} / {fmtMoney(b.budget, 'R$')}</span>
+                    <span className="gd-row-sub">{fmtMoney(b.spent, 'USD')} / {fmtMoney(b.budget, 'USD')}</span>
                     <span className="gd-kind-bar-wrap"><span className={`gd-kind-bar ${b.over ? 'gd-bar-over' : 'gd-bar-ok'}`} style={{ width: `${Math.min(100, Math.round((b.pct || 0) * 100))}%` }} /></span>
                     <span className={`gd-row-val ${b.over ? 'gd-neg' : ''}`}>{b.budget > 0 ? `${Math.round((b.pct || 0) * 100)}%` : '—'}</span>
                   </div>
@@ -342,7 +342,7 @@ export default function GastosDashboardPage() {
                     <CartesianGrid stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
                     <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={52} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
-                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'R$')} />
+                    <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {view.topCats.map((cid) => (
                       <Bar key={cid} dataKey={cid} stackId="a" name={catName(cid)} fill={COLORS[catMeta(cid).color] || COLORS.gray} />
@@ -361,7 +361,7 @@ export default function GastosDashboardPage() {
                     <CatIcon name={catMeta(categoryOf(b.tx, data.categories) ?? 'outros').icon} color={catMeta(categoryOf(b.tx, data.categories) ?? 'outros').color} />
                     <span className="gd-row-name">{b.tx.note || catName(categoryOf(b.tx, data.categories) ?? 'outros')}</span>
                     <span className="gd-row-sub">vence {b.dueDate || b.tx.date.slice(0, 10)}{b.overdue ? ' · atrasado' : ''}</span>
-                    <span className={`gd-row-val ${b.tx.kind === 'expense' ? 'gd-neg' : 'gd-pos'}`}>{fmtMoney(Math.abs(b.tx.amount), 'R$')}</span>
+                    <span className={`gd-row-val ${b.tx.kind === 'expense' ? 'gd-neg' : 'gd-pos'}`}>{fmtMoney(Math.abs(b.tx.amount), 'USD')}</span>
                   </div>
                 ))}
               </div>
@@ -378,7 +378,7 @@ export default function GastosDashboardPage() {
                       <span className="gd-row-name">{m.name}</span>
                       <span className="gd-row-sub">{m.count}x</span>
                       <span className="gd-kind-bar-wrap"><span className="gd-kind-bar" style={{ width: `${Math.round((m.total / max) * 100)}%` }} /></span>
-                      <span className="gd-row-val gd-neg">{fmtMoney(m.total, 'R$')}</span>
+                      <span className="gd-row-val gd-neg">{fmtMoney(m.total, 'USD')}</span>
                     </div>
                   ));
                 })()}
@@ -389,17 +389,17 @@ export default function GastosDashboardPage() {
               <div className="dash-section" key="tax">
                 <div className="dash-title">
                   <span><Landmark size={14} /> Impostos</span>
-                  <span className="gd-row-sub">desde o início {fmtMoney(view.taxAllTime, 'R$')}</span>
+                  <span className="gd-row-sub">desde o início {fmtMoney(view.taxAllTime, 'USD')}</span>
                 </div>
                 <div className="gd-row">
                   <span className="gd-row-ico"><Receipt size={14} /></span>
                   <span className="gd-row-name">Total no período</span>
-                  <span className="gd-row-val gd-neg">{fmtMoney(view.taxTotal, 'R$')}</span>
+                  <span className="gd-row-val gd-neg">{fmtMoney(view.taxTotal, 'USD')}</span>
                 </div>
                 <div className="gd-row">
                   <span className="gd-row-ico"><PiggyBank size={14} /></span>
                   <span className="gd-row-name">A pagar (reservar)</span>
-                  <span className="gd-row-val gd-warn-t">{fmtMoney(view.taxPending, 'R$')}</span>
+                  <span className="gd-row-val gd-warn-t">{fmtMoney(view.taxPending, 'USD')}</span>
                 </div>
                 {(() => {
                   const max = Math.max(1, ...view.taxGroups.map((g) => g.total));
@@ -409,7 +409,7 @@ export default function GastosDashboardPage() {
                       <span className="gd-row-name">{catName(g.categoryId)}</span>
                       <span className="gd-row-sub">{g.count}x</span>
                       <span className="gd-kind-bar-wrap"><span className="gd-kind-bar" style={{ width: `${Math.round((g.total / max) * 100)}%` }} /></span>
-                      <span className="gd-row-val gd-neg">{fmtMoney(g.total, 'R$')}</span>
+                      <span className="gd-row-val gd-neg">{fmtMoney(g.total, 'USD')}</span>
                     </div>
                   ));
                 })()}
@@ -427,7 +427,7 @@ export default function GastosDashboardPage() {
                     <CatIcon name={meta.icon} color={meta.color} />
                     <span className="gd-row-name">{t.note || meta.name}</span>
                     <span className="gd-row-sub">{(t.date || '').slice(0, 10)}{t.paid === false ? ' · pendente' : ''}</span>
-                    <span className={`gd-row-val ${t.amount >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(t.amount, 'R$')}</span>
+                    <span className={`gd-row-val ${t.amount >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(t.amount, 'USD')}</span>
                   </button>
                 );
               })}
@@ -456,9 +456,9 @@ export default function GastosDashboardPage() {
                         )}
                       </div>
                       <div className="gd-card-amt">
-                        <span className="gd-row-val gd-neg">{fmtMoney(c.total, 'R$')}</span>
-                        {c.invoice > 0 && <span className="gd-card-open">fatura aberta {fmtMoney(c.invoice, 'R$')}{limit > 0 ? ` · ${Math.round(usedPct)}% do limite` : ''}</span>}
-                        {c.invoice === 0 && c.open > 0 && <span className="gd-card-open">em aberto {fmtMoney(c.open, 'R$')}</span>}
+                        <span className="gd-row-val gd-neg">{fmtMoney(c.total, 'USD')}</span>
+                        {c.invoice > 0 && <span className="gd-card-open">fatura aberta {fmtMoney(c.invoice, 'USD')}{limit > 0 ? ` · ${Math.round(usedPct)}% do limite` : ''}</span>}
+                        {c.invoice === 0 && c.open > 0 && <span className="gd-card-open">em aberto {fmtMoney(c.open, 'USD')}</span>}
                       </div>
                     </div>
                   );

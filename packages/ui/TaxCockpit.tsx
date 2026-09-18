@@ -5,7 +5,7 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md (§ Fiscal).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'BRL') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v, cur = 'USD') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
@@ -23,7 +23,7 @@ function fmtPct(v) {
  * @param {()=>void} [props.onExportCSV]
  * @param {boolean} [props.loading]
  */
-export default function TaxCockpit({ cockpit, currency = 'BRL', yearMonth, onExportCSV, loading = false }) {
+export default function TaxCockpit({ cockpit, currency = 'USD', yearMonth, onExportCSV, loading = false }) {
   if (loading || !cockpit) {
     return (
       <div className="tx-root tx-loading" role="status" aria-live="polite">

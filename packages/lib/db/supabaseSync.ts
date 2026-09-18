@@ -29,8 +29,17 @@ const TABLE_BY_ENTITY: Partial<Record<StoreName, string>> = {
   meta: 'app_meta',
 };
 
-/** Tabelas com PK composta `(user_id, id)` — upsert precisa do conflito correspondente. */
-const COMPOSITE_PK_TABLES = new Set(['app_meta', 'cards']);
+/** Coluna de conflito do upsert por tabela. Default: `id`. */
+const CONFLICT_BY_TABLE: Record<string, string> = {
+  app_meta: 'user_id,id',
+  cards: 'user_id,id',
+  // prop_extensions NÃO tem `id`: a PK é `account_id` (ver migration 008/007).
+  prop_extensions: 'account_id',
+};
+
+function onConflictFor(table: string): string {
+  return CONFLICT_BY_TABLE[table] ?? 'id';
+}
 
 /**
  * Sync de `meta`: por PADRÃO sincroniza tudo (categorias, orçamento, regras, marcos,
@@ -62,6 +71,10 @@ const ENTITY_BY_STORE: Record<string, string> = {
   goal: 'goals',
   position: 'positions',
   card: 'cards',
+  prop_extension: 'prop_extensions',
+  tax_record: 'tax_records',
+  snapshot_networth: 'snapshots_networth',
+  firm_cost: 'firm_costs',
   meta: 'meta',
 };
 
@@ -74,6 +87,10 @@ const STORE_ENTITY: Partial<Record<StoreName, string>> = {
   goals: 'goal',
   positions: 'position',
   cards: 'card',
+  prop_extensions: 'prop_extension',
+  tax_records: 'tax_record',
+  snapshots_networth: 'snapshot_networth',
+  firm_costs: 'firm_cost',
 };
 
 // ---------------------------------------------------------------------------
