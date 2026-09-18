@@ -11,7 +11,8 @@ import { prefetchPage } from './routeLoaders';
 import { useLivePositionCount } from '@apps/state';
 
 // Rotas que "possuem" posições abertas — recebem a bolinha verde quando há posição viva.
-const LIVE_ROUTES = ['/live-positions', '/journal'];
+// (Só a de Positions & Orders; a sidebar marca o módulo Trading.)
+const LIVE_ROUTES = ['/live-positions'];
 
 export default function ModuleTabs({ module: moduleId }) {
   const mod = MODULES.find((m) => m.id === moduleId);
