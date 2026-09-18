@@ -28,6 +28,30 @@ function readLocalSnap() {
   }
 }
 
+/**
+ * Store compartilhado do nº de posições abertas. Um único poller (usePlatform) publica
+ * aqui; qualquer componente (abas, sidebar) lê SEM criar outro polling.
+ */
+let _liveCount = 0;
+const _liveCountListeners = new Set();
+function publishLiveCount(n) {
+  _liveCount = n;
+  for (const l of _liveCountListeners) {
+    try { l(n); } catch { /* noop */ }
+  }
+}
+
+/** Nº de posições abertas (reativo, sem abrir conexão/polling próprios). */
+export function useLivePositionCount() {
+  const [n, setN] = useState(_liveCount);
+  useEffect(() => {
+    _liveCountListeners.add(setN);
+    setN(_liveCount);
+    return () => { _liveCountListeners.delete(setN); };
+  }, []);
+  return n;
+}
+
 export function bridgePrefs() {
   return {
     bridgeUrl:
@@ -109,6 +133,7 @@ export function usePlatform() {
       ]);
       setLivePositions(positions);
       setLiveCount(positions.length);
+          publishLiveCount(positions.length);
       setPositionsAt(Date.now());
       persistSnapshot(positions);
     } catch {
@@ -138,6 +163,7 @@ export function usePlatform() {
         if (Array.isArray(d.positions)) {
           setLivePositions(d.positions);
           setLiveCount(d.positions.length);
+          publishLiveCount(d.positions.length);
           setPositionsAt(Date.now());
           persistSnapshot(d.positions);
         }
@@ -175,6 +201,7 @@ export function usePlatform() {
         .then((positions) => {
           setLivePositions(positions);
           setLiveCount(positions.length);
+          publishLiveCount(positions.length);
           setPositionsAt(Date.now());
           persistSnapshot(positions);
         })

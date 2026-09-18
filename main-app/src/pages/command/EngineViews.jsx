@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useFinance, usePeriod, useCurrency } from '@apps/state';
+import { useFinance, usePeriod } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { fmtMoney } from '@apps/ui/currency';
 import { nowIso } from '@apps/lib/db';
@@ -106,10 +106,8 @@ const PORTFOLIO_HISTORY_GAP_MS = 12 * 60 * 60 * 1000;
 const PRICE_REFRESH_MS = 5 * 60 * 1000;
 
 export function PortfolioPage() {
-  // Taxa única: o mesmo valor alimenta o motor (meta fx:USDBRL) e a exibição (navbar).
-  const { setRate } = useCurrency();
   // A5 — taxa USD→BRL (manual, com data). Sem taxa, posições USD ficam fora dos totais.
-  const [fxInput, setFxInput] = useState('');
+
   const { loading, data, finance, reload } = useEngineData(async (f) => {
     const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends, dividendHistory } = await import('@apps/lib/db');
     const [fxRec, allocation, txs, histRec, cdi, announced, positions, accounts] = await Promise.all([
@@ -359,17 +357,7 @@ export function PortfolioPage() {
     });
   }, []);
 
-  const handleSaveFx = useCallback(async () => {
-    const f = financeRef.current;
-    const rate = Number(String(fxInput).replace(',', '.'));
-    if (!f || !(rate > 0)) return;
-    const { saveFxUSD } = await import('@apps/lib/db');
-    await saveFxUSD(f.ds, rate);
-    // TAXA ÚNICA: a mesma taxa usada pelo motor passa a valer na exibição (navbar).
-    try { localStorage.setItem('usdBrlRate', String(rate)); } catch { /* noop */ }
-    setRate(rate);
-    setFxInput('');
-  }, [fxInput, setRate]);
+
 
   // Posições — CRUD (único writer DataService) + marcação manual + remoção.
   const handlePositionSave = useCallback(async (position) => {
@@ -477,19 +465,14 @@ export function PortfolioPage() {
 
       {ptab === 'config' && (
         <div className="pf-config">
+          {/* Câmbio USD→BRL agora é ÚNICO: definido em Settings → Moeda (e mostrado na
+              Home). Aqui só informamos o valor em uso, sem campo duplicado. */}
           <div className="cfg-card">
             <div className="cfg-title">Câmbio USD → BRL</div>
-            <p className="cfg-hint">Usado para trazer posições em dólar para os totais (ações US, cripto).</p>
-            <div className="cfg-row">
-              <span>Atual: <b>{data?.fx != null ? data.fx : '—'}</b>{data?.fxAt ? ` (${String(data.fxAt).slice(0, 10)})` : ''}</span>
-              <input
-                className="cmd-select" style={{ maxWidth: 120 }}
-                type="number" min="0" step="0.0001" value={fxInput}
-                onChange={(e) => setFxInput(e.target.value)}
-                placeholder="ex.: 5.42" aria-label="Nova taxa USD para BRL"
-              />
-              <button className="cmd-refresh" onClick={handleSaveFx} disabled={!(Number(fxInput) > 0)}>Salvar taxa</button>
-            </div>
+            <p className="cfg-hint">
+              Definido em <b>Settings → Moeda</b> (é o mesmo usado na navbar, na Home e nos cálculos).
+              {data?.fx != null ? ` Em uso: ${data.fx}` : ''}
+            </p>
           </div>
 
           <div className="cfg-card">

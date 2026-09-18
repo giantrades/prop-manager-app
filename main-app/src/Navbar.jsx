@@ -324,6 +324,10 @@ export default function Navbar({ isPinned, onTogglePin }) {
                   <ModuleIcon size={18} strokeWidth={1.75} />
                 </span>
                 <span className="sb-link-label">{mod.label}</span>
+                {/* Bolinha verde: há posição(ões) aberta(s) na plataforma. */}
+                {mod.id === 'trading' && liveCount > 0 && (
+                  <span className="sb-live-dot" title={`${liveCount} posição(ões) aberta(s)`} aria-label={`${liveCount} posição(ões) aberta(s)`} />
+                )}
               </button>
             );
           })}

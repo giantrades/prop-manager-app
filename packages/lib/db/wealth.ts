@@ -376,7 +376,8 @@ export async function getFxUSD(ds: DataService): Promise<FxRate | null> {
     return { rate: v.rate, at: typeof v.at === 'string' ? v.at : '' };
   }
   const fb = displayRateFallback();
-  return fb != null ? { rate: fb, at: '' } : null;
+  // `at` = agora: a taxa da navbar é a vigente, então não deve aparecer como "velha".
+  return fb != null ? { rate: fb, at: nowIso() } : null;
 }
 
 export async function saveFxUSD(ds: DataService, rate: number): Promise<FxRate> {

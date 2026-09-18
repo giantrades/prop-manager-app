@@ -8,9 +8,14 @@ import React, { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MODULES } from './navConfig';
 import { prefetchPage } from './routeLoaders';
+import { useLivePositionCount } from '@apps/state';
+
+// Rotas que "possuem" posições abertas — recebem a bolinha verde quando há posição viva.
+const LIVE_ROUTES = ['/live-positions', '/journal'];
 
 export default function ModuleTabs({ module: moduleId }) {
   const mod = MODULES.find((m) => m.id === moduleId);
+  const liveCount = useLivePositionCount();
   // Prefetch dos chunks das abas ao montar — trocar de aba fica instantâneo.
   useEffect(() => {
     if (!mod) return;
@@ -29,6 +34,9 @@ export default function ModuleTabs({ module: moduleId }) {
           onFocus={() => prefetchPage(to)}
         >
           {label}
+          {liveCount > 0 && LIVE_ROUTES.includes(to) && (
+            <span className="ws-tab-dot" title={`${liveCount} posição(ões) aberta(s)`} aria-label={`${liveCount} posição(ões) aberta(s)`} />
+          )}
         </NavLink>
       ))}
     </nav>

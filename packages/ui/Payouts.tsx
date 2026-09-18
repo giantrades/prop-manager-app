@@ -14,10 +14,45 @@ const METHODS = ['Wise', 'Payoneer', 'Bank', 'Crypto', 'Other'];
 const STATUSES = ['Pending', 'Approved', 'Paid'];
 const DEFAULT_FIRM_COLOR = '#7c5cff';
 
-const statusClass = (s) => (s === 'Paid' ? 'py-st-paid' : s === 'Approved' ? 'py-st-approved' : 'py-st-pending');
+interface PayoutRow {
+  id: string;
+  accountIds?: string[];
+  gross: number;
+  fee: number;
+  net: number;
+  splitByAccount?: Record<string, { gross: number; fee: number; net: number }>;
+  status: string;
+  method: string;
+  date?: string;
+  updatedAt?: string;
+}
+interface AccountRow { id: string; name: string; firmId?: string; kind?: string; currency?: string }
+interface FirmRow { id: string; name: string; color: string; icon?: string; logo?: string }
 
-function emptyForm() {
-  return { gross: '', feePct: 0.2, method: 'Wise', status: 'Pending', date: new Date().toISOString().slice(0, 10), weights: {}, attachments: {} };
+interface PayoutsProps {
+  payouts?: PayoutRow[];
+  accounts?: AccountRow[];
+  firms?: FirmRow[];
+  onCreate?: (payout: Record<string, unknown>) => Promise<void> | void;
+  onDelete?: (payoutId: string) => Promise<void> | void;
+  loading?: boolean;
+}
+
+const statusClass = (s: string) => (s === 'Paid' ? 'py-st-paid' : s === 'Approved' ? 'py-st-approved' : 'py-st-pending');
+
+interface PayoutForm {
+  gross: string;
+  feePct: number;
+  method: string;
+  status: string;
+  date: string;
+  weights: Record<string, number>;
+  attachments: Record<string, unknown>;
+}
+
+function emptyForm(): PayoutForm {
+  // Default de fee: 0.8 (80%) — conforme pedido; ajuste no form se o seu for outro.
+  return { gross: '', feePct: 0.8, method: 'Wise', status: 'Pending', date: new Date().toISOString().slice(0, 10), weights: {}, attachments: {} };
 }
 
 /**
@@ -29,9 +64,9 @@ function emptyForm() {
  * @param {(payoutId:string)=>Promise<void>|void} [props.onDelete]
  * @param {boolean} [props.loading]
  */
-export default function Payouts({ payouts = [], accounts = [], firms = [], onCreate, onDelete, loading = false }) {
+export default function Payouts({ payouts = [], accounts = [], firms = [], onCreate, onDelete, loading = false }: PayoutsProps) {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm());
+  const [form, setForm] = useState<PayoutForm>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -90,10 +125,11 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
       return `${p.method} ${p.status} ${p.gross} ${p.net} ${names}`.toLowerCase().includes(q);
     });
     list = list.slice().sort((a, b) => {
-      let av = a[sortKey]; let bv = b[sortKey];
+      let av: unknown = (a as unknown as Record<string, unknown>)[sortKey];
+      let bv: unknown = (b as unknown as Record<string, unknown>)[sortKey];
       if (sortKey === 'date') { av = a.date || a.updatedAt || ''; bv = b.date || b.updatedAt || ''; return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av)); }
       av = Number(av) || 0; bv = Number(bv) || 0;
-      return sortAsc ? av - bv : bv - av;
+      return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
     return list;
   }, [payouts, query, statusFilter, sortKey, sortAsc, accountById]);
@@ -106,12 +142,12 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
     return computePayoutSplitByWeight(Number(form.gross), Number(form.feePct), weightMap);
   }, [form.gross, form.feePct, form.weights, selectedAccounts]);
 
-  const toggleAccount = (id) => setForm((f) => {
+  const toggleAccount = (id: string) => setForm((f) => {
     const next = { ...f.weights };
     if (next[id]) delete next[id]; else next[id] = 1;
     return { ...f, weights: next };
   });
-  const setWeight = (id, v) => setForm((f) => ({ ...f, weights: { ...f.weights, [id]: Number(v) || 0 } }));
+  const setWeight = (id: string, v: string | number) => setForm((f) => ({ ...f, weights: { ...f.weights, [id]: Number(v) || 0 } }));
 
   const handleCreate = async () => {
     if (!form.gross || Number(form.gross) <= 0) return;
@@ -122,7 +158,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
         ? Object.fromEntries(selectedAccounts.map((a) => [a.id, form.weights[a.id]]))
         : { [accountIds[0]]: 1 };
       const splitByAccount = computePayoutSplitByWeight(Number(form.gross), Number(form.feePct), weightMap);
-      await onCreate({
+      await onCreate?.({
         id: `payout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         accountIds,
         gross: Number(form.gross),
@@ -280,7 +316,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                 <label className="py-field"><span className="py-label">Gross ($)</span>
                   <input className="py-input" type="number" step="0.01" value={form.gross} onChange={(e) => setForm((f) => ({ ...f, gross: e.target.value }))} placeholder="0.00" />
                 </label>
-                <label className="py-field"><span className="py-label">Fee (decimal, ex. 0.2)</span>
+                <label className="py-field"><span className="py-label">Fee (decimal, ex. 0.8)</span>
                   <input className="py-input" type="number" step="0.01" value={form.feePct} onChange={(e) => setForm((f) => ({ ...f, feePct: Number(e.target.value) }))} />
                 </label>
                 <label className="py-field"><span className="py-label">Método</span>

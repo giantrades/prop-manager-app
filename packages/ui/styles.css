@@ -4891,7 +4891,12 @@ select.payouts-input {
   padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 700;
   color: var(--muted); background: transparent; border: 1px solid transparent;
 }
+.cmd-page .ws-tabs .ws-tab { display: inline-flex; align-items: center; gap: 6px; }
 .cmd-page .ws-tabs .ws-tab:hover { background: var(--soft); color: var(--text); }
+/* Bolinha verde nas abas que têm posições abertas (live-positions/journal). */
+.ws-tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green, #2ecc71); box-shadow: 0 0 6px rgba(46,204,113,0.85); flex-shrink: 0; }
+/* Bolinha verde na sidebar (módulo Trading) quando há posições abertas. */
+.sb-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green, #2ecc71); box-shadow: 0 0 6px rgba(46,204,113,0.85); margin-left: auto; flex-shrink: 0; }
 .cmd-page .ws-tabs .ws-tab.active {
   background: linear-gradient(180deg, #1e2740 0%, #161b2b 100%);
   border-color: #2a3b6a; color: var(--text);
