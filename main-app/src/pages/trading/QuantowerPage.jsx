@@ -4,9 +4,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
+import { fmtMoney } from '@apps/ui/currency';
 import { useFinance, usePlatform } from '@apps/state';
 import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
-import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade } from '@apps/lib/db';
+import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade, tradeNetPnl } from '@apps/lib/db';
 
 export default function QuantowerPage() {
   const finance = useFinance();
@@ -23,6 +24,7 @@ export default function QuantowerPage() {
   const [copyProps, setCopyProps] = useState({});
   const [copyForm, setCopyForm] = useState({ masterId: '', symbol: '', side: 'buy', qty: '' });
   const [copyResult, setCopyResult] = useState(null);
+  const [diag, setDiag] = useState(null);
   const [livePositions, setLivePositions] = useState([]);
   const [lastRun, setLastRun] = useState(null);
   const [autoSync, setAutoSync] = useState(() => {
@@ -124,6 +126,38 @@ export default function QuantowerPage() {
       setBusy(false);
     }
   }, [adapter]);
+
+  // Diagnóstico: o que a PONTE manda (cru) x o que o APP tem gravado, na mesma janela.
+  // Foi criado para responder "por que o total do app ≠ total da plataforma" sem chute.
+  const handleDiag = useCallback(async () => {
+    if (!finance) return;
+    setBusy(true);
+    setError(null);
+    try {
+      savePrefs();
+      const a = adapter();
+      const from = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const raw = await a.getTradesRaw(from, undefined).catch(() => []);
+      const stored = (await finance.ds.trades.list())
+        .filter((t) => (t.exitDatetime || t.entryDatetime) >= from);
+      const sum = (arr, f) => Number(arr.reduce((s, x) => s + (Number(f(x)) || 0), 0).toFixed(2));
+      const mapped = await a.getTrades(from, undefined).catch(() => []);
+      setDiag({
+        from,
+        bridgeCount: raw.length,
+        bridgeNet: sum(raw, (t) => t.netPnl),
+        bridgeGross: sum(raw, (t) => t.grossPnl),
+        bridgeFee: sum(raw, (t) => t.fee),
+        appCount: stored.length,
+        appNet: sum(stored, (t) => tradeNetPnl(t)),
+        rows: mapped.slice(0, 25),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha no diagnóstico.');
+    } finally {
+      setBusy(false);
+    }
+  }, [adapter, finance, savePrefs]);
 
   const handleSync = useCallback(async () => {
     if (!finance) return;
@@ -248,7 +282,42 @@ export default function QuantowerPage() {
         <div className="qt-actions">
           <button className="qt-btn" onClick={handleCheck} disabled={busy}>{busy ? 'Testando…' : 'Testar conexão'}</button>
           <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
+          <button className="qt-btn" onClick={handleDiag} disabled={busy || !finance}>Diagnóstico (ponte × app)</button>
         </div>
+        {diag && (
+          <div className="qt-diag" role="region" aria-label="Diagnóstico de trades (7 dias)">
+            <div className="qt-diag-row">
+              <span className="qt-sync-k">Janela</span><span className="qt-sync-v">{new Date(diag.from).toLocaleDateString('pt-BR')} → hoje</span>
+              <span className="qt-sync-k">Ponte</span><span className="qt-sync-v">{diag.bridgeCount} trades · net {fmtMoney(diag.bridgeNet)} · gross {fmtMoney(diag.bridgeGross)} · fee {fmtMoney(diag.bridgeFee)}</span>
+              <span className="qt-sync-k">App</span><span className={`qt-sync-v ${Math.abs(diag.appNet - diag.bridgeNet) > 1 ? 'qt-diag-bad' : ''}`}>{diag.appCount} trades · net {fmtMoney(diag.appNet)}</span>
+              {Math.abs(diag.appNet - diag.bridgeNet) > 1 && (
+                <><span className="qt-sync-k">Diferença</span><span className="qt-sync-v qt-diag-bad">{fmtMoney(diag.appNet - diag.bridgeNet)} (app − ponte)</span></>
+              )}
+            </div>
+            {diag.rows.length > 0 && (
+              <div className="qt-diag-table-wrap">
+                <table className="qt-diag-table">
+                  <thead>
+                    <tr><th>Símbolo</th><th>Qtd</th><th>Saiu</th><th>Gross</th><th>Fee</th><th>Net</th><th>Multiplier</th></tr>
+                  </thead>
+                  <tbody>
+                    {diag.rows.map((t, i) => (
+                      <tr key={`${t.platformTradeId}-${i}`}>
+                        <td>{t.symbol}</td>
+                        <td className="qt-num">{t.quantity}</td>
+                        <td>{t.exitDateTime ? new Date(t.exitDateTime).toLocaleString('pt-BR') : '—'}</td>
+                        <td className="qt-num">{fmtMoney(t.grossPnl)}</td>
+                        <td className="qt-num">{fmtMoney(t.fee)}</td>
+                        <td className="qt-num">{fmtMoney(t.netPnl)}</td>
+                        <td className="qt-num">{t.contractSize ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
         {status && (status.online ? (
           <div className="qt-status" role="status">
             Bridge OK · v{status.version || status.bridgeVersion || '?'}
@@ -375,6 +444,14 @@ const QT_CSS = `
 .qt-side { text-transform: capitalize; color: var(--muted, #a1a7b3); }
 .qt-acct { margin-left: auto; font-size: 12px; color: var(--muted, #a1a7b3); }
 .qt-hint { font-size: 12px; color: var(--muted, #a1a7b3); }
+.qt-diag { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(124,92,255,0.06); border: 1px solid rgba(124,92,255,0.25); display: flex; flex-direction: column; gap: 8px; }
+.qt-diag-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
+.qt-diag-bad { color: var(--red, #e74c3c); font-weight: 800; }
+.qt-diag-table-wrap { overflow-x: auto; }
+.qt-diag-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.qt-diag-table th, .qt-diag-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; }
+.qt-diag-table th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.qt-diag-table .qt-num { text-align: right; }
 .qt-preview { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.2); }
 @media (max-width: 719px) { .qt-grid { grid-template-columns: 1fr; } }
 `;

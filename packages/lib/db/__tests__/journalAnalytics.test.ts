@@ -362,6 +362,16 @@ describe('journalAnalytics � drawdownAnalysis', () => {
   });
 });
 
+describe('journalAnalytics - criterio unico de trade fechado', () => {
+  it('trade com exitDatetime e SEM exitPrice conta no calendario/heat (card x widgets iguais)', () => {
+    const t = trade({ id: 'c1', resultNet: -821.78, exitDatetime: '2026-09-17T13:00:00Z', entryDatetime: '2026-09-17T12:00:00Z' });
+    const cal = calendarPnl([t], 2026, 9);
+    expect(cal.monthTrades).toBe(1);
+    expect(cal.monthPnl).toBe(-821.78);
+    expect(symbolBreakdown([t])[0].pnl).toBe(-821.78);
+  });
+});
+
 describe('journalAnalytics - sessoes que se interseccionam', () => {
   it('trade na sobreposicao entra em TODAS as sessoes que contem a hora', () => {
     // `exitPrice` é obrigatório: sessionAnalysis só olha trades fechados (closedTrades).

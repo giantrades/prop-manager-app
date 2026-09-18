@@ -43,7 +43,7 @@ export function calendarPnl(trades: Trade[], year: number, month: number): Month
   const prefix = `${year}-${String(month).padStart(2, '0')}`;
   const byDate = new Map<string, DayPnl>();
   for (const t of trades) {
-    if (t.exitPrice == null) continue;
+    if (!isClosed(t)) continue;
     const stamp = t.exitDatetime || t.entryDatetime;
     if (!stamp) continue;
     const key = formatDate(parseDate(stamp), 'yyyy-MM-dd');
@@ -66,9 +66,18 @@ export function calendarPnl(trades: Trade[], year: number, month: number): Month
   return { year, month, days, monthPnl, monthTrades, monthWins, monthLosses, bestDay, worstDay };
 }
 
-/** Trades fechados (com exitPrice). Base de todas as análises abaixo. */
+/**
+ * Trade FECHADO — critério ÚNICO para todo o journal: tem saída (`exitDatetime`) OU preço
+ * de saída. Antes era só `exitPrice != null`, enquanto o card do Trading usava
+ * `exitDatetime`: um trade com saída registrada mas sem exitPrice aparecia no card e
+ * DESAPARECIA do calendário/heat/review — os totais divergiam entre widgets.
+ */
+function isClosed(t: Trade): boolean {
+  return t.exitDatetime != null || t.exitPrice != null;
+}
+
 function closedTrades(trades: Trade[]): Trade[] {
-  return trades.filter((t) => t.exitPrice != null);
+  return trades.filter(isClosed);
 }
 
 export interface WeeklyReview {
