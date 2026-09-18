@@ -962,8 +962,10 @@ namespace QuantowerBridge
         // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco
         // (sobrevivem restart); fees somadas de entradas + saidas.
         private const string BridgeVersion = "2.1.0";
+        // Prefixo usa a PRÓPRIA BridgeVersion (antes era "2.0.0-" hardcoded e confundia:
+        // a ponte 2.1.0 aparecia com build "2.0.0-...").
         private static string BuildIdentifier =>
-            $"2.0.0-{DateTime.UtcNow:yyyyMMddHHmm}";
+            $"{BridgeVersion}-{DateTime.UtcNow:yyyyMMddHHmm}";
 
         private static string BuildHealthJson()
         {
