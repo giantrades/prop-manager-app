@@ -1553,6 +1553,27 @@ select.select option {
   margin-left: -12px !important;
 }
 
+/* Recharts — LEGENDA: por padrão ele posiciona a legenda em absolute por cima do
+   gráfico, e em container estreito os itens ficam um sobre o outro. Aqui a legenda
+   vira um bloco normal abaixo do gráfico, centralizada e quebrando linha. */
+.recharts-legend-wrapper {
+  position: static !important;
+  width: 100% !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  height: auto !important;
+}
+.recharts-default-legend {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 16px;
+}
+.recharts-legend-item { margin: 0 !important; }
+.recharts-legend-item-text { font-size: 11px; color: var(--muted, #a1a7b3); }
+
 /* Select nativo - dark mode */
 .select,
 .select option {

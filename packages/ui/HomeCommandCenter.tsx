@@ -83,17 +83,17 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const acctPnl = snapshot.accountPnl ?? [];
 
   const header = [
-    { label: 'Net Worth', value: fmtMoney(nw.netWorth) },
-    { label: 'Cash', value: fmtMoney(nw.components.cash) },
-    { label: 'Invest', value: fmtMoney(nw.components.investments) },
-    { label: 'Pendente', value: fmtMoney(nw.components.receivables) },
+    { label: 'Net Worth', value: fmtMoney(nw.netWorth, 'BRL') },
+    { label: 'Cash', value: fmtMoney(nw.components.cash, 'BRL') },
+    { label: 'Invest', value: fmtMoney(nw.components.investments, 'BRL') },
+    { label: 'Pendente', value: fmtMoney(nw.components.receivables, 'BRL') },
   ];
 
   return (
     <div className="hc-root">
       <div className="hc-hero">
         <div className="hc-hero-label">Patrimônio líquido (derivado)</div>
-        <div className="hc-hero-value">{fmtMoney(nw.netWorth)}</div>
+        <div className="hc-hero-value">{fmtMoney(nw.netWorth, 'BRL')}</div>
         <div className="hc-hero-grid">
           {header.map((h) => (
             <div key={h.label} className="hc-hero-cell">
@@ -160,9 +160,9 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
 
         {!hide('investments') && (<Widget key="investments" id="investments" title="Patrimônio por classe" to="/investimentos" hide={hide}>
           <div className="hc-stats">
-            <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth)}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue)}</span></div>
-            <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl)} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Net worth</span><span className="hc-stat-value">{fmtMoney(nw.netWorth, 'BRL')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">Investido</span><span className="hc-stat-value">{fmtMoney(portfolio.totalValue, 'BRL')}</span></div>
+            <div className="hc-stat"><span className="hc-stat-label">PnL</span><span className="hc-stat-value" style={{ color: portfolio.totalPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(portfolio.totalPnl, 'BRL')} <small>{fmtPct(portfolio.pnlPercent)}</small></span></div>
           </div>
           {classPie.length > 0 ? (
             <div className="hc-pie">
@@ -171,7 +171,7 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
                   <Pie data={classPie} dataKey="value" nameKey="name" innerRadius={46} outerRadius={70} paddingAngle={2}>
                     {classPie.map((d) => <Cell key={d.name} fill={d.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v)} />
+                  <Tooltip contentStyle={tip} formatter={(v) => fmtMoney(v, 'BRL')} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="hc-legend">

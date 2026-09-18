@@ -68,13 +68,13 @@ export default function PlanningDashboardPage() {
             </div>
             <div className="card accent4">
               <h3>Safe Available</h3>
-              <div className="stat">{fmtMoney(data.safeAvailable)}</div>
+              <div className="stat">{fmtMoney(data.safeAvailable, 'BRL')}</div>
               <div className="muted">posso comprar isso?</div>
             </div>
             <div className="card accent1">
               <h3>Runway</h3>
               <div className="stat">{data.runway != null ? `${data.runway} meses` : '—'}</div>
-              <div className="muted">caixa livre ÷ gasto médio ({fmtMoney(data.avgMonthlyExpense)}/mês)</div>
+              <div className="muted">caixa livre ÷ gasto médio ({fmtMoney(data.avgMonthlyExpense, 'BRL')}/mês)</div>
             </div>
             <div className="card accent3">
               <h3>Marcos</h3>
@@ -95,8 +95,8 @@ export default function PlanningDashboardPage() {
               const after = safe - value;
               return (
                 <>
-                  <div className="dash-row"><span className="dash-row-name">Safe available</span><span className="dash-row-val">{fmtMoney(safe)}</span></div>
-                  <div className="dash-row"><span className="dash-row-name">Depois da compra</span><span className={`dash-row-val ${after >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(after)}</span></div>
+                  <div className="dash-row"><span className="dash-row-name">Safe available</span><span className="dash-row-val">{fmtMoney(safe, 'BRL')}</span></div>
+                  <div className="dash-row"><span className="dash-row-name">Depois da compra</span><span className={`dash-row-val ${after >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(after, 'BRL')}</span></div>
                   {value > 0 && (
                     <div className={`pl-sim-verdict ${after >= 0 ? 'is-ok' : 'is-bad'}`}>
                       {after >= 0 ? 'Cabe no seu caixa livre.' : 'Fica abaixo do seu caixa livre — repense o valor.'}
@@ -120,7 +120,7 @@ export default function PlanningDashboardPage() {
                 color="#7c5cff"
                 label={m.title}
                 sub={String(m.date).slice(0, 10)}
-                value={m.amount != null ? fmtMoney(m.amount) : ''}
+                value={m.amount != null ? fmtMoney(m.amount, 'BRL') : ''}
               />
             ))}
           </div>
@@ -140,7 +140,7 @@ export default function PlanningDashboardPage() {
                 return (
                   <div key={g.goal.id} className="dash-row">
                     <span className="dash-row-name">{g.goal.kind}</span>
-                    <span className="dash-row-sub">{fmtMoney(g.current)} / {fmtMoney(g.target)}</span>
+                    <span className="dash-row-sub">{fmtMoney(g.current, 'BRL')} / {fmtMoney(g.target, 'BRL')}</span>
                     <span className="dash-row-val">{months} m · {label}</span>
                   </div>
                 );

@@ -258,7 +258,7 @@ export default function Accounts({
       {/* Resumo */}
       <div className="ac3-summary">
         <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtMoney(summary.balanceTotal)}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtDisplay(summary.balanceTotal)}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Balance líquido</span>
           <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtDisplay(summary.liquidTotal)}</span>
           <span className="ac3-sum-sub">banco · carteira · cash · cripto</span>

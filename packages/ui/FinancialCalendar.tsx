@@ -185,9 +185,9 @@ function markTitle(m) {
   switch (m.kind) {
     case 'trading': return `Trading: ${fmtMoney(m.pnl, '$')} (${m.trades} trades)`;
     case 'economic': return `Econômico: ${m.eventName}`;
-    case 'bills': return `Conta: ${fmtMoney(m.amount)}${m.label ? ` · ${m.label}` : ''}`;
-    case 'payouts': return `Payout: ${fmtMoney(m.amount)} (${m.status})`;
-    case 'tax': return `Imposto: ${fmtMoney(m.amount)}${m.label ? ` · ${m.label}` : ''}`;
+    case 'bills': return `Conta: ${fmtMoney(m.amount, 'BRL')}${m.label ? ` · ${m.label}` : ''}`;
+    case 'payouts': return `Payout: ${fmtMoney(m.amount, 'USD')} (${m.status})`;
+    case 'tax': return `Imposto: ${fmtMoney(m.amount, 'BRL')}${m.label ? ` · ${m.label}` : ''}`;
     default: return '';
   }
 }
