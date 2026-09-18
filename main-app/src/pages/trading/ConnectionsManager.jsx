@@ -281,6 +281,25 @@ export default function ConnectionsManager() {
     }
   }, [load, toast]);
 
+  // Reprocessa 1 ANO: o sync normal lê 90 dias, então trades mais antigos nunca eram
+  // corrigidos (net sem fee de entrada, sem multiplier/R). Aqui a janela é maior.
+  const syncTradesYear = useCallback(async () => {
+    const f = financeRef.current;
+    if (!f) return;
+    setBusy(true);
+    try {
+      const from = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString();
+      const list = await adapterRef.current.getTrades(from, undefined);
+      const res = await ingestQuantowerTrades(f.ds, f.chain, list);
+      toast(`1 ano reprocessado — criados ${res.created}, atualizados ${res.updated}, ignorados ${res.skipped}.`);
+      load();
+    } catch (e) {
+      toast(`Falha ao sincronizar 1 ano: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }, [load, toast]);
+
   // Remove do app os trades que a PLATAFORMA não devolve mais (fantasma de conexões/
   // contas antigas): lê a janela de 90 dias da ponte e apaga o que não está lá.
   const pruneGhostTrades = useCallback(async () => {
@@ -510,6 +529,7 @@ export default function ConnectionsManager() {
           <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
           <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
           <button className="cmd-refresh" onClick={syncTrades} disabled={busy}><RefreshCw size={13} /> Sincronizar trades</button>
+          <button className="cmd-refresh" onClick={syncTradesYear} disabled={busy} title="Reprocessa 1 ano (corrige trades antigos: net com fee de entrada+saída, multiplier e R)"><RefreshCw size={13} /> Sincronizar 1 ano</button>
           <button className="cmd-refresh" onClick={pruneGhostTrades} disabled={busy} title="Apaga trades dos últimos 90 dias que a plataforma não devolve mais"><Trash2 size={13} /> Remover trades que não existem na plataforma</button>
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }} disabled={busy}><RefreshCw size={13} /> Atualizar</button>
         </div>

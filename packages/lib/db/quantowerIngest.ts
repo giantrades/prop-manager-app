@@ -122,7 +122,9 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   // O `netPnl` do bridge é uma RECOMPUTAÇÃO dos fills; se o sinal da fee escapar (DLL
   // antiga) ele vem errado — então, quando temos o gross, usamos gross − |fees|.
   let resultNet = hasNet ? (q.netPnl as number) : 0;
-  const hasGross = typeof q.grossPnl === 'number' && Number.isFinite(q.grossPnl);
+  // Só usa a via do gross quando ele é um número REALMENTE informado (≠ 0). O adapter
+  // preenche 0 quando o bridge não manda — e usar isso como base sobrescreveria um net bom.
+  const hasGross = typeof q.grossPnl === 'number' && Number.isFinite(q.grossPnl) && q.grossPnl !== 0;
   if (hasGross) {
     const expected = Number((((q.grossPnl as number) - fees)).toFixed(2));
     resultNet = Math.abs((hasNet ? (q.netPnl as number) : expected) - expected) < 0.02
