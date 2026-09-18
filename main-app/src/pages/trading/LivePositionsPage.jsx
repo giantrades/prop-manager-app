@@ -72,6 +72,15 @@ export default function LivePositionsPage() {
   // o bridge está FORA — senão uma posição fechada "voltava" como fantasma pela última leitura.
   const positions = online ? livePositions : (lastSnapshot?.positions ?? []);
   const isStale = !online && positions.length > 0;
+  // PnL somado das posições abertas: net (o que a plataforma reporta), gross e fees.
+  const openPnl = useMemo(() => positions.reduce(
+    (acc, p) => ({
+      net: acc.net + (Number(p.netPnl) || 0),
+      gross: acc.gross + (Number(p.grossPnl) || 0),
+      fees: acc.fees + (Number(p.fee) || 0),
+    }),
+    { net: 0, gross: 0, fees: 0 },
+  ), [positions]);
   const staleAgo = lastSnapshot?.at ? agoText(lastSnapshot.at) : null;
   const totals = useMemo(() => {
     const pnl = positions.reduce((s, p) => s + (p.netPnl ?? 0), 0);
@@ -399,6 +408,14 @@ export default function LivePositionsPage() {
           <div className="lp-h"><span className="lp-h-k">Posições</span><span className="lp-h-v">{livePositions.length}</span></div>
           <div className="lp-h"><span className="lp-h-k">Ordens</span><span className="lp-h-v">{orders.length}</span></div>
           <div className="lp-h"><span className="lp-h-k">Última leitura</span><span className="lp-h-v">{positionsAt ? new Date(positionsAt).toLocaleTimeString('pt-BR') : '—'}</span></div>
+          {/* PnL somado das posições ABERTAS (não realizado) — o que a plataforma reporta. */}
+          <div className="lp-h">
+            <span className="lp-h-k">PnL aberto</span>
+            <span className={`lp-h-v ${openPnl.net >= 0 ? 'dash-pos' : 'dash-neg'}`} title="Soma do PnL líquido (não realizado) das posições abertas">
+              {positions.length ? fmtMoney(openPnl.net) : '—'}
+            </span>
+            {positions.length > 0 && <span className="lp-h-sub">gross {fmtMoney(openPnl.gross)} · fees {fmtMoney(-Math.abs(openPnl.fees))}</span>}
+          </div>
         </div>
       )}
 
@@ -542,6 +559,7 @@ const LP_CSS = `
 .lp-h { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); min-width: 110px; }
 .lp-h-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
 .lp-h-v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lp-h-sub { font-size: 10px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .lp-expo { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
 .lp-expo-item { display: flex; align-items: center; gap: 8px; }
 .lp-expo-bar { width: 160px; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; }
