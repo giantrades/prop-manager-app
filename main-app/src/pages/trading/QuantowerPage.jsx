@@ -7,7 +7,10 @@ import LivePositions from '@apps/ui/LivePositions';
 import { fmtMoney } from '@apps/ui/currency';
 import { useFinance, usePlatform } from '@apps/state';
 import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
-import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade, tradeNetPnl } from '@apps/lib/db';
+import {
+  ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade, tradeNetPnl,
+  tradeFingerprint, getDeletedTradeKeys,
+} from '@apps/lib/db';
 
 export default function QuantowerPage() {
   const finance = useFinance();
@@ -142,6 +145,23 @@ export default function QuantowerPage() {
         .filter((t) => (t.exitDatetime || t.entryDatetime) >= from);
       const sum = (arr, f) => Number(arr.reduce((s, x) => s + (Number(f(x)) || 0), 0).toFixed(2));
       const mapped = await a.getTrades(from, undefined).catch(() => []);
+      // POR QUE cada trade da ponte (não) está no app? Compara id/impressão digital e
+      // checa as guardas + lápides (tombstones) do ingest.
+      const deleted = await getDeletedTradeKeys(finance.ds);
+      const byQt = new Map(stored.filter((t) => t.quantowerId).map((t) => [t.quantowerId, t]));
+      const byFp = new Map(stored.map((t) => [tradeFingerprint(t), t]));
+      const farFuture = Date.now() + 24 * 3600 * 1000;
+      const statusOf = (t) => {
+        const fp = tradeFingerprint(t);
+        if (byQt.has(t.platformTradeId) || byFp.has(fp)) return 'ok';
+        if (deleted.has(t.platformTradeId) || deleted.has(fp)) return 'lápide (excluído)';
+        if (!t.entryDateTime) return 'sem entrada';
+        if (Date.parse(t.entryDateTime) > farFuture || (t.exitDateTime && Date.parse(t.exitDateTime) > farFuture)) return 'data futura';
+        if (!t.exitDateTime && !(t.exitPrice > 0)) return 'sem saída';
+        return 'faltando (ingest)';
+      };
+      const rows = mapped.map((t) => ({ ...t, why: statusOf(t) }));
+      const counts = rows.reduce((acc, r) => { acc[r.why] = (acc[r.why] ?? 0) + 1; return acc; }, {});
       setDiag({
         from,
         bridgeCount: raw.length,
@@ -150,7 +170,8 @@ export default function QuantowerPage() {
         bridgeFee: sum(raw, (t) => t.fee),
         appCount: stored.length,
         appNet: sum(stored, (t) => tradeNetPnl(t)),
-        rows: mapped.slice(0, 25),
+        counts,
+        rows: rows.slice(0, 30),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha no diagnóstico.');
@@ -293,12 +314,15 @@ export default function QuantowerPage() {
               {Math.abs(diag.appNet - diag.bridgeNet) > 1 && (
                 <><span className="qt-sync-k">Diferença</span><span className="qt-sync-v qt-diag-bad">{fmtMoney(diag.appNet - diag.bridgeNet)} (app − ponte)</span></>
               )}
+              {diag.counts && (
+                <><span className="qt-sync-k">Motivos</span><span className="qt-sync-v">{Object.entries(diag.counts).map(([k, v]) => `${k}: ${v}`).join(' · ')}</span></>
+              )}
             </div>
             {diag.rows.length > 0 && (
               <div className="qt-diag-table-wrap">
                 <table className="qt-diag-table">
                   <thead>
-                    <tr><th>Símbolo</th><th>Qtd</th><th>Saiu</th><th>Gross</th><th>Fee</th><th>Net</th><th>Multiplier</th></tr>
+                    <tr><th>Símbolo</th><th>Qtd</th><th>Saiu</th><th>Gross</th><th>Fee</th><th>Net</th><th>Multiplier</th><th>No app?</th></tr>
                   </thead>
                   <tbody>
                     {diag.rows.map((t, i) => (
@@ -310,6 +334,7 @@ export default function QuantowerPage() {
                         <td className="qt-num">{fmtMoney(t.fee)}</td>
                         <td className="qt-num">{fmtMoney(t.netPnl)}</td>
                         <td className="qt-num">{t.contractSize ?? '—'}</td>
+                        <td className={t.why === 'ok' ? '' : 'qt-diag-bad'}>{t.why}</td>
                       </tr>
                     ))}
                   </tbody>
