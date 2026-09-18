@@ -148,6 +148,23 @@ export interface SupabaseSync {
   subscribe: (onRemoteChange: () => void) => Promise<() => void>;
 }
 
+/**
+ * Texto legível de um erro do Supabase/PostgREST (que vem como objeto — antes aparecia
+ * "[object Object]" na UI). Prefere `message`, depois `details`/`hint`, depois JSON.
+ */
+export function errText(err: unknown): string {
+  if (err == null) return 'erro desconhecido';
+  if (typeof err === 'string') return err;
+  const e = err as { message?: string; details?: string; hint?: string; code?: string };
+  const parts = [e.message, e.details, e.hint].filter((s) => typeof s === 'string' && s);
+  if (parts.length) return `${parts.join(' — ')}${e.code ? ` (${e.code})` : ''}`;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 /** Igualdade com tolerância numérica (NUMERIC do Postgres pode vir como string). */
 function numEq(a: unknown, b: unknown): boolean {
   if (a == null && b == null) return true;
@@ -193,10 +210,10 @@ export function createSupabaseSync(
         // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
         if (table === 'app_meta') {
           // eslint-disable-next-line no-console
-          console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', error.message);
+          console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', errText(error));
           continue;
         }
-        throw error;
+        throw new Error(`push ${table}: ${errText(error)}`);
       }
       count += rows.length;
       entityCounts[table] = (entityCounts[table] ?? 0) + rows.length;
@@ -215,7 +232,7 @@ export function createSupabaseSync(
     const table = store ? TABLE_BY_ENTITY[store as StoreName] : undefined;
     if (!table) return 0;
     const { error } = await supabase.from(table).delete().eq('user_id', userId).in('id', [id]);
-    if (error) throw error;
+    if (error) throw new Error(`delete ${table}: ${errText(error)}`);
     return 1;
   };
 
@@ -364,7 +381,7 @@ export function createSupabaseSync(
         const { error } = await supabase.from(table).upsert(chunk, { onConflict: conflict });
         if (error) {
           if (table === 'app_meta') break;
-          throw error;
+          throw new Error(`pushAll ${table}: ${errText(error)}`);
         }
         count += chunk.length;
       }

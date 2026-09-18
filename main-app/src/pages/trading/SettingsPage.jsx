@@ -329,7 +329,7 @@ export default function SettingsPage() {
                 const pushed = await f.cloud.pushAll();
                 toast(`Sincronizado — puxados ${pulled?.applied ?? 0}, enviados ${pushed?.count ?? 0}.`);
               } catch (e) {
-                toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+                toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
               }
             }}>Sincronizar agora (pull + push)</button>
             <button className="st-btn st-btn-danger" disabled={busy} onClick={async () => {
@@ -345,7 +345,7 @@ export default function SettingsPage() {
                 const pulled = await f.cloud?.pull?.();
                 toast(`Dados locais limpos e recarregados da nuvem (${pulled?.applied ?? 0} registro(s)).`);
               } catch (e) {
-                toast(`Falha ao limpar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+                toast(`Falha ao limpar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
               }
             }}>Limpar dados DESTE aparelho (recarrega da nuvem)</button>
             <button className="st-btn" disabled={busy} onClick={async () => {
@@ -356,7 +356,7 @@ export default function SettingsPage() {
                   .join(' · ');
                 toast(`Enviado: ${res?.count ?? 0} registro(s)${parts ? ` — ${parts}` : ''}.`);
               } catch (e) {
-                toast(`Falha ao reenviar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+                toast(`Falha ao reenviar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
               }
             }}>Reenviar tudo para a nuvem (reparar)</button>
           </div>
