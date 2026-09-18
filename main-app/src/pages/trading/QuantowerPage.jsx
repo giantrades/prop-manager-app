@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
 import { useFinance, usePlatform } from '@apps/state';
-import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
+import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
 import { ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade } from '@apps/lib/db';
 
 export default function QuantowerPage() {
@@ -261,7 +261,7 @@ export default function QuantowerPage() {
             {status.code === 'auth_failed'
               ? 'Token de bridge inválido ou ausente — confira o Token (Sistema → Quantower).'
               : status.code === 'bridge_stale_version'
-                ? `Bridge desatualizada (v${status.version}) — recompile o QuantowerBridge.cs.`
+                ? `Bridge desatualizada (v${status.version} < v${EXPECTED_BRIDGE_VERSION}) — recompile o QuantowerBridge.cs.`
                 : (status.error || 'Bridge offline — verifique se a estratégia QuantowerBridge está em Run no Quantower.')}
             <div className="qt-err-code">código: {status.code || 'bridge_offline'} · url: {bridgeUrl}</div>
           </div>

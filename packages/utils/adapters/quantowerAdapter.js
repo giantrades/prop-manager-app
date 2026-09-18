@@ -37,7 +37,23 @@ function normIso(v) {
  * 04-BRIDGE_V2_SPEC.md: se o bridge reportar versão diferente, mostramos banner
  * "bridge desatualizada" em vez de chamar rotas de contrato desconhecido.
  */
-export const EXPECTED_BRIDGE_VERSION = '2.0.0';
+export const EXPECTED_BRIDGE_VERSION = '2.1.0';
+
+/**
+ * Compara versões "x.y.z". Aceita a ponte igual OU MAIS NOVA que a esperada — antes o
+ * check exigia igualdade exata e uma ponte atualizada (2.1.0) era acusada de
+ * "desatualizada" com `vnull` (o erro não carregava a versão). Só é velha se for menor.
+ */
+export function versionAtLeast(actual, min) {
+  const a = String(actual || '').split('.').map((n) => parseInt(n, 10) || 0);
+  const b = String(min || '').split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x > y;
+  }
+  return true;
+}
 
 export class QuantowerAdapter extends BaseAdapter {
   constructor(options = {}) {
@@ -170,11 +186,11 @@ export class QuantowerAdapter extends BaseAdapter {
     }
   }
 
-  /** Handshake de versão: compara `/status.version` com EXPECTED_BRIDGE_VERSION. */
+  /** Handshake de versão: a ponte pode ser IGUAL ou MAIS NOVA que a esperada. */
   _assertVersion(version) {
     if (this._versionChecked) return;
     this._versionChecked = true;
-    if (version && version !== EXPECTED_BRIDGE_VERSION) {
+    if (version && !versionAtLeast(version, EXPECTED_BRIDGE_VERSION)) {
       const err = new BridgeVersionError(version);
       this._markError(err);
       throw err;
@@ -203,7 +219,8 @@ export class QuantowerAdapter extends BaseAdapter {
       this._markError(err);
       return {
         online: false,
-        version: null,
+        // Mostra a versão REAL quando o erro é de versão (antes vinha null → "vnull").
+        version: err instanceof BridgeVersionError ? err.bridgeVersion : null,
         platform: 'quantower',
         accountsCount: 0,
         positionsCount: 0,
