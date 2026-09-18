@@ -1,5 +1,5 @@
-// STAGE 7 — TradeForm (novo, engine-driven). Form de trade em steps (Info → Contas →
-// Execuções → Review) + Quick Entry <30s + Position Size Calc. NÃO grava sozinho:
+// STAGE 7 — TradeForm (novo, engine-driven). Form de trade em PÁGINA ÚNICA (seções
+// empilhadas: Trade · Contas · Custos/execuções · Review) + Quick Entry <30s. NÃO grava:
 // entrega um `Trade` via `onSubmit`; o container persiste via `DataChainEngine.syncTrade`.
 //
 // Regra dura: nenhuma fórmula nova. Preview de PnL/R usa `tradePnl`/`calcR`
@@ -22,7 +22,6 @@ import NotesEditor from './NotesEditor';
  * @param {()=>void} [props.onCancel]
  */
 export default function TradeForm({ trade = null, accounts = [], strategies = [], onSubmit, onCancel }) {
-  const [step, setStep] = useState(0);
   const [quick, setQuick] = useState(!trade);
   const [form, setForm] = useState(() => ({
     id: trade?.id ?? `trade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -53,9 +52,6 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
   const [fill, setFill] = useState({ side: 'entry', price: '', quantity: '' });
   const [newStrategyName, setNewStrategyName] = useState('');
 
-  // Position Size Calc: riskAmount / (|entry-stop| * qty * multiplier).
-  const [posSize, setPosSize] = useState({ riskAmount: 100 });
-
   const preview = useMemo(() => {
     const draft = {
       ...form,
@@ -74,17 +70,6 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
       r: calcR(draft as any),
     };
   }, [form]);
-
-  const suggestedQty = useMemo(() => {
-    const entry = Number(form.entryPrice);
-    const stop = form.stopPrice ? Number(form.stopPrice) : null;
-    const mult = Number(form.multiplier) || 1;
-    if (entry > 0 && stop != null && entry !== stop) {
-      const risk = Math.abs(entry - stop) * mult;
-      if (risk > 0) return Math.round((Number(posSize.riskAmount) / risk) * 100) / 100;
-    }
-    return null;
-  }, [form.entryPrice, form.stopPrice, form.multiplier, posSize.riskAmount]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -152,8 +137,6 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
     }
   };
 
-  const STEPS = ['Info', 'Contas', 'Execuções', 'Review'];
-
   return (
     <div className="tf-root">
       {/* Quick Entry */}
@@ -194,19 +177,12 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
         </div>
       )}
 
-      {/* Form completo em steps */}
+      {/* Form completo (página única) */}
       {!quick && (
         <>
-          <div className="tf-steps">
-            {STEPS.map((s, i) => (
-              <button key={s} className={`tf-step${i === step ? ' active' : ''}${i < step ? ' done' : ''}`} onClick={() => setStep(i)}>
-                <span className="tf-step-num">{i + 1}</span> {s}
-              </button>
-            ))}
-          </div>
-
-          {step === 0 && (
+          <div className="tf-sections">
             <div className="tf-step-body">
+              <div className="tf-section-title">1 · Trade</div>
               <div className="tf-grid2">
                 <label className="tf-field"><span className="tf-label">Símbolo</span>
                   <input className="tf-input" value={form.symbol} onChange={(e) => set('symbol', e.target.value.toUpperCase())} />
@@ -247,20 +223,10 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                   </label>
                 )}
               </div>
-              <div className="tf-position-size">
-                <div className="tf-ps-title">Position Size Calc</div>
-                <div className="tf-ps-grid">
-                  <label className="tf-field"><span className="tf-label">Risco ($)</span>
-                    <input className="tf-input" type="number" value={posSize.riskAmount} onChange={(e) => setPosSize({ riskAmount: Number(e.target.value) })} />
-                  </label>
-                  <div className="tf-ps-result">Qty sugerida: <b>{suggestedQty ?? '—'}</b></div>
-                </div>
-              </div>
             </div>
-          )}
 
-          {step === 1 && (
             <div className="tf-step-body">
+              <div className="tf-section-title">2 · Contas</div>
               <div className="tf-accounts">
                 <label className="tf-field"><span className="tf-label">Conta principal</span>
                   <select className="tf-input" value={form.accountId} onChange={(e) => set('accountId', e.target.value)}>
@@ -288,10 +254,9 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 )}
               </div>
             </div>
-          )}
 
-          {step === 2 && (
             <div className="tf-step-body">
+              <div className="tf-section-title">3 · Custos e execuções</div>
               <div className="tf-grid2">
                 <label className="tf-field"><span className="tf-label">Comissão</span>
                   <input className="tf-input" type="number" value={form.commission} onChange={(e) => set('commission', e.target.value)} />
@@ -336,10 +301,9 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 )}
               </div>
             </div>
-          )}
 
-          {step === 3 && (
             <div className="tf-step-body">
+              <div className="tf-section-title">4 · Review e notas</div>
               <div className="tf-review">
                 <div className="tf-review-row"><span>Símbolo</span><b>{form.symbol}</b></div>
                 <div className="tf-review-row"><span>Direção / Qty</span><b>{form.direction} · {form.qty}</b></div>
@@ -355,15 +319,10 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 <NotesEditor value={form.notes} onChange={(md) => set('notes', md)} ariaLabel="Notas do trade" />
               </label>
             </div>
-          )}
+          </div>
 
           <div className="tf-actions">
-            <button className="tf-btn" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}>Voltar</button>
-            {step < STEPS.length - 1 ? (
-              <button className="tf-btn tf-btn-primary" onClick={() => setStep((s) => s + 1)}>Avançar</button>
-            ) : (
-              <button className="tf-btn tf-btn-primary" onClick={doSubmit} disabled={saving}>{saving ? 'Salvando…' : 'Salvar trade'}</button>
-            )}
+            <button className="tf-btn tf-btn-primary" onClick={doSubmit} disabled={saving}>{saving ? 'Salvando…' : 'Salvar trade'}</button>
             {onCancel && <button className="tf-btn tf-btn-ghost" onClick={onCancel}>Cancelar</button>}
           </div>
         </>
@@ -382,11 +341,8 @@ const TF_CSS = `
 .tf-quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .tf-quick-preview { display: flex; gap: 16px; font-size: 13px; color: var(--muted, #a1a7b3); }
 
-.tf-steps { display: flex; gap: 6px; flex-wrap: wrap; }
-.tf-step { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); font-size: 12px; cursor: pointer; }
-.tf-step.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); color: var(--text, #e7eaf0); font-weight: 700; }
-.tf-step.done { color: var(--green, #2ecc71); }
-.tf-step-num { font-weight: 800; }
+.tf-sections { display: flex; flex-direction: column; gap: 14px; }
+.tf-section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted, #a1a7b3); margin-bottom: 10px; }
 
 .tf-step-body { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; }
 .tf-grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }

@@ -636,6 +636,8 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
     if (CASH_LIKE_KINDS.has(acc.kind)) {
       // Saldo do ledger; conta ligada à ponte sem lançamentos usa o saldo da PLATAFORMA.
       const ledger = computeAccountBalance(input.transactions, acc.id);
+      // `computeAccountBalance` já devolve o saldo da plataforma quando existe; o `||`
+      // continua como rede de segurança.
       cash += ledger || Number(acc.platformBalance) || 0;
     }
   }

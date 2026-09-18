@@ -114,8 +114,21 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   // `hasNet`: a plataforma REPORTou o PnL (mesmo 0 = breakeven). Sem isso, um 0 real
   // era sobrescrito pela fórmula (que pode errar sem o multiplier) — e o valor errado
   // ficava gravado, contaminando todos os widgets.
+  // Fee/Swap são CUSTO: guarda em módulo. Algumas conexões mandam negativo e, se o sinal
+  // escapar, o net fica `gross + |fee|` (prejuízo menor do que é).
+  const fees = Math.abs(Number(q.fee) || 0);
   const hasNet = typeof q.netPnl === 'number' && Number.isFinite(q.netPnl);
-  const resultNet = hasNet ? (q.netPnl as number) : 0;
+  // NET preferido = o que a plataforma ganhou/perdeu: gross (dinheiro) − custos.
+  // O `netPnl` do bridge é uma RECOMPUTAÇÃO dos fills; se o sinal da fee escapar (DLL
+  // antiga) ele vem errado — então, quando temos o gross, usamos gross − |fees|.
+  let resultNet = hasNet ? (q.netPnl as number) : 0;
+  const hasGross = typeof q.grossPnl === 'number' && Number.isFinite(q.grossPnl);
+  if (hasGross) {
+    const expected = Number((((q.grossPnl as number) - fees)).toFixed(2));
+    resultNet = Math.abs((hasNet ? (q.netPnl as number) : expected) - expected) < 0.02
+      ? (hasNet ? (q.netPnl as number) : expected)
+      : expected; // bridge inconsistente (fee somada com sinal errado) → usa gross − |fees|
+  }
   const trade = {
     id: `qt_${q.platformTradeId}`,
     accountId,
@@ -134,7 +147,7 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     commission: 0,
     swap: 0,
     rebate: 0,
-    fees: q.fee ?? 0,
+    fees,
     source: 'quantower' as const,
     quantowerId: q.platformTradeId,
     // Guarda o id da plataforma para permitir religar a conta depois (relink).

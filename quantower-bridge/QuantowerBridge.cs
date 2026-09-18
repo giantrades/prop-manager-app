@@ -1781,10 +1781,11 @@ namespace QuantowerBridge
             var avgExit = exitQty > 0 ? exitNotional / exitQty : 0;
 
             var grossPnL = exits.Sum(e => e.GrossPnL);
-            // [CORRIGIDO] Fees somadas de ENTRADAS + SAÍDAS: antes só as saídas entravam,
-            // então a comissão de entrada ficava de fora do netPnl/fee.
-            var totalFees = entries.Sum(e => e.Fee) + exits.Sum(e => e.Fee);
-            var totalSwaps = entries.Sum(e => e.Swap) + exits.Sum(e => e.Swap); // swap por fill (0 hoje)
+            // [CORRIGIDO] Fees somadas de ENTRADAS + SAÍDAS e SEMPRE como CUSTO (Math.Abs):
+            // algumas conexões reportam Fee/Swap NEGATIVOS, e aí `gross - fee` virava
+            // `gross + |fee|` (o prejuízo ficava menor do que é). Fee é custo, sempre soma.
+            var totalFees = entries.Sum(e => Math.Abs(e.Fee)) + exits.Sum(e => Math.Abs(e.Fee));
+            var totalSwaps = entries.Sum(e => Math.Abs(e.Swap)) + exits.Sum(e => Math.Abs(e.Swap));
             var netPnL = grossPnL - totalFees - totalSwaps;
 
             var directionSign = closedState.Direction == "LONG" ? 1 : -1;

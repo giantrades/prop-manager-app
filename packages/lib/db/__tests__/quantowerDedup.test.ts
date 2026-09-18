@@ -27,6 +27,19 @@ const BATCH = [
   },
 ];
 
+describe('fee com sinal: net = gross - |fees|', () => {
+  it('fee negativa (conexão reporta custo negativo) não aumenta o net', () => {
+    const t = quantowerToTrade({ ...BATCH[0], grossPnl: -100, netPnl: -98, fee: -2 });
+    expect(t.fees).toBe(2);
+    expect(t.resultNet).toBe(-102);
+  });
+
+  it('mantém o netPnl do bridge quando ele já está consistente', () => {
+    const t = quantowerToTrade({ ...BATCH[0], grossPnl: -100, netPnl: -102, fee: 2 });
+    expect(t.resultNet).toBe(-102);
+  });
+});
+
 describe('prune de trades fantasma (não existem mais na plataforma)', () => {
   it('remove só o que a ponte não devolve, dentro da janela, e grava lápide', async () => {
     const { ds, chain } = makeEngine();

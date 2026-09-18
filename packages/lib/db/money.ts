@@ -638,9 +638,11 @@ export function computeWalletSummary(
       if (INCOME_KINDS.has(t.kind)) inflows += t.amount;
       else if (COST_KINDS.has(t.kind)) outflows += Math.abs(t.amount);
     }
-    // Conta ligada à ponte sem lançamentos no ledger: usa o saldo da PLATAFORMA.
-    if (!balance && account.platformAccountId && account.platformBalance) {
-      balance = Number(account.platformBalance) || 0;
+    // BALANCE da conta: o saldo da PLATAFORMA (bridge) manda quando existe — é o que a
+    // corretora reporta (já inclui fees/resultado). O ledger é fallback.
+    const platform = Number(account.platformBalance);
+    if (account.platformAccountId && Number.isFinite(platform)) {
+      balance = platform;
     }
     rows.push({ account, currency: account.currency, balance: r2(balance), inflows: r2(inflows), outflows: r2(outflows) });
   }
