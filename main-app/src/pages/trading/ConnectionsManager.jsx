@@ -430,13 +430,16 @@ export default function ConnectionsManager() {
         </div>
       )}
 
-      <div className="cx-actions">
-        <button className="cmd-refresh" onClick={relinkTrades} disabled={busy}><Link2 size={13} /> Religar trades sem conta</button>
-        <button className="cmd-refresh" onClick={clearDeleted} disabled={busy}><RotateCcw size={13} /> Limpar histórico de exclusão</button>
-        {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
-          <button className="cmd-refresh" onClick={unhideAll}><RotateCcw size={13} /> Reexibir ocultos ({hiddenConns.length + hiddenAccts.length})</button>
-        )}
-      </div>
+      <details className="cx-adv">
+        <summary>Avançado</summary>
+        <div className="cx-actions">
+          <button className="cmd-refresh" onClick={relinkTrades} disabled={busy}><Link2 size={13} /> Religar trades sem conta</button>
+          <button className="cmd-refresh" onClick={clearDeleted} disabled={busy}><RotateCcw size={13} /> Limpar histórico de exclusão</button>
+          {(hiddenConns.length > 0 || hiddenAccts.length > 0) && (
+            <button className="cmd-refresh" onClick={unhideAll}><RotateCcw size={13} /> Reexibir ocultos ({hiddenConns.length + hiddenAccts.length})</button>
+          )}
+        </div>
+      </details>
 
       {showDemo && (
         <div className="cx-offline" role="status">
@@ -526,13 +529,27 @@ export default function ConnectionsManager() {
               {KIND_OPTIONS.map((k) => (<option key={k.v} value={k.v}>{k.label}</option>))}
             </select>
           </label>
-          <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
-          <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
           <button className="cmd-refresh" onClick={syncTrades} disabled={busy}><RefreshCw size={13} /> Sincronizar trades</button>
-          <button className="cmd-refresh" onClick={syncTradesYear} disabled={busy} title="Reprocessa 1 ano (corrige trades antigos: net com fee de entrada+saída, multiplier e R)"><RefreshCw size={13} /> Sincronizar 1 ano</button>
-          <button className="cmd-refresh" onClick={pruneGhostTrades} disabled={busy} title="Apaga trades dos últimos 90 dias que a plataforma não devolve mais"><Trash2 size={13} /> Remover trades que não existem na plataforma</button>
           <button className="cmd-refresh" onClick={() => { refreshStatuses(); load(); }} disabled={busy}><RefreshCw size={13} /> Atualizar</button>
         </div>
+      )}
+
+      {online && effectiveBridge.length > 0 && (
+        <details className="cx-adv">
+          <summary>Avançado (contas, histórico e correções)</summary>
+          <div className="cx-actions">
+            <label className="cx-kind">
+              <span>Criar como</span>
+              <select className="cx-select" value={newKind} onChange={(e) => setNewKind(e.target.value)} aria-label="Tipo da conta a criar">
+                {KIND_OPTIONS.map((k) => (<option key={k.v} value={k.v}>{k.label}</option>))}
+              </select>
+            </label>
+            <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
+            <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
+            <button className="cmd-refresh" onClick={syncTradesYear} disabled={busy} title="Reprocessa 1 ano (corrige trades antigos: net com fee de entrada+saída, multiplier e R)"><RefreshCw size={13} /> Sincronizar 1 ano</button>
+            <button className="cmd-refresh" onClick={pruneGhostTrades} disabled={busy} title="Apaga trades dos últimos 90 dias que a plataforma não devolve mais"><Trash2 size={13} /> Remover trades que não existem na plataforma</button>
+          </div>
+        </details>
       )}
     </div>
   );
@@ -568,6 +585,9 @@ const CX_CSS = `
 .cx-btn { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); cursor: pointer; }
 .cx-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); border-color: transparent; color: #fff; }
 .cx-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cx-adv { border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,0.02); }
+.cx-adv > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.cx-adv[open] > summary { margin-bottom: 8px; }
 .cx-kind { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted, #a1a7b3); }
 @media (max-width: 800px) { .cx-grid { grid-template-columns: 1fr; } }
 `;

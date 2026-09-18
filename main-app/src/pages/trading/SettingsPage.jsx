@@ -275,8 +275,6 @@ export default function SettingsPage() {
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
       <ModuleTabs module="system" />
           <ConnectionsCard />
-          <CardsManager />
-          <ActionRulesCard />
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">
@@ -306,11 +304,21 @@ export default function SettingsPage() {
           <button className="st-btn" onClick={handleExport} disabled={busy}>Exportar JSON</button>
           <button className="st-btn" onClick={() => fileRef.current?.click()} disabled={busy}>Importar JSON</button>
           <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])} />
-          <button className="st-btn" onClick={handleImportPayouts} disabled={busy}>Importar payouts (legado)</button>
         </div>
       </div>
 
-      <PushSettingsCard />
+      <details className="st-adv">
+        <summary>Avançado (cartões, regras, notificações, import legado)</summary>
+        <CardsManager />
+        <ActionRulesCard />
+        <PushSettingsCard />
+        <div className="st-card">
+          <div className="st-title">Importação legada</div>
+          <div className="st-actions">
+            <button className="st-btn" onClick={handleImportPayouts} disabled={busy}>Importar payouts (legado)</button>
+          </div>
+        </div>
+      </details>
 
       <div className="st-card">
         <div className="st-title">Conta</div>
@@ -328,6 +336,9 @@ export default function SettingsPage() {
 
 const ST_CSS = `
 .st-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.st-adv { display: flex; flex-direction: column; gap: 12px; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 10px 14px; background: rgba(255,255,255,0.01); }
+.st-adv > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.st-adv[open] > summary { margin-bottom: 12px; }
 .st-title { font-size: 14px; font-weight: 800; }
 .st-row { display: flex; gap: 8px; align-items: center; }
 .st-rate { font-size: 12px; color: var(--muted, #a1a7b3); }

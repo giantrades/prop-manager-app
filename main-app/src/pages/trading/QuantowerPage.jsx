@@ -162,6 +162,18 @@ export default function QuantowerPage() {
       };
       const rows = mapped.map((t) => ({ ...t, why: statusOf(t) }));
       const counts = rows.reduce((acc, r) => { acc[r.why] = (acc[r.why] ?? 0) + 1; return acc; }, {});
+      // O que está GRAVADO no app (com os campos que os widgets usam) — pra achar na hora
+      // um trade que entra no card e não entra no calendário/heat.
+      const appRows = stored.map((t) => ({
+        id: t.id,
+        symbol: t.symbol,
+        accountId: t.accountId ?? '—',
+        entry: t.entryDatetime,
+        exit: t.exitDatetime,
+        hasExitPrice: t.exitPrice != null,
+        net: tradeNetPnl(t),
+        fees: t.fees,
+      }));
       setDiag({
         from,
         bridgeCount: raw.length,
@@ -172,6 +184,7 @@ export default function QuantowerPage() {
         appNet: sum(stored, (t) => tradeNetPnl(t)),
         counts,
         rows: rows.slice(0, 30),
+        appRows,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha no diagnóstico.');
@@ -279,15 +292,17 @@ export default function QuantowerPage() {
         )}
       </div>
       {lastRun && (
-        <div className="qt-sync" aria-label="Sync Center">
-          <div className="qt-sync-title">Sync Center — último run</div>
-          <div className="qt-sync-grid">
-            <span className="qt-sync-k">Quando</span><span className="qt-sync-v">{new Date(lastRun.at).toLocaleString('pt-BR')}</span>
-            <span className="qt-sync-k">Criados</span><span className="qt-sync-v">{lastRun.created ?? 0}</span>
-            <span className="qt-sync-k">Atualizados</span><span className="qt-sync-v">{lastRun.updated ?? 0}</span>
-            <span className="qt-sync-k">Ignorados</span><span className="qt-sync-v">{lastRun.skipped ?? 0}</span>
+        <details className="qt-adv">
+          <summary>Sync Center — último run</summary>
+          <div className="qt-sync" aria-label="Sync Center">
+            <div className="qt-sync-grid">
+              <span className="qt-sync-k">Quando</span><span className="qt-sync-v">{new Date(lastRun.at).toLocaleString('pt-BR')}</span>
+              <span className="qt-sync-k">Criados</span><span className="qt-sync-v">{lastRun.created ?? 0}</span>
+              <span className="qt-sync-k">Atualizados</span><span className="qt-sync-v">{lastRun.updated ?? 0}</span>
+              <span className="qt-sync-k">Ignorados</span><span className="qt-sync-v">{lastRun.skipped ?? 0}</span>
+            </div>
           </div>
-        </div>
+        </details>
       )}
       <ModuleTabs module="system" />
 
@@ -303,8 +318,13 @@ export default function QuantowerPage() {
         <div className="qt-actions">
           <button className="qt-btn" onClick={handleCheck} disabled={busy}>{busy ? 'Testando…' : 'Testar conexão'}</button>
           <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
-          <button className="qt-btn" onClick={handleDiag} disabled={busy || !finance}>Diagnóstico (ponte × app)</button>
         </div>
+        <details className="qt-adv">
+          <summary>Diagnóstico (ponte × app)</summary>
+          <div className="qt-adv-body">
+            <button className="qt-btn" onClick={handleDiag} disabled={busy || !finance}>{busy ? 'Rodando…' : 'Rodar diagnóstico (7 dias)'}</button>
+            <span className="qt-hint">Compara o que a ponte manda com o que está gravado no app.</span>
+          </div>
         {diag && (
           <div className="qt-diag" role="region" aria-label="Diagnóstico de trades (7 dias)">
             <div className="qt-diag-row">
@@ -318,6 +338,29 @@ export default function QuantowerPage() {
                 <><span className="qt-sync-k">Motivos</span><span className="qt-sync-v">{Object.entries(diag.counts).map(([k, v]) => `${k}: ${v}`).join(' · ')}</span></>
               )}
             </div>
+            {diag.appRows?.length > 0 && (
+              <div className="qt-diag-table-wrap">
+                <div className="qt-diag-sub">Trades GRAVADOS no app (o que os widgets leem)</div>
+                <table className="qt-diag-table">
+                  <thead>
+                    <tr><th>Símbolo</th><th>Conta</th><th>Entrada</th><th>Saída</th><th>exitPrice?</th><th>Fees</th><th>Net</th></tr>
+                  </thead>
+                  <tbody>
+                    {diag.appRows.map((t) => (
+                      <tr key={t.id}>
+                        <td>{t.symbol}</td>
+                        <td>{t.accountId}</td>
+                        <td>{t.entry ? new Date(t.entry).toLocaleString('pt-BR') : '—'}</td>
+                        <td>{t.exit ? new Date(t.exit).toLocaleString('pt-BR') : <b className="qt-diag-bad">sem saída</b>}</td>
+                        <td>{t.hasExitPrice ? 'sim' : <b className="qt-diag-bad">NÃO</b>}</td>
+                        <td className="qt-num">{fmtMoney(t.fees)}</td>
+                        <td className="qt-num">{fmtMoney(t.net)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {diag.rows.length > 0 && (
               <div className="qt-diag-table-wrap">
                 <table className="qt-diag-table">
@@ -343,6 +386,7 @@ export default function QuantowerPage() {
             )}
           </div>
         )}
+        </details>
         {status && (status.online ? (
           <div className="qt-status" role="status">
             Bridge OK · v{status.version || status.bridgeVersion || '?'}
@@ -394,6 +438,8 @@ export default function QuantowerPage() {
         </div>
       )}
 
+      <details className="qt-adv">
+        <summary>Copy Trade (enviar ordem para várias contas)</summary>
       <div className="qt-card">
         <div className="qt-list-title">Copy Trade (preview antes de enviar)</div>
         {copyAccounts.length === 0 ? (
@@ -445,6 +491,7 @@ export default function QuantowerPage() {
           </>
         )}
       </div>
+      </details>
     </div>
   );
 }
@@ -473,6 +520,11 @@ const QT_CSS = `
 .qt-diag-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
 .qt-diag-bad { color: var(--red, #e74c3c); font-weight: 800; }
 .qt-diag-table-wrap { overflow-x: auto; }
+.qt-diag-sub { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 6px 0 2px; }
+.qt-adv { border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,0.02); }
+.qt-adv > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.qt-adv[open] > summary { margin-bottom: 8px; }
+.qt-adv-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .qt-diag-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
 .qt-diag-table th, .qt-diag-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; }
 .qt-diag-table th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
