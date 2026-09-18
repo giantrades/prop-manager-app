@@ -182,6 +182,13 @@ export function usePlatform() {
       if (_streamFailures >= 2) { // ...mas se nem abriu, não insiste (evita log infinito)
         _streamDisabled = true;
         try { es.close(); } catch { /* noop */ }
+        // Ajuda a diagnosticar: o bridge devolveu algo que NÃO é SSE (normalmente 401 em
+        // JSON = URL/token errados NESTE aparelho). O polling de 2s continua funcionando.
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[stream] SSE indisponível neste aparelho — usando polling (2s). Confira Bridge URL e Token em Sistema → Quantower (são por aparelho).',
+          { url: base },
+        );
       }
     };
     streamRef.current = es;
