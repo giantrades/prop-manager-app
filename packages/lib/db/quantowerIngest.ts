@@ -284,7 +284,7 @@ export async function ingestQuantowerTrades(
       // `multiplier`/`resultR` entram na comparação: um re-sync passa a CORRIGIR o R
       // dos trades que já estavam gravados com o multiplier errado.
       const changed = ['symbol', 'direction', 'qty', 'entryPrice', 'exitPrice', 'entryDatetime',
-        'exitDatetime', 'resultNet', 'stopPrice', 'takePrice', 'accountId', 'mae', 'mfe', 'multiplier', 'resultR']
+        'exitDatetime', 'resultNet', 'fees', 'stopPrice', 'takePrice', 'accountId', 'mae', 'mfe', 'multiplier', 'resultR']
         .some((k) => (existing as unknown as Record<string, unknown>)[k] !== (merged as unknown as Record<string, unknown>)[k]);
       byQt.set(q.platformTradeId, merged);
       byFp.set(fpOf(merged), merged);
