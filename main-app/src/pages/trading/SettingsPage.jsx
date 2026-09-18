@@ -6,10 +6,9 @@ import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
 import { useCurrency } from '@apps/state';
 import { supabase } from '@apps/supabase/client';
-import { importLegacyPayoutsFromStorage, dumpAppDb, restoreAppDb } from '@apps/lib/db';
+import { dumpAppDb, restoreAppDb } from '@apps/lib/db';
 import SyncConflicts from '@apps/ui/SyncConflicts';
 import ConnectionsManager from './ConnectionsManager';
-import CardsManager from './CardsManager';
 import { useToast } from '@apps/ui/Toast';
 import { usePush } from '../../usePush';
 import { usePlatform } from '@apps/state';
@@ -226,19 +225,6 @@ export default function SettingsPage() {
     }
   }, [finance]);
 
-  const handleImportPayouts = useCallback(async () => {
-    if (!finance) return;
-    setBusy(true);
-    try {
-      const res = await importLegacyPayoutsFromStorage(finance.ds, finance.chain);
-      toast(`Payouts importados: ${res.importedCount} (${res.skippedCount} pulados).`);
-    } catch (e) {
-      toast(`Falha: ${e instanceof Error ? e.message : e}`, { type: 'error' });
-    } finally {
-      setBusy(false);
-    }
-  }, [finance]);
-
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -319,7 +305,6 @@ export default function SettingsPage() {
 
       <details className="st-adv">
         <summary>Avançado (cartões, regras, notificações, import legado)</summary>
-        <CardsManager />
         <ActionRulesCard />
         <PushSettingsCard />
         <div className="st-card">
@@ -329,7 +314,10 @@ export default function SettingsPage() {
             <button className="st-btn" disabled={busy} onClick={async () => {
               try {
                 const res = await finance?.cloud?.pushAll?.();
-                toast(`Enviado para a nuvem: ${res?.count ?? 0} registro(s).`);
+                const parts = Object.entries(res?.entityCounts ?? {})
+                  .map(([t, n]) => `${t} ${n}`)
+                  .join(' · ');
+                toast(`Enviado: ${res?.count ?? 0} registro(s)${parts ? ` — ${parts}` : ''}.`);
               } catch (e) {
                 toast(`Falha ao reenviar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
               }
@@ -337,12 +325,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="st-card">
-          <div className="st-title">Importação legada</div>
-          <div className="st-actions">
-            <button className="st-btn" onClick={handleImportPayouts} disabled={busy}>Importar payouts (legado)</button>
-          </div>
-        </div>
+
       </details>
 
       <div className="st-card">
