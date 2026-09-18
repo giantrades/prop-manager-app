@@ -116,10 +116,14 @@ export default function LivePositionsPage() {
   const fmtPrice = (v) => (v == null || Number.isNaN(Number(v)))
     ? '—'
     : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
-  // Variação % da posição = PnL / notional (qtd × preço de abertura).
+  // Var % = variação do PREÇO a favor da posição. Antes era PnL/(qtd×abertura), que
+  // ignora o contract size — em MGC (10×) o percentual saía 10× maior.
   const varPct = (p) => {
-    const cost = Math.abs((p.quantity ?? 0) * (p.openPrice ?? 0));
-    return cost > 0 ? ((p.netPnl ?? 0) / cost) * 100 : null;
+    const open = Number(p.openPrice);
+    const cur = Number(p.currentPrice);
+    if (!(open > 0) || !Number.isFinite(cur) || cur === 0) return null;
+    const dir = p.side === 'Short' ? -1 : 1;
+    return ((cur - open) / open) * 100 * dir;
   };
 
   const loadOrders = useCallback(async () => {
@@ -408,7 +412,7 @@ export default function LivePositionsPage() {
           ) : (
             <div className="lp-list">
               <div className="lp-row lp-head" aria-hidden="true">
-                <span>Símbolo / Conta</span><span>Lado</span><span>Qtd</span><span>Abertura</span><span>Atual</span><span>PnL</span><span>Var %</span><span>SL</span><span>TP</span><span>Ações</span>
+                <span>Símbolo / Conta</span><span>Lado</span><span>Qtd</span><span>Abertura</span><span>Atual</span><span>PnL</span><span title="Variação do preço a favor da posição">Var %</span><span>SL</span><span>TP</span><span>Ações</span>
               </div>
               {positions.map((p) => {
                 const e = edits[p.platformPositionId] ?? {};

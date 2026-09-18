@@ -1183,7 +1183,9 @@ namespace QuantowerBridge
                 double grossPnl = pos.GrossPnL?.Value ?? 0;
                 double fee = pos.Fee?.Value ?? 0;
                 double swaps = pos.Swaps?.Value ?? 0;
-                double netPnl = pos.NetPnL?.Value ?? (grossPnl + fee + swaps);
+                // Fee/Swap sao CUSTO: no fallback subtrai em modulo (a plataforma as vezes
+                // reporta valor negativo e `gross + fee` aumentava o lucro).
+                double netPnl = pos.NetPnL?.Value ?? (grossPnl - Math.Abs(fee) - Math.Abs(swaps));
 
                 positions.Add(new
                 {
