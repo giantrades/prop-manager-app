@@ -167,7 +167,7 @@ export function usePlatform() {
   // Polling RÁPIDO das posições enquanto o stream não estiver ativo (e a aba visível):
   // sem isso, uma página https + bridge http ficava só no ciclo de 60s ("demora demais").
   useEffect(() => {
-    const FALLBACK_MS = 4000;
+    const FALLBACK_MS = 2000;
     const t = setInterval(() => {
       if (streamingRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
