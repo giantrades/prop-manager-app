@@ -135,6 +135,13 @@ const MAX_CONFLICTS = 50;
 export interface SupabaseSync {
   push: (batch: Array<{ entityType: string; record: SyncedRecord }>) => Promise<{ count: number; entityCounts: Record<string, number> }>;
   pull: () => Promise<{ applied: number; conflicts: number }>;
+  /** Apaga no Supabase (exclusão local propaga para a nuvem). Retorna quantos foram. */
+  remove: (entityType: string, id: string) => Promise<number>;
+  /**
+   * Reenvia TODO o banco local para a nuvem (reparo). Use quando o remoto tem lixo/legado
+   * e o aparelho é a fonte da verdade — depois os outros aparelhos puxam isso.
+   */
+  pushAll: () => Promise<{ count: number; entityCounts: Record<string, number> }>;
   listConflicts: () => Promise<SyncConflict[]>;
   resolveConflictChoice: (conflictId: string, choice: 'mine' | 'theirs') => Promise<boolean>;
   /** Assina mudanças remotas (trades/transactions) → chama `onRemoteChange`. Retorna unsubscribe. */
@@ -197,11 +204,27 @@ export function createSupabaseSync(
     return { count, entityCounts };
   };
 
+  /**
+   * Remove no Supabase. Usado quando um registro é EXCLUÍDO localmente (o push antigo só
+   * fazia upsert, então a exclusão nunca chegava na nuvem nem nos outros aparelhos).
+   */
+  const remove = async (entityType: string, id: string): Promise<number> => {
+    const userId = await getUserId();
+    if (!userId || !id) return 0;
+    const store = ENTITY_BY_STORE[entityType];
+    const table = store ? TABLE_BY_ENTITY[store as StoreName] : undefined;
+    if (!table) return 0;
+    const { error } = await supabase.from(table).delete().eq('user_id', userId).in('id', [id]);
+    if (error) throw error;
+    return 1;
+  };
+
   const pull = async () => {
     const userId = await getUserId();
     if (!userId) return { applied: 0, conflicts: 0 };
     const startedAt = Date.now();
     const entityCounts: Record<string, number> = {};
+    const remoteIdsByStore = new Map<string, Set<string>>();
     let applied = 0;
     let conflicts = 0;
     for (const [store, table] of Object.entries(TABLE_BY_ENTITY)) {
@@ -218,6 +241,7 @@ export function createSupabaseSync(
         if (table === 'app_meta') continue;
         throw e;
       }
+      remoteIdsByStore.set(storeName, new Set(rows.map((row) => String((row as Record<string, unknown>).id ?? ''))));
       for (const row of rows) {
         const rec = snakeToCamel(row as Record<string, unknown>) as unknown as SyncedRecord;
         // Meta: ignora chaves de device (defesa extra).
@@ -258,6 +282,24 @@ export function createSupabaseSync(
           applied += 1;
           entityCounts[storeName] = (entityCounts[storeName] ?? 0) + 1;
         }
+      }
+    }
+    // RECONCILIAÇÃO de exclusões: linha que veio de OUTRO aparelho (deviceId diferente)
+    // e não existe mais na nuvem foi apagada lá → apaga aqui também (senão cada aparelho
+    // ficaria com uma cópia "fantasma"). Só toca em registros de outro device; os locais
+    // (deste device) podem simplesmente ainda não ter subido.
+    for (const [store, ids] of remoteIdsByStore) {
+      if (store === 'meta') continue;
+      try {
+        const locals = (await ds.list(store as StoreName)) as unknown as Array<Record<string, unknown>>;
+        for (const rec of locals) {
+          const key = String(rec[keyPathFor(store as StoreName)] ?? rec.id ?? '');
+          if (!key || ids.has(key)) continue;
+          if (rec.deviceId === ds.deviceId) continue; // local: pode não ter subido ainda
+          await ds.remove(store as StoreName, key, { source: 'sync:pull' });
+        }
+      } catch {
+        /* noop */
       }
     }
     ds.bus.emit(EVENTS.SYNC_PULLED, { count: applied, entityCounts, durationMs: Date.now() - startedAt });
@@ -311,7 +353,40 @@ export function createSupabaseSync(
     };
   };
 
-  return { push, pull, listConflicts, resolveConflictChoice, subscribe };
+  /** Envia TODOS os registros locais (bypass da fila) — reparo de divergência. */
+  const pushAll = async (): Promise<{ count: number; entityCounts: Record<string, number> }> => {
+    const userId = await getUserId();
+    if (!userId) return { count: 0, entityCounts: {} };
+    const entityCounts: Record<string, number> = {};
+    let count = 0;
+    for (const [store, table] of Object.entries(TABLE_BY_ENTITY)) {
+      if (!table) continue;
+      const storeName = store as StoreName;
+      let recs: Array<Record<string, unknown>> = [];
+      try {
+        recs = (await ds.list(storeName)) as unknown as Array<Record<string, unknown>>;
+      } catch {
+        continue;
+      }
+      const rows = recs
+        .filter((r) => !(storeName === 'meta' && !isSyncedMetaKey(r.key)))
+        .map((r) => ({ ...camelToSnake(r), user_id: userId }));
+      for (let i = 0; i < rows.length; i += 200) {
+        const chunk = rows.slice(i, i + 200);
+        const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
+        const { error } = await supabase.from(table).upsert(chunk, { onConflict: conflict });
+        if (error) {
+          if (table === 'app_meta') break;
+          throw error;
+        }
+        count += chunk.length;
+      }
+      if (rows.length) entityCounts[table] = rows.length;
+    }
+    return { count, entityCounts };
+  };
+
+  return { push, pull, remove, pushAll, listConflicts, resolveConflictChoice, subscribe };
 }
 
 async function recordConflict(ds: DataService, conflict: SyncConflict): Promise<void> {

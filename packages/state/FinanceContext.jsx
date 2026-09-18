@@ -96,7 +96,12 @@ export function FinanceProvider({ children, adapter = null }) {
         if (!store || !payload.entityIds) return;
         for (const id of payload.entityIds) {
           const rec = await ds.get(store, id);
-          if (!rec) continue;
+          if (!rec) {
+            // EXCLUSÃO local → apaga na nuvem (antes era ignorado: o registro sumia só
+            // aqui e continuava existindo no Supabase e nos outros aparelhos).
+            supabaseSync.remove?.(payload.entityType, String(id)).catch((e) => console.error('[sync] delete falhou', e));
+            continue;
+          }
           // Meta: só sincroniza chaves na whitelist (firms/conexões).
           if (payload.entityType === 'meta' && !isSyncedMetaKey(rec.key)) continue;
           syncEngine?.enqueue(payload.entityType, rec);

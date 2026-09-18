@@ -323,6 +323,21 @@ export default function SettingsPage() {
         <ActionRulesCard />
         <PushSettingsCard />
         <div className="st-card">
+          <div className="st-title">Sincronização (nuvem)</div>
+          <p className="st-hint">Se outro aparelho mostrou dados estranhos/legados, reenvie este (o do PC) como fonte da verdade. Os outros aparelhos puxam isso no próximo sync.</p>
+          <div className="st-actions">
+            <button className="st-btn" disabled={busy} onClick={async () => {
+              try {
+                const res = await finance?.cloud?.pushAll?.();
+                toast(`Enviado para a nuvem: ${res?.count ?? 0} registro(s).`);
+              } catch (e) {
+                toast(`Falha ao reenviar: ${e instanceof Error ? e.message : e}`, { type: 'error' });
+              }
+            }}>Reenviar tudo para a nuvem (reparar)</button>
+          </div>
+        </div>
+
+        <div className="st-card">
           <div className="st-title">Importação legada</div>
           <div className="st-actions">
             <button className="st-btn" onClick={handleImportPayouts} disabled={busy}>Importar payouts (legado)</button>
