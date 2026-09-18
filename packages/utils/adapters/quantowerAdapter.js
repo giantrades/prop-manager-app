@@ -286,15 +286,6 @@ export class QuantowerAdapter extends BaseAdapter {
     return this.getTrades(undefined, undefined);
   }
 
-  /** Trades CRUS da ponte (sem mapear) — diagnóstico: mostrar o que a plataforma manda. */
-  async getTradesRaw(from, to) {
-    const params = {};
-    if (from) params.from = from;
-    if (to) params.to = to;
-    const data = await this._fetch('/trades', params);
-    return data.trades || [];
-  }
-
   async getPositions() {
     const data = await this._fetch('/positions');
     this._markSynced();

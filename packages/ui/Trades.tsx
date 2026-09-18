@@ -315,8 +315,6 @@ function TradeReplayView({ trade }) {
         <span>MFE <b style={{ color: 'var(--green)' }}>{replay.mfe ?? '—'}</b></span>
         <span>R <b>{fmtR(trade.resultR)}</b></span>
         <span>Fees <b style={{ color: 'var(--red)' }}>{fmtMoney(-Math.abs(trade.fees || 0))}</b></span>
-        {/* Conferência: gross = net + fees (derivado do que está gravado, não é fórmula nova). */}
-        <span>Gross <b>{fmtMoney(tradeNetPnl(trade) + Math.abs(trade.fees || 0))}</b></span>
         {trade.stopPrice != null && <span>Stop <b>{fmtMoney(trade.stopPrice)}</b></span>}
         {trade.takePrice != null && <span>Alvo <b>{fmtMoney(trade.takePrice)}</b></span>}
         {trade.multiplier != null && <span>Multiplier <b>{trade.multiplier}×</b></span>}

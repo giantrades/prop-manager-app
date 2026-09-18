@@ -4,11 +4,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
-import { fmtMoney } from '@apps/ui/currency';
 import { useFinance, usePlatform } from '@apps/state';
 import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
 import {
-  ingestQuantowerTrades, tradeNetPnl, tradeFingerprint, getDeletedTradeKeys,
+  ingestQuantowerTrades,
 } from '@apps/lib/db';
 
 export default function QuantowerPage() {
@@ -22,8 +21,6 @@ export default function QuantowerPage() {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-
-  const [diag, setDiag] = useState(null);
   const [livePositions, setLivePositions] = useState([]);
   const [lastRun, setLastRun] = useState(null);
   const [autoSync, setAutoSync] = useState(() => {
@@ -126,68 +123,7 @@ export default function QuantowerPage() {
     }
   }, [adapter]);
 
-  // Diagnóstico: o que a PONTE manda (cru) x o que o APP tem gravado, na mesma janela.
-  // Foi criado para responder "por que o total do app ≠ total da plataforma" sem chute.
-  const handleDiag = useCallback(async () => {
-    if (!finance) return;
-    setBusy(true);
-    setError(null);
-    try {
-      savePrefs();
-      const a = adapter();
-      const from = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-      const raw = await a.getTradesRaw(from, undefined).catch(() => []);
-      const stored = (await finance.ds.trades.list())
-        .filter((t) => (t.exitDatetime || t.entryDatetime) >= from);
-      const sum = (arr, f) => Number(arr.reduce((s, x) => s + (Number(f(x)) || 0), 0).toFixed(2));
-      const mapped = await a.getTrades(from, undefined).catch(() => []);
-      // POR QUE cada trade da ponte (não) está no app? Compara id/impressão digital e
-      // checa as guardas + lápides (tombstones) do ingest.
-      const deleted = await getDeletedTradeKeys(finance.ds);
-      const byQt = new Map(stored.filter((t) => t.quantowerId).map((t) => [t.quantowerId, t]));
-      const byFp = new Map(stored.map((t) => [tradeFingerprint(t), t]));
-      const farFuture = Date.now() + 24 * 3600 * 1000;
-      const statusOf = (t) => {
-        const fp = tradeFingerprint(t);
-        if (byQt.has(t.platformTradeId) || byFp.has(fp)) return 'ok';
-        if (deleted.has(t.platformTradeId) || deleted.has(fp)) return 'lápide (excluído)';
-        if (!t.entryDateTime) return 'sem entrada';
-        if (Date.parse(t.entryDateTime) > farFuture || (t.exitDateTime && Date.parse(t.exitDateTime) > farFuture)) return 'data futura';
-        if (!t.exitDateTime && !(t.exitPrice > 0)) return 'sem saída';
-        return 'faltando (ingest)';
-      };
-      const rows = mapped.map((t) => ({ ...t, why: statusOf(t) }));
-      const counts = rows.reduce((acc, r) => { acc[r.why] = (acc[r.why] ?? 0) + 1; return acc; }, {});
-      // O que está GRAVADO no app (com os campos que os widgets usam) — pra achar na hora
-      // um trade que entra no card e não entra no calendário/heat.
-      const appRows = stored.map((t) => ({
-        id: t.id,
-        symbol: t.symbol,
-        accountId: t.accountId ?? '—',
-        entry: t.entryDatetime,
-        exit: t.exitDatetime,
-        hasExitPrice: t.exitPrice != null,
-        net: tradeNetPnl(t),
-        fees: t.fees,
-      }));
-      setDiag({
-        from,
-        bridgeCount: raw.length,
-        bridgeNet: sum(raw, (t) => t.netPnl),
-        bridgeGross: sum(raw, (t) => t.grossPnl),
-        bridgeFee: sum(raw, (t) => t.fee),
-        appCount: stored.length,
-        appNet: sum(stored, (t) => tradeNetPnl(t)),
-        counts,
-        rows: rows.slice(0, 30),
-        appRows,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha no diagnóstico.');
-    } finally {
-      setBusy(false);
-    }
-  }, [adapter, finance, savePrefs]);
+
 
   const handleSync = useCallback(async () => {
     if (!finance) return;
@@ -271,74 +207,7 @@ export default function QuantowerPage() {
           <button className="qt-btn" onClick={handleCheck} disabled={busy}>{busy ? 'Testando…' : 'Testar conexão'}</button>
           <button className="qt-btn qt-btn-primary" onClick={handleSync} disabled={busy || !finance}>Sincronizar trades</button>
         </div>
-        <details className="qt-adv">
-          <summary>Diagnóstico (ponte × app)</summary>
-          <div className="qt-adv-body">
-            <button className="qt-btn" onClick={handleDiag} disabled={busy || !finance}>{busy ? 'Rodando…' : 'Rodar diagnóstico (7 dias)'}</button>
-            <span className="qt-hint">Compara o que a ponte manda com o que está gravado no app.</span>
-          </div>
-        {diag && (
-          <div className="qt-diag" role="region" aria-label="Diagnóstico de trades (7 dias)">
-            <div className="qt-diag-row">
-              <span className="qt-sync-k">Janela</span><span className="qt-sync-v">{new Date(diag.from).toLocaleDateString('pt-BR')} → hoje</span>
-              <span className="qt-sync-k">Ponte</span><span className="qt-sync-v">{diag.bridgeCount} trades · net {fmtMoney(diag.bridgeNet)} · gross {fmtMoney(diag.bridgeGross)} · fee {fmtMoney(diag.bridgeFee)}</span>
-              <span className="qt-sync-k">App</span><span className={`qt-sync-v ${Math.abs(diag.appNet - diag.bridgeNet) > 1 ? 'qt-diag-bad' : ''}`}>{diag.appCount} trades · net {fmtMoney(diag.appNet)}</span>
-              {Math.abs(diag.appNet - diag.bridgeNet) > 1 && (
-                <><span className="qt-sync-k">Diferença</span><span className="qt-sync-v qt-diag-bad">{fmtMoney(diag.appNet - diag.bridgeNet)} (app − ponte)</span></>
-              )}
-              {diag.counts && (
-                <><span className="qt-sync-k">Motivos</span><span className="qt-sync-v">{Object.entries(diag.counts).map(([k, v]) => `${k}: ${v}`).join(' · ')}</span></>
-              )}
-            </div>
-            {diag.appRows?.length > 0 && (
-              <div className="qt-diag-table-wrap">
-                <div className="qt-diag-sub">Trades GRAVADOS no app (o que os widgets leem)</div>
-                <table className="qt-diag-table">
-                  <thead>
-                    <tr><th>Símbolo</th><th>Conta</th><th>Entrada</th><th>Saída</th><th>exitPrice?</th><th>Fees</th><th>Net</th></tr>
-                  </thead>
-                  <tbody>
-                    {diag.appRows.map((t) => (
-                      <tr key={t.id}>
-                        <td>{t.symbol}</td>
-                        <td>{t.accountId}</td>
-                        <td>{t.entry ? new Date(t.entry).toLocaleString('pt-BR') : '—'}</td>
-                        <td>{t.exit ? new Date(t.exit).toLocaleString('pt-BR') : <b className="qt-diag-bad">sem saída</b>}</td>
-                        <td>{t.hasExitPrice ? 'sim' : <b className="qt-diag-bad">NÃO</b>}</td>
-                        <td className="qt-num">{fmtMoney(t.fees)}</td>
-                        <td className="qt-num">{fmtMoney(t.net)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {diag.rows.length > 0 && (
-              <div className="qt-diag-table-wrap">
-                <table className="qt-diag-table">
-                  <thead>
-                    <tr><th>Símbolo</th><th>Qtd</th><th>Saiu</th><th>Gross</th><th>Fee</th><th>Net</th><th>Multiplier</th><th>No app?</th></tr>
-                  </thead>
-                  <tbody>
-                    {diag.rows.map((t, i) => (
-                      <tr key={`${t.platformTradeId}-${i}`}>
-                        <td>{t.symbol}</td>
-                        <td className="qt-num">{t.quantity}</td>
-                        <td>{t.exitDateTime ? new Date(t.exitDateTime).toLocaleString('pt-BR') : '—'}</td>
-                        <td className="qt-num">{fmtMoney(t.grossPnl)}</td>
-                        <td className="qt-num">{fmtMoney(t.fee)}</td>
-                        <td className="qt-num">{fmtMoney(t.netPnl)}</td>
-                        <td className="qt-num">{t.contractSize ?? '—'}</td>
-                        <td className={t.why === 'ok' ? '' : 'qt-diag-bad'}>{t.why}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-        </details>
+        
         {status && (status.online ? (
           <div className="qt-status" role="status">
             Bridge OK · v{status.version || status.bridgeVersion || '?'}
@@ -414,19 +283,7 @@ const QT_CSS = `
 .qt-side { text-transform: capitalize; color: var(--muted, #a1a7b3); }
 .qt-acct { margin-left: auto; font-size: 12px; color: var(--muted, #a1a7b3); }
 .qt-hint { font-size: 12px; color: var(--muted, #a1a7b3); }
-.qt-diag { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(124,92,255,0.06); border: 1px solid rgba(124,92,255,0.25); display: flex; flex-direction: column; gap: 8px; }
-.qt-diag-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
-.qt-diag-bad { color: var(--red, #e74c3c); font-weight: 800; }
-.qt-diag-table-wrap { overflow-x: auto; }
-.qt-diag-sub { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 6px 0 2px; }
-.qt-adv { border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,0.02); }
-.qt-adv > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
-.qt-adv[open] > summary { margin-bottom: 8px; }
-.qt-adv-body { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.qt-diag-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
-.qt-diag-table th, .qt-diag-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; }
-.qt-diag-table th { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
-.qt-diag-table .qt-num { text-align: right; }
+
 .qt-preview { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: rgba(124,92,255,0.08); border: 1px solid rgba(124,92,255,0.2); }
 @media (max-width: 719px) { .qt-grid { grid-template-columns: 1fr; } }
 `;
