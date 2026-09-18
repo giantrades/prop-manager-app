@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useFinance, usePeriod } from '@apps/state';
+import { useFinance, usePeriod, useCurrency } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { fmtMoney } from '@apps/ui/currency';
 import { nowIso } from '@apps/lib/db';
@@ -24,6 +24,7 @@ import {
   getBudgets,
   saveBudget,
   saveCategory,
+  getFxUSD,
 } from '@apps/lib/db';
 import RiskCenter from '@apps/ui/RiskCenter';
 import NetWorth from '@apps/ui/NetWorth';
@@ -105,12 +106,14 @@ const PORTFOLIO_HISTORY_GAP_MS = 12 * 60 * 60 * 1000;
 const PRICE_REFRESH_MS = 5 * 60 * 1000;
 
 export function PortfolioPage() {
+  // Taxa única: o mesmo valor alimenta o motor (meta fx:USDBRL) e a exibição (navbar).
+  const { setRate } = useCurrency();
   // A5 — taxa USD→BRL (manual, com data). Sem taxa, posições USD ficam fora dos totais.
   const [fxInput, setFxInput] = useState('');
   const { loading, data, finance, reload } = useEngineData(async (f) => {
     const { applyBenchmark, getCdiSeries, getAnnouncedDividends, upcomingDividends, dividendHistory } = await import('@apps/lib/db');
     const [fxRec, allocation, txs, histRec, cdi, announced, positions, accounts] = await Promise.all([
-      f.ds.meta.getKey('fx:USDBRL'),
+      getFxUSD(f.ds),
       f.wealth.allocation(),
       f.ds.transactions.list(),
       f.ds.meta.getKey(PORTFOLIO_HISTORY_KEY),
@@ -119,7 +122,7 @@ export function PortfolioPage() {
       f.ds.positions.list(),
       f.ds.accounts.list(),
     ]);
-    const fx = fxRec?.value?.rate > 0 ? fxRec.value.rate : null;
+    const fx = fxRec?.rate > 0 ? fxRec.rate : null;
     const portfolio = await f.wealth.portfolio(fx != null ? { fxUSD: fx } : {});
     const history = Array.isArray(histRec?.value) ? histRec.value : [];
     return {
@@ -143,9 +146,9 @@ export function PortfolioPage() {
     try {
       const [positions, fxRec] = await Promise.all([
         f.ds.positions.list(),
-        f.ds.meta.getKey('fx:USDBRL'),
+        getFxUSD(f.ds),
       ]);
-      const fx = fxRec?.value?.rate > 0 ? fxRec.value.rate : null;
+      const fx = fxRec?.rate > 0 ? fxRec.rate : null;
       const symbols = [...new Set(positions.map((p) => p.symbol).filter(Boolean))];
       if (!symbols.length) {
         setQuotes({ status: 'idle', at: null, failed: [], fromCache: [], count: 0, noFx: 0 });
@@ -356,13 +359,17 @@ export function PortfolioPage() {
     });
   }, []);
 
-  const handleSaveFx = useCallback(async () => {    const f = financeRef.current;
+  const handleSaveFx = useCallback(async () => {
+    const f = financeRef.current;
     const rate = Number(String(fxInput).replace(',', '.'));
     if (!f || !(rate > 0)) return;
     const { saveFxUSD } = await import('@apps/lib/db');
     await saveFxUSD(f.ds, rate);
+    // TAXA ÚNICA: a mesma taxa usada pelo motor passa a valer na exibição (navbar).
+    try { localStorage.setItem('usdBrlRate', String(rate)); } catch { /* noop */ }
+    setRate(rate);
     setFxInput('');
-  }, [fxInput]);
+  }, [fxInput, setRate]);
 
   // Posições — CRUD (único writer DataService) + marcação manual + remoção.
   const handlePositionSave = useCallback(async (position) => {

@@ -288,6 +288,16 @@ export default function SettingsPage() {
             type="number" step="0.01" min="0"
             value={rate}
             onChange={(e) => setRate(parseFloat(e.target.value || '0') || 0)}
+            onBlur={async () => {
+              // TAXA ÚNICA: grava também no motor (meta fx:USDBRL) para exibição e
+              // cálculos usarem exatamente o mesmo câmbio.
+              try {
+                if (finance?.ds && rate > 0) {
+                  const { saveFxUSD } = await import('@apps/lib/db');
+                  await saveFxUSD(finance.ds, rate);
+                }
+              } catch { /* noop */ }
+            }}
             aria-label="Cotação USD para BRL"
           />
         </label>

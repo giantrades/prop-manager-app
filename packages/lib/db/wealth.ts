@@ -355,11 +355,28 @@ export interface FxRate {
   at: string;
 }
 
+/**
+ * Taxa de exibição (navbar/Settings). Fallback para não existirem DUAS taxas: se o meta
+ * `fx:USDBRL` não foi salvo, o motor usa o mesmo valor que a UI mostra.
+ */
+function displayRateFallback(): number | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const v = Number(localStorage.getItem('usdBrlRate'));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getFxUSD(ds: DataService): Promise<FxRate | null> {
   const rec = await ds.meta.getKey(FX_USD_META_KEY);
   const v = rec?.value as FxRate | undefined;
-  if (!v || typeof v.rate !== 'number' || !(v.rate > 0)) return null;
-  return { rate: v.rate, at: typeof v.at === 'string' ? v.at : '' };
+  if (v && typeof v.rate === 'number' && v.rate > 0) {
+    return { rate: v.rate, at: typeof v.at === 'string' ? v.at : '' };
+  }
+  const fb = displayRateFallback();
+  return fb != null ? { rate: fb, at: '' } : null;
 }
 
 export async function saveFxUSD(ds: DataService, rate: number): Promise<FxRate> {
