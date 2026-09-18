@@ -8,8 +8,7 @@ import { fmtMoney } from '@apps/ui/currency';
 import { useFinance, usePlatform } from '@apps/state';
 import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
 import {
-  ingestQuantowerTrades, previewCopyTrade, copyPreviewMessage, executeCopyTrade, tradeNetPnl,
-  tradeFingerprint, getDeletedTradeKeys,
+  ingestQuantowerTrades, tradeNetPnl, tradeFingerprint, getDeletedTradeKeys,
 } from '@apps/lib/db';
 
 export default function QuantowerPage() {
@@ -23,10 +22,7 @@ export default function QuantowerPage() {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const [copyAccounts, setCopyAccounts] = useState([]);
-  const [copyProps, setCopyProps] = useState({});
-  const [copyForm, setCopyForm] = useState({ masterId: '', symbol: '', side: 'buy', qty: '' });
-  const [copyResult, setCopyResult] = useState(null);
+
   const [diag, setDiag] = useState(null);
   const [livePositions, setLivePositions] = useState([]);
   const [lastRun, setLastRun] = useState(null);
@@ -205,56 +201,12 @@ export default function QuantowerPage() {
       setTrades(list.slice(0, 8));
       const res = await ingestQuantowerTrades(finance.ds, finance.chain, list);
       setResult(res);
-      const [accs, props] = await Promise.all([finance.ds.accounts.list(), finance.ds.propExtensions.list()]);
-      setCopyAccounts(accs);
-      setCopyProps(Object.fromEntries(props.map((p) => [p.accountId, p])));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao sincronizar.');
     } finally {
       setBusy(false);
     }
   }, [adapter, finance, savePrefs]);
-
-  const copyMaster = useMemo(() => copyAccounts.find((a) => a.id === copyForm.masterId) || null, [copyAccounts, copyForm.masterId]);
-  const copyPreview = useMemo(() => {
-    if (!copyMaster || !copyForm.qty) return null;
-    return previewCopyTrade(copyMaster, copyAccounts, Number(copyForm.qty) || 0);
-  }, [copyMaster, copyAccounts, copyForm.qty]);
-
-  const handleCopy = useCallback(async () => {
-    if (!copyMaster || !copyForm.symbol || !copyForm.qty) {
-      setError('Preencha conta mestra, símbolo e qty para o copy-trade.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setCopyResult(null);
-    try {
-      const a = adapter();
-      const platformIdOf = (accountId) => {
-        const prop = copyProps[accountId];
-        const acct = copyAccounts.find((x) => x.id === accountId);
-        return prop?.quantowerAccountId || acct?.platformAccountId || null;
-      };
-      const sender = {
-        openPosition: (p) => {
-          const platformId = platformIdOf(p.accountId);
-          if (!platformId) throw new Error(`Conta ${p.accountId} sem quantowerAccountId/platformAccountId mapeado`);
-          return a.openPosition({ ...p, accountId: platformId });
-        },
-      };
-      const res = await executeCopyTrade(sender, copyMaster, copyAccounts, {
-        symbol: copyForm.symbol.toUpperCase(),
-        side: copyForm.side,
-        qty: Number(copyForm.qty),
-      });
-      setCopyResult(res);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Falha no copy-trade.');
-    } finally {
-      setBusy(false);
-    }
-  }, [adapter, copyAccounts, copyForm, copyMaster, copyProps]);
 
   return (
     <div className="cmd-page">
@@ -438,60 +390,6 @@ export default function QuantowerPage() {
         </div>
       )}
 
-      <details className="qt-adv">
-        <summary>Copy Trade (enviar ordem para várias contas)</summary>
-      <div className="qt-card">
-        <div className="qt-list-title">Copy Trade (preview antes de enviar)</div>
-        {copyAccounts.length === 0 ? (
-          <div className="qt-hint">Sincronize os trades primeiro (carrega as contas) ou cadastre contas com copyGroup em Accounts.</div>
-        ) : (
-          <>
-            <div className="qt-grid">
-              <label className="qt-field"><span className="qt-label">Conta mestra</span>
-                <select className="qt-input" value={copyForm.masterId} onChange={(e) => setCopyForm({ ...copyForm, masterId: e.target.value })}>
-                  <option value="">—</option>
-                  {copyAccounts.filter((a) => a.copyGroup).map((a) => (
-                    <option key={a.id} value={a.id}>{a.name} (grupo {a.copyGroup})</option>
-                  ))}
-                </select>
-              </label>
-              <label className="qt-field"><span className="qt-label">Símbolo</span>
-                <input className="qt-input" value={copyForm.symbol} onChange={(e) => setCopyForm({ ...copyForm, symbol: e.target.value.toUpperCase() })} placeholder="EURUSD" />
-              </label>
-              <label className="qt-field"><span className="qt-label">Lado</span>
-                <select className="qt-input" value={copyForm.side} onChange={(e) => setCopyForm({ ...copyForm, side: e.target.value })}>
-                  <option value="buy">Buy</option>
-                  <option value="sell">Sell</option>
-                </select>
-              </label>
-              <label className="qt-field"><span className="qt-label">Qty (mestra)</span>
-                <input className="qt-input" type="number" value={copyForm.qty} onChange={(e) => setCopyForm({ ...copyForm, qty: e.target.value })} />
-              </label>
-            </div>
-            {copyPreview && (
-              <div className="qt-preview" role="status">
-                {copyPreviewMessage(copyPreview)}
-              </div>
-            )}
-            <div className="qt-actions">
-              <button className="qt-btn qt-btn-primary" onClick={handleCopy} disabled={busy || !copyMaster}>Executar copy</button>
-            </div>
-            {copyResult && (
-              <div className="qt-list">
-                {copyResult.sent.map((s) => (
-                  <div key={s.clientOrderId} className="qt-item">
-                    <span>{s.accountId}</span>
-                    <span>qty {s.qty}</span>
-                    <span>{s.ok ? '✅ enviada' : `❌ ${s.error}`}</span>
-                  </div>
-                ))}
-                {copyResult.failed > 0 && <div className="qt-error" role="alert">{copyResult.failed} réplica(s) falharam — as outras foram enviadas.</div>}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      </details>
     </div>
   );
 }

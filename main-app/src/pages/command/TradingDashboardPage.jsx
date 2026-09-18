@@ -19,7 +19,7 @@ import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
   strategyVersionMetrics, ruleAdherence, getChecklistTemplate, getDayCheck, tradeNetPnl,
-  tradeAccountIds, weightForAccount, accountBalance,
+  tradeAccountIds, weightForAccount, accountBalance, calendarPnl, formatDate, parseDate,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -307,6 +307,36 @@ export default function TradingDashboardPage() {
         <StatCard label="Payout Yield" value={fmtPct(stats.payoutYield)} sub="payouts / capital nominal" color={stats.payoutYield >= 0 ? '#7c5cff' : '#ef4444'} glow="rgba(124,92,255,0.15)" />
       </div>
 
+      {/* CONFERÊNCIA — mostra o conjunto que o card soma X o que o calendário soma, e
+          lista cada trade. Se divergir, o culpado aparece aqui. */}
+      {(() => {
+        const now = new Date();
+        const sumSel = Number(trades.reduce((s, t) => s + tradeNetPnl(t), 0).toFixed(2));
+        const cal = calendarPnl(trades, now.getFullYear(), now.getMonth() + 1);
+        const diff = Number((sumSel - cal.monthPnl).toFixed(2));
+        return (
+          <details className="td-conf">
+            <summary>Conferência dos totais (card × calendário)</summary>
+            <div className="td-conf-row">
+              <span>Seleção (card)</span><b>{trades.length} trades · {fmtMoney(sumSel, 'USD')}</b>
+              <span>Mês do calendário</span><b>{cal.monthTrades} trades · {fmtMoney(cal.monthPnl, 'USD')}</b>
+              {Math.abs(diff) > 0.05 && <span className="td-conf-bad">divergência {fmtMoney(diff, 'USD')}</span>}
+            </div>
+            <div className="td-conf-list">
+              {trades.map((t) => (
+                <div key={t.id} className="td-conf-item">
+                  <span className="td-conf-sym">{t.symbol}</span>
+                  <span>{t.entryDatetime ? formatDate(parseDate(t.entryDatetime), 'dd/MM HH:mm') : 'sem entrada'} → {t.exitDatetime ? formatDate(parseDate(t.exitDatetime), 'dd/MM HH:mm') : 'sem saída'}</span>
+                  <span className={t.exitPrice != null ? '' : 'td-conf-bad'}>{t.exitPrice != null ? 'exitPrice ok' : 'SEM exitPrice'}</span>
+                  <span>{t.accountId ? `conta ${t.accountId}` : 'SEM conta'}</span>
+                  <b className={tradeNetPnl(t) >= 0 ? 'dash-pos' : 'dash-neg'}>{fmtMoney(tradeNetPnl(t), 'USD')}</b>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })()}
+
       {compare.length > 1 && (
         <div className="td-widget">
           <div className="td-chart-title">Comparação entre contas ({compare.length})</div>
@@ -590,6 +620,17 @@ const TD_CSS = `
 .td-heat-n { color: var(--muted, #a1a7b3); }
 .td-heat-wr, .td-heat-avgr { color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; }
 .td-heat-pnl { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.td-conf { border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 8px 12px; background: rgba(255,255,255,0.02); margin: 12px 0; }
+.td-conf > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.td-conf[open] > summary { margin-bottom: 10px; }
+.td-conf-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; }
+.td-conf-row span { color: var(--muted, #a1a7b3); }
+.td-conf-bad { color: var(--red, #e74c3c); font-weight: 800; }
+.td-conf-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.td-conf-item { display: grid; grid-template-columns: 1.2fr 1.6fr 1fr 1fr auto; gap: 8px; align-items: center; font-size: 11.5px; font-variant-numeric: tabular-nums; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.td-conf-sym { font-weight: 700; }
+@media (max-width: 719px) { .td-conf-item { grid-template-columns: 1fr 1fr; } }
 
 .td-strat { display: flex; flex-direction: column; font-size: 12px; }
 .td-strat-head, .td-strat-row { display: grid; grid-template-columns: 1.6fr 0.6fr 0.8fr 0.8fr 0.7fr 1fr; gap: 8px; align-items: center; padding: 7px 4px; }
