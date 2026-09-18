@@ -290,6 +290,9 @@ export default function ConnectionsManager() {
     try {
       const since = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString();
       const list = await adapterRef.current.getTrades(since, undefined);
+      // 1) Reingere ANTES de limpar: se um trade existe na ponte, ele passa a ser
+      //    "conhecido" (id/impressão digital) e NÃO é removido por engano.
+      if (list.length > 0) await ingestQuantowerTrades(f.ds, f.chain, list);
       const res = await pruneUnknownTrades(f.ds, f.chain, list, since);
       toast(res.removed > 0
         ? `${res.removed} trade(s) fantasma removido(s) (${list.length} lidos da ponte).`

@@ -24,6 +24,8 @@ export interface QuantowerTrade {
   mae?: number | null;
   mfe?: number | null;
   multiplier?: number | null;
+  /** Valor do ponto/contrato (contract size) — v2.1.0 do bridge. Preferido p/ o R. */
+  contractSize?: number | null;
   grossPnl?: number;
   netPnl?: number;
   fee?: number;
@@ -94,6 +96,8 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
   // ficava errado por um fator fixo em futuros (MNQ ×2, MES ×5, NQ ×20, ES ×50…).
   const multiplier = (() => {
     if (typeof q.multiplier === 'number' && Number.isFinite(q.multiplier) && q.multiplier > 0) return q.multiplier;
+    // v2.1.0: o bridge já manda o valor do ponto calculado no lado dele.
+    if (typeof q.contractSize === 'number' && Number.isFinite(q.contractSize) && q.contractSize > 0) return q.contractSize;
     const gross = Number(q.grossPnl);
     if (!Number.isFinite(gross) || gross === 0 || exitPrice == null || qty === 0) return undefined;
     const dirSign = direction === 'short' ? -1 : 1;

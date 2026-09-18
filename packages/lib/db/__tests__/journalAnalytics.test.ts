@@ -361,3 +361,18 @@ describe('journalAnalytics � drawdownAnalysis', () => {
     expect(r.maxDD.drawdownPct).toBe(0);
   });
 });
+
+describe('journalAnalytics - sessoes que se interseccionam', () => {
+  it('trade na sobreposicao entra em TODAS as sessoes que contem a hora', () => {
+    // `exitPrice` é obrigatório: sessionAnalysis só olha trades fechados (closedTrades).
+    const t = trade({ id: 'o1', resultNet: 10, exitPrice: 110, entryPrice: 100, exitDatetime: '2026-09-08T13:30:00Z', entryDatetime: '2026-09-08T13:30:00Z' });
+    const defs = [
+      { id: 'London', label: 'London 08-13', startH: 8, endH: 13 },
+      { id: 'Overlap', label: 'Overlap 12-14', startH: 12, endH: 14 },
+      { id: 'NY', label: 'NY 13-21', startH: 13, endH: 21 },
+    ];
+    const s = sessionAnalysis([t as never], defs);
+    const hit = s.filter((x) => x.trades === 1).map((x) => x.session).sort();
+    expect(hit).toEqual(['NY', 'Overlap']);
+  });
+});

@@ -959,7 +959,9 @@ namespace QuantowerBridge
         }
 
         // ── Bridge v2: versão + build para o handshake do cliente ───────────
-        private const string BridgeVersion = "2.0.0";
+        // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco
+        // (sobrevivem restart); fees somadas de entradas + saidas.
+        private const string BridgeVersion = "2.1.0";
         private static string BuildIdentifier =>
             $"2.0.0-{DateTime.UtcNow:yyyyMMddHHmm}";
 
@@ -1077,6 +1079,9 @@ namespace QuantowerBridge
                 grossPnl = t.GrossPnL,
                 calculatedGrossPnL = t.CalculatedGrossPnL,
                 netPnl = t.NetPnL,
+                // Valor do PONTO (contract size) inferido: dinheiro / pontos. O app usa
+                // para o R (e como fallback de PnL). Ver ComputeContractSize.
+                contractSize = ComputeContractSize(t.GrossPnL, t.CalculatedGrossPnL, t.Quantity),
                 fee = t.Fee,
                 swaps = t.Swaps,
                 positionId = t.PositionId,
@@ -1113,6 +1118,23 @@ namespace QuantowerBridge
                 count = jsonTrades.Count,
                 timestamp = DateTime.UtcNow.ToString("O")
             }, JsonOptions);
+        }
+
+        /**
+         * VALOR DO PONTO (contract size / multiplier) do contrato.
+         * A API do Quantower não expõe o multiplicador direto: ele sai da razão entre o
+         * PnL em DINHEIRO que a plataforma calculou (`GrossPnl`) e o PnL em PONTOS do
+         * nosso cálculo (`CalculatedGrossPnL` = (avgExit-avgEntry) * qty * sinal).
+         * MNQ -> 2, MES -> 5, NQ -> 20, ES -> 50. Snap no inteiro próximo (1.9998 -> 2).
+         * Retorna 0 quando não dá para inferir (o app deriva do mesmo jeito).
+         */
+        private static decimal ComputeContractSize(decimal grossPnl, decimal calculatedGrossPnL, decimal qty)
+        {
+            if (qty == 0 || Math.Abs(calculatedGrossPnL) < 0.0000001m) return 0m;
+            var m = Math.Abs(grossPnl / calculatedGrossPnL);
+            if (m <= 0) return 0m;
+            var rounded = Math.Round(m);
+            return Math.Abs(m - rounded) < 0.02m ? rounded : Math.Round(m, 4);
         }
 
         private static string BuildPositionsJson()
@@ -1358,10 +1380,67 @@ namespace QuantowerBridge
 
         private static readonly object _lock = new();
         private static readonly Dictionary<string, Entry> _map = new();
+        // [PERSIST] SL/TP sobrevivem a restart da strategy: sem isso, um trade fechado
+        // depois de reiniciar o bridge ficava sem stop -> o app não conseguia o R.
+        private static readonly string _storePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "QuantowerBridge", "sl-tp.json");
+        private static bool _loaded;
+        private static DateTime _lastSave = DateTime.MinValue;
+
+        private sealed class PersistEntry
+        {
+            public decimal? Sl { get; set; }
+            public decimal? Tp { get; set; }
+            public DateTime SeenAt { get; set; }
+        }
+
+        private static void EnsureLoaded()
+        {
+            if (_loaded) return;
+            _loaded = true;
+            try
+            {
+                if (!File.Exists(_storePath)) return;
+                var data = JsonSerializer.Deserialize<Dictionary<string, PersistEntry>>(File.ReadAllText(_storePath));
+                if (data == null) return;
+                lock (_lock)
+                {
+                    foreach (var kv in data)
+                    {
+                        if ((DateTime.UtcNow - kv.Value.SeenAt).TotalDays > 30) continue;
+                        _map[kv.Key] = new Entry { Sl = kv.Value.Sl, Tp = kv.Value.Tp, SeenAt = kv.Value.SeenAt };
+                    }
+                }
+            }
+            catch { /* arquivo inválido: começa vazio */ }
+        }
+
+        private static void Save()
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _lastSave).TotalSeconds < 2) return; // I/O no máximo a cada 2s
+            _lastSave = now;
+            try
+            {
+                var dir = Path.GetDirectoryName(_storePath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                Dictionary<string, PersistEntry> data;
+                lock (_lock)
+                {
+                    data = _map.ToDictionary(
+                        kv => kv.Key,
+                        kv => new PersistEntry { Sl = kv.Value.Sl, Tp = kv.Value.Tp, SeenAt = kv.Value.SeenAt });
+                }
+                File.WriteAllText(_storePath, JsonSerializer.Serialize(data));
+            }
+            catch { /* não crítico */ }
+        }
 
         /** Amostra SL/TP das posições abertas. Limpa entradas não vistas há > 24h. */
         internal static void Capture()
         {
+            EnsureLoaded();
             var now = DateTime.UtcNow;
             foreach (var pos in Core.Instance.Positions)
             {
@@ -1377,6 +1456,7 @@ namespace QuantowerBridge
                     foreach (var id in stale) _map.Remove(id);
                 }
             }
+            Save();
         }
 
         /**
@@ -1388,6 +1468,7 @@ namespace QuantowerBridge
         internal static void Upsert(Position pos, bool preserveOnNull)
         {
             if (pos == null || string.IsNullOrEmpty(pos.Id)) return;
+            EnsureLoaded();
             try
             {
                 decimal? sl = pos.StopLoss != null ? (decimal)pos.StopLoss.Price : null;
@@ -1401,6 +1482,7 @@ namespace QuantowerBridge
                     }
                     _map[pos.Id] = new Entry { Sl = sl, Tp = tp, SeenAt = DateTime.UtcNow };
                 }
+                Save();
             }
             catch { /* posição/servidor instável — mantém o último valor */ }
         }
@@ -1410,6 +1492,7 @@ namespace QuantowerBridge
             sl = null;
             tp = null;
             if (string.IsNullOrEmpty(positionId)) return false;
+            EnsureLoaded();
             lock (_lock)
             {
                 if (_map.TryGetValue(positionId, out var e)) { sl = e.Sl; tp = e.Tp; return true; }

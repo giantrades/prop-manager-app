@@ -251,6 +251,9 @@ export class QuantowerAdapter extends BaseAdapter {
       mae: t.mae ?? null,
       mfe: t.mfe ?? null,
       multiplier: t.multiplier ?? null,
+      // Valor do ponto (contract size) inferido pelo bridge (dinheiro/pontos) — se vier,
+      // é preferido na hora de calcular o R.
+      contractSize: t.contractSize ?? null,
       grossPnl: t.grossPnl ?? 0,
       netPnl: t.netPnl ?? 0,
       fee: t.fee ?? 0,

@@ -329,8 +329,12 @@ export function sessionAnalysis(trades: Trade[], sessions: SessionDef[] = DEFAUL
   const fallback = buckets.get(defs[defs.length - 1].id);
   for (const t of closed) {
     const h = parseDate(t.entryDatetime).getUTCHours();
-    const hit = defs.find((d) => h >= d.startH && h < d.endH);
-    (hit ? buckets.get(hit.id) : fallback)?.list.push(t);
+    // Sessões PODEM se sobrepor (ex.: London 08–13 e NY 13–21): o trade entra em TODAS
+    // as sessões que contêm a hora. Antes usávamos `find` (só a primeira) — a sobreposição
+    // sumia e as sessões pareciam sempre separadas.
+    const hits = defs.filter((d) => h >= d.startH && h < d.endH);
+    if (hits.length === 0) fallback?.list.push(t);
+    else for (const hit of hits) buckets.get(hit.id)?.list.push(t);
   }
   return defs.map((def) => ({
     session: def.id,
