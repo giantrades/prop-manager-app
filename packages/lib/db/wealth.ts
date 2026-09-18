@@ -594,6 +594,12 @@ export interface NetWorthInput {
   liabilities?: number;
   markPriceMaxAgeDays?: number;
   now?: string;
+  /**
+   * BRL por USD. Quando informado, contas/posições em USD e os recebíveis de payout
+   * (USD) entram convertidos para BRL — os totais do Net Worth são SEMPRE em BRL (mesma
+   * convenção do portfolio). Sem taxa, soma como está (comportamento antigo).
+   */
+  fxUSD?: number | null;
 }
 
 export interface NetWorthComponents {
@@ -629,6 +635,9 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
   const liabilities = input.liabilities ?? 0;
   const maxAge = input.markPriceMaxAgeDays ?? NET_WORTH_MARK_MAX_AGE_DAYS;
   const now = input.now ?? nowIso();
+  // fx opcional: converte USD -> BRL para os totais ficarem coerentes (BRL).
+  const fx = input.fxUSD != null && input.fxUSD > 0 ? input.fxUSD : null;
+  const toBrl = (value: number, currency?: string) => (fx && String(currency).toUpperCase().includes('USD') ? value * fx : value);
 
   // Caixa: saldo (Σ transactions) das contas bank/wallet/cash.
   let cash = 0;
@@ -638,7 +647,7 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
       const ledger = computeAccountBalance(input.transactions, acc.id);
       // `computeAccountBalance` já devolve o saldo da plataforma quando existe; o `||`
       // continua como rede de segurança.
-      cash += ledger || Number(acc.platformBalance) || 0;
+      cash += toBrl(ledger || Number(acc.platformBalance) || 0, acc.currency);
     }
   }
 
@@ -648,9 +657,9 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
   const stalePositions: StalePositionInfo[] = [];
   for (const p of input.positions) {
     if (isMarkFresh(p, maxAge, now)) {
-      investmentsFresh += (p.lastMarkPrice ?? p.avgPrice) * p.qty;
+      investmentsFresh += toBrl((p.lastMarkPrice ?? p.avgPrice) * p.qty, p.currency);
     } else {
-      const value = p.avgPrice * p.qty;
+      const value = toBrl(p.avgPrice * p.qty, p.currency);
       investmentsStale += value;
       stalePositions.push({
         symbol: p.symbol,
@@ -664,10 +673,10 @@ export function computeNetWorth(input: NetWorthInput): NetWorthResult {
     }
   }
 
-  // Recebíveis: payouts pendentes (net).
+  // Recebíveis: payouts pendentes (net, em USD) -> BRL quando há taxa.
   const receivables = input.payouts
     .filter((p) => p.status === 'Pending')
-    .reduce((s, p) => s + (p.net ?? 0), 0);
+    .reduce((s, p) => s + toBrl(p.net ?? 0, 'USD'), 0);
 
   const investments = r2(investmentsFresh + investmentsStale);
   cash = r2(cash);
@@ -1058,6 +1067,7 @@ export class WealthService {
       this.ds.positions.list(),
       this.ds.payouts.list(),
     ]);
+    const fxRec = await getFxUSD(this.ds).catch(() => null);
     return computeNetWorth({
       accounts,
       transactions,
@@ -1065,6 +1075,7 @@ export class WealthService {
       payouts,
       markPriceMaxAgeDays: this.maxAge(),
       now: this.now(),
+      fxUSD: fxRec?.rate ?? null,
     });
   }
 

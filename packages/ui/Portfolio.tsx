@@ -395,18 +395,21 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                   </div>
                 </td>
                 <td className="pf-num">{r.qty}</td>
-                <td className="pf-num">{fmtMoney(r.avgPrice, currency)}</td>
-                <td className="pf-num">{fmtMoney(r.markPrice, currency)}</td>
-                <td className="pf-num">{fmtMoney(r.costBasis, currency)}</td>
-                <td className="pf-num">{fmtMoney(r.marketValue, currency)}</td>
+                {/* Valores da LINHA na moeda do próprio ativo (r.currency): o prop
+                    `currency` é a moeda dos TOTAIS (BRL). Antes, um ativo USD era
+                    formatado como BRL e saía errado. */}
+                <td className="pf-num">{fmtMoney(r.avgPrice, r.currency || currency)}</td>
+                <td className="pf-num">{fmtMoney(r.markPrice, r.currency || currency)}</td>
+                <td className="pf-num">{fmtMoney(r.costBasis, r.currency || currency)}</td>
+                <td className="pf-num">{fmtMoney(r.marketValue, r.currency || currency)}</td>
                 <td className={`pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>
-                  {fmtMoney(r.pnl, currency)}
+                  {fmtMoney(r.pnl, r.currency || currency)}
                   <span className="pf-pnl-sub"> {fmtPct(r.pnlPercent)}</span>
                   {(r.dividends ?? 0) > 0 && (
-                    <span className="pf-pnl-sub" title="Proventos recebidos"> +{fmtMoney(r.dividends, currency)} div</span>
+                    <span className="pf-pnl-sub" title="Proventos recebidos"> +{fmtMoney(r.dividends, r.currency || currency)} div</span>
                   )}
                   {(r.accruedInterest ?? 0) > 0 && (
-                    <span className="pf-pnl-sub" title="Juros acumulados (accrual)"> +{fmtMoney(r.accruedInterest, currency)} juros</span>
+                    <span className="pf-pnl-sub" title="Juros acumulados (accrual)"> +{fmtMoney(r.accruedInterest, r.currency || currency)} juros</span>
                   )}
                 </td>
                 <td className={`pf-num ${r.yieldOnCost >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtPct(r.yieldOnCost ?? 0)}</td>
@@ -500,19 +503,19 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">Investido</div>
-                  <div className="pf-stat-value pf-num">{fmtMoney(r.costBasis, currency)}</div>
+                  <div className="pf-stat-value pf-num">{fmtMoney(r.costBasis, r.currency || currency)}</div>
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">Atual</div>
-                  <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtMoney(r.marketValue, currency)}</div>
+                  <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtMoney(r.marketValue, r.currency || currency)}</div>
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">PnL</div>
                   <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>
-                    {fmtMoney(r.pnl, currency)}
+                    {fmtMoney(r.pnl, r.currency || currency)}
                     <span className="pf-stat-sub"> {fmtPct(r.pnlPercent)}</span>
                     {(r.dividends ?? 0) > 0 && (
-                      <span className="pf-stat-sub"> +{fmtMoney(r.dividends, currency)} div</span>
+                      <span className="pf-stat-sub"> +{fmtMoney(r.dividends, r.currency || currency)} div</span>
                     )}
                   </div>
                 </div>

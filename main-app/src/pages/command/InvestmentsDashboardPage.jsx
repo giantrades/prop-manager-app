@@ -73,24 +73,41 @@ export default function InvestmentsDashboardPage() {
     return { entradas: r2(entradas), gastos: r2(gastos), custos: r2(custos), tradingPnl: r2(tradingPnl), variacao: r2(entradas - gastos - custos + tradingPnl) };
   }, [data, period]);
 
+  // Os pies são em BRL (convenção dos totais). Cada linha é convertida pela sua própria
+  // moeda via fxUSD; linhas sem câmbio (`converted === false`) ficam de fora, igual ao total.
+  const fxOfRow = (r) => (String(r.currency ?? '').toUpperCase().includes('USD') ? (data?.portfolio?.fxUSD ?? null) : 1);
+  const brlValue = (r) => {
+    const fx = fxOfRow(r);
+    return fx == null ? null : (r.marketValue ?? 0) * fx;
+  };
+
   const classData = useMemo(() => {
-    const rows = data?.portfolio?.rows ?? [];
+    const rows = (data?.portfolio?.rows ?? []).filter((r) => r.converted !== false);
     const acctKind = new Map((data?.accounts ?? []).map((a) => [a.id, a.kind]));
     const map = { equity: 0, fixed: 0, crypto: 0, other: 0 };
     for (const r of rows) {
+      const v = brlValue(r);
+      if (v == null) continue;
       const kind = acctKind.get(r.accountId);
-      if (kind === 'crypto') map.crypto += r.marketValue ?? 0;
-      else if (r.assetKind === 'fixed') map.fixed += r.marketValue ?? 0;
-      else if (r.assetKind === 'other') map.other += r.marketValue ?? 0;
-      else map.equity += r.marketValue ?? 0;
+      if (kind === 'crypto') map.crypto += v;
+      else if (r.assetKind === 'fixed') map.fixed += v;
+      else if (r.assetKind === 'other') map.other += v;
+      else map.equity += v;
     }
     return Object.entries(map).filter(([, v]) => v > 0)
       .map(([k, v]) => ({ label: CLASS_META[k]?.label ?? k, value: v, color: CLASS_META[k]?.color }));
   }, [data]);
 
-  const symbolData = useMemo(() => (
-    (data?.allocation?.bySymbol ?? []).slice(0, 8).map((a) => ({ label: a.label, value: a.value }))
-  ), [data]);
+  const symbolData = useMemo(() => {
+    const by = new Map();
+    for (const r of (data?.portfolio?.rows ?? [])) {
+      if (r.converted === false) continue;
+      const v = brlValue(r);
+      if (v == null || v <= 0) continue;
+      by.set(r.symbol, (by.get(r.symbol) ?? 0) + v);
+    }
+    return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([label, value]) => ({ label, value }));
+  }, [data]);
 
   const payoutSeries = useMemo(() => {
     const payouts = (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, []));
@@ -187,8 +204,8 @@ export default function InvestmentsDashboardPage() {
           <WidgetGrid
             storageKey="investimentos"
             items={[
-              { id: 'class', node: (<div className="dash-section"><AllocationPie title="Por classe" data={classData} emptyLabel="Cadastre posições para ver a alocação por classe." /></div>) },
-              { id: 'symbol', node: (<div className="dash-section"><AllocationPie title="Por ativo" data={symbolData} emptyLabel="Sem posições." /></div>) },
+              { id: 'class', node: (<div className="dash-section"><AllocationPie title="Por classe" data={classData} currency="BRL" emptyLabel="Cadastre posições para ver a alocação por classe." /></div>) },
+              { id: 'symbol', node: (<div className="dash-section"><AllocationPie title="Por ativo" data={symbolData} currency="BRL" emptyLabel="Sem posições." /></div>) },
               {
                 id: 'top',
                 node: (
