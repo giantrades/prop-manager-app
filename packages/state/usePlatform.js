@@ -33,6 +33,9 @@ function readLocalSnap() {
  * aqui; qualquer componente (abas, sidebar) lê SEM criar outro polling.
  */
 let _liveCount = 0;
+// SSE indisponível nesta sessão (bridge antigo)? Conta falhas e desiste.
+let _streamFailures = 0;
+let _streamDisabled = false;
 const _liveCountListeners = new Set();
 function publishLiveCount(n) {
   _liveCount = n;
@@ -146,6 +149,9 @@ export function usePlatform() {
   // navegador trata como contexto seguro. Antes o stream era descartado no PC (app em
   // https + bridge em http://127.0.0.1) e as posições só atualizavam no polling de 60s.
   const openStream = useCallback(() => {
+    // Se o bridge não entrega SSE (ex.: DLL antiga → 401 em JSON), o navegador reclama a
+    // cada tentativa. Após 2 falhas desistimos na sessão: o polling de 2s cobre.
+    if (_streamDisabled) return;
     const base = adapterRef.current.getBridgeBase();
     const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
     if (typeof EventSource === 'undefined' || !base) return;
@@ -156,7 +162,7 @@ export function usePlatform() {
     const url = `${base.replace(/\/$/, '')}/stream?token=${encodeURIComponent(bridgeToken)}`;
     let es;
     try { es = new EventSource(url); } catch { return; }
-    es.onopen = () => setStreaming(true);
+    es.onopen = () => { _streamFailures = 0; setStreaming(true); };
     es.onmessage = (ev) => {
       try {
         const d = JSON.parse(ev.data);
@@ -170,7 +176,14 @@ export function usePlatform() {
         window.dispatchEvent(new CustomEvent('qt:stream', { detail: d }));
       } catch { /* payload inválido */ }
     };
-    es.onerror = () => setStreaming(false); // EventSource reconecta sozinho
+    es.onerror = () => {
+      setStreaming(false); // EventSource reconecta sozinho...
+      _streamFailures += 1;
+      if (_streamFailures >= 2) { // ...mas se nem abriu, não insiste (evita log infinito)
+        _streamDisabled = true;
+        try { es.close(); } catch { /* noop */ }
+      }
+    };
     streamRef.current = es;
   }, [persistSnapshot]);
 

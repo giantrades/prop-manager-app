@@ -42,7 +42,7 @@ const statusClass = (s: string) => (s === 'Paid' ? 'py-st-paid' : s === 'Approve
 
 interface PayoutForm {
   gross: string;
-  feePct: number;
+  keptPct: number;
   method: string;
   status: string;
   date: string;
@@ -52,7 +52,7 @@ interface PayoutForm {
 
 function emptyForm(): PayoutForm {
   // Default de fee: 0.8 (80%) — conforme pedido; ajuste no form se o seu for outro.
-  return { gross: '', feePct: 0.8, method: 'Wise', status: 'Pending', date: new Date().toISOString().slice(0, 10), weights: {}, attachments: {} };
+  return { gross: '', keptPct: 0.8, method: 'Wise', status: 'Pending', date: new Date().toISOString().slice(0, 10), weights: {}, attachments: {} };
 }
 
 /**
@@ -134,13 +134,13 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
     return list;
   }, [payouts, query, statusFilter, sortKey, sortAsc, accountById]);
 
-  const net = form.gross ? Number(form.gross) * (1 - Number(form.feePct)) : 0;
+  const net = form.gross ? Number(form.gross) * Number(form.keptPct) : 0;
   const selectedAccounts = accounts.filter((a) => (form.weights[a.id] ?? 0) > 0);
   const preview = useMemo(() => {
     if (!form.gross || selectedAccounts.length === 0) return null;
     const weightMap = Object.fromEntries(selectedAccounts.map((a) => [a.id, form.weights[a.id]]));
-    return computePayoutSplitByWeight(Number(form.gross), Number(form.feePct), weightMap);
-  }, [form.gross, form.feePct, form.weights, selectedAccounts]);
+    return computePayoutSplitByWeight(Number(form.gross), 1 - Number(form.keptPct), weightMap);
+  }, [form.gross, form.keptPct, form.weights, selectedAccounts]);
 
   const toggleAccount = (id: string) => setForm((f) => {
     const next = { ...f.weights };
@@ -157,12 +157,12 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
       const weightMap = selectedAccounts.length > 0
         ? Object.fromEntries(selectedAccounts.map((a) => [a.id, form.weights[a.id]]))
         : { [accountIds[0]]: 1 };
-      const splitByAccount = computePayoutSplitByWeight(Number(form.gross), Number(form.feePct), weightMap);
+      const splitByAccount = computePayoutSplitByWeight(Number(form.gross), 1 - Number(form.keptPct), weightMap);
       await onCreate?.({
         id: `payout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         accountIds,
         gross: Number(form.gross),
-        fee: Number(form.gross) * Number(form.feePct),
+        fee: Number(form.gross) * (1 - Number(form.keptPct)),
         net,
         splitByAccount,
         status: form.status,
@@ -316,8 +316,8 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                 <label className="py-field"><span className="py-label">Gross ($)</span>
                   <input className="py-input" type="number" step="0.01" value={form.gross} onChange={(e) => setForm((f) => ({ ...f, gross: e.target.value }))} placeholder="0.00" />
                 </label>
-                <label className="py-field"><span className="py-label">Fee (decimal, ex. 0.8)</span>
-                  <input className="py-input" type="number" step="0.01" value={form.feePct} onChange={(e) => setForm((f) => ({ ...f, feePct: Number(e.target.value) }))} />
+                <label className="py-field"><span className="py-label">Sua parte (decimal, ex. 0.8 = 80% fica comigo · 20% fee)</span>
+                  <input className="py-input" type="number" step="0.01" value={form.keptPct} onChange={(e) => setForm((f) => ({ ...f, keptPct: Number(e.target.value) }))} />
                 </label>
                 <label className="py-field"><span className="py-label">Método</span>
                   <input className="py-input" list="py-methods" value={form.method} onChange={(e) => setForm((f) => ({ ...f, method: e.target.value }))} />
@@ -356,7 +356,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
 
               <div className="py-preview">
                 <div><span className="py-label">Gross</span> <b>{fmtMoney(Number(form.gross) || 0)}</b></div>
-                <div><span className="py-label">Fee</span> <b className="py-neg">{fmtMoney((Number(form.gross) || 0) * Number(form.feePct))}</b></div>
+                <div><span className="py-label">Fee</span> <b className="py-neg">{fmtMoney((Number(form.gross) || 0) * (1 - Number(form.keptPct)))}</b></div>
                 <div><span className="py-label">Líquido</span> <b className="py-pos">{fmtMoney(net)}</b></div>
               </div>
 
