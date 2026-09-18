@@ -49,6 +49,8 @@ export function usePlatform() {
   const [lastSync, setLastSync] = useState(() => localStorage.getItem(LAST_SYNC_KEY));
   const [liveCount, setLiveCount] = useState(0);
   const [streaming, setStreaming] = useState(false);
+  // Timestamp da última leitura de posições (stream ou polling) — a UI mostra a idade.
+  const [positionsAt, setPositionsAt] = useState(null);
   const [lastSnapshot, setLastSnapshot] = useState(() => readLocalSnap());
   const adapterRef = useRef(null);
   const streamRef = useRef(null);
@@ -107,6 +109,7 @@ export function usePlatform() {
       ]);
       setLivePositions(positions);
       setLiveCount(positions.length);
+      setPositionsAt(Date.now());
       persistSnapshot(positions);
     } catch {
       setStatuses([{ platformId: 'quantower', online: false, connections: [], positionsCount: 0 }]);
@@ -114,12 +117,15 @@ export function usePlatform() {
     setLastSync(localStorage.getItem(LAST_SYNC_KEY));
   }, [persistSnapshot]);
 
-  // SSE: só em página segura quando a URL também é https (evita mixed content).
+  // SSE: em página https exige URL https — EXCETO loopback (127.0.0.1/localhost), que o
+  // navegador trata como contexto seguro. Antes o stream era descartado no PC (app em
+  // https + bridge em http://127.0.0.1) e as posições só atualizavam no polling de 60s.
   const openStream = useCallback(() => {
     const base = adapterRef.current.getBridgeBase();
     const secure = typeof window !== 'undefined' && window.location.protocol === 'https:';
     if (typeof EventSource === 'undefined' || !base) return;
-    if (secure && !base.startsWith('https://')) return;
+    const isLoopback = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(base);
+    if (secure && !base.startsWith('https://') && !isLoopback) return;
     try { streamRef.current?.close(); } catch { /* noop */ }
     const { bridgeToken } = bridgePrefs();
     const url = `${base.replace(/\/$/, '')}/stream?token=${encodeURIComponent(bridgeToken)}`;
@@ -132,6 +138,7 @@ export function usePlatform() {
         if (Array.isArray(d.positions)) {
           setLivePositions(d.positions);
           setLiveCount(d.positions.length);
+          setPositionsAt(Date.now());
           persistSnapshot(d.positions);
         }
         window.dispatchEvent(new CustomEvent('qt:stream', { detail: d }));
@@ -147,11 +154,34 @@ export function usePlatform() {
     setStreaming(false);
   }, []);
 
+  // Ref do streaming para o polling rápido não reiniciar o interval a cada mudança.
+  const streamingRef = useRef(false);
+  streamingRef.current = streaming;
+
   useEffect(() => {
     refreshStatuses();
     const t = setInterval(refreshStatuses, 60000);
     return () => clearInterval(t);
   }, [refreshStatuses]);
+
+  // Polling RÁPIDO das posições enquanto o stream não estiver ativo (e a aba visível):
+  // sem isso, uma página https + bridge http ficava só no ciclo de 60s ("demora demais").
+  useEffect(() => {
+    const FALLBACK_MS = 4000;
+    const t = setInterval(() => {
+      if (streamingRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      adapterRef.current?.getPositions()
+        .then((positions) => {
+          setLivePositions(positions);
+          setLiveCount(positions.length);
+          setPositionsAt(Date.now());
+          persistSnapshot(positions);
+        })
+        .catch(() => { /* bridge fora: o status já cobre */ });
+    }, FALLBACK_MS);
+    return () => clearInterval(t);
+  }, [persistSnapshot]);
 
   const online = statuses.some((s) => s.online);
   useEffect(() => {
@@ -176,6 +206,6 @@ export function usePlatform() {
 
   return {
     statuses, livePositions, isRunning, startSync, stopSync, lastSync, liveCount,
-    refreshStatuses, streaming, lastSnapshot,
+    refreshStatuses, streaming, lastSnapshot, positionsAt,
   };
 }

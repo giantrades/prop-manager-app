@@ -34,7 +34,13 @@ function agoText(iso) {
 }
 
 export default function LivePositionsPage() {
-  const { livePositions, statuses, lastSync, refreshStatuses, streaming, lastSnapshot } = usePlatform();
+  const { livePositions, statuses, lastSync, refreshStatuses, streaming, lastSnapshot, positionsAt } = usePlatform();
+  // Tick de 1s só para o rótulo "atualizado há Xs" (mostra a idade real da leitura).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
   const { toast } = useToast();
   const wake = useWakeLock();
   const [edits, setEdits] = useState({});
@@ -359,7 +365,12 @@ export default function LivePositionsPage() {
         <span className={`lp-dot ${online ? 'on' : 'off'}`} />
         <span>{online ? 'Plataforma conectada' : 'Plataforma offline — abra o bridge'}</span>
         <span className="lp-muted">{positions.length} posição(ões) · {orders.length} ordem(ns){lastSync ? ` · último sync ${new Date(lastSync).toLocaleTimeString('pt-BR')}` : ''}</span>
-        <span className={`lp-live ${streaming ? 'on' : ''}`} title={streaming ? 'Streaming ao vivo (SSE)' : 'Atualizando por polling'}>{streaming ? 'LIVE' : 'polling'}</span>
+        {online && positionsAt && (
+          <span className="lp-ago" title="Idade da última leitura de posições">
+            {Date.now() - positionsAt < 3000 ? 'agora' : `há ${Math.max(1, Math.round((Date.now() - positionsAt) / 1000))}s`}
+          </span>
+        )}
+        <span className={`lp-live ${streaming ? 'on' : ''}`} title={streaming ? 'Streaming ao vivo (SSE ~1,5s)' : 'Polling rápido (4s) — stream indisponível'}>{streaming ? 'LIVE' : 'polling'}</span>
       </div>
 
       {pending > 0 && (
@@ -546,6 +557,7 @@ const LP_CSS = `
 .lp-dot { width: 9px; height: 9px; border-radius: 50%; }
 .lp-dot.on { background: var(--green, #2ecc71); box-shadow: 0 0 8px rgba(46,204,113,0.6); }
 .lp-dot.off { background: var(--red, #e74c3c); }
+.lp-ago { font-size: 10px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .lp-live { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: var(--muted, #a1a7b3); }
 .lp-live.on { background: rgba(46,204,113,0.16); border-color: rgba(46,204,113,0.5); color: #2ecc71; }
 .lp-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 18px 0 8px; }
