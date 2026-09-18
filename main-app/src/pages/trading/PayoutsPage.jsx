@@ -124,7 +124,7 @@ export default function PayoutsPage() {
           <div className="dash-title"><span>Alocar payout recebido</span></div>
           {pending.map((p) => (
             <div key={p.id} className="dash-row">
-              <span className="dash-row-name">{p.net} {p.currency ?? 'USD'}</span>
+              <span className="dash-row-name">{p.net}</span>
               <span className="dash-row-sub">{String(p.date ?? '').slice(0, 10)} · {p.status ?? 'pendente'}</span>
               <button className="cmd-refresh" onClick={() => setAllocating(p)}>Alocar</button>
             </div>
@@ -136,12 +136,12 @@ export default function PayoutsPage() {
         <div className="ac3-overlay" onClick={() => setAllocating(null)}>
           <div className="ac3-sheet" style={{ maxWidth: 620 }} role="dialog" aria-modal="true" aria-label="Alocar payout" onClick={(e) => e.stopPropagation()}>
             <div className="ac3-sheet-head">
-              <span className="ac3-sheet-title">Alocar payout · {allocating.net} {allocating.currency ?? 'USD'}</span>
+              <span className="ac3-sheet-title">Alocar payout · {allocating.net}</span>
               <button className="ac3-icon" onClick={() => setAllocating(null)} aria-label="Fechar">✕</button>
             </div>
             <div style={{ padding: '14px 18px 20px' }}>
               <PayoutCenter
-                payout={{ ...allocating, currency: allocating.currency ?? 'USD' }}
+                payout={allocating}
                 wallets={wallets}
                 onAllocate={handleAllocate}
               />

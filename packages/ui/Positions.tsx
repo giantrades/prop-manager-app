@@ -64,7 +64,7 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
   if (editing) {
     const kind = editing.assetKind || 'equity';
     const isOther = kind === 'other';
-    const curSym = editing.currency === 'USD' ? '$' : 'R$';
+    const curSym = '$'; // base única do app: USD (a navbar converte p/ BRL)
     return (
       <div className="ps-root">
         <div className="ps-form">
@@ -87,12 +87,6 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
             </label>
             <label className="ps-field"><span className="ps-label">{isOther ? 'Nome do ativo' : 'Símbolo'}</span>
               <input className="ps-input" value={editing.symbol} onChange={(e) => update('symbol', isOther ? e.target.value : e.target.value.toUpperCase())} placeholder={isOther ? 'Ex.: Apartamento' : 'Ex.: PETR4'} />
-            </label>
-            <label className="ps-field"><span className="ps-label">Moeda</span>
-              <select className="ps-input" value={editing.currency || 'BRL'} onChange={(e) => update('currency', e.target.value)}>
-                <option value="BRL">BRL</option>
-                <option value="USD">USD</option>
-              </select>
             </label>
 
             {isOther ? (
@@ -168,7 +162,7 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
                   <div className="ps-item-name">
                     {p.symbol}
                     <span className="ps-account">{(accounts.find((a) => a.id === p.accountId)?.name) || p.accountId}</span>
-                    <span className="ps-cur">{p.currency || 'BRL'}</span>
+                    
                     {p.assetKind === 'fixed' && <span className="ps-tag">RF</span>}
                     {p.assetKind === 'other' && <span className="ps-tag" style={{ background: 'rgba(225,177,44,0.15)', color: 'var(--yellow,#e1b12c)' }}>OUTRO</span>}
                   </div>
@@ -179,10 +173,10 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
                 </div>
                 <div className="ps-item-grid">
                   <div className="ps-cell"><span className="ps-label">Qty</span><span>{p.qty}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Médio</span><span>{fmtMoney(p.avgPrice, p.currency === 'USD' ? '$' : 'R$')}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Marca</span><span>{p.lastMarkPrice != null ? fmtMoney(p.lastMarkPrice, p.currency === 'USD' ? '$' : 'R$') : 'velha'}</span></div>
-                  <div className="ps-cell"><span className="ps-label">Valor</span><span>{fmtMoney(value, p.currency === 'USD' ? '$' : 'R$')}</span></div>
-                  <div className="ps-cell"><span className="ps-label">PnL</span><span style={{ color: pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(pnl, p.currency === 'USD' ? '$' : 'R$')} <small>{(pnlPct * 100).toFixed(1)}%</small></span></div>
+                  <div className="ps-cell"><span className="ps-label">Médio</span><span>{fmtMoney(p.avgPrice, 'USD')}</span></div>
+                  <div className="ps-cell"><span className="ps-label">Marca</span><span>{p.lastMarkPrice != null ? fmtMoney(p.lastMarkPrice, 'USD') : 'velha'}</span></div>
+                  <div className="ps-cell"><span className="ps-label">Valor</span><span>{fmtMoney(value, 'USD')}</span></div>
+                  <div className="ps-cell"><span className="ps-label">PnL</span><span style={{ color: pnl >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtMoney(pnl, 'USD')} <small>{(pnlPct * 100).toFixed(1)}%</small></span></div>
                 </div>
               </div>
             );

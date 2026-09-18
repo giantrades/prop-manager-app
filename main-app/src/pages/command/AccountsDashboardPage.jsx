@@ -65,7 +65,8 @@ export default function AccountsDashboardPage() {
     // BALANCE da conta — fonte ÚNICA de todos os widgets: plataforma (bridge) manda;
     // o ledger (derivado) é só fallback quando a plataforma nunca reportou a conta.
     const balOf = (a) => accountBalance(a, balances[a.id]);
-    const acctValue = (a) => convertMoney(balOf(a), a.currency); // converte p/ a moeda do app
+    // Contas são tratadas como USD (padrão do app): a navbar converte para BRL multiplicando.
+    const acctValue = (a) => convertMoney(balOf(a), 'USD');
     const capital = accounts.reduce((s, a) => s + acctValue(a), 0);
     const propBalance = accounts.filter((a) => a.kind === 'prop').reduce((s, a) => s + acctValue(a), 0);
     const netPayouts = payouts.reduce((s, p) => s + (Number(p.net) || 0), 0);
@@ -81,7 +82,7 @@ export default function AccountsDashboardPage() {
       const e = perKind[a.kind] ?? { count: 0, total: 0 };
       e.count += 1; e.total += total; perKind[a.kind] = e;
       if (LIQUID.includes(a.kind)) liquidTotal += total;
-      rows.push({ id: a.id, name: a.name, kind: a.kind, currency: a.currency, balance: balOf(a), liquid: LIQUID.includes(a.kind) });
+      rows.push({ id: a.id, name: a.name, kind: a.kind, balance: balOf(a), liquid: LIQUID.includes(a.kind) });
     }
     const topBalances = rows.filter((r) => r.liquid).sort((a, b) => b.balance - a.balance).slice(0, 6);
     const pieData = Object.entries(perKind).filter(([, v]) => v.total > 0).map(([k, v]) => ({ label: KIND_META[k]?.label ?? k, value: v.total, color: KIND_META[k]?.color }));
@@ -109,7 +110,6 @@ export default function AccountsDashboardPage() {
         id: a.id,
         name: a.name,
         kind: a.kind,
-        currency: a.currency,
         status: a.kind === 'prop' ? (phase ? phase.toUpperCase() : '—') : '—',
         level: rk?.status?.status ?? null,
         value: acctValue(a),
@@ -256,8 +256,7 @@ export default function AccountsDashboardPage() {
                   <div key={r.id} className="dash-row">
                     <span className="ad-kind-ico" style={{ color: meta.color, borderColor: meta.color }}><Icon size={14} /></span>
                     <span className="dash-row-name">{r.name}</span>
-                    <span className="dash-row-sub">{r.currency}</span>
-                    <span className={`dash-row-val ${r.balance >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(r.balance, r.currency === 'USD' ? '$' : 'R$')}</span>
+                    <span className={`dash-row-val ${r.balance >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(r.balance, 'USD')}</span>
                   </div>
                 );
               })}

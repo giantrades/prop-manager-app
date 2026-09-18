@@ -36,22 +36,24 @@ export default function Wallets({ rows = [], loading = false }: {
   }
 
   const totalByCurrency = rows.reduce((acc, r) => {
-    acc[r.currency] = (acc[r.currency] ?? 0) + r.balance;
+    acc.__all = (acc.__all ?? 0) + r.balance;
     return acc;
   }, {} as Record<string, number>);
 
   return (
     <div className="wl-root">
       <div className="wl-total-card">
-        <div className="wl-total-label">Saldo por moeda (multi-moeda)</div>
+        <div className="wl-total-label">Saldo total</div>
         <div className="wl-total-sub">
-          {Object.entries(totalByCurrency).map(([cur, val]) => (
-            <span key={cur} className="wl-total-cur">
-              <span className="wl-total-cur-label">{cur}</span>
-              <span className={`wl-total-cur-value ${val < 0 ? 'wl-neg' : 'wl-pos'}`}>{fmtMoney(val, cur)}</span>
+          {rows.length === 0 ? (
+            <span className="wl-muted">Sem wallets.</span>
+          ) : (
+            <span className="wl-total-cur">
+              <span className={`wl-total-cur-value ${(totalByCurrency.__all ?? 0) < 0 ? 'wl-neg' : 'wl-pos'}`}>
+                {fmtMoney(totalByCurrency.__all ?? 0, 'USD')}
+              </span>
             </span>
-          ))}
-          {Object.keys(totalByCurrency).length === 0 && <span className="wl-muted">Sem wallets.</span>}
+          )}
         </div>
       </div>
 
@@ -80,24 +82,24 @@ export default function Wallets({ rows = [], loading = false }: {
             <div className="wl-card-head">
               <div>
                 <div className="wl-name">{r.account.name}</div>
-                <div className="wl-kind">{KIND_LABEL[r.account.kind] || r.account.kind} · {r.currency}</div>
+                <div className="wl-kind">{KIND_LABEL[r.account.kind] || r.account.kind}</div>
               </div>
               <div className={`wl-balance ${r.balance < 0 ? 'wl-neg' : 'wl-pos'}`}>
-                {fmtMoney(r.balance, r.currency)}
+                {fmtMoney(r.balance, 'USD')}
               </div>
             </div>
             <div className="wl-flow">
               <div className="wl-flow-item">
                 <span className="wl-flow-label">In</span>
-                <span className="wl-flow-in">{fmtMoney(r.inflows, r.currency)}</span>
+                <span className="wl-flow-in">{fmtMoney(r.inflows, 'USD')}</span>
               </div>
               <div className="wl-flow-item">
                 <span className="wl-flow-label">Out</span>
-                <span className="wl-flow-out">{fmtMoney(r.outflows, r.currency)}</span>
+                <span className="wl-flow-out">{fmtMoney(r.outflows, 'USD')}</span>
               </div>
               <div className="wl-flow-item">
                 <span className="wl-flow-label">Net</span>
-                <span>{fmtMoney(r.balance, r.currency)}</span>
+                <span>{fmtMoney(r.balance, 'USD')}</span>
               </div>
             </div>
           </div>

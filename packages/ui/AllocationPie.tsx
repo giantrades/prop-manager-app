@@ -51,7 +51,7 @@ export default function AllocationPie({ title = null, data = [], currency = 'R$'
               <span className="ap-dot" style={{ background: d.color || PALETTE[i % PALETTE.length] }} />
               <span className="ap-label" title={d.label}>{d.label}</span>
               <span className="ap-pct">{total > 0 ? Math.round((d.value / total) * 100) : 0}%</span>
-              <span className="ap-val">{fmtMoney(d.value, d.currency || currency)}</span>
+              <span className="ap-val">{fmtMoney(d.value, currency)}</span>
             </div>
           ))}
         </div>

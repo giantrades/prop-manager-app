@@ -493,7 +493,7 @@ export default function ConnectionsManager() {
                         <div key={b.platformAccountId} className="cx-row">
                           <div className="cx-row-info">
                             <span className="cx-row-name">{b.name || b.platformAccountId}</span>
-                            <span className="cx-row-sub">{b.currency} {b.balance != null ? `· ${b.balance}` : ''}</span>
+                            <span className="cx-row-sub">{b.balance != null ? `${b.balance}` : ''}</span>
                           </div>
                           {mapped ? (
                             <>

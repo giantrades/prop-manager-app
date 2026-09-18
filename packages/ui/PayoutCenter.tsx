@@ -61,7 +61,7 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
     const plan = {
       payoutId: payout.id,
       destinationAccountId: destWallet || wallets[0]?.id,
-      currency: payout.currency ?? 'USD',
+      currency: 'USD',
       date: payout.date ?? new Date().toISOString(),
       taxReservePct: Number(taxPct) || 0,
       buckets: [
@@ -94,19 +94,19 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
         <div className="pc-grid">
           <div className="pc-stat">
             <div className="pc-stat-label">Gross</div>
-            <div className="pc-stat-value">{fmtMoney(payout.gross, payout.currency)}</div>
+            <div className="pc-stat-value">{fmtMoney(payout.gross, 'USD')}</div>
           </div>
           <div className="pc-stat">
             <div className="pc-stat-label">Fee</div>
-            <div className="pc-stat-value pc-neg">{fmtMoney(-(payout.fee ?? 0), payout.currency)}</div>
+            <div className="pc-stat-value pc-neg">{fmtMoney(-(payout.fee ?? 0), 'USD')}</div>
           </div>
           <div className="pc-stat">
             <div className="pc-stat-label">Recebe (Net)</div>
-            <div className="pc-stat-value pc-pos">{fmtMoney(net, payout.currency)}</div>
+            <div className="pc-stat-value pc-pos">{fmtMoney(net, 'USD')}</div>
           </div>
           <div className="pc-stat">
             <div className="pc-stat-label">Tax est.</div>
-            <div className="pc-stat-value">{fmtMoney(taxReserve, payout.currency)}</div>
+            <div className="pc-stat-value">{fmtMoney(taxReserve, 'USD')}</div>
           </div>
         </div>
 
@@ -135,7 +135,7 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
               >
                 {wallets.map((w) => (
                   <option key={w.id} value={w.id}>
-                    {w.name} ({w.currency})
+                    {w.name}
                   </option>
                 ))}
                 {wallets.length === 0 && <option value="">Sem wallets</option>}
@@ -161,7 +161,7 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
               const labels = { living: 'Living', invest: 'Invest', cash: 'Cash' };
               return (
                 <label key={k} className="pc-weight">
-                  <span>{labels[k]} · {fmtMoney(splits[k], payout.currency)}</span>
+                  <span>{labels[k]} · {fmtMoney(splits[k], 'USD')}</span>
                   <input
                     className="pc-input"
                     type="number"
@@ -178,10 +178,10 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
 
           <div className="pc-actions">
             <button className="pc-btn" onClick={() => onApplyPayout?.(payout)}>
-              Sacar {fmtMoney(payout.gross, payout.currency)} → líquido {fmtMoney(net, payout.currency)}
+              Sacar {fmtMoney(payout.gross, 'USD')} → líquido {fmtMoney(net, 'USD')}
             </button>
             <button className="pc-btn pc-btn-ghost" onClick={handleAllocate}>
-              Alocar {fmtMoney(available, payout.currency)}
+              Alocar {fmtMoney(available, 'USD')}
             </button>
           </div>
         </div>

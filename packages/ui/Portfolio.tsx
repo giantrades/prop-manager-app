@@ -389,7 +389,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                   <div className="pf-symbol">{r.symbol}</div>
                   <div className="pf-acct">
                     {r.accountName || r.accountId}
-                    {r.currency && r.currency !== 'BRL' && <span className="pf-cur">{r.currency}</span>}
+                    
                     {r.assetKind === 'fixed' && <span className="pf-pill" title="Renda fixa com accrual automático">RF</span>}
                     {r.converted === false && <span className="pf-pill pf-pill-stale" title="Sem taxa de conversão — fora dos totais">sem câmbio</span>}
                   </div>
@@ -398,18 +398,18 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                 {/* Valores da LINHA na moeda do próprio ativo (r.currency): o prop
                     `currency` é a moeda dos TOTAIS (BRL). Antes, um ativo USD era
                     formatado como BRL e saía errado. */}
-                <td className="pf-num">{fmtMoney(r.avgPrice, r.currency || currency)}</td>
-                <td className="pf-num">{fmtMoney(r.markPrice, r.currency || currency)}</td>
-                <td className="pf-num">{fmtMoney(r.costBasis, r.currency || currency)}</td>
-                <td className="pf-num">{fmtMoney(r.marketValue, r.currency || currency)}</td>
+                <td className="pf-num">{fmtMoney(r.avgPrice, currency)}</td>
+                <td className="pf-num">{fmtMoney(r.markPrice, currency)}</td>
+                <td className="pf-num">{fmtMoney(r.costBasis, currency)}</td>
+                <td className="pf-num">{fmtMoney(r.marketValue, currency)}</td>
                 <td className={`pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>
-                  {fmtMoney(r.pnl, r.currency || currency)}
+                  {fmtMoney(r.pnl, currency)}
                   <span className="pf-pnl-sub"> {fmtPct(r.pnlPercent)}</span>
                   {(r.dividends ?? 0) > 0 && (
-                    <span className="pf-pnl-sub" title="Proventos recebidos"> +{fmtMoney(r.dividends, r.currency || currency)} div</span>
+                    <span className="pf-pnl-sub" title="Proventos recebidos"> +{fmtMoney(r.dividends, currency)} div</span>
                   )}
                   {(r.accruedInterest ?? 0) > 0 && (
-                    <span className="pf-pnl-sub" title="Juros acumulados (accrual)"> +{fmtMoney(r.accruedInterest, r.currency || currency)} juros</span>
+                    <span className="pf-pnl-sub" title="Juros acumulados (accrual)"> +{fmtMoney(r.accruedInterest, currency)} juros</span>
                   )}
                 </td>
                 <td className={`pf-num ${r.yieldOnCost >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtPct(r.yieldOnCost ?? 0)}</td>
@@ -488,7 +488,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                     <div className="pf-symbol">{r.symbol}</div>
                     <div className="pf-acct">
                       {r.accountName || r.accountId}
-                      {r.currency && r.currency !== 'BRL' && <span className="pf-cur">{r.currency}</span>}
+                      
                       {r.converted === false && <span className="pf-pill pf-pill-stale">sem câmbio</span>}
                     </div>
                   </div>
@@ -503,19 +503,19 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">Investido</div>
-                  <div className="pf-stat-value pf-num">{fmtMoney(r.costBasis, r.currency || currency)}</div>
+                  <div className="pf-stat-value pf-num">{fmtMoney(r.costBasis, currency)}</div>
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">Atual</div>
-                  <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtMoney(r.marketValue, r.currency || currency)}</div>
+                  <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>{fmtMoney(r.marketValue, currency)}</div>
                 </div>
                 <div className="pf-stat">
                   <div className="pf-stat-label">PnL</div>
                   <div className={`pf-stat-value pf-num ${r.pnl >= 0 ? 'pf-pos' : 'pf-neg'}`}>
-                    {fmtMoney(r.pnl, r.currency || currency)}
+                    {fmtMoney(r.pnl, currency)}
                     <span className="pf-stat-sub"> {fmtPct(r.pnlPercent)}</span>
                     {(r.dividends ?? 0) > 0 && (
-                      <span className="pf-stat-sub"> +{fmtMoney(r.dividends, r.currency || currency)} div</span>
+                      <span className="pf-stat-sub"> +{fmtMoney(r.dividends, currency)} div</span>
                     )}
                   </div>
                 </div>

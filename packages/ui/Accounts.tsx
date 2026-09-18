@@ -50,10 +50,6 @@ function emptyProp() {
   };
 }
 
-function curSymbol(c) {
-  return c === 'BRL' ? 'R$' : c === 'USD' ? '$' : (c || '');
-}
-
 /**
  * @param {object} props
  * @param {Array<object>} [props.accounts]
@@ -120,12 +116,12 @@ export default function Accounts({
     const prop = accounts.filter((a) => a.kind === 'prop');
     // BALANCE = plataforma (bridge) quando existe; ledger como fallback (regra única).
     const balOf = (a) => accountBalance(a, balances[a.id]);
-    const balanceTotal = accounts.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
-    const propBalance = prop.reduce((s, a) => s + convertMoney(balOf(a), a.currency), 0);
+    const balanceTotal = accounts.reduce((s, a) => s + convertMoney(balOf(a), 'USD'), 0);
+    const propBalance = prop.reduce((s, a) => s + convertMoney(balOf(a), 'USD'), 0);
     let liquidTotal = 0;
     for (const a of accounts) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
-      liquidTotal += convertMoney(balOf(a), a.currency);
+      liquidTotal += convertMoney(balOf(a), 'USD');
     }
     const activeProp = prop.filter((a) => isActiveProp(props[a.id]?.phase));
     return { total: accounts.length, propCount: prop.length, balanceTotal, propBalance, liquidTotal, activeProp: activeProp.length };
@@ -323,19 +319,19 @@ export default function Accounts({
                   <div className="ac3-metric">
                     <span className="ac3-metric-label">Balance</span>
                     <span className="ac3-metric-value" title={a.platformBalance != null ? 'Saldo reportado pela plataforma (Quantower)' : 'Saldo do ledger do app'}>
-                      {fmtMoney(accountBalance(a, balances[a.id]), curSymbol(a.currency))}
+                      {fmtMoney(accountBalance(a, balances[a.id]), 'USD')}
                     </span>
                   </div>
                   {a.kind === 'prop' && p?.nominalSize > 0 && (
                     <div className="ac3-metric">
                       <span className="ac3-metric-label">Nominal</span>
-                      <span className="ac3-metric-value">{fmtMoney(p.nominalSize, curSymbol(a.currency))}</span>
+                      <span className="ac3-metric-value">{fmtMoney(p.nominalSize, 'USD')}</span>
                     </div>
                   )}
                   {a.kind === 'prop' && (
                     <div className="ac3-metric">
                       <span className="ac3-metric-label">Custo</span>
-                      <span className="ac3-metric-value">{fmtMoney(p?.challengeCost ?? 0, curSymbol(a.currency))}</span>
+                      <span className="ac3-metric-value">{fmtMoney(p?.challengeCost ?? 0, 'USD')}</span>
                     </div>
                   )}
                   {a.kind === 'prop' && (

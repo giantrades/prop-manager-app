@@ -230,7 +230,7 @@ export default function InvestmentsDashboardPage() {
                           barPct={((p.marketValue ?? 0) / max) * 100}
                           // marketValue está na moeda do ativo; formatar com a dela (era 'BRL'
                           // fixo e um ativo USD saía convertido errado).
-                          value={fmtMoney(p.marketValue, p.currency || 'BRL')}
+                          value={fmtMoney(p.marketValue, 'BRL')}
                           onClick={() => openPosition(p)}
                         />
                       ));

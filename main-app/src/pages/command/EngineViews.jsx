@@ -334,7 +334,7 @@ export function PortfolioPage() {
       accountId: pos.accountId,
       positionId: pos.id,
       amount,
-      currency: pos.currency ?? 'BRL',
+      currency: 'USD',
       note: `Provento ${pos.symbol} ex ${ev.exDate}`,
     });
     const { removeAnnouncedDividend } = await import('@apps/lib/db');
@@ -352,7 +352,7 @@ export function PortfolioPage() {
       accountId: pos.accountId,
       positionId: pos.id,
       amount,
-      currency: pos.currency ?? 'BRL',
+      currency: 'USD',
       note: `Provento ${pos.symbol}`,
     });
   }, []);
