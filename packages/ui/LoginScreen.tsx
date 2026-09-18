@@ -13,7 +13,19 @@ import React, { useState } from 'react';
  * @param {boolean} [props.loading]
  * @param {string|null} [props.error]
  */
-export default function LoginScreen({ onLogin, onMagicLink, onLogout, user, loading = false, error = null }) {
+interface LoginUser {
+  email?: string;
+}
+
+interface LoginScreenProps {
+  onLogin: (email: string, password: string) => Promise<void> | void;
+  onMagicLink?: (email: string) => Promise<void> | void;
+  onLogout?: () => Promise<void> | void;
+  user?: LoginUser | null;
+  loading?: boolean;
+  error?: string | null;
+}
+export default function LoginScreen({ onLogin, onMagicLink, onLogout, user, loading = false, error = null }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState('password');
@@ -65,7 +77,7 @@ export default function LoginScreen({ onLogin, onMagicLink, onLogout, user, load
           onClick={async () => {
             setSent(false);
             if (mode === 'password') await onLogin(email, password);
-            else { await onMagicLink(email); setSent(true); }
+            else { await onMagicLink?.(email); setSent(true); }
           }}
         >
           {loading ? 'Entrando…' : mode === 'password' ? 'Entrar' : 'Enviar magic link'}

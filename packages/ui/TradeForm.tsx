@@ -10,7 +10,52 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradePnl, calcR, vwapOfExecutions } from '@apps/lib/db';
+import type { Trade, Account, TradeAccountSplit, TradeExecution, TradeDirection, TradeSource } from '@apps/lib/db';
+import type { RInput } from '@apps/lib/db';
 import NotesEditor from './NotesEditor';
+
+interface StrategyOption {
+  id: string;
+  name?: string;
+}
+
+interface TradeFormProps {
+  trade?: Trade | null;
+  accounts?: Account[];
+  strategies?: StrategyOption[];
+  onSubmit: (trade: Trade) => Promise<void> | void;
+  onCancel?: () => void;
+}
+
+interface TradeFormState {
+  id: string;
+  symbol: string;
+  direction: TradeDirection;
+  qty: number | string;
+  entryPrice: number | string;
+  exitPrice: number | string;
+  entryDatetime: string;
+  exitDatetime: string;
+  commission: number | string;
+  fees: number | string;
+  swap: number | string;
+  rebate: number | string;
+  multiplier: number | string;
+  stopPrice: number | string;
+  strategyId: string;
+  strategyVersion: string;
+  accountId: string;
+  accounts: TradeAccountSplit[];
+  source: TradeSource;
+  notes: string;
+  tagsText: string;
+}
+
+interface FillDraft {
+  side: 'entry' | 'exit';
+  price: string;
+  quantity: string;
+}
 
 
 /**
@@ -21,9 +66,9 @@ import NotesEditor from './NotesEditor';
  * @param {(trade:object)=>Promise<void>|void} props.onSubmit
  * @param {()=>void} [props.onCancel]
  */
-export default function TradeForm({ trade = null, accounts = [], strategies = [], onSubmit, onCancel }) {
+export default function TradeForm({ trade = null, accounts = [], strategies = [], onSubmit, onCancel }: TradeFormProps) {
   const [quick, setQuick] = useState(!trade);
-  const [form, setForm] = useState(() => ({
+  const [form, setForm] = useState<TradeFormState>(() => ({
     id: trade?.id ?? `trade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     symbol: trade?.symbol ?? '',
     direction: trade?.direction ?? 'long',
@@ -47,9 +92,9 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
     tagsText: ((trade?.tags ?? []).join(', ')),
   }));
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [executions, setExecutions] = useState(trade?.executions ?? []);
-  const [fill, setFill] = useState({ side: 'entry', price: '', quantity: '' });
+  const [error, setError] = useState<string | null>(null);
+  const [executions, setExecutions] = useState<TradeExecution[]>(trade?.executions ?? []);
+  const [fill, setFill] = useState<FillDraft>({ side: 'entry', price: '', quantity: '' });
   const [newStrategyName, setNewStrategyName] = useState('');
 
   const preview = useMemo(() => {
@@ -66,23 +111,24 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
     };
     if (draft.exitPrice == null) return { pnl: null, r: null };
     return {
-      pnl: tradePnl(draft as any),
-      r: calcR(draft as any),
+      pnl: tradePnl(draft as unknown as Trade),
+      r: calcR(draft as unknown as RInput),
     };
   }, [form]);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof TradeFormState>(k: K, v: TradeFormState[K]): void =>
+    setForm((f) => ({ ...f, [k]: v }) as TradeFormState);
 
   const addFill = () => {
     const price = Number(fill.price);
     const quantity = Number(fill.quantity);
     if (!price || !quantity) return;
-    setExecutions((xs) => [...xs, { side: fill.side, price, quantity, timestamp: new Date().toISOString() }]);
+    setExecutions((xs: TradeExecution[]) => [...xs, { side: fill.side, price, quantity, timestamp: new Date().toISOString() }]);
     setFill({ side: 'entry', price: '', quantity: '' });
   };
-  const removeFill = (i) => setExecutions((xs) => xs.filter((_, idx) => idx !== i));
-  const entryVwap = vwapOfExecutions(executions.filter((x) => x.side === 'entry'));
-  const exitVwap = vwapOfExecutions(executions.filter((x) => x.side === 'exit'));
+  const removeFill = (i: number) => setExecutions((xs: TradeExecution[]) => xs.filter((_: TradeExecution, idx: number) => idx !== i));
+  const entryVwap = vwapOfExecutions(executions.filter((x: TradeExecution) => x.side === 'entry'));
+  const exitVwap = vwapOfExecutions(executions.filter((x: TradeExecution) => x.side === 'exit'));
   const applyVwap = () => {
     if (entryVwap != null) set('entryPrice', entryVwap);
     if (exitVwap != null) set('exitPrice', exitVwap);
@@ -127,7 +173,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
         resultNet: preview.pnl != null ? Number(preview.pnl.toFixed(2)) : 0,
         resultR: preview.r != null ? Number(preview.r.toFixed(4)) : null,
       };
-      await onSubmit(tradePayload);
+      await onSubmit(tradePayload as Trade);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[trade] falha ao salvar', err);
@@ -148,7 +194,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
               <input className="tf-input" value={form.symbol} onChange={(e) => set('symbol', e.target.value.toUpperCase())} placeholder="EURUSD" />
             </label>
             <label className="tf-field"><span className="tf-label">Direção</span>
-              <select className="tf-input" value={form.direction} onChange={(e) => set('direction', e.target.value)}>
+              <select className="tf-input" value={form.direction} onChange={(e) => set('direction', e.target.value as TradeDirection)}>
                 <option value="long">Long</option>
                 <option value="short">Short</option>
               </select>
@@ -188,7 +234,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                   <input className="tf-input" value={form.symbol} onChange={(e) => set('symbol', e.target.value.toUpperCase())} />
                 </label>
                 <label className="tf-field"><span className="tf-label">Direção</span>
-                  <select className="tf-input" value={form.direction} onChange={(e) => set('direction', e.target.value)}>
+                  <select className="tf-input" value={form.direction} onChange={(e) => set('direction', e.target.value as TradeDirection)}>
                     <option value="long">Long</option><option value="short">Short</option>
                   </select>
                 </label>
@@ -210,7 +256,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 <label className="tf-field"><span className="tf-label">Estratégia</span>
                   <select className="tf-input" value={form.strategyId} onChange={(e) => set('strategyId', e.target.value)}>
                     <option value="">—</option>
-                    {strategies.map((s) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
+                    {strategies.map((s: StrategyOption) => <option key={s.id} value={s.id}>{s.name || s.id}</option>)}
                     <option value="__new__">＋ Nova estratégia…</option>
                   </select>
                 </label>
@@ -231,21 +277,21 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 <label className="tf-field"><span className="tf-label">Conta principal</span>
                   <select className="tf-input" value={form.accountId} onChange={(e) => set('accountId', e.target.value)}>
                     <option value="">—</option>
-                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.kind})</option>)}
+                    {accounts.map((a: Account) => <option key={a.id} value={a.id}>{a.name} ({a.kind})</option>)}
                   </select>
                 </label>
                 <div className="tf-hint">Rateio por peso (opcional): informe pesos por conta se o trade for multi-conta.</div>
                 {accounts.length > 0 && (
                   <div className="tf-split">
-                    {accounts.map((a) => {
-                      const w = form.accounts.find((x) => x.accountId === a.id)?.weight ?? 0;
+                    {accounts.map((a: Account) => {
+                      const w = form.accounts.find((x: TradeAccountSplit) => x.accountId === a.id)?.weight ?? 0;
                       return (
                         <div key={a.id} className="tf-split-row">
                           <span className="tf-split-name">{a.name}</span>
                           <input className="tf-input tf-split-input" type="number" placeholder="peso" value={w || ''}
                             onChange={(e) => {
                               const val = Number(e.target.value) || 0;
-                              set('accounts', form.accounts.filter((x) => x.accountId !== a.id).concat({ accountId: a.id, weight: val }));
+                              set('accounts', form.accounts.filter((x: TradeAccountSplit) => x.accountId !== a.id).concat({ accountId: a.id, weight: val }));
                             }} />
                         </div>
                       );
@@ -275,7 +321,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
               <div className="tf-executions">
                 <div className="tf-ps-title">Execuções (fills)</div>
                 <div className="tf-exec-row">
-                  <select className="tf-input tf-exec-select" value={fill.side} onChange={(e) => setFill({ ...fill, side: e.target.value })}>
+                  <select className="tf-input tf-exec-select" value={fill.side} onChange={(e) => setFill({ ...fill, side: e.target.value as FillDraft['side'] })}>
                     <option value="entry">Entry</option>
                     <option value="exit">Exit</option>
                   </select>
@@ -285,7 +331,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 </div>
                 {executions.length > 0 && (
                   <div className="tf-exec-list">
-                    {executions.map((x, i) => (
+                    {executions.map((x: TradeExecution, i: number) => (
                       <div key={i} className="tf-exec-item">
                         <span className={`tf-exec-side tf-${x.side}`}>{x.side}</span>
                         <span>{x.price}</span>
@@ -316,7 +362,7 @@ export default function TradeForm({ trade = null, accounts = [], strategies = []
                 <input className="tf-input" value={form.tagsText} onChange={(e) => set('tagsText', e.target.value)} placeholder="ex.: rompimento, london, erro-entrada" aria-label="Tags do trade" />
               </label>
               <label className="tf-field"><span className="tf-label">Notas / review pós-trade</span>
-                <NotesEditor value={form.notes} onChange={(md) => set('notes', md)} ariaLabel="Notas do trade" />
+                <NotesEditor value={form.notes} onChange={(md: string) => set('notes', md)} ariaLabel="Notas do trade" />
               </label>
             </div>
           </div>

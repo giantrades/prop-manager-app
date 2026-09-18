@@ -8,9 +8,21 @@ import React from 'react';
  * @param {(p:object)=>void} props.onChange
  * @param {boolean} [props.compact]
  */
-export default function PeriodPicker({ period, onChange, compact = false }) {
+interface Period {
+  mode: 'month' | 'range' | 'all';
+  ym?: string;
+  from?: string;
+  to?: string;
+}
+
+interface PeriodPickerProps {
+  period: Period;
+  onChange: (p: Period) => void;
+  compact?: boolean;
+}
+export default function PeriodPicker({ period, onChange, compact = false }: PeriodPickerProps) {
   const mode = period?.mode ?? 'all';
-  const set = (patch) => onChange({ ...period, ...patch });
+  const set = (patch: Partial<Period>) => onChange({ ...period, ...patch });
   const nowYm = new Date().toISOString().slice(0, 7);
 
   return (

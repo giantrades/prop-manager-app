@@ -8,7 +8,7 @@ import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 
-const KIND_LABEL = {
+const KIND_LABEL: Record<string, string> = {
   wallet: 'Wallet',
   bank: 'Banco',
   cash: 'Dinheiro',

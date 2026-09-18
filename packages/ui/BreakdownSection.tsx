@@ -7,14 +7,15 @@
 import { fmtMoney } from './currency';
 import React, { useMemo } from 'react';
 import { directionSplit, symbolBreakdown } from '@apps/lib/db';
+import type { Trade } from '@apps/lib/db';
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtPF(pf) {
+function fmtPF(pf: number | string | null | undefined) {
   if (pf === 'infinity') return '∞';
   if (pf === 'n/a') return 'n/a';
   return Number(pf).toFixed(2);
@@ -26,7 +27,12 @@ function fmtPF(pf) {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function BreakdownSection({ trades = [], currency = 'USD', loading = false }) {
+interface BreakdownSectionProps {
+  trades?: Trade[];
+  currency?: string;
+  loading?: boolean;
+}
+export default function BreakdownSection({ trades = [], currency = 'USD', loading = false }: BreakdownSectionProps) {
   const dirs = useMemo(() => directionSplit(trades), [trades]);
   const symbols = useMemo(() => symbolBreakdown(trades), [trades]);
 

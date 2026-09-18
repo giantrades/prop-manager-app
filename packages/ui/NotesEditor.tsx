@@ -25,12 +25,18 @@ class EditorErrorBoundary extends Component<BoundaryProps, { failed: boolean }> 
   }
 }
 
-function PlainFallback({ value, onChange, ariaLabel }) {
+interface PlainFallbackProps {
+  value?: string;
+  onChange?: (md: string) => void;
+  ariaLabel?: string;
+}
+
+function PlainFallback({ value, onChange, ariaLabel }: PlainFallbackProps) {
   return (
     <textarea
       className="tf-input tf-textarea"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange?.(e.target.value)}
       placeholder="O que funcionou? O que errou? Emoção?"
       rows={4}
       aria-label={ariaLabel || 'Notas do trade'}
@@ -38,10 +44,22 @@ function PlainFallback({ value, onChange, ariaLabel }) {
   );
 }
 
-function LoadedEditor({ mods, initialMarkdown, onChange, ariaLabel }) {
+interface BlockNoteMods {
+  useCreateBlockNote: typeof import('@blocknote/react')['useCreateBlockNote'];
+  BlockNoteView: typeof import('@blocknote/mantine')['BlockNoteView'];
+}
+
+interface LoadedEditorProps {
+  mods: BlockNoteMods;
+  initialMarkdown?: string;
+  onChange?: (md: string) => void;
+  ariaLabel?: string;
+}
+
+function LoadedEditor({ mods, initialMarkdown, onChange, ariaLabel }: LoadedEditorProps) {
   const { useCreateBlockNote, BlockNoteView } = mods;
   const editor = useCreateBlockNote();
-  const onChangeRef = useRef(onChange);
+  const onChangeRef = useRef<((md: string) => void) | undefined>(onChange);
   onChangeRef.current = onChange;
   const seededRef = useRef(false);
 
@@ -49,8 +67,11 @@ function LoadedEditor({ mods, initialMarkdown, onChange, ariaLabel }) {
     if (seededRef.current) return;
     seededRef.current = true;
     if (initialMarkdown && initialMarkdown.trim()) {
-      editor
-        .tryParseMarkdownToBlocks(initialMarkdown)
+      // O runtime assume API assíncrona; coerção só de tipos (sem efeito em runtime).
+      const pending = editor.tryParseMarkdownToBlocks(initialMarkdown) as unknown as Promise<
+        Parameters<typeof editor.replaceBlocks>[1]
+      >;
+      pending
         .then((blocks) => {
           if (blocks && blocks.length > 0) editor.replaceBlocks(editor.document, blocks);
         })
@@ -77,14 +98,19 @@ function LoadedEditor({ mods, initialMarkdown, onChange, ariaLabel }) {
   );
 }
 
+interface NotesEditorProps {
+  value?: string;
+  onChange?: (md: string) => void;
+  ariaLabel?: string;
+}
 /**
  * @param {object} props
  * @param {string} [props.value] markdown inicial
  * @param {(md:string)=>void} [props.onChange]
  * @param {string} [props.ariaLabel]
- */
-export default function NotesEditor({ value = '', onChange, ariaLabel }) {
-  const [mods, setMods] = useState(null);
+  */
+export default function NotesEditor({ value = '', onChange, ariaLabel }: NotesEditorProps) {
+  const [mods, setMods] = useState<BlockNoteMods | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {

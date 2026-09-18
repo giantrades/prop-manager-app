@@ -10,7 +10,13 @@ import React from 'react';
  * @param {(index:number, done:boolean)=>void} [props.onToggle]
  * @param {boolean} [props.loading]
  */
-export default function PreTradeChecklist({ items = [], checked = {}, onToggle, loading = false }) {
+interface PreTradeChecklistProps {
+  items?: string[];
+  checked?: Record<string, boolean>;
+  onToggle?: (index: number, done: boolean) => void;
+  loading?: boolean;
+}
+export default function PreTradeChecklist({ items = [], checked = {}, onToggle, loading = false }: PreTradeChecklistProps) {
   if (loading) {
     return (
       <div className="pc-root pc-loading" role="status" aria-live="polite">

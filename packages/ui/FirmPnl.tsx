@@ -17,12 +17,52 @@ import {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-const FIRM_COLORS = [
+const FIRM_COLORS: string[] = [
   'var(--green,#2ecc71)', 'var(--blue,#3498db)', 'var(--yellow,#e1b12c)', 'var(--brand,#7c5cff)',
   'var(--red,#e74c3c)', 'var(--muted,#a1a7b3)',
 ];
-export default function FirmPnl({ rows = [], byAccount = {}, history = null, currency = 'USD', loading = false, colorById = {} }) {
-  const [open, setOpen] = useState(null);
+
+export interface FirmPnlRow {
+  firmId: string;
+  firmName?: string;
+  payouts: number;
+  costs: number;
+  rebates: number;
+  fees: number;
+  profit: number;
+}
+
+export interface FirmPnlAccountRow {
+  accountId: string;
+  accountName?: string;
+  payouts: number;
+  costs: number;
+  rebates: number;
+  fees: number;
+  profit: number;
+}
+
+export interface FirmPnlHistoryRow {
+  ym: string;
+  [firm: string]: string | number;
+}
+
+export interface FirmPnlHistory {
+  months: string[];
+  firms: string[];
+  rows: FirmPnlHistoryRow[];
+}
+
+export interface FirmPnlProps {
+  rows?: FirmPnlRow[];
+  byAccount?: Record<string, FirmPnlAccountRow[]>;
+  history?: FirmPnlHistory | null;
+  currency?: string;
+  loading?: boolean;
+  colorById?: Record<string, string>;
+}
+export default function FirmPnl({ rows = [], byAccount = {}, history = null, currency = 'USD', loading = false, colorById = {} }: FirmPnlProps) {
+  const [open, setOpen] = useState<string | null>(null);
   if (loading) {
     return (
       <div className="fp-root fp-loading" role="status" aria-live="polite">

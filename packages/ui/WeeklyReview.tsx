@@ -7,14 +7,15 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { weeklyReview } from '@apps/lib/db';
+import type { Trade } from '@apps/lib/db';
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtDay(iso) {
+function fmtDay(iso: string | null | undefined) {
   if (!iso) return '—';
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 }
@@ -25,7 +26,12 @@ function fmtDay(iso) {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function WeeklyReview({ trades = [], currency = 'USD', loading = false }) {
+interface WeeklyReviewProps {
+  trades?: Trade[];
+  currency?: string;
+  loading?: boolean;
+}
+export default function WeeklyReview({ trades = [], currency = 'USD', loading = false }: WeeklyReviewProps) {
   const data = useMemo(() => weeklyReview(trades), [trades]);
   const [copied, setCopied] = useState(false);
 

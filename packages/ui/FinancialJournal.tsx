@@ -9,7 +9,12 @@ import { fmtMoney } from './currency';
 import React from 'react';
 
 
-const TYPE_META = {
+interface JournalTypeMeta {
+  label: string;
+  emoji: string;
+}
+
+const TYPE_META: Record<string, JournalTypeMeta> = {
   first_payout: { label: 'Primeiro payout', emoji: '🎉' },
   payout_milestone: { label: 'Marco de payout', emoji: '💰' },
   networth_milestone: { label: 'Marco de patrimônio', emoji: '🏦' },
@@ -25,7 +30,24 @@ const TYPE_META = {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function FinancialJournal({ events = [], onConfirm, onDelete, currency = 'USD', loading = false }) {
+export interface JournalEvent {
+  id: string;
+  date: string;
+  type: string;
+  title: string;
+  amount?: number;
+  note?: string;
+  confirmed: boolean;
+}
+
+export interface FinancialJournalProps {
+  events?: JournalEvent[];
+  onConfirm?: (event: JournalEvent) => void;
+  onDelete?: (id: string) => void;
+  currency?: string;
+  loading?: boolean;
+}
+export default function FinancialJournal({ events = [], onConfirm, onDelete, currency = 'USD', loading = false }: FinancialJournalProps) {
   if (loading) {
     return (
       <div className="fj-root fj-loading" role="status" aria-live="polite">
@@ -43,7 +65,7 @@ export default function FinancialJournal({ events = [], onConfirm, onDelete, cur
   return (
     <div className="fj-root">
       {events.map((e) => {
-        const meta = TYPE_META[e.type] || TYPE_META.custom;
+        const meta: JournalTypeMeta = TYPE_META[e.type] ?? TYPE_META['custom'] ?? { label: 'Evento', emoji: '📝' };
         return (
           <div key={e.id} className={`fj-card${e.confirmed ? ' fj-confirmed' : ''}`}>
             <div className="fj-card-head">

@@ -8,17 +8,27 @@
 import { fmtMoney } from './currency';
 import React, { useId } from 'react';
 import { normalizePropPhase } from '@apps/lib/db';
+import type { Account, AccountDashboard, Payout, PropExtension } from '@apps/lib/db';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
 
 
-const PHASE_LABEL = { challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby' };
+const PHASE_LABEL: Record<string, string> = { challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby' };
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
+}
+
+interface AccountDetailProps {
+  account: Account;
+  prop?: PropExtension | null;
+  dashboard?: AccountDashboard | null;
+  payouts?: Payout[];
+  onBack?: () => void;
+  loading?: boolean;
 }
 
 /**
@@ -30,7 +40,7 @@ function fmtPct(v) {
  * @param {()=>void} [props.onBack]
  * @param {boolean} [props.loading]
  */
-export default function AccountDetail({ account, prop = null, dashboard = null, payouts = [], onBack, loading = false }) {
+export default function AccountDetail({ account, prop = null, dashboard = null, payouts = [], onBack, loading = false }: AccountDetailProps) {
   const gid = useId().replace(/[^a-zA-Z0-9]/g, '');
 
   if (loading || !dashboard) {
@@ -68,7 +78,7 @@ export default function AccountDetail({ account, prop = null, dashboard = null, 
         <div>
           <div className="ad-title">{account.name} <span className="ad-kind">{account.kind}</span></div>
           <div className="ad-sub">
-            {prop ? `${PHASE_LABEL[normalizePropPhase(prop.phase)] ?? prop.phase} · balance ${fmtMoney(prop.nominalSize)}` : 'sem regras prop'}
+            {prop ? `${PHASE_LABEL[normalizePropPhase(prop.phase) ?? ''] ?? prop.phase} · balance ${fmtMoney(prop.nominalSize)}` : 'sem regras prop'}
             {account.platformName ? ` · ${account.platformName}` : ''}
           </div>
         </div>

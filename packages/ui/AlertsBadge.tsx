@@ -11,7 +11,12 @@ import React from 'react';
  * @param {() => void} [props.onClick]
  * @param {string} [props.label]
  */
-export default function AlertsBadge({ count = 0, onClick, label = 'Ações' }) {
+interface AlertsBadgeProps {
+  count?: number;
+  onClick?: () => void;
+  label?: string;
+}
+export default function AlertsBadge({ count = 0, onClick, label = 'Ações' }: AlertsBadgeProps) {
   const hasAlert = count > 0;
   return (
     <button

@@ -12,8 +12,18 @@ import React from 'react';
  * @param {React.ReactNode} props.value
  * @param {string} [props.valueClass]
  */
-export default function StatRow({ icon = null, label, sub, barPct, color = '#7c5cff', value, valueClass = '', onClick }) {
-  const Tag = onClick ? 'button' : 'div';
+interface StatRowProps {
+  icon?: React.ReactNode;
+  label: string;
+  sub?: string | number;
+  barPct?: number;
+  color?: string;
+  value: React.ReactNode;
+  valueClass?: string;
+  onClick?: () => void;
+}
+export default function StatRow({ icon = null, label, sub, barPct, color = '#7c5cff', value, valueClass = '', onClick }: StatRowProps) {
+  const Tag: React.ElementType = onClick ? 'button' : 'div';
   return (
     <Tag
       className={`sr-row${onClick ? ' sr-row-btn' : ''}`}

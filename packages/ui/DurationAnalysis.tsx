@@ -5,8 +5,9 @@
 
 import React, { useMemo } from 'react';
 import { durationStats } from '@apps/lib/db';
+import type { Trade } from '@apps/lib/db';
 
-function fmtMin(v) {
+function fmtMin(v: number | null | undefined) {
   if (v == null) return '—';
   if (v < 60) return `${v.toFixed(v % 1 ? 1 : 0)}m`;
   const h = Math.floor(v / 60);
@@ -19,7 +20,11 @@ function fmtMin(v) {
  * @param {Array<object>} [props.trades]
  * @param {boolean} [props.loading]
  */
-export default function DurationAnalysis({ trades = [], loading = false }) {
+interface DurationAnalysisProps {
+  trades?: Trade[];
+  loading?: boolean;
+}
+export default function DurationAnalysis({ trades = [], loading = false }: DurationAnalysisProps) {
   const data = useMemo(() => durationStats(trades), [trades]);
 
   if (loading) {

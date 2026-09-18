@@ -12,13 +12,35 @@ import {
   Pencil, Trash2, Plus, Copy, Gauge, X,
 } from 'lucide-react';
 import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR, isActiveProp, normalizePropPhase, accountBalance } from '@apps/lib/db';
+import type { Account, AccountKind, FirmDef, PropExtension, PropPhase, PayoutFrequency } from '@apps/lib/db';
 
-const KINDS = ['prop', 'wallet', 'investment', 'bank', 'cash'];
+type IconComponent = typeof Building2;
+interface KindMeta { label: string; icon: IconComponent; color: string; }
+type EditableAccount = Partial<Account> & { kind: AccountKind; name: string };
+type PropDraft = Partial<PropExtension>;
+interface EditingState { account: EditableAccount; prop: PropDraft | null; }
+interface NewFirmDraft { name: string; color: string; }
+interface FirmInput { name: string; color?: string; type?: string; }
+interface AccountsProps {
+  accounts?: Account[];
+  props?: Record<string, PropExtension>;
+  balances?: Record<string, number>;
+  statusById?: Record<string, string>;
+  firms?: FirmDef[];
+  onSave: (account: EditableAccount, prop: PropDraft | null) => Promise<void> | void;
+  onDelete?: (accountId: string) => Promise<void> | void;
+  onSelect?: (accountId: string) => void;
+  onDuplicate?: (accountId: string) => void;
+  onSaveFirm?: (firm: FirmInput) => Promise<string | undefined> | void;
+  loading?: boolean;
+}
+
+const KINDS: AccountKind[] = ['prop', 'wallet', 'investment', 'bank', 'cash'];
 // Status de vida da conta (4 estados pedidos): Challenge, Funded, Live, Standby.
-const PHASES = ['challenge', 'funded', 'live', 'standby'];
-const FREQUENCIES = ['daily', 'weekly', 'biweekly', 'monthly'];
+const PHASES: PropPhase[] = ['challenge', 'funded', 'live', 'standby'];
+const FREQUENCIES: PayoutFrequency[] = ['daily', 'weekly', 'biweekly', 'monthly'];
 
-const KIND_META = {
+const KIND_META: Record<string, KindMeta> = {
   prop: { label: 'Prop', icon: Building2, color: 'var(--brand, #7c5cff)' },
   wallet: { label: 'Cripto/Carteira', icon: Wallet, color: 'var(--green, #2ecc71)' },
   investment: { label: 'Investimento', icon: TrendingUp, color: 'var(--yellow, #e1b12c)' },
@@ -28,18 +50,18 @@ const KIND_META = {
   crypto: { label: 'Cripto/Carteira', icon: Wallet, color: 'var(--green, #2ecc71)' },
 };
 
-const PHASE_LABEL = {
+const PHASE_LABEL: Record<string, string> = {
   challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby',
 };
-const FREQ_LABEL = { daily: 'Diário', weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal' };
-const PHASE_CLASS = {
+const FREQ_LABEL: Record<string, string> = { daily: 'Diário', weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal' };
+const PHASE_CLASS: Record<string, string> = {
   challenge: 'ac3-pill-warn', funded: 'ac3-pill-safe', live: 'ac3-pill-safe', standby: 'ac3-pill-muted',
 };
 
-function emptyAccount() {
+function emptyAccount(): EditableAccount {
   return { kind: 'wallet', name: '', currency: 'USD', institution: '', hidden: false, defaultWeight: 1 };
 }
-function emptyProp() {
+function emptyProp(): PropDraft {
   // Só estes campos são editáveis no form; os demais ficam com defaults p/ o motor
   // (DD/consistência/minDays) e podem ser ajustados via template da firm.
   return {
@@ -66,32 +88,41 @@ function emptyProp() {
 export default function Accounts({
   accounts = [], props = {}, balances = {}, statusById = {}, firms = [],
   onSave, onDelete, onSelect, onDuplicate, onSaveFirm, loading = false,
-}) {
-  const [editing, setEditing] = useState(null); // { account, prop } | null
+}: AccountsProps) {
+  const [editing, setEditing] = useState<EditingState | null>(null); // { account, prop } | null
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [templateId, setTemplateId] = useState('');
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState('all');
-  const [newFirm, setNewFirm] = useState(null); // { name, color } | null
+  const [newFirm, setNewFirm] = useState<NewFirmDraft | null>(null); // { name, color } | null
 
-  const applyFirmTemplate = (id) => {
+  const applyFirmTemplate = (id: string): void => {
     setTemplateId(id);
     if (!id) return;
     const applied = applyTemplate(editing?.account?.name ?? '', id);
     if (!applied) return;
-    setEditing((e) => ({
-      account: { ...e.account, ...applied.accountPatch },
-      prop: { ...(e.prop || emptyProp()), ...applied.prop },
-    }));
+    setEditing((e) => {
+      if (!e) return e;
+      return {
+        account: { ...e.account, ...applied.accountPatch },
+        prop: { ...(e.prop || emptyProp()), ...applied.prop },
+      };
+    });
   };
 
-  const startNew = () => { setEditing({ account: emptyAccount(), prop: null }); setIsNew(true); setTemplateId(''); };
-  const startEdit = (a) => { setEditing({ account: a, prop: props[a.id] ?? null }); setIsNew(false); };
-  const update = (k, v) => setEditing((e) => ({ ...e, account: { ...e.account, [k]: v } }));
-  const updateProp = (k, v) => setEditing((e) => ({ ...e, prop: { ...(e.prop || emptyProp()), [k]: v } }));
+  const startNew = (): void => { setEditing({ account: emptyAccount(), prop: null }); setIsNew(true); setTemplateId(''); };
+  const startEdit = (a: Account): void => { setEditing({ account: a, prop: props[a.id] ?? null }); setIsNew(false); };
+  const update = (k: string, v: unknown): void => setEditing((e) => {
+    if (!e) return e;
+    return { ...e, account: { ...e.account, [k]: v } as EditableAccount };
+  });
+  const updateProp = (k: string, v: unknown): void => setEditing((e) => {
+    if (!e) return e;
+    return { ...e, prop: { ...(e.prop || emptyProp()), [k]: v } as PropDraft };
+  });
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<void> => {
     if (!editing?.account?.name) return;
     setSaving(true);
     try {
@@ -115,7 +146,7 @@ export default function Accounts({
   const summary = useMemo(() => {
     const prop = accounts.filter((a) => a.kind === 'prop');
     // BALANCE = plataforma (bridge) quando existe; ledger como fallback (regra única).
-    const balOf = (a) => accountBalance(a, balances[a.id]);
+    const balOf = (a: Account): number => accountBalance(a, balances[a.id]);
     const balanceTotal = accounts.reduce((s, a) => s + balOf(a), 0);
     const propBalance = prop.reduce((s, a) => s + balOf(a), 0);
     let liquidTotal = 0;
@@ -190,13 +221,14 @@ export default function Accounts({
 
             {newFirm && (
               <div className="ac3-newfirm">
-                <input className="ac3-input" value={newFirm.name} onChange={(e) => setNewFirm((p) => ({ ...p, name: e.target.value }))} placeholder="Nome da empresa (ex.: FTMO)" aria-label="Nome da nova empresa" />
-                <input type="color" value={newFirm.color} onChange={(e) => setNewFirm((p) => ({ ...p, color: e.target.value }))} aria-label="Cor da nova empresa" style={{ width: 44, height: 40, border: 'none', background: 'transparent', cursor: 'pointer' }} />
+                <input className="ac3-input" value={newFirm.name} onChange={(e) => setNewFirm((p) => ({ ...(p as NewFirmDraft), name: e.target.value }))} placeholder="Nome da empresa (ex.: FTMO)" aria-label="Nome da nova empresa" />
+                <input type="color" value={newFirm.color} onChange={(e) => setNewFirm((p) => ({ ...(p as NewFirmDraft), color: e.target.value }))} aria-label="Cor da nova empresa" style={{ width: 44, height: 40, border: 'none', background: 'transparent', cursor: 'pointer' }} />
                 <button
                   type="button"
                   className="ac3-btn ac3-btn-sm ac3-btn-primary"
                   disabled={!newFirm.name.trim()}
                   onClick={async () => {
+                    if (!onSaveFirm) return;
                     const id = await onSaveFirm({ name: newFirm.name.trim(), color: newFirm.color });
                     if (id) update('firmId', id);
                     setNewFirm(null);

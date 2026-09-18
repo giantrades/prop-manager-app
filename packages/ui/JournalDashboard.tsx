@@ -19,18 +19,19 @@ import {
   ReferenceDot,
 } from 'recharts';
 import { tradeNetPnl, winrate, profitFactor, formatDate, parseDate } from '@apps/lib/db';
+import type { Trade, Payout, ProfitFactor } from '@apps/lib/db';
 
 // Chave de dia LOCAL (mesma regra do calendarPnl/drawdown). Nunca `slice(0,10)` em ISO UTC,
 // senão o trade das 22h de SP cai no dia seguinte e os widgets divergem entre si.
 const dayKey = (v: string | undefined | null): string => (v ? formatDate(parseDate(v), 'yyyy-MM-dd') : '');
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtPF(pf) {
+function fmtPF(pf: ProfitFactor): string {
   if (pf === 'infinity') return '∞';
   if (pf === 'n/a') return 'n/a';
   return Number(pf).toFixed(2);
@@ -42,7 +43,24 @@ function fmtPF(pf) {
  * @param {Array<object>} [props.payouts] — A6: marcadores na equity (dias com payout)
  * @param {boolean} [props.loading]
  */
-export default function JournalDashboard({ trades = [], payouts = [], loading = false }) {
+export interface JournalDashboardProps {
+  trades?: Trade[];
+  payouts?: Payout[];
+  loading?: boolean;
+}
+
+interface MetricCard {
+  label: string;
+  value: string | number;
+  color?: string;
+}
+
+interface PayoutMark {
+  at: string;
+  amount: number;
+  y: number;
+}
+export default function JournalDashboard({ trades = [], payouts = [], loading = false }: JournalDashboardProps) {
   const [showPayouts, setShowPayouts] = useState(true);
   const data = useMemo(() => {
     const closed = trades
@@ -104,16 +122,17 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
 
   // A6 — marcadores de payout na equity (mesma chave de data da curva: slice ISO).
   const payoutMarks = useMemo(() => {
-    if (!payouts.length || !data.equity.length) return [];
-    const byDay = new Map();
+    if (!payouts.length || !data.equity.length) return [] as PayoutMark[];
+    const byDay = new Map<string, number>();
     for (const p of payouts) {
       if (p.status === 'Pending') continue;
       const key = dayKey(p.date);
       if (!key) continue;
       byDay.set(key, (byDay.get(key) ?? 0) + (p.net ?? 0));
     }
-    const marks = [];
-    let lastY = data.equity[data.equity.length - 1].equity;
+    const marks: PayoutMark[] = [];
+    const lastEquity = data.equity[data.equity.length - 1];
+    let lastY: number = lastEquity ? lastEquity.equity : 0;
     for (const [at, amount] of byDay) {
       const point = [...data.equity].reverse().find((e) => e.at <= at);
       const y = point ? point.equity : lastY;
@@ -132,7 +151,7 @@ export default function JournalDashboard({ trades = [], payouts = [], loading = 
     );
   }
 
-  const cards = [
+  const cards: MetricCard[] = [
     { label: 'Trades', value: data.count },
     { label: 'Winrate', value: fmtPct(data.wr) },
     { label: 'Profit Factor', value: fmtPF(data.pf) },

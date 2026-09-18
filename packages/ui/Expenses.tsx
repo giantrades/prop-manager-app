@@ -6,8 +6,17 @@
 // Fonte: DOCS/10_MODULES/gastos/00-spec.md (G1–G9).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: number | string | Array<number | string>, cur = 'R$'): string { return fmtMoneyShared(v, cur); }
 import React, { useMemo, useState } from 'react';
+import type {
+  Account,
+  BankEntry,
+  Card,
+  CategoryDef,
+  MonthCompare,
+  Transaction,
+  TransactionKind,
+} from '@apps/lib/db';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown,
   Briefcase, GraduationCap, Tag, Wallet, Pencil, Trash2, Plus, Coins, Gift,
@@ -25,12 +34,12 @@ import {
   DEFAULT_CATEGORIES,
 } from '@apps/lib/db';
 
-const ICONS = {
+const ICONS: Record<string, React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>> = {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
   Briefcase, GraduationCap, Tag, Wallet, Pencil, Trash2, Plus, Receipt, Coins, Gift,
 };
 
-const COLORS = {
+const COLORS: Record<string, string> = {
   blue: 'var(--blue,#3498db)',
   green: 'var(--green,#2ecc71)',
   yellow: 'var(--yellow,#e1b12c)',
@@ -39,7 +48,7 @@ const COLORS = {
   gray: 'var(--gray,#5b6270)',
 };
 
-const INCOME_META = {
+const INCOME_META: Record<string, { label: string; icon: string; color: string }> = {
   payout_in: { label: 'Payouts', icon: 'Wallet', color: 'green' },
   rebate: { label: 'Rebates', icon: 'Coins', color: 'green' },
   income: { label: 'Outros ganhos', icon: 'Gift', color: 'blue' },
@@ -48,8 +57,14 @@ const INCOME_META = {
 const ICON_CHOICES = ['House', 'UtensilsCrossed', 'Car', 'HeartPulse', 'Gamepad2', 'Landmark', 'TrendingUp', 'Briefcase', 'GraduationCap', 'Tag', 'Receipt', 'Coins', 'Gift', 'Wallet'];
 const COLOR_CHOICES = ['blue', 'green', 'yellow', 'red', 'brand', 'gray'];
 
-function CatIcon({ name, color, size = 18 }) {
-  const Cmp = ICONS[name] || Tag;
+interface CatIconProps {
+  name: string;
+  color: string;
+  size?: number;
+}
+
+function CatIcon({ name, color, size = 18 }: CatIconProps) {
+  const Cmp = ICONS[name] ?? Tag;
   return (
     <span className="ex-ico" style={{ color: COLORS[color] || COLORS.gray, borderColor: COLORS[color] || COLORS.gray }}>
       <Cmp size={size} strokeWidth={2} />
@@ -58,18 +73,41 @@ function CatIcon({ name, color, size = 18 }) {
 }
 
 
-function ymKey(year, month) {
+function ymKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`;
 }
 
-function shiftMonth(year, month, delta) {
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
   const d = new Date(year, month - 1 + delta, 1);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
 
 const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-function emptyForm() {
+interface ExpenseFormAttachment {
+  name: string;
+  dataUrl: string;
+}
+
+interface ExpenseForm {
+  type: string;
+  category: string;
+  accountId: string;
+  amount: string;
+  date: string;
+  note: string;
+  recur: boolean;
+  recurDay: number | string;
+  attachments: Record<string, ExpenseFormAttachment>;
+  paid: boolean;
+  dueDate: string;
+  card: string;
+  cardId: string;
+  installmentCount: string;
+  tags: string;
+}
+
+function emptyForm(): ExpenseForm {
   return {
     type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '',
     recur: false, recurDay: new Date().getDate(), attachments: {},
@@ -81,8 +119,8 @@ function emptyForm() {
 // A2 — limite por anexo (300KB) com compressão client-side para imagens.
 const ATTACH_MAX_BYTES = 300 * 1024;
 
-function compressImage(file, maxBytes = ATTACH_MAX_BYTES) {
-  return new Promise((resolve, reject) => {
+function compressImage(file: File, maxBytes: number = ATTACH_MAX_BYTES): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
       if (file.size <= maxBytes) {
         const reader = new FileReader();
@@ -103,6 +141,11 @@ function compressImage(file, maxBytes = ATTACH_MAX_BYTES) {
         canvas.width = Math.max(1, Math.round(img.width * scale));
         canvas.height = Math.max(1, Math.round(img.height * scale));
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error('compressão'));
+          return;
+        }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
         let quality = 0.8;
@@ -151,13 +194,62 @@ function compressImage(file, maxBytes = ATTACH_MAX_BYTES) {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
+interface ImportPreviewEntry extends BankEntry {
+  categoryId: string | null;
+  kind: TransactionKind | undefined;
+}
+
+interface ImportPreview {
+  entries: ImportPreviewEntry[];
+  skipped: number;
+  errors: string[];
+}
+
+interface TransferForm {
+  from: string;
+  to: string;
+  amount: string;
+  date: string;
+  note: string;
+}
+
+interface NewCategoryForm {
+  name: string;
+  icon: string;
+  color: string;
+}
+
+interface ExpensesProps {
+  txs?: Transaction[];
+  categories?: CategoryDef[];
+  budgets?: Record<string, Record<string, number>>;
+  accounts?: Account[];
+  cards?: Card[];
+  onAdd?: (input: Partial<Transaction>) => void;
+  onUpdate?: (id: string, patch: Partial<Transaction>) => void;
+  onDelete?: (id: string) => void;
+  onRestore?: (tx: Transaction) => void;
+  onSaveBudget?: (ym: string, catId: string, amount: number) => void;
+  onSaveCategory?: (cat: CategoryDef) => void;
+  onGenerate?: (templateId: string, ym: string) => void;
+  onMakeRecurring?: (id: string, day: number) => void;
+  savingsGoal?: Record<string, number>;
+  onSaveSavingsGoal?: (ym: string, amount: number) => void;
+  onImportBatch?: (entries: Array<{ date: string; amount: number; description: string; kind: string; categoryId: string | null }>) => void;
+  rolloverCats?: string[];
+  onToggleRollover?: (catId: string) => void;
+  onAddInstallments?: (input: { accountId: string; currency: string; totalAmount: number; count: number; category: string; card?: string; cardId?: string; note?: string; firstDate: string }) => void;
+  onTransfer?: (input: { fromAccountId: string; toAccountId: string; amount: number; currency: string; date?: string; note?: string }) => void;
+  currency?: string;
+  loading?: boolean;
+}
 export default function Expenses({
   txs = [], categories = [], budgets = {}, accounts = [], cards = [],
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer,
   currency = 'USD', loading = false,
-}) {
+}: ExpensesProps) {
   const now = new Date();
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const [typeFilter, setTypeFilter] = useState('all');
@@ -165,14 +257,14 @@ export default function Expenses({
   const [q, setQ] = useState('');
   const [groupBy, setGroupBy] = useState('cat');
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(emptyForm());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<ExpenseForm>(emptyForm());
   const [showBudget, setShowBudget] = useState(false);
   const [showCats, setShowCats] = useState(false);
-  const [newCat, setNewCat] = useState({ name: '', icon: 'Tag', color: 'gray' });
-  const [undo, setUndo] = useState(null);
+  const [newCat, setNewCat] = useState<NewCategoryForm>({ name: '', icon: 'Tag', color: 'gray' });
+  const [undo, setUndo] = useState<{ tx: Transaction } | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [transfer, setTransfer] = useState({ from: '', to: '', amount: '', date: '', note: '' });
+  const [transfer, setTransfer] = useState<TransferForm>({ from: '', to: '', amount: '', date: '', note: '' });
 
   const cats = categories.length ? categories : DEFAULT_CATEGORIES;
   const catById = useMemo(() => {
@@ -197,7 +289,7 @@ export default function Expenses({
   // A4 — comparativo com o mês passado + meta de economia.
   const comparison = useMemo(() => compareMonths(txs, key, cats), [txs, key, cats]);
   const goal = savingsGoal[key] ?? 0;
-  const worstRise = useMemo(() => comparison.filter((r) => r.deltaPct != null && r.deltaPct > 0).sort((a, b) => b.deltaPct - a.deltaPct)[0] ?? null, [comparison]);
+  const worstRise = useMemo(() => comparison.filter((r): r is MonthCompare & { deltaPct: number } => r.deltaPct != null && r.deltaPct > 0).sort((a, b) => b.deltaPct - a.deltaPct)[0] ?? null, [comparison]);
 
   const filteredGroups = useMemo(() => {
     let g = groups;
@@ -241,7 +333,7 @@ export default function Expenses({
   const billSummary = useMemo(() => pendingSummary(txs), [txs]);
   // D2 — fatura por cartão no mês (despesas pagas + pendentes do cartão).
   const cardTotals = useMemo(() => {
-    const acc = new Map();
+    const acc = new Map<string, number>();
     for (const t of txs) {
       const cardKey = t.cardId || t.card;
       if (t.kind !== 'expense' || !cardKey) continue;
@@ -256,10 +348,10 @@ export default function Expenses({
   const merchants = useMemo(() => merchantRanking(txs, key, 6), [txs, key]);
   // D3 — lançamentos agrupados por dia (extrato).
   const dayGroups = useMemo(() => {
-    const acc = new Map();
+    const acc = new Map<string, { day: string; items: Transaction[]; total: number }>();
     for (const t of monthTxs) {
       const day = (t.date || '').slice(0, 10);
-      const cur = acc.get(day) ?? { day, items: [], total: 0 };
+      const cur = acc.get(day) ?? { day, items: [] as Transaction[], total: 0 };
       cur.items.push(t);
       if (t.kind === 'expense') cur.total -= Math.abs(t.amount);
       else if (['payout_in', 'rebate', 'income', 'dividend'].includes(t.kind)) cur.total += t.amount;
@@ -268,7 +360,7 @@ export default function Expenses({
     return [...acc.values()].sort((a, b) => b.day.localeCompare(a.day));
   }, [monthTxs]);
 
-  const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setF = <K extends keyof ExpenseForm>(k: K, v: ExpenseForm[K]): void => setForm((f) => ({ ...f, [k]: v }));
 
   const startAdd = () => {
     setEditingId(null);
@@ -276,11 +368,11 @@ export default function Expenses({
     setShowForm(true);
   };
 
-  const [attachError, setAttachError] = useState(null);
-  const [importPreview, setImportPreview] = useState(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [goalInput, setGoalInput] = useState('');
 
-  const startEdit = (t) => {
+  const startEdit = (t: Transaction): void => {
     const isExp = t.kind === 'expense';
     setEditingId(t.id);
     setForm({
@@ -292,7 +384,7 @@ export default function Expenses({
       note: isExp && t.note ? t.note : (t.note ?? ''),
       recur: false,
       recurDay: new Date().getDate(),
-      attachments: { ...(t.attachments ?? {}) },
+      attachments: { ...(t.attachments as unknown as Record<string, ExpenseFormAttachment> | undefined ?? {}) },
       paid: t.paid !== false,
       dueDate: (t.dueDate || '').slice(0, 16),
       card: t.card ?? '',
@@ -322,9 +414,9 @@ export default function Expenses({
       tags: tags.length ? tags : undefined,
     };
     if (editingId) {
-      const patch = form.type === 'expense'
-        ? { amount: -amt, category: form.category, ...base }
-        : { amount: amt, ...base };
+      const patch: Partial<Transaction> = form.type === 'expense'
+        ? { category: form.category, ...base }
+        : { ...base };
       onUpdate?.(editingId, patch);
     } else if (form.type === 'expense') {
       const parts = Number(form.installmentCount);
@@ -363,7 +455,7 @@ export default function Expenses({
   };
 
   // A2 — anexa arquivo ao form (comprime imagem; erro visível, nunca alert()).
-  const handleAttach = async (file) => {
+  const handleAttach = async (file: File | undefined): Promise<void> => {
     if (!file) return;
     setAttachError(null);
     try {
@@ -374,7 +466,7 @@ export default function Expenses({
     }
   };
 
-  const removeAttach = (name) => {
+  const removeAttach = (name: string): void => {
     setForm((f) => {
       const next = { ...(f.attachments ?? {}) };
       delete next[name];
@@ -382,16 +474,16 @@ export default function Expenses({
     });
   };
 
-  const handleDelete = (t) => {
+  const handleDelete = (t: Transaction): void => {
     setUndo({ tx: t });
     onDelete?.(t.id);
     setTimeout(() => setUndo((u) => (u && u.tx.id === t.id ? null : u)), 8000);
   };
 
   // A3 — importa extrato (OFX/CSV): parse + preview com categoria editável + dedup.
-  const importFileRef = React.useRef(null);
-  const [importError, setImportError] = useState(null);
-  const handleImportFile = async (file) => {
+  const importFileRef = React.useRef<HTMLInputElement | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const handleImportFile = async (file: File | undefined): Promise<void> => {
     if (!file) return;
     setImportError(null);
     try {
@@ -552,10 +644,14 @@ export default function Expenses({
                 <span className={`ex-import-amt ${en.amount >= 0 ? 'ex-pos-t' : 'ex-neg-t'}`}>{fmtMoney(en.amount, currency)}</span>
                 <select
                   className="ex-input ex-import-cat" value={en.categoryId ?? ''}
-                  onChange={(e) => setImportPreview((p) => ({
-                    ...p,
-                    entries: p.entries.map((x) => (x.key === en.key ? { ...x, categoryId: e.target.value || null } : x)),
-                  }))}
+                  onChange={(e) => setImportPreview((p) => {
+                    if (!p) return p;
+                    const categoryId: string | null = e.target.value || null;
+                    return {
+                      ...p,
+                      entries: p.entries.map((x) => (x.key === en.key ? { ...x, categoryId } : x)),
+                    };
+                  })}
                   aria-label={`Categoria de ${en.description.slice(0, 20)}`}
                 >
                   <option value="">Auto</option>
@@ -572,6 +668,7 @@ export default function Expenses({
               className="ex-btn"
               disabled={importPreview.entries.length === 0}
               onClick={() => {
+                if (!importPreview) return;
                 onImportBatch?.(importPreview.entries.map((en) => ({
                   date: en.date,
                   amount: en.amount,
@@ -1031,13 +1128,25 @@ export default function Expenses({
   );
 }
 
-function TxRow({ t, currency, label, icon = 'Tag', color = 'gray', accountName, onEdit = null, onDelete = null, onPay = null }) {
+interface TxRowProps {
+  t: Transaction;
+  currency: string;
+  label: string;
+  icon?: string;
+  color?: string;
+  accountName?: string;
+  onEdit?: (() => void) | null;
+  onDelete?: (() => void) | null;
+  onPay?: (() => void) | null;
+}
+
+function TxRow({ t, currency, label, icon = 'Tag', color = 'gray', accountName, onEdit = null, onDelete = null, onPay = null }: TxRowProps) {
   const files = Object.keys(t.attachments ?? {});
   const pending = t.paid === false;
   return (
     <div className="ex-item">
-      <span className="ex-item-ico" style={{ color: COLORS[color] || COLORS.gray, borderColor: COLORS[color] || COLORS.gray }}>
-        {(() => { const Cmp = ICONS[icon] || Tag; return <Cmp size={16} strokeWidth={2} />; })()}
+      <span className="ex-item-ico" style={{ color: COLORS[color] ?? COLORS.gray, borderColor: COLORS[color] ?? COLORS.gray }}>
+        {(() => { const Cmp = ICONS[icon] ?? Tag; return <Cmp size={16} strokeWidth={2} />; })()}
       </span>
       <div className="ex-item-main">
         <div className="ex-item-cat">
@@ -1052,7 +1161,8 @@ function TxRow({ t, currency, label, icon = 'Tag', color = 'gray', accountName, 
         {files.length > 0 && (
           <div className="ex-attach-list">
             {files.map((name) => {
-              const dataUrl = t.attachments[name]?.dataUrl;
+              const raw = t.attachments?.[name] as { dataUrl?: unknown } | undefined;
+              const dataUrl = raw?.dataUrl;
               const isImg = typeof dataUrl === 'string' && dataUrl.startsWith('data:image');
               return isImg
                 ? <img key={name} className="ex-thumb ex-thumb-sm" src={dataUrl} alt={name} title={name} />
@@ -1074,7 +1184,14 @@ function TxRow({ t, currency, label, icon = 'Tag', color = 'gray', accountName, 
   );
 }
 
-function BudgetEditor({ cats, budgets, onSave, currency }) {
+interface BudgetEditorProps {
+  cats: CategoryDef[];
+  budgets: Record<string, number>;
+  onSave: (catId: string, amount: number) => void;
+  currency: string;
+}
+
+function BudgetEditor({ cats, budgets, onSave, currency }: BudgetEditorProps) {
   const [catId, setCatId] = useState(cats[0]?.id ?? '');
   const [amount, setAmount] = useState('');
   return (
@@ -1088,7 +1205,11 @@ function BudgetEditor({ cats, budgets, onSave, currency }) {
   );
 }
 
-function CategoryEditor({ onSave }) {
+interface CategoryEditorProps {
+  onSave: (cat: CategoryDef) => void;
+}
+
+function CategoryEditor({ onSave }: CategoryEditorProps) {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('Tag');
   const [color, setColor] = useState('gray');

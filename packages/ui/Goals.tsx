@@ -7,11 +7,33 @@
 // Dados: `computeGoalProgress` (packages/lib/db/wealth.ts).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: number, cur: string = 'R$'): string { return fmtMoneyShared(v, cur); }
 import React from 'react';
 
+interface GoalProgressGoal {
+  id: string;
+  kind: string;
+  targetValue: number;
+  windowType?: string;
+}
 
-const KIND_META = {
+interface GoalProgress {
+  goal: GoalProgressGoal;
+  current: number;
+  target: number;
+  pct: number;
+  completed: boolean;
+  remaining: number;
+  window?: string;
+}
+
+interface GoalsProps {
+  goals?: GoalProgress[];
+  currency?: string;
+  loading?: boolean;
+}
+
+const KIND_META: Record<string, { label: string; emoji: string }> = {
   emergency: { label: 'Reserva de emergência', emoji: '🛡️' },
   networth: { label: 'Patrimônio líquido', emoji: '🏦' },
   property: { label: 'Imóvel (entrada)', emoji: '🏠' },
@@ -25,7 +47,7 @@ const KIND_META = {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function Goals({ goals = [], currency = 'USD', loading = false }) {
+export default function Goals({ goals = [], currency = 'USD', loading = false }: GoalsProps) {
   if (loading) {
     return (
       <div className="gl-root gl-loading" role="status" aria-live="polite">

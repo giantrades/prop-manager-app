@@ -7,6 +7,7 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { calendarPnl, MIN_SAMPLE } from '@apps/lib/db';
+import type { Trade, DayPnl } from '@apps/lib/db';
 
 const DOW = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MONTHS_PT = [
@@ -15,7 +16,7 @@ const MONTHS_PT = [
 ];
 
 
-function shiftMonth(year, month, delta) {
+function shiftMonth(year: number, month: number, delta: number) {
   const d = new Date(year, month - 1 + delta, 1);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
 }
@@ -36,7 +37,14 @@ function todayKey() {
 // `currency` é a moeda DE ORIGEM do PnL dos trades (o app opera em USD; o `fmtMoney`
 // converte pra moeda de exibição). Antes era 'R$' por padrão: o PnL em USD era tratado
 // como BRL e dividido pelo câmbio (ex.: -1.022,22 virava -200,44 com taxa 5,1).
-export default function PnLCalendar({ trades = [], currency = 'USD', onSelectDay, selectedDay, loading = false }) {
+interface PnLCalendarProps {
+  trades?: Trade[];
+  currency?: string;
+  onSelectDay?: (dateKey: string | null) => void;
+  selectedDay?: string | null;
+  loading?: boolean;
+}
+export default function PnLCalendar({ trades = [], currency = 'USD', onSelectDay, selectedDay, loading = false }: PnLCalendarProps) {
   const now = new Date();
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
 
@@ -57,7 +65,7 @@ export default function PnLCalendar({ trades = [], currency = 'USD', onSelectDay
     );
   }
 
-  const cells = [];
+  const cells: Array<{ day: number; info: DayPnl | null; isToday: boolean; key: string } | null> = [];
   for (let i = 0; i < firstDow; i += 1) cells.push(null);
   for (let day = 1; day <= daysInMonth; day += 1) {
     const key = `${ym.year}-${String(ym.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -66,7 +74,7 @@ export default function PnLCalendar({ trades = [], currency = 'USD', onSelectDay
 
   // Heat por intensidade (|pnl| relativo ao maior dia do mês), como no app antigo.
   const maxAbs = Math.max(1, ...data.days.map((d) => Math.abs(d.pnl || 0)));
-  const heatStyle = (info) => {
+  const heatStyle = (info: DayPnl | null | undefined) => {
     if (!info || !info.pnl) return undefined;
     const t = Math.min(1, Math.abs(info.pnl) / maxAbs);
     const alpha = 0.12 + t * 0.5;

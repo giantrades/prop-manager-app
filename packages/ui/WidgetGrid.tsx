@@ -3,13 +3,38 @@
 // filho precisa de `key`; largura via prop data-span={2}). Sem lógica financeira.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-function loadLayout(storageKey, ids) {
+export interface WidgetItem {
+  id: string;
+  node: React.ReactNode;
+  defaultSpan?: number;
+}
+
+export interface WidgetLayout {
+  order: string[];
+  spans: Record<string, number>;
+}
+
+export interface WidgetGridProps {
+  storageKey: string;
+  items?: WidgetItem[] | null;
+  children?: React.ReactNode;
+  columns?: number;
+}
+
+function loadLayout(storageKey: string, ids: string[]): WidgetLayout {
   try {
-    const raw = JSON.parse(localStorage.getItem(`widgetLayout:${storageKey}`) || 'null');
-    if (raw && Array.isArray(raw.order)) {
-      const order = raw.order.filter((id) => ids.includes(id));
-      for (const id of ids) if (!order.includes(id)) order.push(id);
-      return { order, spans: raw.spans && typeof raw.spans === 'object' ? raw.spans : {} };
+    const raw: unknown = JSON.parse(localStorage.getItem(`widgetLayout:${storageKey}`) || 'null');
+    if (typeof raw === 'object' && raw !== null && 'order' in raw) {
+      const maybe = raw as { order: unknown; spans?: unknown };
+      if (Array.isArray(maybe.order)) {
+        const order: string[] = (maybe.order as unknown[])
+          .filter((id): id is string => typeof id === 'string')
+          .filter((id) => ids.includes(id));
+        for (const id of ids) if (!order.includes(id)) order.push(id);
+        const spans: Record<string, number> =
+          maybe.spans != null && typeof maybe.spans === 'object' ? (maybe.spans as Record<string, number>) : {};
+        return { order, spans };
+      }
     }
   } catch {
     /* noop */
@@ -17,29 +42,32 @@ function loadLayout(storageKey, ids) {
   return { order: ids, spans: {} };
 }
 
-function readDefaultSpan(child) {
-  const raw = child?.props?.['data-span'];
-  return Number(raw) === 2 ? 2 : 1;
+function readDefaultSpan(child: React.ReactNode): number {
+  if (React.isValidElement<{ 'data-span'?: unknown }>(child)) {
+    const raw = child.props['data-span'];
+    return Number(raw) === 2 ? 2 : 1;
+  }
+  return 1;
 }
 
-export default function WidgetGrid({ storageKey, items = null, children = null, columns = 2 }) {
-  const list = useMemo(() => {
+export default function WidgetGrid({ storageKey, items = null, children = null, columns = 2 }: WidgetGridProps) {
+  const list: WidgetItem[] = useMemo(() => {
     if (items) return items;
-    return React.Children.toArray(children).map((child) => ({
-      id: String((child as any)?.key ?? '').replace(/^\.\$/, '') || `w-${Math.random().toString(36).slice(2, 5)}`,
+    return React.Children.toArray(children).map((child): WidgetItem => ({
+      id: String(React.isValidElement(child) ? child.key ?? '' : '').replace(/^\.\$/, '') || `w-${Math.random().toString(36).slice(2, 5)}`,
       node: child,
       defaultSpan: readDefaultSpan(child),
     }));
   }, [items, children]);
 
-  const ids = list.map((i) => i.id);
-  const idsKey = ids.join('|');
-  const [layout, setLayout] = useState(() => loadLayout(storageKey, ids));
-  const [dragId, setDragId] = useState(null);
+  const ids: string[] = list.map((i) => i.id);
+  const idsKey: string = ids.join('|');
+  const [layout, setLayout] = useState<WidgetLayout>(() => loadLayout(storageKey, ids));
+  const [dragId, setDragId] = useState<string | null>(null);
 
   useEffect(() => setLayout(loadLayout(storageKey, idsKey.split('|'))), [storageKey, idsKey]);
 
-  const persist = useCallback((next) => {
+  const persist = useCallback((next: WidgetLayout) => {
     setLayout(next);
     try {
       localStorage.setItem(`widgetLayout:${storageKey}`, JSON.stringify(next));
@@ -48,19 +76,19 @@ export default function WidgetGrid({ storageKey, items = null, children = null, 
     }
   }, [storageKey]);
 
-  const spanOf = (it) => layout.spans[it.id] ?? it.defaultSpan ?? 1;
-  const toggleSpan = (id, span) => persist({ ...layout, spans: { ...layout.spans, [id]: span === 2 ? 1 : 2 } });
+  const spanOf = (it: WidgetItem): number => layout.spans[it.id] ?? it.defaultSpan ?? 1;
+  const toggleSpan = (id: string, span: number): void => persist({ ...layout, spans: { ...layout.spans, [id]: span === 2 ? 1 : 2 } });
 
-  const onDrop = (targetId) => {
+  const onDrop = (targetId: string): void => {
     if (!dragId || dragId === targetId) return;
-    const order = layout.order.filter((id) => id !== dragId);
+    const order: string[] = layout.order.filter((id) => id !== dragId);
     order.splice(order.indexOf(targetId), 0, dragId);
     persist({ ...layout, order });
     setDragId(null);
   };
 
-  const byId = new Map(list.map((i) => [i.id, i]));
-  const ordered = layout.order.map((id) => byId.get(id)).filter(Boolean);
+  const byId = new Map<string, WidgetItem>(list.map((i): [string, WidgetItem] => [i.id, i]));
+  const ordered: WidgetItem[] = layout.order.map((id) => byId.get(id)).filter((it): it is WidgetItem => it !== undefined);
 
   return (
     <div className="wg" style={{ ['--wg-cols']: columns } as React.CSSProperties}>

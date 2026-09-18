@@ -4,20 +4,40 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradeReplay, tradeNetPnl, formatDate, parseDate } from '@apps/lib/db';
+import type { Trade, Account } from '@apps/lib/db';
 
-function fmtR(v) {
+interface FirmInfo {
+  id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  logo?: string;
+}
+
+interface TradesProps {
+  trades?: Trade[];
+  accounts?: Account[];
+  firms?: FirmInfo[];
+  onEdit?: (trade: Trade) => void;
+  onDelete?: (tradeId: string) => void;
+  onDeleteMany?: (tradeIds: string[]) => void;
+  onNew?: () => void;
+  loading?: boolean;
+}
+
+function fmtR(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return 'n/a';
   return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`;
 }
 // Data/hora SEMPRE local (nunca slice() em ISO UTC).
-function fmtDate(iso) {
+function fmtDate(iso: string | null | undefined) {
   return iso ? formatDate(parseDate(iso), 'dd/MM/yyyy HH:mm') : '—';
 }
-function fmtDateShort(iso) {
+function fmtDateShort(iso: string | null | undefined) {
   return iso ? formatDate(parseDate(iso), 'dd/MM HH:mm') : '—';
 }
 /** Duração do trade (abertura → fechamento), curta: "12m", "1h 05m". */
-function fmtDuration(fromIso, toIso) {
+function fmtDuration(fromIso: string | null | undefined, toIso: string | null | undefined) {
   if (!fromIso || !toIso) return null;
   const ms = parseDate(toIso).getTime() - parseDate(fromIso).getTime();
   if (!Number.isFinite(ms) || ms < 0) return null;
@@ -28,7 +48,7 @@ function fmtDuration(fromIso, toIso) {
   return m ? `${h}h ${String(m).padStart(2, '0')}m` : `${h}h`;
 }
 
-function FirmBadge({ firm }) {
+function FirmBadge({ firm }: { firm: FirmInfo | null | undefined }) {
   if (!firm) return null;
   if (firm.logo) return <span className="tr-firm-badge tr-firm-logo" title={firm.name}><img src={firm.logo} alt={firm.name} /></span>;
   if (firm.icon) return <span className="tr-firm-badge" title={firm.name}>{firm.icon}</span>;
@@ -50,30 +70,30 @@ function FirmBadge({ firm }) {
  * @param {()=>void} [props.onNew]
  * @param {boolean} [props.loading]
  */
-export default function Trades({ trades = [], accounts = [], firms = [], onEdit, onDelete, onDeleteMany, onNew, loading = false }) {
+export default function Trades({ trades = [], accounts = [], firms = [], onEdit, onDelete, onDeleteMany, onNew, loading = false }: TradesProps) {
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState('');
   const [sortKey, setSortKey] = useState('entryDatetime');
-  const [sortDir, setSortDir] = useState('desc');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const perPage = 15;
 
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
-  const firmById = useMemo(() => new Map(firms.map((f) => [f.id, f])), [firms]);
-  const tagsOf = (t) => (Array.isArray(t?.tags) ? t.tags : []);
+  const accountById = useMemo(() => new Map<string, Account>(accounts.map((a) => [a.id, a])), [accounts]);
+  const firmById = useMemo(() => new Map<string, FirmInfo>(firms.map((f) => [f.id, f])), [firms]);
+  const tagsOf = (t: Trade): string[] => (Array.isArray(t?.tags) ? t.tags : []);
   const allTags = useMemo(() => {
     const s = new Set<string>();
     for (const t of trades) for (const g of tagsOf(t)) if (typeof g === 'string' && g) s.add(g);
     return [...s].sort((a, b) => String(a).localeCompare(String(b)));
   }, [trades]);
 
-  const accountLabel = (t) => {
+  const accountLabel = (t: Trade) => {
     if (t.accounts?.length) return t.accounts.map((a) => accountById.get(a.accountId)?.name || a.accountId).join(', ');
-    return accountById.get(t.accountId)?.name || t.accountId || '—';
+    return accountById.get(t.accountId ?? '')?.name || t.accountId || '—';
   };
-  const firmOf = (t) => {
+  const firmOf = (t: Trade): FirmInfo | null | undefined => {
     const accId = t.accountId || t.accounts?.[0]?.accountId;
     const acc = accId ? accountById.get(accId) : null;
     return acc?.firmId ? firmById.get(acc.firmId) : null;
@@ -86,11 +106,15 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
       if (!q) return true;
       return `${t.symbol} ${t.strategyId || ''} ${accountLabel(t)} ${tagsOf(t).join(' ')}`.toLowerCase().includes(q);
     });
-    list = list.slice().sort((a, b) => {
-      let av = a[sortKey];
-      let bv = b[sortKey];
+    list = list.slice().sort((a: Trade, b: Trade) => {
+      let av: number;
+      let bv: number;
       if (sortKey === 'entryDatetime') { av = new Date(a.entryDatetime || 0).getTime(); bv = new Date(b.entryDatetime || 0).getTime(); }
-      else { av = Number(av) || 0; bv = Number(bv) || 0; }
+      else {
+        const recA = a as unknown as Record<string, unknown>;
+        const recB = b as unknown as Record<string, unknown>;
+        av = Number(recA[sortKey]) || 0; bv = Number(recB[sortKey]) || 0;
+      }
       return sortDir === 'asc' ? av - bv : bv - av;
     });
     return list;
@@ -124,11 +148,11 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
   });
   const clearSel = () => setSelected(new Set());
 
-  const toggleSort = (key) => {
+  const toggleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortKey(key); setSortDir('desc'); }
   };
-  const sortMark = (key) => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
+  const sortMark = (key: string) => (sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
 
   if (loading) {
     return (
@@ -296,7 +320,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
   );
 }
 
-function TradeReplayView({ trade }) {
+function TradeReplayView({ trade }: { trade: Trade }) {
   const replay = useMemo(() => tradeReplay(trade), [trade]);
   const maxAbs = Math.max(1, ...replay.points.map((p) => Math.abs(p.price - trade.entryPrice)));
   return (

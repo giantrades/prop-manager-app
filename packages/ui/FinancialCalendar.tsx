@@ -8,7 +8,7 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Financial Calendar) + 01-tasks.md (T6.2).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: unknown, cur: string = 'R$'): string { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 
 const LAYERS = [
@@ -40,6 +40,68 @@ const DOW = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
  * @param {()=>void} [props.onPrevMonth]
  * @param {()=>void} [props.onNextMonth]
  */
+export interface TradingDayMark {
+  date: string;
+  pnl: number;
+  trades: number;
+}
+
+export interface EconomicMark {
+  scheduledAt: string;
+  eventName: string;
+  importance: string;
+}
+
+export interface BillMark {
+  date: string;
+  amount: number;
+  label?: string;
+}
+
+export interface PayoutMark {
+  date: string;
+  amount: number;
+  status: string;
+}
+
+export interface TaxMark {
+  date: string;
+  amount: number;
+  label?: string;
+}
+
+export interface CalendarMarker {
+  kind: string;
+  pnl?: number;
+  trades?: number;
+  eventName?: string;
+  importance?: string;
+  amount?: number;
+  label?: string;
+  status?: string;
+}
+
+export interface CalendarCell {
+  key: string;
+  day: number;
+  isToday: boolean;
+}
+
+export interface FinancialCalendarProps {
+  yearMonth: string;
+  trading?: TradingDayMark[];
+  economic?: EconomicMark[];
+  bills?: BillMark[];
+  payouts?: PayoutMark[];
+  tax?: TaxMark[];
+  loading?: boolean;
+  economicLoading?: boolean;
+  economicError?: string | null;
+  activeLayers?: Set<string> | string[];
+  onToggleLayer?: (id: LayerId) => void;
+  onPrevMonth?: () => void;
+  onNextMonth?: () => void;
+}
 export default function FinancialCalendar({
   yearMonth,
   trading = [],
@@ -54,16 +116,18 @@ export default function FinancialCalendar({
   onToggleLayer,
   onPrevMonth,
   onNextMonth,
-}) {
+}: FinancialCalendarProps) {
   const activeSet = useMemo(() => new Set(activeLayers), [activeLayers]);
 
   // Índice de marcadores por dia (YYYY-MM-DD).
   const markers = useMemo(() => {
-    const map = new Map();
-    const push = (date, kind, extra) => {
+    const map = new Map<string, CalendarMarker[]>();
+    const push = (date: string, kind: string, extra: Omit<CalendarMarker, 'kind'>): void => {
       const key = date.slice(0, 10);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push({ kind, ...extra });
+      const entry: CalendarMarker = { kind, ...extra };
+      const existing = map.get(key);
+      if (existing) existing.push(entry);
+      else map.set(key, [entry]);
     };
     for (const t of trading) push(t.date, 'trading', { pnl: t.pnl, trades: t.trades });
     for (const e of economic) push(e.scheduledAt, 'economic', { eventName: e.eventName, importance: e.importance });
@@ -161,10 +225,9 @@ export default function FinancialCalendar({
               <span className="fc-daynum">{cell.day === 0 ? '' : cell.day}</span>
               <div className="fc-marks">
                 {cell.key && markers.has(cell.key) &&
-                  markers
-                    .get(cell.key)
-                    .filter((m) => activeSet.has(m.kind))
-                    .map((m, i) => (
+                  (markers.get(cell.key) ?? [])
+                    .filter((m: CalendarMarker) => activeSet.has(m.kind))
+                    .map((m: CalendarMarker, i: number) => (
                       <span key={i} className={`fc-mark fc-mark-${m.kind}`} title={markTitle(m)} />
                     ))}
               </div>
@@ -181,7 +244,7 @@ export default function FinancialCalendar({
   );
 }
 
-function markTitle(m) {
+function markTitle(m: CalendarMarker): string {
   switch (m.kind) {
     case 'trading': return `Trading: ${fmtMoney(m.pnl, '$')} (${m.trades} trades)`;
     case 'economic': return `Econômico: ${m.eventName}`;
@@ -192,12 +255,12 @@ function markTitle(m) {
   }
 }
 
-function buildMonthGrid(yearMonth) {
-  const [y, m] = yearMonth.split('-').map(Number);
+function buildMonthGrid(yearMonth: string): CalendarCell[] {
+  const [y, m] = yearMonth.split('-').map(Number) as [number, number];
   const first = new Date(Date.UTC(y, m - 1, 1));
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const startDow = first.getUTCDay();
-  const cells = [];
+  const cells: CalendarCell[] = [];
   const today = new Date().toISOString().slice(0, 10);
 
   // Células do fim do mês anterior.
@@ -220,7 +283,7 @@ function buildMonthGrid(yearMonth) {
   return cells;
 }
 
-function isoDate(y, m, d) {
+function isoDate(y: number, m: number, d: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.toISOString().slice(0, 10);
 }

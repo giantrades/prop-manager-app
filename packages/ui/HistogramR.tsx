@@ -5,6 +5,7 @@
 
 import React, { useMemo } from 'react';
 import { rDistribution, MIN_SAMPLE } from '@apps/lib/db';
+import type { Trade } from '@apps/lib/db';
 
 /**
  * @param {object} props
@@ -13,7 +14,13 @@ import { rDistribution, MIN_SAMPLE } from '@apps/lib/db';
  * @param {(size:number)=>void} [props.onBucketSize] — A7: controle na UI
  * @param {boolean} [props.loading]
  */
-export default function HistogramR({ trades = [], bucketSize = 0.5, onBucketSize, loading = false }) {
+interface HistogramRProps {
+  trades?: Trade[];
+  bucketSize?: number;
+  onBucketSize?: (size: number) => void;
+  loading?: boolean;
+}
+export default function HistogramR({ trades = [], bucketSize = 0.5, onBucketSize, loading = false }: HistogramRProps) {
   const data = useMemo(() => rDistribution(trades, bucketSize), [trades, bucketSize]);
   const maxCount = useMemo(() => Math.max(1, ...data.buckets.map((b) => b.count)), [data]);
 

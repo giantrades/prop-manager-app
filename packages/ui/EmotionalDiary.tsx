@@ -3,12 +3,34 @@
 
 import React, { useState } from 'react';
 
-function fmtR(v) {
+interface DiaryEntry {
+  sleep: number;
+  mood: number;
+  fomo: boolean;
+  note?: string;
+}
+
+interface DiaryRow {
+  date: string;
+  sleep: number | null;
+  mood: number | null;
+  fomo: boolean | null;
+  r: number;
+}
+
+interface EmotionalDiaryProps {
+  entry?: DiaryEntry | null;
+  rows?: DiaryRow[];
+  onSave?: (entry: DiaryEntry) => void;
+  loading?: boolean;
+}
+
+function fmtR(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return '—';
   return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`;
 }
 
-const SCALE = [1, 2, 3, 4, 5];
+const SCALE: number[] = [1, 2, 3, 4, 5];
 
 /**
  * @param {object} props
@@ -17,7 +39,7 @@ const SCALE = [1, 2, 3, 4, 5];
  * @param {(entry:{sleep:number;mood:number;fomo:boolean;note?:string})=>void} [props.onSave]
  * @param {boolean} [props.loading]
  */
-export default function EmotionalDiary({ entry = null, rows = [], onSave, loading = false }) {
+export default function EmotionalDiary({ entry = null, rows = [], onSave, loading = false }: EmotionalDiaryProps) {
   const [sleep, setSleep] = useState(entry?.sleep ?? 3);
   const [mood, setMood] = useState(entry?.mood ?? 3);
   const [fomo, setFomo] = useState(entry?.fomo ?? false);

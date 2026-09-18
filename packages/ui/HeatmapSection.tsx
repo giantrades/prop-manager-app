@@ -7,9 +7,10 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { heatmapBySymbol, heatmapBySession, DEFAULT_SESSIONS } from '@apps/lib/db';
+import type { Trade, SessionDef } from '@apps/lib/db';
 
 
-function intensity(pnl, maxAbs) {
+function intensity(pnl: number, maxAbs: number): number {
   if (!maxAbs) return 0;
   return Math.min(1, Math.abs(pnl) / maxAbs);
 }
@@ -22,10 +23,17 @@ function intensity(pnl, maxAbs) {
  * @param {(sessions:Array<object>)=>void} [props.onSessions]
  * @param {boolean} [props.loading]
  */
-export default function HeatmapSection({ trades = [], currency = 'USD', sessionDefs, onSessions, loading = false }) {
-  const defs = sessionDefs && sessionDefs.length > 0 ? sessionDefs : DEFAULT_SESSIONS;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(null);
+interface HeatmapSectionProps {
+  trades?: Trade[];
+  currency?: string;
+  sessionDefs?: SessionDef[];
+  onSessions?: (sessions: SessionDef[]) => void;
+  loading?: boolean;
+}
+export default function HeatmapSection({ trades = [], currency = 'USD', sessionDefs, onSessions, loading = false }: HeatmapSectionProps) {
+  const defs: SessionDef[] = sessionDefs && sessionDefs.length > 0 ? sessionDefs : DEFAULT_SESSIONS;
+  const [editing, setEditing] = useState<boolean>(false);
+  const [draft, setDraft] = useState<SessionDef[] | null>(null);
   const symbols = useMemo(() => heatmapBySymbol(trades, 12), [trades]);
   const sessions = useMemo(() => heatmapBySession(trades, defs), [trades, defs]);
   const maxAbs = useMemo(() => {
@@ -43,7 +51,7 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
     );
   }
 
-  const renderCell = (key, label, sub, pnl, extra) => (
+  const renderCell = (key: string, label: string, sub: string, pnl: number, extra: string) => (
     <div
       key={key}
       className={`hm-cell${pnl > 0 ? ' hm-pos' : pnl < 0 ? ' hm-neg' : ' hm-flat'}`}
@@ -76,7 +84,7 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
               className="hm-edit-btn"
               aria-expanded={editing}
               onClick={() => {
-                if (!editing) setDraft(defs.map((d) => ({ ...d })));
+                if (!editing) setDraft(defs.map((d: SessionDef) => ({ ...d })));
                 setEditing((e) => !e);
               }}
             >
@@ -94,21 +102,21 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
                 <input
                   className="hm-input hm-input-label"
                   value={d.label}
-                  onChange={(e) => setDraft((prev) => prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  onChange={(e) => setDraft((prev) => (prev ?? []).map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
                   aria-label={`Nome da sessão ${i + 1}`}
                 />
                 <input
                   className="hm-input"
                   type="number" min={0} max={24} step={0.5}
                   value={d.startH}
-                  onChange={(e) => setDraft((prev) => prev.map((x, j) => (j === i ? { ...x, startH: Number(e.target.value) } : x)))}
+                  onChange={(e) => setDraft((prev) => (prev ?? []).map((x, j) => (j === i ? { ...x, startH: Number(e.target.value) } : x)))}
                   aria-label={`Início (hora UTC) da sessão ${i + 1}`}
                 />
                 <input
                   className="hm-input"
                   type="number" min={0} max={24} step={0.5}
                   value={d.endH}
-                  onChange={(e) => setDraft((prev) => prev.map((x, j) => (j === i ? { ...x, endH: Number(e.target.value) } : x)))}
+                  onChange={(e) => setDraft((prev) => (prev ?? []).map((x, j) => (j === i ? { ...x, endH: Number(e.target.value) } : x)))}
                   aria-label={`Fim (hora UTC) da sessão ${i + 1}`}
                 />
               </div>

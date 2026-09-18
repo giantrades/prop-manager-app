@@ -5,7 +5,7 @@
 
 import React from 'react';
 
-const META = {
+const META: Record<string, { label: string; emoji: string; color: string }> = {
   SAFE: { label: 'Risco OK', emoji: '🟢', color: 'var(--green, #2ecc71)' },
   WARN: { label: 'Atenção', emoji: '🟡', color: 'var(--yellow, #e1b12c)' },
   STOP: { label: 'Parar', emoji: '🔴', color: 'var(--red, #e74c3c)' },
@@ -17,7 +17,12 @@ const META = {
  * @param {{SAFE:number, WARN:number, STOP:number}} [props.counts]
  * @param {() => void} [props.onClick]
  */
-export default function RiskBadge({ status = 'SAFE', counts, onClick }) {
+interface RiskBadgeProps {
+  status?: 'SAFE' | 'WARN' | 'STOP';
+  counts?: { SAFE: number; WARN: number; STOP: number };
+  onClick?: () => void;
+}
+export default function RiskBadge({ status = 'SAFE', counts, onClick }: RiskBadgeProps) {
   const meta = META[status] || META.SAFE;
   const alertCount = (counts?.WARN || 0) + (counts?.STOP || 0);
   return (

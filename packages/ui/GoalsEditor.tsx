@@ -3,7 +3,26 @@
 
 import React, { useState } from 'react';
 
-const KINDS = [
+interface GoalForm {
+  id?: string;
+  kind: string;
+  targetValue: number;
+  windowType: string;
+  deadline: string;
+}
+
+interface GoalItem extends GoalForm {
+  id: string;
+}
+
+interface GoalsEditorProps {
+  goals?: GoalItem[];
+  onSave: (goal: GoalForm) => Promise<void> | void;
+  onDelete?: (goalId: string) => Promise<void> | void;
+  loading?: boolean;
+}
+
+const KINDS: Array<{ id: string; label: string }> = [
   { id: 'emergency', label: 'Reserva de emergência' },
   { id: 'networth', label: 'Patrimônio líquido' },
   { id: 'property', label: 'Imóvel (entrada)' },
@@ -11,7 +30,7 @@ const KINDS = [
   { id: 'portfolio', label: 'Portfolio' },
 ];
 
-function emptyGoal() {
+function emptyGoal(): GoalForm {
   return { kind: 'networth', targetValue: 0, windowType: 'calendar_year', deadline: '' };
 }
 
@@ -22,14 +41,14 @@ function emptyGoal() {
  * @param {(goalId:string)=>Promise<void>|void} [props.onDelete]
  * @param {boolean} [props.loading]
  */
-export default function GoalsEditor({ goals = [], onSave, onDelete, loading = false }) {
-  const [editing, setEditing] = useState(null);
+export default function GoalsEditor({ goals = [], onSave, onDelete, loading = false }: GoalsEditorProps) {
+  const [editing, setEditing] = useState<GoalForm | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const startNew = () => { setEditing(emptyGoal()); setIsNew(true); };
-  const startEdit = (g) => { setEditing(g); setIsNew(false); };
-  const update = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
+  const startEdit = (g: GoalItem) => { setEditing(g); setIsNew(false); };
+  const update = (k: keyof GoalForm, v: string | number) => setEditing((e) => (e ? ({ ...e, [k]: v } as GoalForm) : e));
 
   const handleSave = async () => {
     if (!editing) return;

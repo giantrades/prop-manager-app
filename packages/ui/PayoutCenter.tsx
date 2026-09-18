@@ -5,18 +5,19 @@
 
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
+import type { Payout, PayoutAllocationPlan } from '@apps/lib/db';
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
-function fmtBool(v) {
+function fmtBool(v: boolean) {
   return v ? 'YES' : 'NO';
 }
 
-const CHECK_META = [
+const CHECK_META: Array<[string, string]> = [
   ['equityReachedTarget', 'Equity ≥ target'],
   ['drawdownOk', 'Drawdown ok'],
   ['daysOperatedOk', 'Dias operados'],
@@ -39,35 +40,56 @@ function normalizeWeights(weights: Record<string, number>) {
  * @param {(plan:object)=>void} [props.onAllocate]
  * @param {(payout:object)=>void} [props.onApplyPayout]
  */
-export default function PayoutCenter({ payout, wallets = [], onAllocate, onApplyPayout }) {
-  const [taxPct, setTaxPct] = useState(0.15);
-  const [weights, setWeights] = useState({ living: 0.4, invest: 0.4, cash: 0.2 });
-  const [destWallet, setDestWallet] = useState(wallets[0]?.id ?? '');
+type PayoutBucketKey = 'living' | 'invest' | 'cash';
+
+interface PayoutWalletOption {
+  id: string;
+  name: string;
+  currency: string;
+  kind: string;
+}
+
+interface PayoutCenterPayout extends Payout {
+  firmName?: string;
+  eligible?: boolean;
+  checks?: Record<string, boolean>;
+}
+
+interface PayoutCenterProps {
+  payout: PayoutCenterPayout;
+  wallets?: PayoutWalletOption[];
+  onAllocate?: (plan: PayoutAllocationPlan) => void;
+  onApplyPayout?: (payout: PayoutCenterPayout) => void;
+}
+export default function PayoutCenter({ payout, wallets = [], onAllocate, onApplyPayout }: PayoutCenterProps) {
+  const [taxPct, setTaxPct] = useState<number>(0.15);
+  const [weights, setWeights] = useState<Record<PayoutBucketKey, number>>({ living: 0.4, invest: 0.4, cash: 0.2 });
+  const [destWallet, setDestWallet] = useState<string>(wallets[0]?.id ?? '');
 
   const net = payout.net ?? 0;
   const taxReserve = net * Math.max(0, Number(taxPct) || 0);
   const available = net - taxReserve;
 
   const normalized = useMemo(() => normalizeWeights(weights), [weights]);
-  const splits = useMemo(() => {
-    const out = {};
-    for (const k of ['living', 'invest', 'cash']) {
+  const splits = useMemo<Record<PayoutBucketKey, number>>(() => {
+    const out: Record<PayoutBucketKey, number> = { living: 0, invest: 0, cash: 0 };
+    for (const k of ['living', 'invest', 'cash'] as PayoutBucketKey[]) {
       out[k] = available * (normalized[k] ?? 0);
     }
     return out;
   }, [normalized, available]);
 
   const handleAllocate = () => {
-    const plan = {
+    const plan: PayoutAllocationPlan = {
       payoutId: payout.id,
-      destinationAccountId: destWallet || wallets[0]?.id,
+      destinationAccountId: (destWallet || wallets[0]?.id) ?? '',
       currency: 'USD',
       date: payout.date ?? new Date().toISOString(),
       taxReservePct: Number(taxPct) || 0,
       buckets: [
-        { kind: 'expense', accountId: destWallet || wallets[0]?.id, weight: normalized.living ?? 0, note: 'Living' },
+        { kind: 'expense', accountId: (destWallet || wallets[0]?.id) ?? '', weight: normalized.living ?? 0, note: 'Living' },
         { kind: 'invest', accountId: wallets.find((w) => w.kind === 'investment')?.id ?? destWallet, weight: normalized.invest ?? 0, note: 'Invest' },
-        { kind: 'cash', accountId: destWallet || wallets[0]?.id, weight: normalized.cash ?? 0, note: 'Cash' },
+        { kind: 'cash', accountId: (destWallet || wallets[0]?.id) ?? '', weight: normalized.cash ?? 0, note: 'Cash' },
       ],
     };
     onAllocate?.(plan);
@@ -157,8 +179,8 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
           </div>
 
           <div className="pc-weight-row">
-            {['living', 'invest', 'cash'].map((k) => {
-              const labels = { living: 'Living', invest: 'Invest', cash: 'Cash' };
+            {(['living', 'invest', 'cash'] as PayoutBucketKey[]).map((k: PayoutBucketKey) => {
+              const labels: Record<PayoutBucketKey, string> = { living: 'Living', invest: 'Invest', cash: 'Cash' };
               return (
                 <label key={k} className="pc-weight">
                   <span>{labels[k]} · {fmtMoney(splits[k], 'USD')}</span>
@@ -168,7 +190,7 @@ export default function PayoutCenter({ payout, wallets = [], onAllocate, onApply
                     min="0"
                     step="0.1"
                     value={weights[k]}
-                    onChange={(e) => setWeights((w) => ({ ...w, [k]: Number(e.target.value) }))}
+                    onChange={(e) => setWeights((w) => ({ ...w, [k]: Number(e.target.value) } as Record<PayoutBucketKey, number>))}
                     aria-label={`Peso ${labels[k]}`}
                   />
                 </label>

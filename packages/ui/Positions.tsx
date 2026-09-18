@@ -5,8 +5,31 @@
 import { fmtMoney } from './currency';
 import React, { useState } from 'react';
 import { TrendingUp, Landmark, Home, Wallet, Plus } from 'lucide-react';
+import type { Position, Account } from '@apps/lib/db';
 
-function emptyPos(accountId) {
+interface PositionDraft {
+  id?: string;
+  accountId: string;
+  symbol: string;
+  qty: number | string;
+  avgPrice: number | string;
+  lastMarkPrice: number | string | undefined;
+  currency?: string;
+  assetKind?: string;
+  yieldRate?: number | string;
+  yieldType?: string;
+}
+
+interface PositionsProps {
+  positions?: Position[];
+  accounts?: Account[];
+  onSave: (position: Position) => Promise<void> | void;
+  onMark?: (positionId: string, price: number) => Promise<void> | void;
+  onDelete?: (positionId: string) => Promise<void> | void;
+  loading?: boolean;
+}
+
+function emptyPos(accountId: string): PositionDraft {
   return { accountId, symbol: '', qty: 1, avgPrice: 0, lastMarkPrice: '', currency: 'USD', assetKind: 'equity' };
 }
 
@@ -25,14 +48,15 @@ const ASSET_KINDS = [
  * @param {(positionId:string)=>Promise<void>|void} [props.onDelete]
  * @param {boolean} [props.loading]
  */
-export default function Positions({ positions = [], accounts = [], onSave, onMark, onDelete, loading = false }) {
-  const [editing, setEditing] = useState(null);
+export default function Positions({ positions = [], accounts = [], onSave, onMark, onDelete, loading = false }: PositionsProps) {
+  const [editing, setEditing] = useState<PositionDraft | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const startNew = () => { setEditing(emptyPos(accounts[0]?.id || '')); setIsNew(true); };
-  const startEdit = (p) => { setEditing({ ...p, lastMarkPrice: p.lastMarkPrice || '' }); setIsNew(false); };
-  const update = (k, v) => setEditing((e) => ({ ...e, [k]: v }));
+  const startEdit = (p: Position) => { setEditing({ ...p, lastMarkPrice: p.lastMarkPrice || '' }); setIsNew(false); };
+  const update = <K extends keyof PositionDraft>(k: K, v: PositionDraft[K]): void =>
+    setEditing((e) => (e ? ({ ...e, [k]: v } as PositionDraft) : e));
 
   const handleSave = async () => {
     if (!editing) return;
@@ -44,7 +68,7 @@ export default function Positions({ positions = [], accounts = [], onSave, onMar
         qty: isOther ? 1 : Number(editing.qty) || 0,
         avgPrice: Number(editing.avgPrice) || 0,
         lastMarkPrice: editing.lastMarkPrice !== '' && editing.lastMarkPrice != null ? Number(editing.lastMarkPrice) : undefined,
-      });
+      } as Position);
       setEditing(null);
       setIsNew(false);
     } finally {

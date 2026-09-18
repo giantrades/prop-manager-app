@@ -7,9 +7,43 @@
 // Dados: `computeNetWorth` (packages/lib/db/wealth.ts) — NUNCA digitado na tela.
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: number, cur: string = 'R$'): string { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+
+interface NetWorthComponents {
+  cash: number;
+  investments: number;
+  investmentsFresh: number;
+  investmentsStale: number;
+  receivables: number;
+  liabilities: number;
+}
+
+interface StalePosition {
+  symbol: string;
+  value: number;
+  ageDays?: number | null;
+}
+
+interface NetWorthData {
+  netWorth: number;
+  components: NetWorthComponents;
+  stalePositions: StalePosition[];
+  updatedAt: string;
+}
+
+interface NetWorthSnapshot {
+  netWorth: number;
+  snapshotAt: string;
+}
+
+interface NetWorthProps {
+  netWorth?: NetWorthData | null;
+  snapshots?: NetWorthSnapshot[];
+  currency?: string;
+  loading?: boolean;
+}
 
 
 /**
@@ -19,7 +53,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianG
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function NetWorth({ netWorth = null, snapshots = [], currency = 'USD', loading = false }) {
+export default function NetWorth({ netWorth = null, snapshots = [], currency = 'USD', loading = false }: NetWorthProps) {
   if (loading) {
     return (
       <div className="nw-root nw-loading" role="status" aria-live="polite">
@@ -36,7 +70,7 @@ export default function NetWorth({ netWorth = null, snapshots = [], currency = '
   }
 
   const c = netWorth.components;
-  const rows = [
+  const rows: Array<{ label: string; value: number; cls: string }> = [
     { label: 'Caixa (bank/wallet/cash)', value: c.cash, cls: '' },
     { label: 'Investimentos + cripto (mark-to-market)', value: c.investments, cls: '' },
     { label: 'Recebíveis (payouts pendentes)', value: c.receivables, cls: '' },
@@ -67,7 +101,7 @@ export default function NetWorth({ netWorth = null, snapshots = [], currency = '
         <div className="nw-provenance" role="note">
           <div className="nw-prov-title">⚠️ Marcas antigas (proveniência)</div>
           <div className="nw-prov-list">
-            {netWorth.stalePositions.map((p) => (
+            {netWorth.stalePositions.map((p: StalePosition) => (
               <div key={`${p.symbol}-${p.value}`} className="nw-prov-row">
                 <span className="nw-prov-symbol">{p.symbol}</span>
                 <span className="nw-prov-value">{fmtMoney(p.value, currency)}</span>

@@ -10,17 +10,25 @@ export interface EntityRow {
   color?: string;
 }
 
-/**
- * @param {object} props
- * @param {boolean} props.open
- * @param {string} props.title
- * @param {string} [props.subtitle] linha de contexto (fonte/tipo)
- * @param {EntityRow[]} [props.rows] pares chave/valor (modo declarativo)
- * @param {string} [props.href] link "abrir no módulo"
- * @param {()=>void} props.onClose
- * @param {React.ReactNode} props.children conteúdo livre (alternativo a rows)
- */
-export default function EntityDrawer({ open, title, subtitle, rows, href, hrefLabel = 'Abrir no módulo', onClose, children = null }) {
+export interface EntityDrawerProps {
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  rows?: EntityRow[];
+  href?: string;
+  hrefLabel?: string;
+  onClose: () => void;
+  children?: React.ReactNode;
+}
+
+export interface DrawerEntity {
+  title: string;
+  subtitle?: string;
+  rows?: EntityRow[];
+  href?: string;
+  hrefLabel?: string;
+}
+export default function EntityDrawer({ open, title, subtitle, rows, href, hrefLabel = 'Abrir no módulo', onClose, children = null }: EntityDrawerProps) {
   if (!open) return null;
   return (
     <>
@@ -33,7 +41,7 @@ export default function EntityDrawer({ open, title, subtitle, rows, href, hrefLa
         <div className="ed-body">
           {subtitle ? <div className="ed-sub">{subtitle}</div> : null}
           {rows && rows.length > 0
-            ? rows.map((r) => (
+            ? rows.map((r: EntityRow) => (
                 <div key={r.k} className="ed-kv">
                   <span className="ed-k">{r.k}</span>
                   <span className="ed-v" style={r.color ? { color: r.color } : undefined}>{r.v}</span>
@@ -49,10 +57,10 @@ export default function EntityDrawer({ open, title, subtitle, rows, href, hrefLa
 }
 
 /** Estado + render para o padrão "abrir entidade sem navegar" (reuso por página). */
-export function useEntityDrawer() {
-  const [entity, setEntity] = React.useState(null);
+export function useEntityDrawer(): { entity: DrawerEntity | null; open: (e: DrawerEntity) => void; close: () => void; node: React.ReactNode } {
+  const [entity, setEntity] = React.useState<DrawerEntity | null>(null);
   const close = React.useCallback(() => setEntity(null), []);
-  const open = React.useCallback((e) => setEntity(e), []);
+  const open = React.useCallback((e: DrawerEntity) => setEntity(e), []);
   const node = (
     <EntityDrawer
       open={!!entity}

@@ -6,25 +6,26 @@
 
 import { fmtMoney } from './currency';
 import React from 'react';
+import type { RiskSnapshot } from '@apps/lib/db';
 
 
-function fmtPct(value) {
+function fmtPct(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return '—';
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function fmtR(value) {
+function fmtR(value: number | null | undefined) {
   if (value == null || Number.isNaN(value)) return '—';
   return `${value >= 0 ? '+' : ''}${Number(value).toFixed(2)}R`;
 }
 
-const STATUS_META = {
+const STATUS_META: Record<string, { label: string; emoji: string; color: string }> = {
   SAFE: { label: 'SAFE', emoji: '🟢', color: 'var(--green, #2ecc71)' },
   WARN: { label: 'WARN', emoji: '🟡', color: 'var(--yellow, #e1b12c)' },
   STOP: { label: 'STOP', emoji: '🔴', color: 'var(--red, #e74c3c)' },
 };
 
-function RiskStatusPill({ status }) {
+function RiskStatusPill({ status }: { status: string }) {
   const meta = STATUS_META[status] || STATUS_META.SAFE;
   return (
     <span className="rc-pill" style={{ color: meta.color, borderColor: meta.color }}>
@@ -34,16 +35,20 @@ function RiskStatusPill({ status }) {
   );
 }
 
-function fmtBool(v) {
+function fmtBool(v: unknown) {
   return v ? 'YES' : 'NO';
 }
 
+interface RiskCenterProps {
+  snapshot?: RiskSnapshot | null;
+  loading?: boolean;
+}
 /**
  * @param {object} props
  * @param {import('../lib/db/risk').RiskSnapshot} props.snapshot
  * @param {boolean} [props.loading]
- */
-export default function RiskCenter({ snapshot, loading = false }) {
+  */
+export default function RiskCenter({ snapshot, loading = false }: RiskCenterProps) {
   if (loading || !snapshot) {
     return (
       <div className="rc-root rc-loading" role="status" aria-live="polite">

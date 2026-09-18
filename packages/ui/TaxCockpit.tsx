@@ -5,12 +5,12 @@
 // Fonte: DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md (§ Fiscal).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'USD') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: number | null | undefined, cur = 'USD') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(0)}%`;
 }
@@ -23,7 +23,16 @@ function fmtPct(v) {
  * @param {()=>void} [props.onExportCSV]
  * @param {boolean} [props.loading]
  */
-export default function TaxCockpit({ cockpit, currency = 'USD', yearMonth, onExportCSV, loading = false }) {
+import type { TaxCockpitResult } from '@apps/lib/db';
+
+interface TaxCockpitProps {
+  cockpit?: TaxCockpitResult | null;
+  currency?: string;
+  yearMonth?: string;
+  onExportCSV?: () => void;
+  loading?: boolean;
+}
+export default function TaxCockpit({ cockpit, currency = 'USD', yearMonth, onExportCSV, loading = false }: TaxCockpitProps) {
   if (loading || !cockpit) {
     return (
       <div className="tx-root tx-loading" role="status" aria-live="polite">

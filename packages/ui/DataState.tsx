@@ -4,7 +4,7 @@ import React from 'react';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 
 /** Skeleton estrutural de uma dashboard (não uma linha de texto). */
-export function DashSkeleton({ cards = 3, widgets = 2 }) {
+export function DashSkeleton({ cards = 3, widgets = 2 }: { cards?: number; widgets?: number }) {
   return (
     <div className="ds-wrap" role="status" aria-live="polite" aria-label="Carregando dados">
       <div className="ds-cards">
@@ -26,8 +26,14 @@ export function DashSkeleton({ cards = 3, widgets = 2 }) {
  * Erro acionável: diz o que houve, por quê e como resolver (retry).
  * Nunca substitui dado já em cache (use `stale` para o banner).
  */
-export function ActionableError({ error, onRetry, label = 'os dados', stale = false }) {
-  const message = error?.message || String(error || 'falha inesperada');
+interface ActionableErrorProps {
+  error?: { message?: string } | string | null;
+  onRetry?: () => void;
+  label?: string;
+  stale?: boolean;
+}
+export function ActionableError({ error, onRetry, label = 'os dados', stale = false }: ActionableErrorProps) {
+  const message = typeof error === 'string' ? error : error?.message || String(error || 'falha inesperada');
   return (
     <div className={`ds-error ${stale ? 'ds-error-stale' : ''}`} role="alert">
       <div className="ds-error-head">

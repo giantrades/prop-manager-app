@@ -11,18 +11,42 @@ import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
 import StatRow from './StatRow';
 import { useEntityDrawer } from './EntityDrawer';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+import type { ActionItem, CommandSnapshot, Insight } from '@apps/lib/db';
+import type { EconomicEvent, UsHoliday } from '@apps/lib/db';
 
-const WIDGET_ICONS = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
+type WidgetIcon = React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>;
 
-function fmtPct(value) {
+interface HomeCalendar {
+  events: EconomicEvent[];
+  holidays: UsHoliday[];
+}
+
+interface HomeCommandCenterProps {
+  snapshot?: CommandSnapshot | null;
+  actions?: ActionItem[];
+  insights?: Insight[];
+  calendar?: HomeCalendar;
+  loading?: boolean;
+  hidden?: string[];
+}
+
+function fmtMoney(v: unknown, cur: string = 'R$'): string { return fmtMoneyShared(v, cur); }
+
+const WIDGET_ICONS: Record<string, WidgetIcon> = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
+
+function fmtPct(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
   const v = value * 100;
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 }
-const shortYm = (ym) => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
-const kfmt = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
-function Delta({ current, previous, currency = 'USD' }) {
+const shortYm = (ym: string): string => `${String(ym).slice(5, 7)}/${String(ym).slice(2, 4)}`;const tip = { background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 };
+const kfmt = (v: number): string => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`);
+interface DeltaProps {
+  current: number;
+  previous: number | null | undefined;
+  currency?: string;
+}
+function Delta({ current, previous, currency = 'USD' }: DeltaProps) {
   if (previous == null || !Number.isFinite(current) || !Number.isFinite(previous)) return null;
   const diff = current - previous;
   if (diff === 0) return <span className="hc-delta hc-delta-flat">=</span>;
@@ -30,11 +54,19 @@ function Delta({ current, previous, currency = 'USD' }) {
   return <span className={`hc-delta ${up ? 'hc-delta-up' : 'hc-delta-down'}`} title="vs período anterior">{up ? '▲' : '▼'} {fmtMoney(Math.abs(diff), currency)}</span>;
 }
 
-const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'];
-const CLASS_COLORS = { equity: '#7c5cff', crypto: '#f7931a', fixed: '#3498db', other: '#e1b12c', cash: '#2ecc71' };
-const CAT_COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
+const PALETTE: string[] = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#e74c3c', '#a855f7', '#22d3ee', '#f59e0b'];
+const CLASS_COLORS: Record<string, string> = { equity: '#7c5cff', crypto: '#f7931a', fixed: '#3498db', other: '#e1b12c', cash: '#2ecc71' };
+const CAT_COLORS: Record<string, string> = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
 
-function Widget({ id, title, to = null, hide, children }) {  if (hide(id)) return null;
+interface WidgetProps {
+  id: string;
+  title: string;
+  to?: string | null;
+  hide: (id: string) => boolean;
+  children?: React.ReactNode;
+}
+
+function Widget({ id, title, to = null, hide, children }: WidgetProps) {  if (hide(id)) return null;
   const Icon = WIDGET_ICONS[id];
   return (
     <section className="hc-widget" aria-label={title}>
@@ -47,8 +79,8 @@ function Widget({ id, title, to = null, hide, children }) {  if (hide(id)) retur
   );
 }
 
-export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }) {
-  const hide = (id) => (hidden || []).includes(id);
+export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }: HomeCommandCenterProps) {
+  const hide = (id: string): boolean => (hidden || []).includes(id);
   const drawer = useEntityDrawer();
   if (loading || !snapshot) {
     return (
@@ -72,14 +104,14 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
   const catById = new Map<string, { name: string; color?: string }>(catList.map((c) => [c.id, c]));
   const expensePie = (snapshot.expensesByCategory ?? []).slice(0, 7).map((g, i) => {
     const c = catById.get(g.categoryId);
-    return { name: c?.name ?? g.categoryId, value: g.total, color: CAT_COLORS[c?.color] || PALETTE[i % PALETTE.length] };
+    return { name: c?.name ?? g.categoryId, value: g.total, color: CAT_COLORS[c?.color ?? ''] || PALETTE[i % PALETTE.length] };
   });
   const assetClasses = (snapshot.assetClasses ?? []) as Array<{ key: string; label: string; value: number }>;
   const classTotal = assetClasses.reduce((s, c) => s + (c.value || 0), 0);
   const classPie = assetClasses.map((c, i) => ({ name: c.label, value: c.value, color: CLASS_COLORS[c.key] || PALETTE[i % PALETTE.length] }));
-  const payoutMonths = [...new Set((snapshot.payoutEvents ?? []).map((p) => String(p.date).slice(0, 7)))]
-    .map((ym) => ({ label: shortYm(ym), value: (trading.find((t) => t.ym === ym) ?? {}).pnl }))
-    .filter((m) => m.value != null);
+  const payoutMonths: Array<{ label: string; value: number }> = [...new Set((snapshot.payoutEvents ?? []).map((p) => String(p.date).slice(0, 7)))]
+    .map((ym: string) => ({ label: shortYm(ym), value: trading.find((t) => t.ym === ym)?.pnl }))
+    .filter((m): m is { label: string; value: number } => m.value != null);
   const acctPnl = snapshot.accountPnl ?? [];
 
   const header = [

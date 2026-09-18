@@ -5,21 +5,33 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md (Alerts) + 01-tasks.md (T6.3).
 
 import React, { useMemo } from 'react';
+import type { ActionItem } from '@apps/lib/db';
 
-const SEVERITY_META = {
+interface SeverityMeta {
+  label: string;
+  emoji: string;
+  color: string;
+}
+
+const SEVERITY_META: Record<string, SeverityMeta> = {
   warn: { label: 'Atenção', emoji: '⚠️', color: 'var(--red, #e74c3c)' },
   info: { label: 'Info', emoji: 'ℹ️', color: 'var(--yellow, #e1b12c)' },
   good: { label: 'Ok', emoji: '✅', color: 'var(--green, #2ecc71)' },
 };
+
+interface ActionCenterProps {
+  actions?: ActionItem[];
+  loading?: boolean;
+}
 
 /**
  * @param {object} props
  * @param {Array<{id:string;kind:string;severity:'warn'|'info'|'good';title:string;detail:string;source:string}>} props.actions
  * @param {boolean} [props.loading]
  */
-export default function ActionCenter({ actions = [], loading = false }) {
+export default function ActionCenter({ actions = [], loading = false }: ActionCenterProps) {
   const sorted = useMemo(() => {
-    const order = { warn: 0, info: 1, good: 2 };
+    const order: Record<string, number> = { warn: 0, info: 1, good: 2 };
     return [...actions].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
   }, [actions]);
 

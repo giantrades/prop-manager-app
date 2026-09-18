@@ -5,7 +5,33 @@
 
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 
-const ToastContext = createContext(null);
+type ToastType = 'ok' | 'warn' | 'error';
+
+interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+interface ToastItem {
+  id: string;
+  message: string;
+  type: ToastType;
+  action: ToastAction | null;
+  durationMs: number;
+}
+
+interface ToastOptions {
+  type?: ToastType;
+  action?: ToastAction;
+  durationMs?: number;
+}
+
+interface ToastContextValue {
+  toast: (message: unknown, opts?: ToastOptions) => string;
+  dismiss: (id: string) => void;
+}
+
+const ToastContext = createContext<ToastContextValue | null>(null);
 
 let seq = 0;
 
@@ -22,11 +48,11 @@ export function useToast() {
   return ctx;
 }
 
-export function ToastProvider({ children }) {
-  const [items, setItems] = useState([]);
-  const timers = useRef(new Map());
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const dismiss = useCallback((id) => {
+  const dismiss = useCallback((id: string) => {
     setItems((list) => list.filter((t) => t.id !== id));
     const timer = timers.current.get(id);
     if (timer) {
@@ -35,7 +61,7 @@ export function ToastProvider({ children }) {
     }
   }, []);
 
-  const toast = useCallback((message, opts: { type?: 'ok' | 'warn' | 'error'; action?: { label: string; run: () => void }; durationMs?: number } = {}) => {
+  const toast = useCallback((message: unknown, opts: ToastOptions = {}) => {
     const id = `toast-${Date.now().toString(36)}-${(seq += 1)}`;
     const item = {
       id,
@@ -58,7 +84,7 @@ export function ToastProvider({ children }) {
           <div key={t.id} className={`tst-item tst-${t.type}`}>
             <span className="tst-msg">{t.message}</span>
             {t.action && (
-              <button className="tst-action" onClick={() => { try { t.action.run(); } finally { dismiss(t.id); } }}>
+              <button className="tst-action" onClick={() => { try { t.action?.run(); } finally { dismiss(t.id); } }}>
                 {t.action.label}
               </button>
             )}

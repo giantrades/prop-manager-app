@@ -4,17 +4,32 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
+interface CommandItem {
+  id: string;
+  label: string;
+  hint?: string;
+  keywords?: string;
+  group?: string;
+  run: () => void;
+}
+
+interface CommandPaletteProps {
+  open: boolean;
+  onClose: () => void;
+  items?: CommandItem[];
+}
+
 /**
  * @param {object} props
  * @param {boolean} props.open
  * @param {()=>void} props.onClose
  * @param {Array<{id:string;label:string;hint?:string;keywords?:string;group?:string;run:()=>void}>} props.items
  */
-export default function CommandPalette({ open, onClose, items = [] }) {
+export default function CommandPalette({ open, onClose, items = [] }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -38,7 +53,7 @@ export default function CommandPalette({ open, onClose, items = [] }) {
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();

@@ -6,14 +6,23 @@
 // (packages/lib/db/wealth.ts) — NUNCA calculado na tela.
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: unknown, cur = 'R$'): string { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import AllocationPie from './AllocationPie';
 import { dividendIncomeByMonth, dividendByAsset, dividendCalendar } from '@apps/lib/db';
+import type {
+  AllocationResult,
+  BenchmarkPoint,
+  DcaMonth,
+  DividendEvent,
+  DividendRow,
+  PortfolioRow,
+  Position,
+} from '@apps/lib/db';
 
 /** #4 — desloca um `YYYY-MM` em N meses. */
-function shiftYm(ym, delta) {
+function shiftYm(ym: string, delta: number): string {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -22,53 +31,103 @@ function shiftYm(ym, delta) {
 const PALETTE = ['#7c5cff', '#2ecc71', '#3498db', '#e1b12c', '#f7931a', '#e74c3c', '#a855f7', '#22d3ee'];
 
 
-function fmtPct(value) {
+function fmtPct(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
   const v = value * 100;
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 }
 
-/**
- * @param {object} props
- * @param {Array<{id:string;symbol:string;accountName?:string;qty:number;avgPrice:number;markPrice:number;costBasis:number;marketValue:number;pnl:number;pnlPercent:number;staleMark:boolean;markedAt?:string;ageDays?:number|null}>} props.rows
- * @param {{totalCost:number;totalValue:number;totalPnl:number;pnlPercent:number;staleCount:number}} [props.summary]
- * @param {Array<{month:string;amount:number}>} [props.dca]
- * @param {{bySymbol:Array<{label:string;value:number;pct:number}>;byAccount:Array<{label:string;value:number;pct:number}>;topSymbol:string|null;topPct:number}} [props.allocation]
- * @param {Array<{at:string;value:number;cost:number}>} [props.history] — snapshots (P5), valor vs custo
- * @param {Array<{at:string;index:number}>} [props.benchmark] — A3: CDI acumulado (base 100)
- * @param {string} [props.currency]
- * @param {(row:object)=>void} [props.onMark]  — marca a posição (mark-to-market manual)
- * @param {(row:object, amount:number)=>void} [props.onDividend] — A1: registrar provento
- * @param {(row:object, alert:{dir:string,price:number})=>void} [props.onSaveAlert] — A2
- * @param {(row:object, alertId:string)=>void} [props.onDeleteAlert] — A2
- * @param {(alertId:string)=>void} [props.onRearmAlert] — A2: volta a poder disparar
- * @param {Array<string>} [props.firedAlertIds] — A2: ids já disparados
- * @param {Array<object>} [props.announced] — B1: proventos anunciados (data-com)
- * @param {Array<object>} [props.positions] — B1: posições p/ select do form
- * @param {(ev:object)=>void} [props.onSaveDividendEvent] — B1
- * @param {(id:string)=>void} [props.onRemoveDividendEvent] — B1
- * @param {(ev:object)=>void} [props.onReceiveDividend] — B1: marca como recebido
- * @param {boolean} [props.loading]
- */
-export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'USD', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }) {
-  const show = (k) => !only || only.includes(k);
+/** Resumo agregado do portfolio (totais derivados — ver `computePortfolio`). */
+interface PortfolioSummary {
+  totalCost: number;
+  totalValue: number;
+  totalPnl: number;
+  pnlPercent: number;
+  staleCount: number;
+  dividendsTotal?: number;
+}
+
+/** Snapshot do histórico (valor vs custo) p/ o gráfico de evolução. */
+interface PortfolioHistoryPoint {
+  at: string;
+  value: number;
+  cost: number;
+}
+
+/** Alerta de preço a salvar (direção + preço-alvo). */
+interface PriceAlertDraft {
+  dir: string;
+  price: number;
+}
+
+/** Provento anunciado a salvar (valor já convertido p/ número no onClick). */
+interface DividendEventDraft {
+  positionId: string;
+  exDate: string;
+  amountPerShare?: number;
+  note?: string;
+}
+
+/** Estado do mini-form de anúncio de provento (campos ainda texto). */
+interface DividendFormState {
+  positionId: string;
+  exDate: string;
+  amountPerShare: string;
+  note: string;
+}
+
+/** Alerta listado na seção "Alertas de preço" (alerta + proveniência da linha). */
+interface PortfolioAlertView {
+  id: string;
+  dir: 'above' | 'below';
+  price: number;
+  symbol: string;
+  rowId: string;
+  fired: boolean;
+}
+
+interface PortfolioProps {
+  rows?: PortfolioRow[];
+  summary?: PortfolioSummary | null;
+  dca?: DcaMonth[];
+  allocation?: AllocationResult | null;
+  history?: PortfolioHistoryPoint[];
+  benchmark?: BenchmarkPoint[];
+  currency?: string;
+  onMark?: (row: PortfolioRow) => void;
+  onDividend?: (row: PortfolioRow, amount: number) => void;
+  onSaveAlert?: (row: PortfolioRow, alert: PriceAlertDraft) => void;
+  onDeleteAlert?: (row: { id: string }, alertId: string) => void;
+  onRearmAlert?: (alertId: string) => void;
+  firedAlertIds?: string[];
+  announced?: DividendEvent[];
+  dividends?: DividendRow[];
+  positions?: Position[];
+  onSaveDividendEvent?: (ev: DividendEventDraft) => void;
+  onRemoveDividendEvent?: (id: string) => void;
+  onReceiveDividend?: (ev: DividendEvent) => void;
+  loading?: boolean;
+  only?: string[] | null;
+}
+export default function Portfolio({ rows = [], summary = null, dca = [], allocation = null, history = [], benchmark = [], currency = 'USD', onMark, onDividend, onSaveAlert, onDeleteAlert, onRearmAlert, firedAlertIds = [], announced = [], dividends = [], positions = [], onSaveDividendEvent, onRemoveDividendEvent, onReceiveDividend, loading = false, only = null }: PortfolioProps) {
+  const show = (k: string): boolean => !only || only.includes(k);
   const [calYm, setCalYm] = React.useState(() => new Date().toISOString().slice(0, 7));
-  const symbolById = React.useMemo(() => Object.fromEntries((positions || []).map((p) => [p.id, p.symbol])), [positions]);
+  const symbolById = React.useMemo<Record<string, string>>(() => Object.fromEntries((positions || []).map((p) => [p.id, p.symbol])), [positions]);
   const divMonthly = React.useMemo(() => dividendIncomeByMonth(dividends), [dividends]);
   const divByAsset = React.useMemo(() => dividendByAsset(dividends, symbolById), [dividends, symbolById]);
   const divCal = React.useMemo(() => dividendCalendar(dividends, announced, calYm), [dividends, announced, calYm]);
   const divTotal = React.useMemo(() => dividends.reduce((s, d) => s + (d.amount || 0), 0), [dividends]);
-  const benchByAt = React.useMemo(() => new Map((benchmark || []).map((b) => [b.at, b.index])), [benchmark]);
-  const [divRow, setDivRow] = React.useState(null);
+  const benchByAt = React.useMemo(() => new Map<string, number>((benchmark || []).map((b) => [b.at, b.index])), [benchmark]);
+  const [divRow, setDivRow] = React.useState<string | null>(null);
   const [divAmount, setDivAmount] = React.useState('');
-  const [alertRow, setAlertRow] = React.useState(null);
+  const [alertRow, setAlertRow] = React.useState<string | null>(null);
   const [alertDir, setAlertDir] = React.useState('above');
   const [alertPrice, setAlertPrice] = React.useState('');
   const [showDivForm, setShowDivForm] = React.useState(false);
-  const [divEv, setDivEv] = React.useState({ positionId: '', exDate: '', amountPerShare: '', note: '' });
-  const fired = React.useMemo(() => new Set(firedAlertIds || []), [firedAlertIds]);
+  const [divEv, setDivEv] = React.useState<DividendFormState>({ positionId: '', exDate: '', amountPerShare: '', note: '' });
+  const fired = React.useMemo(() => new Set<string>(firedAlertIds || []), [firedAlertIds]);
   const allAlerts = React.useMemo(() => {
-    const list = [];
+    const list: PortfolioAlertView[] = [];
     for (const r of rows) {
       for (const a of r.alerts ?? []) {
         list.push({ ...a, symbol: r.symbol, rowId: r.id, fired: fired.has(a.id) });
@@ -87,7 +146,7 @@ export default function Portfolio({ rows = [], summary = null, dca = [], allocat
     );
   }
 
-  const s = summary || {
+  const s: PortfolioSummary = summary || {
     totalCost: rows.reduce((acc, r) => acc + r.costBasis, 0),
     totalValue: rows.reduce((acc, r) => acc + r.marketValue, 0),
     totalPnl: 0,

@@ -5,19 +5,34 @@
 
 import React from 'react';
 
-function fmtVal(v) {
+function fmtVal(v: unknown) {
   if (v == null) return '—';
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
 }
 
+interface SyncConflict {
+  id: string;
+  entityType: string;
+  recordId: string | number;
+  fields: string[];
+  local?: Record<string, unknown> | null;
+  remote?: Record<string, unknown> | null;
+  detectedAt?: string;
+}
+
+interface SyncConflictsProps {
+  conflicts?: SyncConflict[];
+  onResolve?: (conflictId: string, choice: 'mine' | 'theirs') => void;
+  loading?: boolean;
+}
 /**
  * @param {object} props
  * @param {Array<{id:string;entityType:string;recordId:string;fields:string[];local:object;remote:object;detectedAt:string}>} [props.conflicts]
  * @param {(conflictId:string, choice:'mine'|'theirs')=>void} [props.onResolve]
  * @param {boolean} [props.loading]
- */
-export default function SyncConflicts({ conflicts = [], onResolve, loading = false }) {
+  */
+export default function SyncConflicts({ conflicts = [], onResolve, loading = false }: SyncConflictsProps) {
   if (loading) {
     return (
       <div className="sc-root sc-loading" role="status" aria-live="polite">
@@ -45,7 +60,7 @@ export default function SyncConflicts({ conflicts = [], onResolve, loading = fal
               <span className="sc-id">{String(c.recordId).slice(0, 12)}</span>
             </div>
             <div className="sc-fields">
-              {(c.fields || []).map((f) => (
+              {(c.fields || []).map((f: string) => (
                 <div key={f} className="sc-field">
                   <span className="sc-field-name">{f}</span>
                   <span className="sc-field-local">meu: <b>{fmtVal(c.local?.[f])}</b></span>

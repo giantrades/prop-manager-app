@@ -3,7 +3,33 @@
 import React, { useState } from 'react';
 import { X, Bell, CheckCheck, Plus, Trash2, Clock, ExternalLink } from 'lucide-react';
 
-const SEVERITY_META = {
+type NotificationSeverity = 'critical' | 'warn' | 'info' | 'good';
+
+interface NotificationItem {
+  id: string;
+  severity: NotificationSeverity;
+  title: string;
+  detail: string;
+  source: string;
+  kind?: string;
+  href?: string;
+}
+
+interface NotificationsDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  items?: NotificationItem[];
+  onRead?: (id: string) => void;
+  onReadAll?: () => void;
+  onGoActions?: () => void;
+  onCreate?: (title: string, severity: string) => void;
+  onDelete?: (id: string) => void;
+  onOpen?: (href: string) => void;
+  onSnooze?: (id: string) => void;
+  onDismiss?: (id: string) => void;
+}
+
+const SEVERITY_META: Record<NotificationSeverity, { label: string; color: string; dot: string }> = {
   critical: { label: 'Crítico', color: 'var(--red, #e74c3c)', dot: '#e74c3c' },
   warn: { label: 'Atenção', color: 'var(--yellow, #e1b12c)', dot: '#e1b12c' },
   info: { label: 'Info', color: 'var(--blue, #3498db)', dot: '#3498db' },
@@ -19,12 +45,12 @@ const SEVERITY_META = {
  * @param {()=>void} [props.onReadAll]
  * @param {()=>void} [props.onGoActions] — abrir o Action Center completo
  */
-export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions, onCreate, onDelete, onOpen, onSnooze, onDismiss }) {
-  const [showForm, setShowForm] = useState(false);
-  const [title, setTitle] = useState('');
-  const [severity, setSeverity] = useState('info');
+export default function NotificationsDrawer({ open, onClose, items = [], onRead, onReadAll, onGoActions, onCreate, onDelete, onOpen, onSnooze, onDismiss }: NotificationsDrawerProps) {
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [title, setTitle] = useState<string>('');
+  const [severity, setSeverity] = useState<string>('info');
   if (!open) return null;
-  const order = { critical: 0, warn: 1, info: 2, good: 3 };
+  const order: Record<NotificationSeverity, number> = { critical: 0, warn: 1, info: 2, good: 3 };
   const sorted = [...items].sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
 
   return (
@@ -59,7 +85,7 @@ export default function NotificationsDrawer({ open, onClose, items = [], onRead,
                 </button>
                 <div className="nb-item-actions">
                   {a.href && onOpen && (
-                    <button type="button" className="nb-icon" onClick={() => { onRead?.(a.id); onOpen(a.href); }} title="Abrir contexto" aria-label={`Abrir ${a.title}`}><ExternalLink size={13} /></button>
+                    <button type="button" className="nb-icon" onClick={() => { onRead?.(a.id); if (a.href) onOpen(a.href); }} title="Abrir contexto" aria-label={`Abrir ${a.title}`}><ExternalLink size={13} /></button>
                   )}
                   {onSnooze && (
                     <button type="button" className="nb-icon" onClick={() => onSnooze(a.id)} title="Adiar 1 dia" aria-label={`Adiar ${a.title}`}><Clock size={13} /></button>

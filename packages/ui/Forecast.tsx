@@ -5,7 +5,7 @@
 // Dados: `computeForecast` + `computeSafeAvailable` (packages/lib/db/wealth.ts).
 
 import { fmtMoney as fmtMoneyShared } from './currency';
-function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
+function fmtMoney(v: number | null | undefined, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -17,7 +17,21 @@ import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tool
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function Forecast({ forecast = null, safeAvailable = null, currency = 'USD', loading = false }) {
+interface ForecastData {
+  today: number;
+  d30: number;
+  d60: number;
+  d90: number;
+  netMonthly: number;
+}
+
+interface ForecastProps {
+  forecast?: ForecastData | null;
+  safeAvailable?: number | null;
+  currency?: string;
+  loading?: boolean;
+}
+export default function Forecast({ forecast = null, safeAvailable = null, currency = 'USD', loading = false }: ForecastProps) {
   if (loading) {
     return (
       <div className="fc-root fc-loading" role="status" aria-live="polite">

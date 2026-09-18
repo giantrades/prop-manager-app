@@ -4,19 +4,20 @@
 
 import { fmtMoney } from './currency';
 import React from 'react';
+import type { StrategyMetrics, ProfitFactor } from '@apps/lib/db';
 
-function fmtR(v) {
+function fmtR(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}R`;
 }
 
-function fmtPct(v) {
+function fmtPct(v: number | null | undefined) {
   if (v == null || Number.isNaN(v)) return '—';
   return `${(v * 100).toFixed(1)}%`;
 }
 
 
-function fmtPF(pf) {
+function fmtPF(pf: ProfitFactor) {
   if (pf === 'infinity') return '∞';
   if (pf === 'n/a') return 'n/a';
   return Number(pf).toFixed(2);
@@ -28,7 +29,12 @@ function fmtPF(pf) {
  * @param {(strategyId:string)=>void} [props.onUnlink] desvincula a estratégia dos trades.
  * @param {boolean} [props.loading]
  */
-export default function Strategies({ metrics = [], onUnlink, loading = false }) {
+interface StrategiesProps {
+  metrics?: StrategyMetrics[];
+  onUnlink?: (strategyId: string) => void;
+  loading?: boolean;
+}
+export default function Strategies({ metrics = [], onUnlink, loading = false }: StrategiesProps) {
   if (loading) {
     return (
       <div className="st-root st-loading" role="status" aria-live="polite">
