@@ -25,7 +25,7 @@ function fmtDay(iso) {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function WeeklyReview({ trades = [], currency = 'R$', loading = false }) {
+export default function WeeklyReview({ trades = [], currency = 'USD', loading = false }) {
   const data = useMemo(() => weeklyReview(trades), [trades]);
   const [copied, setCopied] = useState(false);
 

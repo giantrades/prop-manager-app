@@ -33,7 +33,10 @@ function todayKey() {
  * @param {string} [props.selectedDay]
  * @param {boolean} [props.loading]
  */
-export default function PnLCalendar({ trades = [], currency = 'R$', onSelectDay, selectedDay, loading = false }) {
+// `currency` é a moeda DE ORIGEM do PnL dos trades (o app opera em USD; o `fmtMoney`
+// converte pra moeda de exibição). Antes era 'R$' por padrão: o PnL em USD era tratado
+// como BRL e dividido pelo câmbio (ex.: -1.022,22 virava -200,44 com taxa 5,1).
+export default function PnLCalendar({ trades = [], currency = 'USD', onSelectDay, selectedDay, loading = false }) {
   const now = new Date();
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
 

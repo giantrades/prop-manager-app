@@ -22,7 +22,7 @@ function intensity(pnl, maxAbs) {
  * @param {(sessions:Array<object>)=>void} [props.onSessions]
  * @param {boolean} [props.loading]
  */
-export default function HeatmapSection({ trades = [], currency = 'R$', sessionDefs, onSessions, loading = false }) {
+export default function HeatmapSection({ trades = [], currency = 'USD', sessionDefs, onSessions, loading = false }) {
   const defs = sessionDefs && sessionDefs.length > 0 ? sessionDefs : DEFAULT_SESSIONS;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);

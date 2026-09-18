@@ -26,7 +26,7 @@ function fmtPF(pf) {
  * @param {string} [props.currency]
  * @param {boolean} [props.loading]
  */
-export default function BreakdownSection({ trades = [], currency = 'R$', loading = false }) {
+export default function BreakdownSection({ trades = [], currency = 'USD', loading = false }) {
   const dirs = useMemo(() => directionSplit(trades), [trades]);
   const symbols = useMemo(() => symbolBreakdown(trades), [trades]);
 

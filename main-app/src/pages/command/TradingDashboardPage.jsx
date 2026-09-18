@@ -571,7 +571,7 @@ export default function TradingDashboardPage() {
               })()}
             </div>
           ) },
-          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} loading={false} /></div>) },
+          { id: 'calendar', node: (<div className="td-widget"><div className="td-chart-title"><CalendarDays size={14} /> Calendário de PnL</div><PnLCalendar trades={trades} currency="USD" loading={false} /></div>) },
           { id: 'hist', node: (<div className="td-widget"><div className="td-chart-title"><BarChart3 size={14} /> Histograma de R</div><HistogramR trades={trades} bucketSize={0.5} loading={false} /></div>) },
           { id: 'drawdown', defaultSpan: 2, node: (<div className="td-widget"><DrawdownSection trades={trades} initialFunding={stats.capital} currency="USD" /></div>) },
         ]}

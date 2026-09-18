@@ -8,7 +8,7 @@ import ModuleTabs from '../../ModuleTabs';
 import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
-import { fmtMoney, convertMoney, fmtDisplay } from '@apps/ui/currency';
+import { fmtMoney, convertMoney, fmtDisplay, displaySymbol } from '@apps/ui/currency';
 import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds, accountBalance } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -212,7 +212,9 @@ export default function AccountsDashboardPage() {
             </div>
 
             <div className="dash-section" key="pie">
-              <AllocationPie title="Distribuição por tipo" data={stats.pieData} emptyLabel="Sem contas com saldo." />
+              {/* pieData já está na moeda de EXIBIÇÃO (convertido em acctValue): passar a
+                  moeda de exibição como origem evita a dupla conversão (÷câmbio). */}
+              <AllocationPie title="Distribuição por tipo" data={stats.pieData} currency={displaySymbol()} emptyLabel="Sem contas com saldo." />
             </div>
 
             <div className="dash-section" key="bykind">

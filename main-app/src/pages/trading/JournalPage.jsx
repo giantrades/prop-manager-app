@@ -380,11 +380,11 @@ export default function JournalPage() {
                   <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
                 )}
               </div>
-              <HeatmapSection trades={dashTrades} sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
-              <BreakdownSection trades={dashTrades} loading={loading} />
+              <HeatmapSection trades={dashTrades} currency="USD" sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
+              <BreakdownSection trades={dashTrades} currency="USD" loading={loading} />
               <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
               <DurationAnalysis trades={dashTrades} loading={loading} />
-              <WeeklyReview trades={dashTrades} loading={loading} />
+              <WeeklyReview trades={dashTrades} currency="USD" loading={loading} />
             </>
           ) : view === 'trades' ? (
             <Trades
