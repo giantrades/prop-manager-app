@@ -567,19 +567,25 @@ const LP_CSS = `
 .lp-section { font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); margin: 18px 0 8px; }
 .lp-empty { display: flex; align-items: center; gap: 8px; padding: 28px; justify-content: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; }
 .lp-list { display: flex; flex-direction: column; gap: 6px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
-.lp-row { display: grid; grid-template-columns: 1.6fr 0.6fr 0.5fr 1fr 1fr 1fr 0.8fr 1fr 1fr auto; gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
-/* Alinha o VALOR com o TÍTULO da coluna: cabeçalho e célula usam a mesma regra por
-   coluna (os números à direita; a primeira coluna à esquerda). */
+/* Larguras explícitas por coluna: o valor fica exatamente sob o título. Números
+   alinhados à DIREITA (título e célula juntos); SL/TP com largura fixa (não espalham). */
+.lp-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.8fr) 66px 56px 108px 108px 108px 80px 118px 118px minmax(150px, auto);
+  gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px;
+}
+.lp-row > * { min-width: 0; white-space: nowrap; }
 .lp-row > span:nth-child(3), .lp-row > span:nth-child(4), .lp-row > span:nth-child(5),
-.lp-row > span:nth-child(6), .lp-row > span:nth-child(7) { text-align: right; }
-.lp-row > input:nth-child(8), .lp-row > input:nth-child(9) { text-align: right; }
-.lp-ordrow > span:nth-child(4), .lp-ordrow > span:nth-child(5) { text-align: right; }
-.lp-row.lp-head > span:nth-child(8), .lp-row.lp-head > span:nth-child(9),
-.lp-row.lp-head > span:nth-child(10) { text-align: right; }
-.lp-ordrow.lp-head > span:nth-child(8) { text-align: right; }
+.lp-row > span:nth-child(6), .lp-row > span:nth-child(7),
+.lp-row > span:nth-child(8), .lp-row > span:nth-child(9) { text-align: right; }
+.lp-row > span:nth-child(10) { text-align: right; }
+.lp-row > input.lp-input { justify-self: end; max-width: 118px; text-align: right; }
+.lp-ordrow { grid-template-columns: minmax(140px, 1.6fr) 66px 80px 56px 108px 100px minmax(150px, 1.4fr) minmax(150px, auto); }
+.lp-ordrow > span:nth-child(4), .lp-ordrow > span:nth-child(5), .lp-ordrow > span:nth-child(6),
+.lp-ordrow > span:nth-child(8) { text-align: right; }
 .lp-firm { display: inline-flex; align-items: center; margin-right: 5px; font-size: 10px; font-weight: 700; }
 .lp-firm img { width: 12px; height: 12px; object-fit: contain; border-radius: 3px; }
-.lp-ordrow { grid-template-columns: 1.3fr 0.7fr 0.7fr 0.7fr 0.9fr 0.9fr 1.1fr auto; }
+
 .lp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .lp-sym { font-weight: 700; display: flex; flex-direction: column; }
 .lp-acct { font-size: 10px; color: var(--muted, #a1a7b3); font-weight: 400; }
