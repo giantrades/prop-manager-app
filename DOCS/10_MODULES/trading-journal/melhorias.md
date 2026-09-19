@@ -82,7 +82,7 @@
 - Proposta: winrate/PnL/avgR agrupados por tag + filtro cruzado tag×símbolo. Mesma base do breakdown por símbolo.
 
 ## B3 — Sessões de mercado sobrepostas (timeline estilo babypips)
-- Status: [x] executada
+- Status: [x] executada (mapa visual fxblue)
 - Contexto: as sessões eram 4 buckets UTC fixos e **disjuntos** (Asian/London/NY/Off) justamente para evitar dupla contagem, o que não representa o mercado real (London∩NY 12–16, Sydney cruza a meia-noite). Faltava uma visualização que deixasse a sobreposição evidente.
 - Proposta: `sessionContains()` com suporte a virada de meia-noite + `marketSessionsInLocalZone()` (converte os horários reais de Sydney/Tokyo/London/NY com DST para o **relógio do aparelho**); componente `SessionTradeMap.tsx` — mapa de 1 dia (0–24h, seletor de data, eixo local/UTC) com as sessões ao fundo e cada trade desenhado da **abertura ao fechamento** (bolinha → barra → seta, cor = direção); `sessionAttribution()` atribui cada trade pela **abertura** (1x, sem inflar); editor aceita sobreposição/wrap; sessões persistidas em `meta` (`journal:sessions`, sincroniza entre aparelhos).
 - Arquivos: `packages/lib/db/journalAnalytics.ts`, `packages/ui/SessionTradeMap.tsx`, `packages/ui/sessionTime.ts`, `packages/ui/HeatmapSection.tsx`, `main-app/src/pages/trading/JournalPage.jsx`
