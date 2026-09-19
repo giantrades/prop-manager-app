@@ -73,8 +73,8 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
   const [sortKey, setSortKey] = useState('date');
   const [sortAsc, setSortAsc] = useState(false);
 
-  const accountList = accounts as Array<{ id: string; name: string; firmId?: string }>;
-  const firmList = firms as Array<{ id: string; name: string; color: string; icon?: string }>;
+  const accountList = accounts as AccountRow[];
+  const firmList = firms as FirmRow[];
   // Contas desabilitadas não entram no split de um payout novo (só em histórico/ghost).
   const selectableAccounts = useMemo(() => accounts.filter((a) => !a.disabled), [accounts]);
   const accountById = useMemo(() => Object.fromEntries(accountList.map((a) => [a.id, a])), [accountList]);
