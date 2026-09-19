@@ -12,9 +12,10 @@ import type { Account, AccountDashboard, Payout, PropExtension } from '@apps/lib
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
+import { Ghost } from 'lucide-react';
 
 
-const PHASE_LABEL: Record<string, string> = { challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby' };
+const PHASE_LABEL: Record<string, string> = { challenge: 'Challenge', funded: 'Funded', live: 'Live', demo: 'DEMO', standby: 'Standby' };
 
 
 function fmtPct(v: number | null | undefined): string {
@@ -76,7 +77,9 @@ export default function AccountDetail({ account, prop = null, dashboard = null, 
     <div className="ad-root">
       <div className="ad-head">
         <div>
-          <div className="ad-title">{account.name} <span className="ad-kind">{account.kind}</span></div>
+          <div className="ad-title">{account.name} <span className="ad-kind">{account.kind}</span>
+            {account.disabled && <span className="ad-ghost-badge"><Ghost size={11} /> desabilitada</span>}
+          </div>
           <div className="ad-sub">
             {prop ? `${PHASE_LABEL[normalizePropPhase(prop.phase) ?? ''] ?? prop.phase} · balance ${fmtMoney(prop.nominalSize)}` : 'sem regras prop'}
             {account.platformName ? ` · ${account.platformName}` : ''}
@@ -169,6 +172,7 @@ const AD_CSS = `
 .ad-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .ad-title { font-size: 16px; font-weight: 800; }
 .ad-kind { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(124,92,255,0.15); color: var(--brand, #7c5cff); margin-left: 6px; text-transform: capitalize; }
+.ad-ghost-badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.06); color: var(--muted, #a1a7b3); margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .ad-sub { font-size: 12px; color: var(--muted, #a1a7b3); margin-top: 4px; }
 .ad-btn { padding: 8px 14px; border-radius: 10px; background: transparent; border: 1px solid #2a3246; color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; cursor: pointer; min-height: 42px; }
 .ad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

@@ -54,7 +54,8 @@ export default function AccountsDashboardPage() {
   });
 
   const stats = useMemo(() => {
-    const accounts = data?.accounts ?? [];
+    // Contas desabilitadas saem do resumo (continuam só no histórico em ghost).
+    const accounts = (data?.accounts ?? []).filter((a) => !a.disabled);
     const propExts = data?.propExts ?? [];
     const txs = data?.txs ?? [];
     const payouts = (data?.payouts ?? []).filter((p) => inPeriod(p.date || p.updatedAt, period, []));
@@ -164,7 +165,7 @@ export default function AccountsDashboardPage() {
                   <div className="ac-matrix-head">
                     <span title="Nome da conta no app">Conta</span>
                     <span title="Tipo da conta (prop, banco, carteira…)">Tipo</span>
-                    <span title="Fase da conta prop (challenge/funded/live/standby)">Status</span>
+                    <span title="Fase da conta prop (challenge/funded/live/demo/standby)">Status</span>
                     <span className="ac-matrix-num" title="Balance: saldo reportado pela plataforma; senão saldo do ledger">Balance</span>
                     <span className="ac-matrix-num" title="% do limite de drawdown já usado (Risk Center)">DD</span>
                     <span className="ac-matrix-num" title="Payouts recebidos (líquido) no período">Payouts</span>

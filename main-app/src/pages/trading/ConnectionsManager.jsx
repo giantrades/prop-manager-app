@@ -131,6 +131,15 @@ export default function ConnectionsManager() {
   // Demo automático só em build com VITE_DEMO_MODE; o botão "Ver exemplo" funciona em
   // qualquer build (inclusive produção), pois é uma ação explícita e rotulada.
   const userAccounts = appAccounts.filter((a) => !demoAccountIds.has(a.id));
+  // Contas DESABILITADAS saem das conexões: não aparecem como associadas, não são
+  // escolhidas no "Associar a…", nem recebem auto-associação/religação. O registro
+  // permanece (referências antigas continuam resolvendo o nome em ghost).
+  const linkableAccounts = useMemo(() => appAccounts.filter((a) => !a.disabled), [appAccounts]);
+  // Todo platformAccountId já vinculado (mesmo de conta desabilitada) — evita duplicar.
+  const linkedPlatformIds = useMemo(
+    () => new Set(appAccounts.filter((a) => a.platformAccountId).map((a) => a.platformAccountId)),
+    [appAccounts],
+  );
   const autoDemo = DEMO_CAPABLE && !demoDisabled && userAccounts.length === 0 && bridgeAccounts.length === 0;
   const showDemo = autoDemo;
   const online = !!quantower?.online || showDemo;
@@ -150,7 +159,7 @@ export default function ConnectionsManager() {
     }
     for (const [, entry] of m) {
       const ids = new Set(entry.bridge.map((b) => b.platformAccountId));
-      entry.mapped = appAccounts.filter((a) => a.platformAccountId && ids.has(a.platformAccountId));
+      entry.mapped = linkableAccounts.filter((a) => a.platformAccountId && ids.has(a.platformAccountId));
       // Firm explícita da conexão tem prioridade; senão, a mais comum entre as contas.
       const counts = new Map();
       for (const a of entry.mapped) if (a.firmId) counts.set(a.firmId, (counts.get(a.firmId) ?? 0) + 1);
@@ -161,13 +170,13 @@ export default function ConnectionsManager() {
       entry.color = firm?.color || '#7c5cff';
     }
     return [...m.values()];
-  }, [connections, effectiveBridge, appAccounts, firmById, connFirmById]);
+  }, [connections, effectiveBridge, linkableAccounts, firmById, connFirmById]);
 
   const appByPlatformId = useMemo(() => {
     const m = new Map();
-    for (const a of appAccounts) if (a.platformAccountId) m.set(a.platformAccountId, a);
+    for (const a of linkableAccounts) if (a.platformAccountId) m.set(a.platformAccountId, a);
     return m;
-  }, [appAccounts]);
+  }, [linkableAccounts]);
 
   const associate = useCallback(async (bridgeAcc, appAccountId) => {
     const f = financeRef.current;
@@ -208,6 +217,7 @@ export default function ConnectionsManager() {
       institution: bridgeAcc.connectionName || undefined,
       firmId: connFirmById[bridgeAcc.connectionId] || undefined,
       hidden: false,
+      disabled: false,
       defaultWeight: 1,
       platformAccountId: bridgeAcc.platformAccountId,
       platformName: 'quantower',
@@ -394,26 +404,27 @@ export default function ConnectionsManager() {
     let n = 0;
     for (const b of effectiveBridge) {
       if (appByPlatformId.has(b.platformAccountId)) continue;
-      const match = appAccounts.find((a) => !a.platformAccountId && a.name.trim().toLowerCase() === (b.name || '').trim().toLowerCase());
+      const match = linkableAccounts.find((a) => !a.platformAccountId && a.name.trim().toLowerCase() === (b.name || '').trim().toLowerCase());
       if (!match) continue;
       await f.ds.accounts.put({ ...match, platformAccountId: b.platformAccountId, platformName: 'quantower', firmId: connFirmById[b.connectionId] || match.firmId, updatedAt: new Date().toISOString() }, { source: 'local' });
       n += 1;
     }
     toast(n > 0 ? `${n} conta(s) associadas por nome.` : 'Nada para auto-associar por nome.', { type: n > 0 ? 'ok' : 'warn' });
     load();
-  }, [effectiveBridge, appAccounts, appByPlatformId, connFirmById, load, toast]);
+  }, [effectiveBridge, linkableAccounts, appByPlatformId, connFirmById, load, toast]);
 
   const createAllMissing = useCallback(async () => {
     const f = financeRef.current;
     if (!f) return;
     let n = 0;
     for (const b of effectiveBridge) {
-      if (appByPlatformId.has(b.platformAccountId)) continue;
+      // Já existe conta (mesmo desabilitada) com esse platformAccountId? Não duplica.
+      if (appByPlatformId.has(b.platformAccountId) || linkedPlatformIds.has(b.platformAccountId)) continue;
       await createFor(b);
       n += 1;
     }
     if (n === 0) toast('Nenhuma conta faltando.', { type: 'warn' });
-  }, [effectiveBridge, appByPlatformId, createFor, toast]);
+  }, [effectiveBridge, appByPlatformId, linkedPlatformIds, createFor, toast]);
 
   return (
     <div className="st-card">
@@ -504,7 +515,7 @@ export default function ConnectionsManager() {
                             <>
                               <select className="cx-select" value="" onChange={(e) => { if (e.target.value) associate(b, e.target.value); }} aria-label={`Associar ${b.name}`}>
                                 <option value="">Associar a…</option>
-                                {appAccounts.map((a) => (<option key={a.id} value={a.id}>{a.name}{a.platformAccountId ? ' (já vinculada)' : ''}</option>))}
+                                {linkableAccounts.map((a) => (<option key={a.id} value={a.id}>{a.name}{a.platformAccountId ? ' (já vinculada)' : ''}</option>))}
                               </select>
                               <button className="cx-btn cx-btn-primary" onClick={() => createFor(b)} title="Criar conta no app"><Plus size={13} /></button>
                             </>

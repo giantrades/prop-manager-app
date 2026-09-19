@@ -5,6 +5,8 @@ import {
   investRiskStatus,
   isActiveProp,
   isRiskTracked,
+  normalizePropPhase,
+  isAccountDisabled,
   type AccountRiskMetrics,
 } from '../accountModel';
 import type { Account, PropExtension } from '../types';
@@ -90,14 +92,30 @@ describe('accountModel — helpers', () => {
     expect(isActiveProp('funded')).toBe(true);
     expect(isActiveProp('live')).toBe(true);
     expect(isActiveProp('standby')).toBe(false);
+    expect(isActiveProp('demo')).toBe(false); // demo é prática, não conta no risco
     expect(isActiveProp('paused')).toBe(false); // legado -> standby
     expect(isActiveProp('challenge1')).toBe(true); // legado -> challenge
     expect(isActiveProp(undefined)).toBe(false);
   });
 
-  it('isRiskTracked exclui contas ocultas e prop inativa', () => {
+  it('normalizePropPhase aceita demo e preserva os demais', () => {
+    expect(normalizePropPhase('demo')).toBe('demo');
+    expect(normalizePropPhase('funded')).toBe('funded');
+    expect(normalizePropPhase('failed')).toBe('standby');
+    expect(normalizePropPhase('challenge1')).toBe('challenge');
+    expect(normalizePropPhase(undefined)).toBeUndefined();
+  });
+
+  it('isAccountDisabled reflete o flag disabled', () => {
+    expect(isAccountDisabled(propAccount())).toBe(false);
+    expect(isAccountDisabled(propAccount({ disabled: true }))).toBe(true);
+    expect(isAccountDisabled(null)).toBe(false);
+  });
+
+  it('isRiskTracked exclui contas ocultas, desabilitadas e prop inativa', () => {
     expect(isRiskTracked(propAccount(), propExt())).toBe(true);
     expect(isRiskTracked(propAccount({ hidden: true }), propExt())).toBe(false);
+    expect(isRiskTracked(propAccount({ disabled: true }), propExt())).toBe(false);
     expect(isRiskTracked(propAccount(), propExt({ phase: 'standby' }))).toBe(false);
     const cash: Account = { id: 'c', kind: 'cash', name: 'Cash', currency: 'USD', hidden: false, defaultWeight: 1 } as Account;
     expect(isRiskTracked(cash)).toBe(true);

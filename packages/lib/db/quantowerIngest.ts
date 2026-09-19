@@ -272,11 +272,12 @@ export async function ingestQuantowerTrades(
       skipped += 1;
       continue;
     }
-    // Resolve conta interna pelo platformAccountId.
+    // Resolve conta interna pelo platformAccountId (prefere conta ATIVA: uma conta
+    // desabilitada não deve receber trades novos; histórico antigo continua ligado).
     let accountId: string | undefined;
     if (q.platformAccountId) {
       const matches = await ds.accounts.byPlatformAccountId(q.platformAccountId);
-      accountId = matches[0]?.id;
+      accountId = (matches.find((a) => !a.disabled) ?? matches[0])?.id;
     }
 
     const trade = quantowerToTrade(q, accountId);

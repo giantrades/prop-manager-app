@@ -41,6 +41,7 @@ export async function syncPlatformBalances(ds: DataService, bridgeAccounts: Brid
   const accounts = await ds.accounts.list();
   let updated = 0;
   for (const a of accounts) {
+    if (a.disabled) continue; // conta desabilitada sai das conexões (não recebe saldo).
     if (!a.platformAccountId) continue;
     const bal = balByPid.get(a.platformAccountId);
     if (bal == null) continue;

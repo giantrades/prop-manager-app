@@ -9,7 +9,7 @@ import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import {
   Building2, Landmark, Wallet, TrendingUp, Bitcoin, Banknote, Search,
-  Pencil, Trash2, Plus, Copy, Gauge, X,
+  Pencil, Trash2, Plus, Copy, Gauge, X, Eye, EyeOff, Ghost,
 } from 'lucide-react';
 import { FIRM_TEMPLATES, applyTemplate, templateNeedsCheck, DEFAULT_FIRM_COLOR, isActiveProp, normalizePropPhase, accountBalance } from '@apps/lib/db';
 import type { Account, AccountKind, FirmDef, PropExtension, PropPhase, PayoutFrequency } from '@apps/lib/db';
@@ -31,13 +31,14 @@ interface AccountsProps {
   onDelete?: (accountId: string) => Promise<void> | void;
   onSelect?: (accountId: string) => void;
   onDuplicate?: (accountId: string) => void;
+  onToggleDisabled?: (accountId: string, disabled: boolean) => Promise<void> | void;
   onSaveFirm?: (firm: FirmInput) => Promise<string | undefined> | void;
   loading?: boolean;
 }
 
 const KINDS: AccountKind[] = ['prop', 'wallet', 'investment', 'bank', 'cash'];
-// Status de vida da conta (4 estados pedidos): Challenge, Funded, Live, Standby.
-const PHASES: PropPhase[] = ['challenge', 'funded', 'live', 'standby'];
+// Status de vida da conta prop: Challenge, Funded, Live, Demo, Standby.
+const PHASES: PropPhase[] = ['challenge', 'funded', 'live', 'demo', 'standby'];
 const FREQUENCIES: PayoutFrequency[] = ['daily', 'weekly', 'biweekly', 'monthly'];
 
 const KIND_META: Record<string, KindMeta> = {
@@ -51,11 +52,11 @@ const KIND_META: Record<string, KindMeta> = {
 };
 
 const PHASE_LABEL: Record<string, string> = {
-  challenge: 'Challenge', funded: 'Funded', live: 'Live', standby: 'Standby',
+  challenge: 'Challenge', funded: 'Funded', live: 'Live', demo: 'DEMO', standby: 'Standby',
 };
 const FREQ_LABEL: Record<string, string> = { daily: 'Diário', weekly: 'Semanal', biweekly: 'Quinzenal', monthly: 'Mensal' };
 const PHASE_CLASS: Record<string, string> = {
-  challenge: 'ac3-pill-warn', funded: 'ac3-pill-safe', live: 'ac3-pill-safe', standby: 'ac3-pill-muted',
+  challenge: 'ac3-pill-warn', funded: 'ac3-pill-safe', live: 'ac3-pill-safe', demo: 'ac3-pill-demo', standby: 'ac3-pill-muted',
 };
 
 function emptyAccount(): EditableAccount {
@@ -87,7 +88,7 @@ function emptyProp(): PropDraft {
  */
 export default function Accounts({
   accounts = [], props = {}, balances = {}, statusById = {}, firms = [],
-  onSave, onDelete, onSelect, onDuplicate, onSaveFirm, loading = false,
+  onSave, onDelete, onSelect, onDuplicate, onToggleDisabled, onSaveFirm, loading = false,
 }: AccountsProps) {
   const [editing, setEditing] = useState<EditingState | null>(null); // { account, prop } | null
   const [isNew, setIsNew] = useState(false);
@@ -95,6 +96,7 @@ export default function Accounts({
   const [templateId, setTemplateId] = useState('');
   const [query, setQuery] = useState('');
   const [kindFilter, setKindFilter] = useState('all');
+  const [showDisabled, setShowDisabled] = useState(false);
   const [newFirm, setNewFirm] = useState<NewFirmDraft | null>(null); // { name, color } | null
 
   const applyFirmTemplate = (id: string): void => {
@@ -137,25 +139,30 @@ export default function Accounts({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return accounts.filter((a) => {
+      if (!showDisabled && a.disabled) return false;
       if (kindFilter !== 'all' && a.kind !== kindFilter) return false;
       if (q && !(`${a.name} ${a.institution ?? ''}`.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [accounts, kindFilter, query]);
+  }, [accounts, kindFilter, query, showDisabled]);
+
+  const disabledCount = useMemo(() => accounts.filter((a) => a.disabled).length, [accounts]);
 
   const summary = useMemo(() => {
-    const prop = accounts.filter((a) => a.kind === 'prop');
+    // Contas desabilitadas não entram nos totais (saíram do jogo; só histórico/ghost).
+    const live = accounts.filter((a) => !a.disabled);
+    const prop = live.filter((a) => a.kind === 'prop');
     // BALANCE = plataforma (bridge) quando existe; ledger como fallback (regra única).
     const balOf = (a: Account): number => accountBalance(a, balances[a.id]);
-    const balanceTotal = accounts.reduce((s, a) => s + balOf(a), 0);
+    const balanceTotal = live.reduce((s, a) => s + balOf(a), 0);
     const propBalance = prop.reduce((s, a) => s + balOf(a), 0);
     let liquidTotal = 0;
-    for (const a of accounts) {
+    for (const a of live) {
       if (!['bank', 'wallet', 'cash', 'crypto'].includes(a.kind)) continue;
       liquidTotal += balOf(a);
     }
     const activeProp = prop.filter((a) => isActiveProp(props[a.id]?.phase));
-    return { total: accounts.length, propCount: prop.length, balanceTotal, propBalance, liquidTotal, activeProp: activeProp.length };
+    return { total: live.length, propCount: prop.length, balanceTotal, propBalance, liquidTotal, activeProp: activeProp.length, disabledCount: accounts.length - live.length };
   }, [accounts, props, balances]);
 
   // ---- Form (modal) ----
@@ -285,7 +292,7 @@ export default function Accounts({
     <div className="ac3-root">
       {/* Resumo */}
       <div className="ac3-summary">
-        <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas</span></div>
+        <div className="ac3-sum-card"><span className="ac3-sum-label">Contas</span><span className="ac3-sum-value">{summary.total}</span><span className="ac3-sum-sub">{summary.propCount} prop · {summary.activeProp} ativas{summary.disabledCount > 0 ? ` · ${summary.disabledCount} desabilitada(s)` : ''}</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Balance total</span><span className="ac3-sum-value">{fmtMoney(summary.balanceTotal, 'USD')}</span><span className="ac3-sum-sub">plataforma quando disponível</span></div>
         <div className="ac3-sum-card"><span className="ac3-sum-label">Balance líquido</span>
           <span className={`ac3-sum-value ${summary.liquidTotal >= 0 ? 'ac3-pos' : 'ac3-neg'}`}>{fmtMoney(summary.liquidTotal, 'USD')}</span>
@@ -313,6 +320,11 @@ export default function Accounts({
               </button>
             );
           })}
+          {disabledCount > 0 && (
+            <button className={`ac3-chip${showDisabled ? ' active' : ''}`} onClick={() => setShowDisabled((v) => !v)} title="Mostrar/ocultar contas desabilitadas">
+              <Ghost size={14} /> Desabilitadas ({disabledCount})
+            </button>
+          )}
         </div>
       </div>
 
@@ -330,13 +342,14 @@ export default function Accounts({
             const firm = firms.find((f) => f.id === a.firmId);
             const accent = firm?.color || M.color;
             return (
-              <div key={a.id} className="ac3-card" style={{ borderTopColor: accent }}>
+              <div key={a.id} className={`ac3-card${a.disabled ? ' ac3-card-disabled' : ''}`} style={{ borderTopColor: accent }}>
                 <div className="ac3-card-head">
                   <span className="ac3-card-icon" style={{ color: accent, borderColor: accent }}><Icon size={18} /></span>
                   <div className="ac3-card-title">
                     <div className="ac3-card-name">
                       {a.name}
                       {a.hidden && <span className="ac3-mini-badge">oculta</span>}
+                      {a.disabled && <span className="ac3-mini-badge ac3-mini-badge-ghost"><Ghost size={10} /> desabilitada</span>}
                     </div>
                     <div className="ac3-card-sub">
                       {firm && <span style={{ color: accent }}>{firm.icon ? `${firm.icon} ` : '● '}</span>}
@@ -378,6 +391,16 @@ export default function Accounts({
                   {onSelect && <button className="ac3-btn ac3-btn-sm ac3-btn-primary" onClick={() => onSelect(a.id)}><Gauge size={14} /> Painel</button>}
                   <button className="ac3-btn ac3-btn-sm" onClick={() => startEdit(a)} aria-label={`Editar ${a.name}`}><Pencil size={14} /></button>
                   {onDuplicate && <button className="ac3-btn ac3-btn-sm" onClick={() => onDuplicate(a.id)} aria-label={`Duplicar ${a.name}`}><Copy size={14} /></button>}
+                  {onToggleDisabled && (
+                    <button
+                      className="ac3-btn ac3-btn-sm"
+                      onClick={() => onToggleDisabled(a.id, !a.disabled)}
+                      aria-label={a.disabled ? `Reabilitar ${a.name}` : `Desabilitar ${a.name}`}
+                      title={a.disabled ? 'Reabilitar conta' : 'Desabilitar conta (some das listas e conexões)'}
+                    >
+                      {a.disabled ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                  )}
                   {onDelete && <button className="ac3-btn ac3-btn-sm ac3-btn-danger" onClick={() => onDelete(a.id)} aria-label={`Excluir ${a.name}`}><Trash2 size={14} /></button>}
                 </div>
               </div>

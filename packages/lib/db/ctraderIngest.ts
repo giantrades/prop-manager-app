@@ -92,7 +92,7 @@ export async function ingestCtraderTrades(
     let accountId: string | undefined;
     if (q.platformAccountId) {
       const matches = await ds.accounts.byPlatformAccountId(q.platformAccountId);
-      accountId = matches[0]?.id;
+      accountId = (matches.find((a) => !a.disabled) ?? matches[0])?.id;
     }
 
     const trade = ctraderToTrade(q, accountId);

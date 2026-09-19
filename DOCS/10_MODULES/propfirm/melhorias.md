@@ -44,29 +44,46 @@
 - Contexto: payouts tÃªm data, mas nÃ£o hÃ¡ visÃ£o temporal de "quando recebi / quando espero".
 - Proposta: mini-calendÃ¡rio na Firm P&L com payouts recebidos + prÃ³ximos elegÃ­veis (via `computePayoutEligibility`), por conta. Reuso do `PnLCalendar` como base visual.
 
-## Batch C — Accounts unificado + Firms (executado)
-- **C1 Accounts = registro de TODAS as contas**: a página deixou de ser "só prop firm". Agora
+## Batch C ï¿½ Accounts unificado + Firms (executado)
+- **C1 Accounts = registro de TODAS as contas**: a pï¿½gina deixou de ser "sï¿½ prop firm". Agora
   cobre `prop | bank | wallet | investment | crypto | cash`, com resumo (contas, capital
-  gerido, líquido), busca, filtro por tipo, cards com saldo (derivado por
+  gerido, lï¿½quido), busca, filtro por tipo, cards com saldo (derivado por
   `computeAccountBalance`) ou nominal (prop), pill de fase/risco e cor da firm. Editar/criar
-  em modal (regras da prop só quando `kind=prop`), painel da conta em modal (`AccountDetail`).
+  em modal (regras da prop sï¿½ quando `kind=prop`), painel da conta em modal (`AccountDetail`).
   Arquivos: `packages/ui/Accounts.tsx` (reescrito), `AccountsPage.jsx` (modal + saldos),
   `Account.firmId` (aditivo).
-- **C2 Firms vira cadastro de empresas dentro de Contas**: nova página `/firms`
-  (`FirmsPage`) com nome, tipo, cor, logo e observações + P&L por firm. Persistido em `meta`
+- **C2 Firms vira cadastro de empresas dentro de Contas**: nova pï¿½gina `/firms`
+  (`FirmsPage`) com nome, tipo, cor, logo e observaï¿½ï¿½es + P&L por firm. Persistido em `meta`
   (`packages/lib/db/firms.ts`: `listFirms`/`saveFirm`/`deleteFirm`/`firmColorById`, + testes).
-- **C3 cor da firm propaga**: cards de conta, dot/subtítulo e gráficos (`FirmPnl` aceita
-  `colorById`) usam a cor cadastrada — muda a empresa, muda o app inteiro.
-- **C4 payouts saíram de Contas**: `/payouts` e `/payout-center` agora são abas do módulo
-  **Dinheiro** (payout é dinheiro, não cadastro de conta). Contas = Resumo|Contas|Firms.
+- **C3 cor da firm propaga**: cards de conta, dot/subtï¿½tulo e grï¿½ficos (`FirmPnl` aceita
+  `colorById`) usam a cor cadastrada ï¿½ muda a empresa, muda o app inteiro.
+- **C4 payouts saï¿½ram de Contas**: `/payouts` e `/payout-center` agora sï¿½o abas do mï¿½dulo
+  **Dinheiro** (payout ï¿½ dinheiro, nï¿½o cadastro de conta). Contas = Resumo|Contas|Firms.
 - Gate: `tsc` 0 + build verde + 232 testes verdes (4 novos de firms).
 
-## Batch D — página Payouts/Withdrawals rica (executado)
-- Reaproveitada a UX do app antigo: cards Gross solicitado / Total de taxas / Líquido
-  recebido, **líquido por firm** (com a cor da firm), busca, filtro de status, ordenação,
-  tabela (desktop) + cards (mobile), export CSV e form completo (método/status/data,
+## Batch E ï¿½ Ciclo de vida de conta prop (executado)
+- **E1 Status selecionÃ¡vel no painel**: o botÃ£o Ãºnico "AvanÃ§ar status" virou um seletor de
+  status (`challenge|funded|live|demo|standby`) no painel da conta (`AccountsPage.jsx`).
+  Novo status **DEMO** em `PropPhase` (`types.ts`), `normalizePropPhase` e UI. DEMO nÃ£o conta
+  no Risk Center (`ACTIVE_PROP_PHASES` = challenge/funded/live).
+- **E2 Desabilitar conta (soft-disable)**: `Account.disabled`/`disabledAt`. BotÃ£o
+  "Desabilitar/Reabilitar" no painel e nos cards. Conta desabilitada some de Contas
+  (`Accounts.tsx`) e do dashboard `/contas`, e sai das conexÃµes (`ConnectionsManager`
+  matching/associaÃ§Ã£o/criaÃ§Ã£o, `syncPlatformBalances`, ingest prefere conta ativa). O
+  registro permanece (nÃ£o Ã© hard-delete) para resolver nome no histÃ³rico.
+- **E3 Ghost**: conta desabilitada aparece esmaecida com badge ðŸ‘»; referÃªncias antigas
+  (payouts, trades, `AccountDetail`) mostram o nome + Ã­cone ghost. Payout novo nÃ£o oferece
+  conta desabilitada no split.
+- Gate: `pnpm test` 306 verdes (+5 de accountModel, +1 de platformBalances) e `build:all` verde.
+- **PrÃ³ximo**: snapshot de nome para hard-delete (payouts/trades) e ghost nos demais widgets
+  (Expenses/Portfolio/Gastos) que resolvem conta ao vivo.
+
+## Batch D ï¿½ pï¿½gina Payouts/Withdrawals rica (executado)
+- Reaproveitada a UX do app antigo: cards Gross solicitado / Total de taxas / Lï¿½quido
+  recebido, **lï¿½quido por firm** (com a cor da firm), busca, filtro de status, ordenaï¿½ï¿½o,
+  tabela (desktop) + cards (mobile), export CSV e form completo (mï¿½todo/status/data,
   split por peso com preview do net por conta, comprovante).
-- Alocação inline (Tax?Living?Invest?Cash) via modal `PayoutCenter` — sem aba "Alocar".
+- Alocaï¿½ï¿½o inline (Tax?Living?Invest?Cash) via modal `PayoutCenter` ï¿½ sem aba "Alocar".
 - Arquivos: `packages/ui/Payouts.tsx` (reescrito), `PayoutsPage.jsx` (passa firms), rota
   `/payout-center` removida. Gate: `tsc` 0 + build verde + 232 testes.
-- Próximo: filtro por período (date range) e gráfico de payouts por mês/firm.
+- Prï¿½ximo: filtro por perï¿½odo (date range) e grï¿½fico de payouts por mï¿½s/firm.

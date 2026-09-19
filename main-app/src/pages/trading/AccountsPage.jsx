@@ -9,8 +9,9 @@ import { accountDashboard, computeAccountBalance, listFirms, saveFirm, normalize
 import Accounts from '@apps/ui/Accounts';
 import AccountDetail from '@apps/ui/AccountDetail';
 
-// Avanço natural do ciclo de vida da conta.
-const NEXT_PHASE = { challenge: 'funded', funded: 'live', live: 'live', standby: 'live' };
+// Status de vida da conta prop (selecionável no painel).
+const PHASES = ['challenge', 'funded', 'live', 'demo', 'standby'];
+const PHASE_LABEL = { challenge: 'Challenge', funded: 'Funded', live: 'Live', demo: 'DEMO', standby: 'Standby' };
 
 export default function AccountsPage() {
   const finance = useFinance();
@@ -130,6 +131,20 @@ export default function AccountsPage() {
     load();
   }, [load]);
 
+  // Desabilitar/reabilitar conta: some das listas e das conexões (o registro fica para
+  // os "ghosts" em payouts/trades/widgets). Não fecha o painel — dá p/ reabilitar.
+  const handleToggleDisabled = useCallback(async (accountId, disabled) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const acc = (await f.ds.accounts.list()).find((a) => a.id === accountId);
+    if (!acc) return;
+    await f.ds.accounts.put(
+      { ...acc, disabled, disabledAt: disabled ? new Date().toISOString() : undefined },
+      { source: 'local' },
+    );
+    load();
+  }, [load]);
+
   // Cria empresa direto do modal da conta e devolve o id p/ vincular.
   const handleSaveFirm = useCallback(async (firm) => {
     const f = financeRef.current;
@@ -166,6 +181,7 @@ export default function AccountsPage() {
         onSave={handleSave}
         onDelete={handleDelete}
         onDuplicate={handleDuplicate}
+        onToggleDisabled={handleToggleDisabled}
         onSaveFirm={handleSaveFirm}
         onSelect={setSelectedId}
       />
@@ -196,17 +212,27 @@ export default function AccountsPage() {
                 loading={detailLoading}
                 onBack={() => setSelectedId(null)}
               />
-              <div className="ac3-form-actions" role="group" aria-label="Gerenciar conta" style={{ marginTop: 12, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+              <div className="ac3-form-actions" role="group" aria-label="Gerenciar conta" style={{ marginTop: 12, justifyContent: 'flex-start', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <button className="ac3-btn ac3-btn-sm" onClick={() => handleDuplicate(selected.id)}>Duplicar</button>
-                {props[selected.id] && (() => {
-                  const phase = normalizePropPhase(props[selected.id].phase);
-                  return (
-                    <>
-                      <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, NEXT_PHASE[phase] ?? 'challenge')}>Avançar status</button>
-                      <button className="ac3-btn ac3-btn-sm" onClick={() => handleSetPhase(selected.id, phase === 'standby' ? 'live' : 'standby')}>{phase === 'standby' ? 'Ativar' : 'Standby'}</button>
-                    </>
-                  );
-                })()}
+                {props[selected.id] && (
+                  <label className="ac3-field" style={{ minWidth: 160, margin: 0 }}>
+                    <span className="ac3-label">Status da conta</span>
+                    <select
+                      className="ac3-input"
+                      value={normalizePropPhase(props[selected.id].phase) ?? 'challenge'}
+                      onChange={(e) => handleSetPhase(selected.id, e.target.value)}
+                      aria-label="Status da conta prop"
+                    >
+                      {PHASES.map((p) => <option key={p} value={p}>{PHASE_LABEL[p] ?? p}</option>)}
+                    </select>
+                  </label>
+                )}
+                <button
+                  className={`ac3-btn ac3-btn-sm${selected.disabled ? ' ac3-btn-primary' : ''}`}
+                  onClick={() => handleToggleDisabled(selected.id, !selected.disabled)}
+                >
+                  {selected.disabled ? 'Reabilitar conta' : 'Desabilitar conta'}
+                </button>
               </div>
             </div>
           </div>

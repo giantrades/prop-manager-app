@@ -8,7 +8,7 @@
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { computePayoutSplitByWeight } from '@apps/lib/db';
-import { Search, Plus, Trash2, X, Download } from 'lucide-react';
+import { Search, Plus, Trash2, X, Download, Ghost } from 'lucide-react';
 
 const METHODS = ['Wise', 'Payoneer', 'Bank', 'Crypto', 'Other'];
 const STATUSES = ['Pending', 'Approved', 'Paid'];
@@ -26,7 +26,7 @@ interface PayoutRow {
   date?: string;
   updatedAt?: string;
 }
-interface AccountRow { id: string; name: string; firmId?: string; kind?: string; currency?: string }
+interface AccountRow { id: string; name: string; firmId?: string; kind?: string; currency?: string; disabled?: boolean }
 interface FirmRow { id: string; name: string; color: string; icon?: string; logo?: string }
 
 interface PayoutsProps {
@@ -75,6 +75,8 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
 
   const accountList = accounts as Array<{ id: string; name: string; firmId?: string }>;
   const firmList = firms as Array<{ id: string; name: string; color: string; icon?: string }>;
+  // Contas desabilitadas não entram no split de um payout novo (só em histórico/ghost).
+  const selectableAccounts = useMemo(() => accounts.filter((a) => !a.disabled), [accounts]);
   const accountById = useMemo(() => Object.fromEntries(accountList.map((a) => [a.id, a])), [accountList]);
   const firmById = useMemo(() => Object.fromEntries(firmList.map((f) => [f.id, f])), [firmList]);
   const firmColorOf = (accountId: string) => {
@@ -87,6 +89,8 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
     const firm = acc?.firmId ? firmById[acc.firmId] : null;
     return firm?.icon || null;
   };
+  // Conta desabilitada/excluída: o nome ainda resolve, mas marca ghost.
+  const isGhost = (accountId: string) => !!accountById[accountId]?.disabled;
 
   const summary = useMemo(() => {
     const gross = payouts.reduce((s, p) => s + (Number(p.gross) || 0), 0);
@@ -135,7 +139,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
   }, [payouts, query, statusFilter, sortKey, sortAsc, accountById]);
 
   const net = form.gross ? Number(form.gross) * Number(form.keptPct) : 0;
-  const selectedAccounts = accounts.filter((a) => (form.weights[a.id] ?? 0) > 0);
+  const selectedAccounts = selectableAccounts.filter((a) => (form.weights[a.id] ?? 0) > 0);
   const preview = useMemo(() => {
     if (!form.gross || selectedAccounts.length === 0) return null;
     const weightMap = Object.fromEntries(selectedAccounts.map((a) => [a.id, form.weights[a.id]]));
@@ -153,7 +157,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
     if (!form.gross || Number(form.gross) <= 0) return;
     setSaving(true);
     try {
-      const accountIds = selectedAccounts.length > 0 ? selectedAccounts.map((a) => a.id) : (accounts[0] ? [accounts[0].id] : []);
+      const accountIds = selectedAccounts.length > 0 ? selectedAccounts.map((a) => a.id) : (selectableAccounts[0] ? [selectableAccounts[0].id] : []);
       const weightMap = selectedAccounts.length > 0
         ? Object.fromEntries(selectedAccounts.map((a) => [a.id, form.weights[a.id]]))
         : { [accountIds[0]]: 1 };
@@ -267,7 +271,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                       {(p.accountIds ?? []).map((id) => (
                         <span key={id} className="py-acct-chip">
                           {firmIconOf(id) ? <span>{firmIconOf(id)}</span> : <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />}
-                          {accountById[id]?.name ?? id}
+                          {accountById[id]?.name ?? id}{isGhost(id) && <Ghost size={11} className="py-ghost" aria-label="Conta desabilitada" />}
                         </span>
                       ))}
                     </td>
@@ -293,7 +297,7 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
                 <div className="py-card-meta">gross {fmtMoney(p.gross)} · fee {fmtMoney(p.fee)} · {p.method}</div>
                 <div className="py-card-accts">
                   {(p.accountIds ?? []).map((id) => (
-                    <span key={id} className="py-acct-chip">{firmIconOf(id) ? <span>{firmIconOf(id)}</span> : <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />}{accountById[id]?.name ?? id}</span>
+                    <span key={id} className="py-acct-chip">{firmIconOf(id) ? <span>{firmIconOf(id)}</span> : <span className="py-firm-dot" style={{ background: firmColorOf(id) }} />}{accountById[id]?.name ?? id}{isGhost(id) && <Ghost size={11} className="py-ghost" aria-label="Conta desabilitada" />}</span>
                   ))}
                 </div>
                 {onDelete && <button className="py-btn py-btn-sm py-btn-danger" onClick={() => onDelete(p.id)}>Excluir</button>}
@@ -335,8 +339,8 @@ export default function Payouts({ payouts = [], accounts = [], firms = [], onCre
 
               <div className="py-split">
                 <div className="py-split-title">Contas (marque e defina o peso) — divisão por peso</div>
-                {accounts.length === 0 && <div className="py-hint">Nenhuma conta prop — crie em Contas primeiro.</div>}
-                {accounts.map((a) => {
+                {selectableAccounts.length === 0 && <div className="py-hint">Nenhuma conta prop — crie em Contas primeiro.</div>}
+                {selectableAccounts.map((a) => {
                   const on = (form.weights[a.id] ?? 0) > 0;
                   const firm = a.firmId ? firmById[a.firmId] : null;
                   const part = preview?.[a.id]?.net;
@@ -426,6 +430,7 @@ const PY_CSS = `
 .py-pos { color: var(--green, #2ecc71); }
 .py-neg { color: var(--red, #e74c3c); }
 .py-acct-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; margin-right: 6px; white-space: nowrap; }
+.py-ghost { color: #c9b8ff; flex-shrink: 0; }
 .py-status { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; padding: 3px 8px; border-radius: 999px; border: 1px solid; }
 .py-st-paid { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.45); background: rgba(46,204,113,0.1); }
 .py-st-approved { color: var(--blue, #3498db); border-color: rgba(52,152,219,0.45); background: rgba(52,152,219,0.1); }

@@ -57,6 +57,10 @@ export interface Account extends SyncedRecord {
   currency: string;
   institution?: string;
   hidden: boolean;
+  // Conta DESABILITADA (soft-disable): some das listas/pickers/conexões mas o registro
+  // permanece — referências antigas (payouts/trades/widgets) mostram o nome em "ghost".
+  disabled?: boolean;
+  disabledAt?: string;
   defaultWeight: number;
   copyGroup?: string;
   copyMultiplier?: number;
@@ -72,12 +76,13 @@ export interface Account extends SyncedRecord {
   firmId?: string;
 }
 
-// Status de vida de uma conta prop (campo `phase` do PropExtension). 4 estados:
-// challenge, funded, live, standby. Persistido em coluna TEXT (sem migration).
+// Status de vida de uma conta prop (campo `phase` do PropExtension). Estados:
+// challenge, funded, live, demo, standby. Persistido em coluna TEXT (sem migration).
 export type PropPhase =
   | 'challenge'
   | 'funded'
   | 'live'
+  | 'demo'
   | 'standby';
 
 // Legado: valores gravados antes desta simplificação (normalizados no read).
@@ -352,6 +357,10 @@ export interface DatastoreChangePayload {
     | 'goal'
     | 'position'
     | 'card'
+    | 'prop_extension'
+    | 'tax_record'
+    | 'snapshot_networth'
+    | 'firm_cost'
     | 'meta';
   entityIds?: string[];
 }

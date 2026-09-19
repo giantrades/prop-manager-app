@@ -5,6 +5,7 @@ import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
 import { tradeReplay, tradeNetPnl, formatDate, parseDate } from '@apps/lib/db';
 import type { Trade, Account } from '@apps/lib/db';
+import { Ghost } from 'lucide-react';
 
 interface FirmInfo {
   id: string;
@@ -92,6 +93,11 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
   const accountLabel = (t: Trade) => {
     if (t.accounts?.length) return t.accounts.map((a) => accountById.get(a.accountId)?.name || a.accountId).join(', ');
     return accountById.get(t.accountId ?? '')?.name || t.accountId || '—';
+  };
+  // Ghost: alguma conta do trade está desabilitada/excluída? (nome ainda resolve, marca 👻)
+  const accountIsGhost = (t: Trade): boolean => {
+    const ids = t.accounts?.length ? t.accounts.map((a) => a.accountId) : [t.accountId ?? ''];
+    return ids.some((id) => id && accountById.get(id)?.disabled);
   };
   const firmOf = (t: Trade): FirmInfo | null | undefined => {
     const accId = t.accountId || t.accounts?.[0]?.accountId;
@@ -255,7 +261,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                         <td className="tr-num">{t.exitPrice != null ? fmtMoney(t.exitPrice) : '—'}</td>
                         <td className={`tr-num ${tradeNetPnl(t) >= 0 ? 'tr-pos' : 'tr-neg'}`}>{fmtMoney(tradeNetPnl(t))}</td>
                         <td className="tr-num">{fmtR(t.resultR)}</td>
-                        <td className="tr-acct"><FirmBadge firm={firmOf(t)} /> {acct}</td>
+                        <td className="tr-acct"><FirmBadge firm={firmOf(t)} /> {acct}{accountIsGhost(t) && <span className="tr-ghost" title="Conta desabilitada"><Ghost size={11} /></span>}</td>
                         <td className="tr-actions">
                           <button className="tr-btn tr-btn-sm tr-btn-ghost" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : t.id)}>{isOpen ? 'Ocultar' : 'Replay'}</button>
                           {onEdit && <button className="tr-btn tr-btn-sm" onClick={() => onEdit(t)} aria-label="Editar">✎</button>}
@@ -294,7 +300,7 @@ export default function Trades({ trades = [], accounts = [], firms = [], onEdit,
                   </div>
                   <div className="tr-card-meta">
                     {fmtDateShort(t.entryDatetime)}
-                    {fmtDuration(t.entryDatetime, t.exitDatetime) ? ` → ${fmtDuration(t.entryDatetime, t.exitDatetime)}` : ''} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}
+                    {fmtDuration(t.entryDatetime, t.exitDatetime) ? ` → ${fmtDuration(t.entryDatetime, t.exitDatetime)}` : ''} · {fmtR(t.resultR)} · <FirmBadge firm={firmOf(t)} /> {accountLabel(t)}{accountIsGhost(t) && <span className="tr-ghost" title="Conta desabilitada"><Ghost size={11} /></span>}
                   </div>
                   <div className="tr-card-actions">
                     <button className="tr-btn tr-btn-sm tr-btn-ghost" onClick={() => setExpanded(isOpen ? null : t.id)}>{isOpen ? 'Ocultar' : 'Replay'}</button>
@@ -391,6 +397,7 @@ const TR_CSS = `
 .tr-neg { color: var(--red, #e74c3c); }
 .tr-sym { font-weight: 700; }
 .tr-acct { font-size: 11px; }
+.tr-ghost { display: inline-flex; align-items: center; margin-left: 4px; color: #c9b8ff; vertical-align: middle; }
 .tr-actions { display: flex; gap: 6px; }
 .tr-firm-badge { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 4px; font-size: 9px; font-weight: 700; vertical-align: middle; margin-right: 4px; }
 .tr-firm-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }

@@ -68,7 +68,7 @@
 - [x] F1 Dashboard por conta (`accountDashboard()` + `AccountDetail.tsx`: equity/peak/DD/headroom/payouts/trades + gráfico equity + `useId()`)
 - [x] F2 Gasto por firm/conta com gráficos (barras por firm) + comparador (badge "melhor" + retorno por $ gasto) + expand per-conta (`computeFirmPnlByAccount`)
 - [x] F3 Payouts por conta (filtro na `PayoutsPage` + lista com 📎 comprovantes no `AccountDetail`)
-- [x] F4 Gerenciar contas (duplicar como challenge1 / fail / avançar fase / pausar-retomar)
+- [x] F4 Gerenciar contas (duplicar / **selecionar status** challenge·funded·live·demo·standby / **desabilitar-reabilitar** com ghost no histórico — ver Batch E em melhorias.md)
 - [x] F5 cTrader ingest (`ctraderIngest.ts` template Quantower, `ct_` ids, mapping via `Account.platformAccountId` editável no form)
 - [x] F6 Multi-plataforma unificado (`source` += `ctrader`; `platformTradeId`/`platformName` no schema; dedup por primary-key)
 - [x] F7 Challenge EV (`challengeEv()` n≥5, "sem amostra" abaixo)

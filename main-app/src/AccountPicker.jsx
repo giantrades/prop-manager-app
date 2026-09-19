@@ -23,7 +23,8 @@ export default function AccountPicker({ selected = [], onChange }) {
       if (!finance) return;
       try {
         const accs = await finance.ds.accounts.list();
-        if (alive) setAccounts(accs);
+        // Contas desabilitadas não entram no filtro do Trading.
+        if (alive) setAccounts((accs ?? []).filter((a) => !a.disabled));
       } catch { /* noop */ }
     })();
     return () => { alive = false; };

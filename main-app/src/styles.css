@@ -1750,6 +1750,10 @@ select optgroup {
 .ac3-card-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .ac3-card-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
 .ac3-mini-badge { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); }
+.ac3-mini-badge-ghost { display: inline-flex; align-items: center; gap: 3px; color: #c9b8ff; background: rgba(124,92,255,0.12); }
+/* Conta desabilitada (soft-disable): "ghost" — some das listas, mas segue visível p/ histórico. */
+.ac3-card-disabled { opacity: 0.5; border-style: dashed; filter: grayscale(0.5); }
+.ac3-card-disabled:hover { opacity: 0.75; }
 .ac3-card-metrics { display: flex; gap: 16px; }
 .ac3-metric { display: flex; flex-direction: column; gap: 2px; }
 .ac3-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
@@ -1761,6 +1765,7 @@ select optgroup {
 .ac3-pill-warn { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.45); background: rgba(225,177,44,0.1); }
 .ac3-pill-stop { color: var(--red, #e74c3c); border-color: rgba(231,76,60,0.45); background: rgba(231,76,60,0.1); }
 .ac3-pill-muted { color: var(--muted, #a1a7b3); border-color: rgba(255,255,255,0.15); }
+.ac3-pill-demo { color: var(--blue, #3498db); border-color: rgba(52,152,219,0.45); background: rgba(52,152,219,0.1); }
 
 .ac3-btn { padding: 9px 16px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 13px; cursor: pointer; min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
 .ac3-btn:hover:not(:disabled) { filter: brightness(1.1); }

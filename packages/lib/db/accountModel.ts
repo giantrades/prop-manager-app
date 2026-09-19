@@ -29,7 +29,7 @@ import { parseDate, formatDate } from './dateUtils';
  */
 export function normalizePropPhase(phase: string | undefined): PropPhase | undefined {
   if (!phase) return undefined;
-  if (phase === 'challenge' || phase === 'funded' || phase === 'live' || phase === 'standby') {
+  if (phase === 'challenge' || phase === 'funded' || phase === 'live' || phase === 'demo' || phase === 'standby') {
     return phase;
   }
   const legacy: Record<LegacyPropPhase, PropPhase> = {
@@ -41,12 +41,17 @@ export function normalizePropPhase(phase: string | undefined): PropPhase | undef
   return legacy[phase as LegacyPropPhase];
 }
 
-/** Fases ativas (Risk Center só considera estas). */
+/** Fases ativas (Risk Center só considera estas). DEMO não conta (é prática). */
 export const ACTIVE_PROP_PHASES: PropPhase[] = ['challenge', 'funded', 'live'];
 
 export function isActiveProp(phase: PropPhase | string | undefined): boolean {
   const p = normalizePropPhase(phase);
   return !!p && ACTIVE_PROP_PHASES.includes(p);
+}
+
+/** Conta desabilitada (soft-disable) — sai das listas, pickers e conexões. */
+export function isAccountDisabled(account: { disabled?: boolean } | null | undefined): boolean {
+  return !!account?.disabled;
 }
 
 export function isPropAccount(account: Account): boolean {
@@ -57,9 +62,9 @@ export function needsPropExtension(account: Account): boolean {
   return account.kind === 'prop';
 }
 
-/** Contas que o Risk Center considera (prop ativa + não-ocultas). */
+/** Contas que o Risk Center considera (prop ativa + não-ocultas + não-desabilitadas). */
 export function isRiskTracked(account: Account, prop?: PropExtension): boolean {
-  if (account.hidden) return false;
+  if (account.hidden || account.disabled) return false;
   if (account.kind === 'prop') {
     return isActiveProp(prop?.phase);
   }
