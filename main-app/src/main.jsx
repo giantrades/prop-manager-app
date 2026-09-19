@@ -28,8 +28,8 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter
       future={{ v7_relativeSplatPath: true }}>
       <DriveProvider>
-        <CurrencyProvider>
-          <FinanceProvider>
+        <FinanceProvider>
+          <CurrencyProvider>
             <PeriodProvider>
               <ToastProvider>
                 <BridgeAutoSync />
@@ -42,8 +42,8 @@ createRoot(document.getElementById('root')).render(
                 </CommandProvider>
               </ToastProvider>
             </PeriodProvider>
-          </FinanceProvider>
-        </CurrencyProvider>
+          </CurrencyProvider>
+        </FinanceProvider>
       </DriveProvider>
     </BrowserRouter>
   </React.StrictMode>

@@ -54,6 +54,10 @@ const STORE_BY_ENTITY = {
   goal: 'goals',
   position: 'positions',
   card: 'cards',
+  prop_extension: 'prop_extensions',
+  tax_record: 'tax_records',
+  snapshot_networth: 'snapshots_networth',
+  firm_cost: 'firm_costs',
   meta: 'meta',
 };
 
@@ -71,6 +75,8 @@ export function FinanceProvider({ children, adapter = null }) {
     let offChange = null;
     let unsubCloud = null;
     let pullTimer = null;
+    let pullInterval = null;
+    let detachWake = null;
 
     async function boot() {
       let dsAdapter = adapter;
@@ -159,6 +165,39 @@ export function FinanceProvider({ children, adapter = null }) {
         }, 2000);
       };
 
+      const flushSoon = () => {
+        try {
+          const p = syncEngine?.flushNow?.();
+          if (p && typeof p.catch === 'function') p.catch(() => { /* re-tenta sozinho */ });
+        } catch {
+          /* noop */
+        }
+      };
+
+      // Volta ao foco/rede: puxa o que o OUTRO aparelho mudou e envia o que ficou na fila.
+      const wake = () => { schedulePull(); flushSoon(); };
+      const onVisibility = () => {
+        if (typeof document !== 'undefined' && document.hidden) flushSoon();
+        else wake();
+      };
+      if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
+      if (typeof window !== 'undefined') {
+        window.addEventListener('focus', wake);
+        window.addEventListener('online', wake);
+      }
+      detachWake = () => {
+        if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('focus', wake);
+          window.removeEventListener('online', wake);
+        }
+      };
+      // Rede de segurança: puxa de tempos em tempos enquanto a aba está visível.
+      pullInterval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        schedulePull();
+      }, 60000);
+
       const ensureCloud = async () => {
         if (unsubCloud) {
           try {
@@ -213,6 +252,8 @@ export function FinanceProvider({ children, adapter = null }) {
       offChange?.();
       syncEngine?.dispose?.();
       if (pullTimer) clearTimeout(pullTimer);
+      if (pullInterval) clearInterval(pullInterval);
+      detachWake?.();
       if (unsubCloud) {
         try {
           unsubCloud();
@@ -237,6 +278,12 @@ export function useFinance() {
     throw new Error('useFinance() precisa estar dentro de <FinanceProvider>');
   }
   return ctx;
+}
+
+/** Igual ao `useFinance`, mas devolve `undefined` fora do Provider (sem lançar).
+ *  Útil para contextos que podem ser montados sem os motores (ex.: moeda em teste). */
+export function useFinanceOptional() {
+  return useContext(FinanceContext);
 }
 
 export default FinanceProvider;

@@ -67,6 +67,12 @@ export interface PushRecord {
   record: SyncedRecord;
 }
 
+/** Chave estável do registro para dedup. `prop_extensions` usa `accountId` (sem `id`). */
+function recordKey(record: SyncedRecord): string {
+  const r = record as unknown as { id?: string; accountId?: string; key?: string };
+  return r.id ?? r.accountId ?? r.key ?? '';
+}
+
 export type PushFn = (batch: PushRecord[]) => Promise<{ count: number; entityCounts: Record<string, number> }>;
 
 export interface SyncEngineOptions {
@@ -101,8 +107,9 @@ export class SyncEngine {
   /** Enfileira uma mudança e agenda o push com debounce de 3s. */
   enqueue(entityType: string, record: SyncedRecord): void {
     // Dedup por id: mantém a versão mais recente do mesmo registro.
+    const key = recordKey(record);
     const existing = this.queue.findIndex(
-      (q) => q.entityType === entityType && q.record.id === record.id,
+      (q) => q.entityType === entityType && recordKey(q.record) === key,
     );
     if (existing >= 0) this.queue[existing] = { entityType, record };
     else this.queue.push({ entityType, record });

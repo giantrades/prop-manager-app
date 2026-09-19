@@ -310,7 +310,7 @@ export default function SettingsPage() {
         <PushSettingsCard />
         <div className="st-card">
           <div className="st-title">Sincronização (nuvem)</div>
-          <p className="st-hint">Se outro aparelho mostrou dados estranhos/legados, reenvie este (o do PC) como fonte da verdade. Os outros aparelhos puxam isso no próximo sync.</p>
+          <p className="st-hint">O sync é automático: puxa ao abrir e envia suas mudanças sozinho. Use o botão apenas para forçar agora.</p>
           {cloudStatus && (
             <div className="st-hint" aria-live="polite">
               {cloudStatus.userId === 'sem-login' ? <b>Sessão: SEM LOGIN (o sync não roda)</b> : <span>Sessão: logada ✓</span>}
@@ -331,34 +331,7 @@ export default function SettingsPage() {
               } catch (e) {
                 toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
               }
-            }}>Sincronizar agora (pull + push)</button>
-            <button className="st-btn st-btn-danger" disabled={busy} onClick={async () => {
-              // Destrutivo: limpa o banco LOCAL deste aparelho e recarrega da nuvem.
-              // Útil quando ESTE aparelho tem lixo (ex.: dados legados puxados antes).
-              if (!window.confirm('Limpar os dados LOCAIS deste aparelho e recarregar da nuvem? Os dados que já subiram não são afetados.')) return;
-              try {
-                const f = finance;
-                if (!f?.ds) { toast('DataService indisponível.', { type: 'error' }); return; }
-                for (const store of ['trades', 'accounts', 'prop_extensions', 'transactions', 'positions', 'payouts', 'goals', 'tax_records', 'snapshots_networth', 'firm_costs', 'cards']) {
-                  try { await f.ds.clearStore(store); } catch { /* store vazia/ausente */ }
-                }
-                const pulled = await f.cloud?.pull?.();
-                toast(`Dados locais limpos e recarregados da nuvem (${pulled?.applied ?? 0} registro(s)).`);
-              } catch (e) {
-                toast(`Falha ao limpar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
-              }
-            }}>Limpar dados DESTE aparelho (recarrega da nuvem)</button>
-            <button className="st-btn" disabled={busy} onClick={async () => {
-              try {
-                const res = await finance?.cloud?.pushAll?.();
-                const parts = Object.entries(res?.entityCounts ?? {})
-                  .map(([t, n]) => `${t} ${n}`)
-                  .join(' · ');
-                toast(`Enviado: ${res?.count ?? 0} registro(s)${parts ? ` — ${parts}` : ''}.`);
-              } catch (e) {
-                toast(`Falha ao reenviar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
-              }
-            }}>Reenviar tudo para a nuvem (reparar)</button>
+            }}>Sincronizar agora</button>
           </div>
         </div>
 

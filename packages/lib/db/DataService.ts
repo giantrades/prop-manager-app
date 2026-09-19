@@ -65,6 +65,10 @@ const ENTITY_TYPE_BY_STORE: Partial<Record<StoreName, DatastoreChangePayload['en
   goals: 'goal',
   positions: 'position',
   cards: 'card',
+  prop_extensions: 'prop_extension',
+  tax_records: 'tax_record',
+  snapshots_networth: 'snapshot_networth',
+  firm_costs: 'firm_cost',
   meta: 'meta',
 };
 
@@ -173,7 +177,7 @@ export class DataService {
           timestamp: Date.now(),
           source: opts?.source ?? 'local',
           entityType: ENTITY_TYPE_BY_STORE[store],
-          entityIds: [record.id],
+          entityIds: [this.keyOf(store, record)],
         },
         this.channel,
       );
@@ -196,7 +200,7 @@ export class DataService {
           timestamp: Date.now(),
           source: opts?.source ?? 'local',
           entityType: ENTITY_TYPE_BY_STORE[store],
-          entityIds: stamped.map((r) => r.id),
+          entityIds: stamped.map((r) => this.keyOf(store, r)),
         },
         this.channel,
       );

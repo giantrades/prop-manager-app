@@ -13,10 +13,10 @@ function makeDs() {
 
 // Mock de supabase `from` que captura upsert/select.
 function mockSupabase() {
-  const calls: { upsert: Array<{ table: string; rows: unknown[] }>; select: Array<{ table: string; from: number; to: number }>; selectResults?: Record<string, unknown[]> } = { upsert: [], select: [] };
+  const calls: { upsert: Array<{ table: string; rows: unknown[]; onConflict?: string }>; select: Array<{ table: string; from: number; to: number }>; selectResults?: Record<string, unknown[]>; subscribedTables: string[] } = { upsert: [], select: [], subscribedTables: [] };
   const make = (table: string) => ({
-    upsert: async (rows: unknown[], _opts?: unknown) => {
-      calls.upsert.push({ table, rows });
+    upsert: async (rows: unknown[], opts?: { onConflict?: string }) => {
+      calls.upsert.push({ table, rows, onConflict: opts?.onConflict });
       return { error: null };
     },
     select: () => ({
@@ -28,7 +28,17 @@ function mockSupabase() {
       }),
     }),
   });
-  const supabase = { from: make };
+  const channel = (_name: string) => {
+    const ch: any = {
+      on: (_evt: string, filter: { table: string }, _cb: () => void) => {
+        calls.subscribedTables.push(filter.table);
+        return ch;
+      },
+      subscribe: () => ch,
+    };
+    return ch;
+  };
+  const supabase = { from: make, channel, removeChannel: () => undefined };
   return { supabase, calls };
 }
 
@@ -54,6 +64,41 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     expect(out.defaultWeight).toBe(2);
     expect(out.updatedAt).toBe('t');
     expect('user_id' in out).toBe(false);
+  });
+
+  it('camelToSnake/snakeToCamel tratam acrônimos DD (maxDD → max_dd, não max_d_d)', () => {
+    expect(camelToSnake({ maxDD: 0.1, trailingDD: 0.08, dailyDD: 0.05 })).toEqual({
+      max_dd: 0.1,
+      trailing_dd: 0.08,
+      daily_dd: 0.05,
+    });
+    expect(snakeToCamel({ max_dd: 0.1, trailing_dd: 0.08, daily_dd: 0.05 })).toEqual({
+      maxDD: 0.1,
+      trailingDD: 0.08,
+      dailyDD: 0.05,
+    });
+  });
+
+  it('push de prop_extensions usa onConflict account_id e coluna daily_dd', async () => {
+    const { ds } = makeDs();
+    const { supabase, calls } = mockSupabase();
+    const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
+    await sync.push([
+      {
+        entityType: 'prop_extension',
+        record: {
+          accountId: 'a1', nominalSize: 100000, maxDD: 0.1, trailingDD: 0.08,
+          dailyDD: 0.05, updatedAt: 't', deviceId: 'd', version: 1,
+        } as any,
+      },
+    ]);
+    expect(calls.upsert).toHaveLength(1);
+    expect(calls.upsert[0].table).toBe('prop_extensions');
+    expect(calls.upsert[0].onConflict).toBe('account_id');
+    const row = calls.upsert[0].rows[0] as Record<string, unknown>;
+    expect(row.account_id).toBe('a1');
+    expect(row.daily_dd).toBe(0.05);
+    expect('daily_d_d' in row).toBe(false);
   });
 
   it('push agrupa por tabela e injeta user_id', async () => {
@@ -91,6 +136,21 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     expect(calls.upsert).toHaveLength(1);
     expect(calls.upsert[0].table).toBe('app_meta');
     expect(calls.upsert[0].rows).toHaveLength(2);
+  });
+
+  it('subscribe assina TODAS as tabelas sincronizadas (não só trades/transactions)', async () => {
+    const { ds } = makeDs();
+    const { supabase, calls } = mockSupabase();
+    const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
+    await sync.subscribe(() => {});
+    expect(calls.subscribedTables).toContain('trades');
+    expect(calls.subscribedTables).toContain('transactions');
+    expect(calls.subscribedTables).toContain('accounts');
+    expect(calls.subscribedTables).toContain('prop_extensions');
+    expect(calls.subscribedTables).toContain('goals');
+    expect(calls.subscribedTables).toContain('app_meta');
+    // sem duplicatas
+    expect(new Set(calls.subscribedTables).size).toBe(calls.subscribedTables.length);
   });
 
   it('push é no-op sem usuário logado', async () => {

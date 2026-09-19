@@ -41,6 +41,11 @@ function onConflictFor(table: string): string {
   return CONFLICT_BY_TABLE[table] ?? 'id';
 }
 
+/** Coluna que identifica o registro no DELETE (prop_extensions usa account_id). */
+const KEY_BY_TABLE: Record<string, string> = {
+  prop_extensions: 'account_id',
+};
+
 /**
  * Sync de `meta`: por PADRÃO sincroniza tudo (categorias, orçamento, regras, marcos,
  * checklist, CDI/FX, firms, vínculo conexão...). Só fica local o que é do DEVICE:
@@ -97,11 +102,27 @@ const STORE_ENTITY: Partial<Record<StoreName, string>> = {
 // camel <-> snake (topo)
 // ---------------------------------------------------------------------------
 
+/** Campos com acrônimo no fim (`maxDD`) que o snake_case ingênuo erraria
+ *  (`max_d_d`). Mapa explícito para os dois sentidos. */
+const SNAKE_BY_CAMEL: Record<string, string> = {
+  maxDD: 'max_dd',
+  trailingDD: 'trailing_dd',
+  dailyDD: 'daily_dd',
+};
+const CAMEL_BY_SNAKE: Record<string, string> = Object.fromEntries(
+  Object.entries(SNAKE_BY_CAMEL).map(([camel, snake]) => [snake, camel]),
+);
+
 function toSnake(key: string): string {
-  return key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
+  if (SNAKE_BY_CAMEL[key]) return SNAKE_BY_CAMEL[key];
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase();
 }
 
 function toCamel(key: string): string {
+  if (CAMEL_BY_SNAKE[key]) return CAMEL_BY_SNAKE[key];
   return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
@@ -220,9 +241,8 @@ export function createSupabaseSync(
     const entityCounts: Record<string, number> = {};
     for (const [table, rows] of byTable) {
       if (rows.length === 0) continue;
-      // upsert por id; ignora conflito de construtor único (ex.: positions UNIQUE user+account+symbol).
-      const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
-      const { error } = await supabase.from(table).upsert(rows, { onConflict: conflict });
+      // upsert pela PK real da tabela (prop_extensions usa account_id).
+      const { error } = await supabase.from(table).upsert(rows, { onConflict: onConflictFor(table) });
       if (error) {
         // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
         if (table === 'app_meta') {
@@ -248,7 +268,8 @@ export function createSupabaseSync(
     const store = ENTITY_BY_STORE[entityType];
     const table = store ? TABLE_BY_ENTITY[store as StoreName] : undefined;
     if (!table) return 0;
-    const { error } = await supabase.from(table).delete().eq('user_id', userId).in('id', [id]);
+    const keyCol = KEY_BY_TABLE[table] ?? 'id';
+    const { error } = await supabase.from(table).delete().eq('user_id', userId).eq(keyCol, id);
     if (error) throw new Error(`delete ${table}: ${errText(error)}`);
     return 1;
   };
@@ -344,10 +365,9 @@ export function createSupabaseSync(
     if (choice === 'theirs') {
       await ds.put(store, found.remote as unknown as SyncedRecord, { source: 'sync:pull' });
     } else {
-      const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
       const { error } = await supabase
         .from(table)
-        .upsert([{ ...camelToSnake(found.local), user_id: userId }], { onConflict: conflict });
+        .upsert([{ ...camelToSnake(found.local), user_id: userId }], { onConflict: onConflictFor(table) });
       if (error) throw error;
     }
     await ds.meta.setKey(
@@ -360,11 +380,14 @@ export function createSupabaseSync(
   const subscribe = async (onRemoteChange: () => void): Promise<() => void> => {
     const userId = await getUserId();
     if (!userId) return () => undefined;
-    const ch = supabase
-      .channel('appdb-v3')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, () => onRemoteChange())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => onRemoteChange())
-      .subscribe();
+    // Escuta TODAS as tabelas sincronizadas (não só trades/transactions) — senão uma
+    // mudança feita no celular (conta, meta, payout, prop…) não aparecia no PC sem reload.
+    const tables = [...new Set(Object.values(TABLE_BY_ENTITY).filter((t): t is string => !!t))];
+    let ch = supabase.channel('appdb-v3');
+    for (const table of tables) {
+      ch = ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => onRemoteChange());
+    }
+    ch.subscribe();
     return () => {
       try {
         supabase.removeChannel(ch);
@@ -394,8 +417,7 @@ export function createSupabaseSync(
         .map((r) => ({ ...camelToSnake(r), user_id: userId }));
       for (let i = 0; i < rows.length; i += 200) {
         const chunk = rows.slice(i, i + 200);
-        const conflict = COMPOSITE_PK_TABLES.has(table) ? 'user_id,id' : 'id';
-        const { error } = await supabase.from(table).upsert(chunk, { onConflict: conflict });
+        const { error } = await supabase.from(table).upsert(chunk, { onConflict: onConflictFor(table) });
         if (error) {
           if (table === 'app_meta') break;
           throw new Error(`pushAll ${table}: ${errText(error)}`);
