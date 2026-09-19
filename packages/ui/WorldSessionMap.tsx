@@ -383,7 +383,7 @@ export default function WorldSessionMap({ trades = [], sessions, zone = 'local',
                   fill="#fff"
                   textAnchor="middle"
                   fontFamily="Inter, system-ui, sans-serif"
-                  fontVariantNumeric="tabular-nums"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
                 >
                   {nowLabel} {zone === 'utc' ? 'UTC' : 'local'}
                 </text>
