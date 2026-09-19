@@ -111,7 +111,8 @@ export default function JournalPage() {
       return next;
     });
   };
-  // A3 — sessões custom do heatmap (persistidas; default = padrão do motor).
+  // A3 — sessões custom do heatmap. Fonte da verdade: `meta` (`journal:sessions`, sincroniza
+  // entre aparelhos); localStorage é só cache do 1º paint. Default = sessões de mercado.
   const [sessionDefs, setSessionDefs] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('journalSessions') || 'null');
@@ -121,12 +122,34 @@ export default function JournalPage() {
     }
     return null;
   });
+  useEffect(() => {
+    if (!finance?.ds) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const rec = await finance.ds.meta.getKey('journal:sessions');
+        const v = rec?.value;
+        if (alive && Array.isArray(v) && v.length > 0) {
+          setSessionDefs(v);
+          try { localStorage.setItem('journalSessions', JSON.stringify(v)); } catch { /* noop */ }
+        }
+      } catch {
+        /* sem meta ainda = usa cache local */
+      }
+    })();
+    return () => { alive = false; };
+  }, [finance]);
   const handleSessions = (defs) => {
     setSessionDefs(defs);
     try {
       localStorage.setItem('journalSessions', JSON.stringify(defs));
     } catch {
       /* noop */
+    }
+    try {
+      finance?.ds?.meta?.setKey('journal:sessions', defs);
+    } catch {
+      /* noop: próximo sync sobe */
     }
   };
   // A4 — drill-down do dia do calendário.

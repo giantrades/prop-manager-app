@@ -93,7 +93,7 @@
 ## Limitações conhecidas (pós-execução)
 - J9: textarea simples, não editor rich-text (BlockNote está nas deps do root — upgrade futuro).
 - J10: proxy via fills; MAE/MFE verdadeiro exige série M1 intra-trade (schema não guarda).
-- Sessões em buckets UTC fixos (Asian/London/NY/Off); configurável por firm no futuro.
+- Sessões: default = horários reais de Sydney/Tokyo/London/NY convertidos pro **fuso do aparelho** (`marketSessionsInLocalZone()`, DST via Intl); visualização `SessionTradeMap.tsx` (mapa de 1 dia, sessões ao fundo, trades desenhados da abertura ao fechamento, eixo local/UTC); configurável e sincronizado via `meta:journal:sessions`. Números por sessão usam `sessionAttribution()` (pela **abertura**, cada trade 1x — sem inflar). `DEFAULT_SESSIONS`/`sessionAnalysis` (J7, trade em todas as sessões) seguem para back-compat.
 - Histograma com bucket fixo 0.5R (prop, não configurável na UI).
 - Sem drill-down dia do calendário → trades do dia (clique no dia).
 
@@ -106,7 +106,7 @@
 
 ## Melhorias futuras (pasta melhorias.md)
 
-> Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,
-> analisar os itens abertos e execut�-los um a um (c�digo + teste + doc + build verde).
+> Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,
+> analisar os itens abertos e execut�-los um a um (c�digo + teste + doc + build verde).
 > Ao concluir, marcar - [x] no arquivo da melhoria.
 

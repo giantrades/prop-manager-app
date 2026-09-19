@@ -6,8 +6,9 @@
 
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
-import { heatmapBySymbol, heatmapBySession, DEFAULT_SESSIONS } from '@apps/lib/db';
+import { heatmapBySymbol, sessionAttribution, marketSessionsInLocalZone } from '@apps/lib/db';
 import type { Trade, SessionDef } from '@apps/lib/db';
+import SessionTradeMap from './SessionTradeMap';
 
 
 function intensity(pnl: number, maxAbs: number): number {
@@ -31,11 +32,16 @@ interface HeatmapSectionProps {
   loading?: boolean;
 }
 export default function HeatmapSection({ trades = [], currency = 'USD', sessionDefs, onSessions, loading = false }: HeatmapSectionProps) {
-  const defs: SessionDef[] = sessionDefs && sessionDefs.length > 0 ? sessionDefs : DEFAULT_SESSIONS;
+  // Sessões no relógio do aparelho; default = horários reais de mercado convertidos pro seu fuso.
+  const defs: SessionDef[] = useMemo(
+    () => (sessionDefs && sessionDefs.length > 0 ? sessionDefs : marketSessionsInLocalZone()),
+    [sessionDefs],
+  );
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<SessionDef[] | null>(null);
+  const [axisZone, setAxisZone] = useState<'local' | 'utc'>('local');
   const symbols = useMemo(() => heatmapBySymbol(trades, 12), [trades]);
-  const sessions = useMemo(() => heatmapBySession(trades, defs), [trades, defs]);
+  const sessions = useMemo(() => sessionAttribution(trades, defs, { zone: 'local' }), [trades, defs]);
   const maxAbs = useMemo(() => {
     const all = [...symbols.map((s) => s.pnl), ...sessions.map((s) => s.pnl)];
     return Math.max(1, ...all.map((v) => Math.abs(v)));
@@ -78,20 +84,26 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
       </div>
       <div className="hm-section">
         <div className="hm-title-row">
-          <div className="hm-title">Heat por sessão (UTC)</div>
-          {onSessions && (
-            <button
-              className="hm-edit-btn"
-              aria-expanded={editing}
-              onClick={() => {
-                if (!editing) setDraft(defs.map((d: SessionDef) => ({ ...d })));
-                setEditing((e) => !e);
-              }}
-            >
-              {editing ? 'Fechar' : 'Editar sessões'}
-            </button>
-          )}
+          <div className="hm-title">Sessões de mercado e trades</div>
+          <div className="hm-title-actions">
+            <button className={`hm-edit-btn${axisZone === 'local' ? ' hm-primary' : ''}`} aria-pressed={axisZone === 'local'} onClick={() => setAxisZone('local')}>Local</button>
+            <button className={`hm-edit-btn${axisZone === 'utc' ? ' hm-primary' : ''}`} aria-pressed={axisZone === 'utc'} onClick={() => setAxisZone('utc')}>UTC</button>
+            {onSessions && (
+              <button
+                className="hm-edit-btn"
+                aria-expanded={editing}
+                onClick={() => {
+                  if (!editing) setDraft(defs.map((d: SessionDef) => ({ ...d })));
+                  setEditing((e) => !e);
+                }}
+              >
+                {editing ? 'Fechar' : 'Editar sessões'}
+              </button>
+            )}
+          </div>
         </div>
+        <SessionTradeMap trades={trades} sessions={defs} zone={axisZone} currency={currency} />
+        <p className="hm-note">Cada trade é desenhado da abertura ao fechamento; some em uma sessão só — a de abertura — então os valores por sessão não inflam.</p>
         <div className="hm-grid hm-grid-4">
           {sessions.map((s) => renderCell(s.session, s.label, `${s.trades} trades`, s.pnl, `${s.wins}W/${s.losses}L`))}
         </div>
@@ -110,14 +122,14 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
                   type="number" min={0} max={24} step={0.5}
                   value={d.startH}
                   onChange={(e) => setDraft((prev) => (prev ?? []).map((x, j) => (j === i ? { ...x, startH: Number(e.target.value) } : x)))}
-                  aria-label={`Início (hora UTC) da sessão ${i + 1}`}
+                  aria-label={`Início (hora local) da sessão ${i + 1}`}
                 />
                 <input
                   className="hm-input"
                   type="number" min={0} max={24} step={0.5}
                   value={d.endH}
                   onChange={(e) => setDraft((prev) => (prev ?? []).map((x, j) => (j === i ? { ...x, endH: Number(e.target.value) } : x)))}
-                  aria-label={`Fim (hora UTC) da sessão ${i + 1}`}
+                  aria-label={`Fim (hora local) da sessão ${i + 1}`}
                 />
               </div>
             ))}
@@ -125,8 +137,9 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
               <button
                 className="hm-edit-btn hm-primary"
                 onClick={() => {
+                  // Aceita sobreposição e sessões que cruzam a meia-noite (endH <= startH).
                   const clean = draft
-                    .filter((d) => d.label.trim() && d.startH >= 0 && d.endH <= 24 && d.startH < d.endH)
+                    .filter((d) => d.label.trim() && d.startH >= 0 && d.startH <= 24 && d.endH >= 0 && d.endH <= 24 && d.startH !== d.endH)
                     .map((d) => ({ ...d, label: d.label.trim() }));
                   if (clean.length > 0) {
                     onSessions(clean);
@@ -139,7 +152,7 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
               <button
                 className="hm-edit-btn"
                 onClick={() => {
-                  onSessions(DEFAULT_SESSIONS.map((d) => ({ ...d })));
+                  onSessions(marketSessionsInLocalZone());
                   setEditing(false);
                 }}
               >
@@ -171,7 +184,9 @@ const HM_CSS = `
 .hm-sub { font-size: 10px; color: var(--muted, #a1a7b3); }
 .hm-val { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hm-empty { padding: 16px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
-.hm-title-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.hm-note { margin: 0 0 8px; font-size: 10px; color: var(--muted, #a1a7b3); }
+.hm-title-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.hm-title-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .hm-title-row .hm-title { margin-bottom: 0; }
 .hm-edit-btn { background: transparent; border: 1px solid #2a3246; color: var(--text, #e7eaf0); border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer; min-height: 36px; }
 .hm-edit-btn.hm-primary { background: var(--brand, #7c5cff); border-color: var(--brand, #7c5cff); color: #fff; }

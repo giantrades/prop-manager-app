@@ -310,38 +310,136 @@ export interface SessionStat extends GroupStat {
   label: string;
 }
 
+/** Fuso em que a hora (`startH`/`endH`) é interpretada: 'utc' (default, back-compat J7)
+ *  ou 'local' (relógio do aparelho — usado pelo journal, onde o trader pensa em hora local). */
+export type SessionZone = 'utc' | 'local';
+
 export interface SessionDef {
   id: string;
   label: string;
-  startH: number; // 0–23 UTC, inclusivo
-  endH: number; // 0–24 UTC, exclusivo
+  startH: number; // 0–24, inclusivo (no fuso `zone`)
+  endH: number; // 0–24, exclusivo (no fuso `zone`)
 }
 
-/** Buckets padrão (comportamento histórico quando sem config). */
+/** Buckets padrão (comportamento histórico quando sem config). Disjuntos de propósito:
+ *  evita que um trade seja contado em duas sessões. Ver `MARKET_SESSIONS` p/ o modelo real. */
 export const DEFAULT_SESSIONS: SessionDef[] = [
   { id: 'Asian', label: 'Asian 00–07', startH: 0, endH: 8 },
   { id: 'London', label: 'London 08–12', startH: 8, endH: 13 },
-  { id: 'NewYork', label: 'NewYork 13–20', startH: 13, endH: 21 },
+  { id: 'NewYork', label: 'New York 13–20', startH: 13, endH: 21 },
   { id: 'Off', label: 'Off 21–23', startH: 21, endH: 24 },
 ];
 
 /**
- * J7/A3 — Sessão/hora (hora UTC da entrada). `sessions` opcional: quando presente
- * (ex.: config da firm salva no journal), usa os buckets configurados; sem config,
- * comportamento idêntico ao original. `session` vira o id da definição.
+ * Sessões reais de mercado em UTC (aproximadas) — **se sobrepõem** (Tokyo∩London 07–09,
+ * London∩NY 12–16) e a de Sydney **cruza a meia-noite** (21→06). Constante de referência;
+ * o journal usa `marketSessionsInLocalZone()` para ver no relógio do aparelho.
  */
-export function sessionAnalysis(trades: Trade[], sessions: SessionDef[] = DEFAULT_SESSIONS): SessionStat[] {
+export const MARKET_SESSIONS: SessionDef[] = [
+  { id: 'sydney', label: 'Sydney 21–06', startH: 21, endH: 6 },
+  { id: 'tokyo', label: 'Tokyo 00–09', startH: 0, endH: 9 },
+  { id: 'london', label: 'London 07–16', startH: 7, endH: 16 },
+  { id: 'newyork', label: 'New York 12–21', startH: 12, endH: 21 },
+];
+
+/** Horário local de referência de cada mercado (fuso IANA + horário comercial local). */
+interface MarketHoursDef {
+  id: string;
+  label: string;
+  tz: string;
+  startH: number; // hora local do mercado (0–24)
+  endH: number;
+}
+const MARKET_HOURS: MarketHoursDef[] = [
+  { id: 'sydney', label: 'Sydney', tz: 'Australia/Sydney', startH: 7, endH: 16 },
+  { id: 'tokyo', label: 'Tokyo', tz: 'Asia/Tokyo', startH: 9, endH: 18 },
+  { id: 'london', label: 'London', tz: 'Europe/London', startH: 8, endH: 17 },
+  { id: 'newyork', label: 'New York', tz: 'America/New_York', startH: 9.5, endH: 16 },
+];
+
+/** Offset (minutos, leste positivo) de um fuso IANA numa data. Usa a base IANA do navegador. */
+function tzOffsetMinutes(tz: string, date: Date): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(date)) if (part.type !== 'literal') p[part.type] = part.value;
+  const asUTC = Date.UTC(
+    Number(p.year), Number(p.month) - 1, Number(p.day),
+    Number(p.hour) % 24, Number(p.minute), Number(p.second),
+  );
+  return Math.round((asUTC - date.getTime()) / 60000);
+}
+
+function fmtHour(h: number): string {
+  const total = Math.round(((h % 24) + 24) % 24 * 60);
+  const hh = String(Math.floor(total / 60)).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+/**
+ * Converte os horários REAIS de cada mercado (fuso próprio, com DST) para o **relógio do
+ * aparelho** na data `ref`. Resultado fica “fixo” no seu fuso (o trader ajusta se quiser),
+ * e é o padrão do journal. Usa `Intl` (base IANA), sem dependência nova.
+ */
+export function marketSessionsInLocalZone(ref: Date = new Date()): SessionDef[] {
+  return MARKET_HOURS.map((m) => {
+    const off = tzOffsetMinutes(m.tz, ref);
+    const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: m.tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .format(ref).split('-').map(Number);
+    const toLocal = (h: number) => {
+      const utcMs = Date.UTC(y, mo - 1, d, Math.floor(h), Math.round((h % 1) * 60)) - off * 60000;
+      const inst = new Date(utcMs);
+      return Math.round((inst.getHours() + inst.getMinutes() / 60) * 100) / 100;
+    };
+    const startH = toLocal(m.startH);
+    const endH = toLocal(m.endH);
+    return { id: m.id, label: `${m.label} ${fmtHour(startH)}–${fmtHour(endH)}`, startH, endH };
+  });
+}
+
+/**
+ * A hora `h` (0–24, fracionária) pertence à sessão? Suporta sessões que cruzam a
+ * meia-noite (`endH <= startH`, ex.: Sydney 21→06).
+ */
+export function sessionContains(def: SessionDef, h: number): boolean {
+  const s = def.startH;
+  const e = def.endH;
+  if (e === s) return false;
+  if (s < e) return h >= s && h < e;
+  return h >= s || h < e; // wrap na meia-noite
+}
+
+/** Hora do trade no fuso pedido (fracionária, com minutos). */
+function tradeHour(t: Trade, zone: SessionZone): number {
+  const d = parseDate(t.entryDatetime);
+  return zone === 'local'
+    ? d.getHours() + d.getMinutes() / 60
+    : d.getUTCHours() + d.getUTCMinutes() / 60;
+}
+
+/**
+ * J7/A3 — Sessão/hora da entrada. `sessions` opcional (config salva no journal); sem config
+ * usa `DEFAULT_SESSIONS`. `opts.zone`: 'utc' (default, back-compat) ou 'local' (relógio do
+ * aparelho — journal). Um trade na sobreposição entra em TODAS as sessões que contêm a hora.
+ */
+export function sessionAnalysis(
+  trades: Trade[],
+  sessions: SessionDef[] = DEFAULT_SESSIONS,
+  opts?: { zone?: SessionZone },
+): SessionStat[] {
+  const zone: SessionZone = opts?.zone ?? 'utc';
   const closed = closedTrades(trades);
   const defs = sessions.length > 0 ? sessions : DEFAULT_SESSIONS;
   const buckets = new Map<string, { def: SessionDef; list: Trade[] }>();
   for (const def of defs) buckets.set(def.id, { def, list: [] });
   const fallback = buckets.get(defs[defs.length - 1].id);
   for (const t of closed) {
-    const h = parseDate(t.entryDatetime).getUTCHours();
-    // Sessões PODEM se sobrepor (ex.: London 08–13 e NY 13–21): o trade entra em TODAS
-    // as sessões que contêm a hora. Antes usávamos `find` (só a primeira) — a sobreposição
-    // sumia e as sessões pareciam sempre separadas.
-    const hits = defs.filter((d) => h >= d.startH && h < d.endH);
+    const h = tradeHour(t, zone);
+    const hits = defs.filter((d) => sessionContains(d, h));
     if (hits.length === 0) fallback?.list.push(t);
     else for (const hit of hits) buckets.get(hit.id)?.list.push(t);
   }
@@ -353,8 +451,41 @@ export function sessionAnalysis(trades: Trade[], sessions: SessionDef[] = DEFAUL
 }
 
 /** J2 — Heatmap por sessão (mesma base do J7, para intensidade de cor). */
-export function heatmapBySession(trades: Trade[], sessions?: SessionDef[]): SessionStat[] {
-  return sessionAnalysis(trades, sessions);
+export function heatmapBySession(
+  trades: Trade[],
+  sessions?: SessionDef[],
+  opts?: { zone?: SessionZone },
+): SessionStat[] {
+  return sessionAnalysis(trades, sessions, opts);
+}
+
+/**
+ * Atribuição por ABERTURA: cada trade pertence a UMA única sessão — a primeira, na ordem,
+ * que contém a hora de ENTRADA. Assim a soma por sessão = total (nunca infla), ao contrário
+ * do `sessionAnalysis` (J7), que coloca o trade em TODAS as sessões que o contêm.
+ * Sem sessão correspondente → última (fallback), como no J7.
+ */
+export function sessionAttribution(
+  trades: Trade[],
+  sessions: SessionDef[] = DEFAULT_SESSIONS,
+  opts?: { zone?: SessionZone },
+): SessionStat[] {
+  const zone: SessionZone = opts?.zone ?? 'utc';
+  const closed = closedTrades(trades);
+  const defs = sessions.length > 0 ? sessions : DEFAULT_SESSIONS;
+  const buckets = new Map<string, Trade[]>();
+  for (const def of defs) buckets.set(def.id, []);
+  const fallbackId = defs[defs.length - 1].id;
+  for (const t of closed) {
+    const h = tradeHour(t, zone);
+    const hit = defs.find((d) => sessionContains(d, h));
+    (buckets.get(hit?.id ?? fallbackId) ?? []).push(t);
+  }
+  return defs.map((def) => ({
+    session: def.id,
+    label: def.label,
+    ...groupStat(buckets.get(def.id) ?? []),
+  }));
 }
 
 export interface RBucket {

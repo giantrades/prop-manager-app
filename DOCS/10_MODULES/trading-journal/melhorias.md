@@ -81,7 +81,15 @@
 - Contexto: tags existem (J12) mas não há análise por elas.
 - Proposta: winrate/PnL/avgR agrupados por tag + filtro cruzado tag×símbolo. Mesma base do breakdown por símbolo.
 
-## Batch C � dashboard Trading (reaproveitar app antigo)
-- Ideia: trazer os gr�ficos/cards/estilos da dashboard antiga do journal (calend�rio,
+## B3 — Sessões de mercado sobrepostas (timeline estilo babypips)
+- Status: [x] executada
+- Contexto: as sessões eram 4 buckets UTC fixos e **disjuntos** (Asian/London/NY/Off) justamente para evitar dupla contagem, o que não representa o mercado real (London∩NY 12–16, Sydney cruza a meia-noite). Faltava uma visualização que deixasse a sobreposição evidente.
+- Proposta: `sessionContains()` com suporte a virada de meia-noite + `marketSessionsInLocalZone()` (converte os horários reais de Sydney/Tokyo/London/NY com DST para o **relógio do aparelho**); componente `SessionTradeMap.tsx` — mapa de 1 dia (0–24h, seletor de data, eixo local/UTC) com as sessões ao fundo e cada trade desenhado da **abertura ao fechamento** (bolinha → barra → seta, cor = direção); `sessionAttribution()` atribui cada trade pela **abertura** (1x, sem inflar); editor aceita sobreposição/wrap; sessões persistidas em `meta` (`journal:sessions`, sincroniza entre aparelhos).
+- Arquivos: `packages/lib/db/journalAnalytics.ts`, `packages/ui/SessionTradeMap.tsx`, `packages/ui/sessionTime.ts`, `packages/ui/HeatmapSection.tsx`, `main-app/src/pages/trading/JournalPage.jsx`
+- Aceite: default do journal = sessões reais no fuso local; mapa mostra trades abertura→fechamento sem dupla contagem; eixo local/UTC; editar sessão sincroniza; `DEFAULT_SESSIONS`/`sessionAnalysis` inalterados (back-compat J7); testes verdes; build verde.
+- Fora de escopo: icones SVG de mercado; rateio proporcional do PnL entre sessões atravessadas (hoje atribui 100% à abertura).
+
+## Batch C � dashboard Trading (reaproveitar app antigo)
+- Ideia: trazer os gr�ficos/cards/estilos da dashboard antiga do journal (calend�rio,
   heatmap, curvas) para a nova `/trading`, melhorando a UI. Ver `DOCS/11_PAGE_MAP.md`.
-- Status: [ ] ideia (futura) � aguardando o dono priorizar.
+- Status: [ ] ideia (futura) � aguardando o dono priorizar.

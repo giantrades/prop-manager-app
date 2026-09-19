@@ -10,6 +10,11 @@ import {
   rDistribution,
   durationStats,
   sessionAnalysis,
+  sessionAttribution,
+  sessionContains,
+  DEFAULT_SESSIONS,
+  MARKET_SESSIONS,
+  marketSessionsInLocalZone,
   maeMfe,
   weeklyReview,
   tradeReplay,
@@ -147,6 +152,72 @@ describe('J2–J7 — análises (cálculo à mão)', () => {
   it('A3 sem config usa o padrão (regressão J7)', () => {
     const s = sessionAnalysis(jTrades);
     expect(s.map((x) => x.session)).toEqual(['Asian', 'London', 'NewYork', 'Off']);
+  });
+
+  it('sessionContains suporta sessão que cruza a meia-noite (Sydney 21→06)', () => {
+    const sydney = { id: 'sydney', label: 'Sydney', startH: 21, endH: 6 };
+    expect(sessionContains(sydney, 23)).toBe(true);
+    expect(sessionContains(sydney, 2)).toBe(true);
+    expect(sessionContains(sydney, 5)).toBe(true);
+    expect(sessionContains(sydney, 6)).toBe(false);
+    expect(sessionContains(sydney, 12)).toBe(false);
+    // sessão vazia nunca contém
+    expect(sessionContains({ id: 'x', label: 'x', startH: 5, endH: 5 }, 5)).toBe(false);
+  });
+
+  it('sessionAnalysis com sessão wrap (Sydney 21→06) conta 02Z', () => {
+    const t = trade({ id: 'w1', resultNet: 5, exitPrice: 110, entryPrice: 100, exitDatetime: '2026-09-08T02:30:00Z', entryDatetime: '2026-09-08T02:30:00Z' });
+    const s = sessionAnalysis([t as never], MARKET_SESSIONS);
+    const by = Object.fromEntries(s.map((x) => [x.session, x]));
+    expect(by.sydney).toMatchObject({ trades: 1, pnl: 5 }); // 02Z dentro de 21→06
+    expect(by.tokyo).toMatchObject({ trades: 1, pnl: 5 }); // 02Z dentro de 00→09 (sobrepõe)
+  });
+
+  it('sessionAttribution atribui pela abertura: cada trade conta UMA vez (sem inflar)', () => {
+    // 13:30 UTC cai em London (07–16) e NY (12–21); atribui à primeira da ordem → London.
+    const t = trade({ id: 'at1', resultNet: 10, exitPrice: 110, entryPrice: 100, exitDatetime: '2026-09-08T13:30:00Z', entryDatetime: '2026-09-08T13:30:00Z' });
+    const s = sessionAttribution([t as never], MARKET_SESSIONS);
+    const by = Object.fromEntries(s.map((x) => [x.session, x]));
+    expect(by.london).toMatchObject({ trades: 1, pnl: 10 });
+    expect(by.newyork.trades).toBe(0);
+    // soma por sessão = total de trades (não duplica)
+    expect(s.reduce((a, x) => a + x.trades, 0)).toBe(1);
+    // sessionAnalysis (J7) conta nos DOIS — contraste explícito.
+    const all = sessionAnalysis([t as never], MARKET_SESSIONS);
+    expect(all.reduce((a, x) => a + x.trades, 0)).toBe(2);
+  });
+
+  it('MARKET_SESSIONS tem as 4 sessões reais e sobreposição London∩NY', () => {
+    expect(MARKET_SESSIONS.map((s) => s.id)).toEqual(['sydney', 'tokyo', 'london', 'newyork']);
+    const london = MARKET_SESSIONS.find((s) => s.id === 'london')!;
+    const ny = MARKET_SESSIONS.find((s) => s.id === 'newyork')!;
+    // 13Z e 15Z estão em London (07–16) e em NY (12–21) ao mesmo tempo.
+    expect(sessionContains(london, 13) && sessionContains(ny, 13)).toBe(true);
+    expect(sessionContains(london, 15) && sessionContains(ny, 15)).toBe(true);
+    // 10Z é só London.
+    expect(sessionContains(london, 10) && !sessionContains(ny, 10)).toBe(true);
+    expect(DEFAULT_SESSIONS).toHaveLength(4);
+  });
+
+  it("sessionAnalysis zone 'local' usa a hora local do aparelho (independente do fuso)", () => {
+    // 13:30 no relógio local, independente de qual fuso o runner esteja.
+    const iso = new Date(2026, 8, 8, 13, 30, 0).toISOString();
+    const t = trade({ id: 'loc1', resultNet: 3, exitPrice: 110, entryPrice: 100, exitDatetime: iso, entryDatetime: iso });
+    const defs = [{ id: 'x', label: 'X 12–14', startH: 12, endH: 14 }];
+    const s = sessionAnalysis([t as never], defs, { zone: 'local' });
+    expect(s[0]).toMatchObject({ trades: 1, pnl: 3 });
+  });
+
+  it('marketSessionsInLocalZone devolve as 4 sessões no relógio do aparelho', () => {
+    const s = marketSessionsInLocalZone(new Date('2026-01-15T12:00:00Z'));
+    expect(s.map((x) => x.id)).toEqual(['sydney', 'tokyo', 'london', 'newyork']);
+    for (const x of s) {
+      expect(x.startH).toBeGreaterThanOrEqual(0);
+      expect(x.startH).toBeLessThan(24);
+      expect(x.endH).toBeGreaterThanOrEqual(0);
+      expect(x.endH).toBeLessThanOrEqual(24);
+      expect(x.label.length).toBeGreaterThan(0);
+    }
   });
 
   it('J7 sessionAnalysis buckets UTC (Asian/London/NY/Off)', () => {
