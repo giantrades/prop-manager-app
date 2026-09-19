@@ -401,6 +401,38 @@ export function marketSessionsInLocalZone(ref: Date = new Date()): SessionDef[] 
   });
 }
 
+export interface MarketStatus {
+  id: string;
+  label: string;
+  tz: string;
+  /** Minutos desde 00:00 no fuso do mercado (para exibir o relógio local). */
+  localMinutes: number;
+  /** A sessão do mercado está aberta agora? (usa o horário comercial local + dia útil). */
+  open: boolean;
+}
+
+/**
+ * Estado de cada mercado AGORA: relógio local (no fuso dele, já com DST) e se está aberto.
+ * Usado pelo mapa mundial (pino + relógio + bolinha aberto/fechado).
+ */
+export function marketStatus(ref: Date = new Date()): MarketStatus[] {
+  return MARKET_HOURS.map((m) => {
+    const off = tzOffsetMinutes(m.tz, ref);
+    const wall = new Date(ref.getTime() + off * 60000); // relógio local do mercado
+    const h = wall.getUTCHours() + wall.getUTCMinutes() / 60;
+    const dow = wall.getUTCDay(); // 0=dom
+    const def: SessionDef = { id: m.id, label: m.label, startH: m.startH, endH: m.endH };
+    const weekday = dow >= 1 && dow <= 5;
+    return {
+      id: m.id,
+      label: m.label,
+      tz: m.tz,
+      localMinutes: wall.getUTCHours() * 60 + wall.getUTCMinutes(),
+      open: weekday && sessionContains(def, h),
+    };
+  });
+}
+
 /**
  * A hora `h` (0–24, fracionária) pertence à sessão? Suporta sessões que cruzam a
  * meia-noite (`endH <= startH`, ex.: Sydney 21→06).

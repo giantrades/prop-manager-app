@@ -9,6 +9,8 @@ import React, { useMemo, useState } from 'react';
 import { heatmapBySymbol, sessionAttribution, marketSessionsInLocalZone } from '@apps/lib/db';
 import type { Trade, SessionDef } from '@apps/lib/db';
 import SessionTradeMap from './SessionTradeMap';
+import WorldSessionMap from './WorldSessionMap';
+import { sessionIconFor, SESSION_COLORS } from './sessionIcons';
 
 
 function intensity(pnl: number, maxAbs: number): number {
@@ -57,14 +59,14 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
     );
   }
 
-  const renderCell = (key: string, label: string, sub: string, pnl: number, extra: string) => (
+  const renderCell = (key: string, label: string, sub: string, pnl: number, extra: string, icon?: React.ReactNode) => (
     <div
       key={key}
       className={`hm-cell${pnl > 0 ? ' hm-pos' : pnl < 0 ? ' hm-neg' : ' hm-flat'}`}
       style={{ '--hm-i': intensity(pnl, maxAbs).toFixed(2) } as React.CSSProperties}
       title={`${label} • ${extra}`}
     >
-      <span className="hm-label">{label}</span>
+      <span className="hm-label">{icon}{label}</span>
       {sub && <span className="hm-sub">{sub}</span>}
       <span className="hm-val">{fmtMoney(pnl, currency)}</span>
     </div>
@@ -102,10 +104,17 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
             )}
           </div>
         </div>
+        <WorldSessionMap sessions={defs} zone={axisZone} trades={trades} />
         <SessionTradeMap trades={trades} sessions={defs} zone={axisZone} currency={currency} />
         <p className="hm-note">Cada trade é desenhado da abertura ao fechamento; some em uma sessão só — a de abertura — então os valores por sessão não inflam.</p>
         <div className="hm-grid hm-grid-4">
-          {sessions.map((s) => renderCell(s.session, s.label, `${s.trades} trades`, s.pnl, `${s.wins}W/${s.losses}L`))}
+          {sessions.map((s, i) => {
+            const Icon = sessionIconFor(s.session);
+            return renderCell(
+              s.session, s.label, `${s.trades} trades`, s.pnl, `${s.wins}W/${s.losses}L`,
+              <Icon size={12} style={{ color: SESSION_COLORS[i % SESSION_COLORS.length] }} />,
+            );
+          })}
         </div>
         {editing && draft && onSessions && (
           <div className="hm-editor" role="group" aria-label="Editar sessões">
@@ -180,7 +189,7 @@ const HM_CSS = `
 .hm-neg { border-color: rgba(231,76,60,0.35); background: rgba(231,76,60,calc(0.05 + 0.25 * var(--hm-i, 0))); }
 .hm-neg .hm-val { color: var(--red, #e74c3c); }
 .hm-flat .hm-val { color: var(--muted, #a1a7b3); }
-.hm-label { font-size: 12px; font-weight: 700; }
+.hm-label { font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
 .hm-sub { font-size: 10px; color: var(--muted, #a1a7b3); }
 .hm-val { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hm-empty { padding: 16px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }

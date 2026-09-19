@@ -25,8 +25,6 @@ const SESSION_FILLS = [
   'rgba(241, 196, 15, 0.15)',
   'rgba(231, 76, 60, 0.15)',
 ];
-const SESSION_DOTS = ['#7c5cff', '#3498db', '#2ecc71', '#f1c40f', '#e74c3c'];
-
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
 }
@@ -127,12 +125,7 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
     <div className="stm-root">
       <div className="stm-head">
         <div className="stm-legend">
-          {sessionSegs.map(({ def, i }) => (
-            <span key={def.id} className="stm-chip">
-              <i style={{ background: SESSION_DOTS[i % SESSION_DOTS.length] }} />{def.label}
-            </span>
-          ))}
-          <span className="stm-chip stm-chip-dir"><i className="stm-md long">▲</i>long<i className="stm-md short">▼</i>short</span>
+          <span className="stm-chip stm-chip-dir"><i className="stm-md long">▲</i>long<i className="stm-md short">▼</i>short · bolinha = abertura, seta = fechamento</span>
         </div>
         <div className="stm-day">
           <button className="stm-btn" onClick={() => goDay(-1)} disabled={!selectedDay} aria-label="Dia anterior">◀</button>
