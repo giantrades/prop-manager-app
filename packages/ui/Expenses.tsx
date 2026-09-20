@@ -558,7 +558,7 @@ export default function Expenses({
         )}
       </div>
 
-      {/* Filtros + ações */}
+      {/* Filtros + ações (uma toolbar só; quebra sozinha em telas estreitas) */}
       <div className="ex-toolbar">
         <div className="ex-monthnav">
           <button className="ex-btn ex-btn-ghost ex-btn-sm" aria-label="Mês anterior" onClick={() => setYm((s) => shiftMonth(s.year, s.month, -1))}>‹</button>
@@ -570,7 +570,12 @@ export default function Expenses({
             <button key={v} className={`ex-chip${typeFilter === v ? ' active' : ''}`} onClick={() => setTypeFilter(v)}>{l}</button>
           ))}
         </div>
-        <span className="ex-toolbar-spacer" />
+        <select className="ex-input ex-catfilter" value={catFilter} onChange={(e) => setCatFilter(e.target.value)} aria-label="Filtrar por categoria">
+          <option value="">Todas as categorias</option>
+          {cats.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
         <input
           className="ex-input ex-search"
           type="search"
@@ -579,19 +584,12 @@ export default function Expenses({
           placeholder="Buscar lançamento…"
           aria-label="Buscar lançamento por nota ou categoria"
         />
-        <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
-      </div>
-      <div className="ex-toolbar ex-toolbar-2">
-        <select className="ex-input ex-catfilter" value={catFilter} onChange={(e) => setCatFilter(e.target.value)} aria-label="Filtrar por categoria">
-          <option value="">Todas as categorias</option>
-          {cats.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
         <button className={`ex-btn ex-btn-ghost${showBudget ? ' ex-btn-on' : ''}`} aria-pressed={showBudget} onClick={() => setShowBudget((s) => !s)}>Orçamento</button>
         <button className={`ex-btn ex-btn-ghost${showCats ? ' ex-btn-on' : ''}`} aria-pressed={showCats} onClick={() => setShowCats((s) => !s)}>Categorias</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => setShowTransfer(true)}>Transferir</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato</button>
+        <span className="ex-toolbar-spacer" />
+        <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
       </div>
 
       {/* D1 — Contas a pagar / a receber */}
@@ -1334,11 +1332,11 @@ const EX_CSS = `
 .ex-budget-total.over .ex-budget-total-top span:last-child { color: var(--red, #e74c3c); font-weight: 800; }
 .ex-budget-total.over .ex-bar { background: linear-gradient(90deg, var(--red, #e74c3c), #ff7b6b); }
 
-.ex-toolbar { gap: 10px; }
-.ex-toolbar-2 { padding-top: 2px; }
+.ex-toolbar { gap: 8px; }
 .ex-toolbar-spacer { flex: 1; }
 .ex-search { max-width: 240px; }
 .ex-catfilter { max-width: 220px; }
+@media (max-width: 900px) { .ex-search { flex: 1 1 160px; max-width: none; } .ex-catfilter { flex: 1 1 140px; max-width: none; } }
 
 .ex-section { background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 16px; padding: 16px; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.25); }
 

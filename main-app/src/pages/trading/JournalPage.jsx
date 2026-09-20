@@ -380,14 +380,14 @@ export default function JournalPage() {
         />
       ) : (
         <>
-          <ModuleTabs module="trading" />
-          <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
-            <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
-            <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
-            <button className={`jd-tab${view === 'playbook' ? ' active' : ''}`} role="tab" aria-selected={view === 'playbook'} onClick={() => setView('playbook')}>Playbook</button>
-          </div>
-          {view === 'review' ? (
-            <>
+          <div className="jd-topbar">
+            <ModuleTabs module="trading" />
+            <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
+              <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
+              <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
+              <button className={`jd-tab${view === 'playbook' ? ' active' : ''}`} role="tab" aria-selected={view === 'playbook'} onClick={() => setView('playbook')}>Playbook</button>
+            </div>
+            {view === 'review' && (
               <div className="jd-filters" role="group" aria-label="Filtros do review">
                 <select className="jd-filter" value={dashFilters.period} onChange={(e) => setDashFilter('period', e.target.value)} aria-label="Período">
                   <option value="all">Todo o período</option>
@@ -403,6 +403,10 @@ export default function JournalPage() {
                   <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
                 )}
               </div>
+            )}
+          </div>
+          {view === 'review' ? (
+            <>
               <HeatmapSection trades={dashTrades} currency="USD" sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
               <BreakdownSection trades={dashTrades} currency="USD" loading={loading} />
               <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
@@ -430,8 +434,15 @@ export default function JournalPage() {
 }
 
 const JD_TABS_CSS = `
-.jd-tabs { display: flex; gap: 6px; }
-.jd-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.jd-topbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jd-topbar .ws-tabs { margin: 0; flex: 0 1 auto; }
+.jd-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.jd-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+@media (max-width: 720px) {
+  .jd-topbar { gap: 8px; }
+  .jd-tabs { order: 3; width: 100%; }
+  .jd-filters { margin-left: 0; }
+}
 .jd-filter { background: #111623; border: 1px solid #273044; color: var(--text, #e7eaf0); padding: 8px 10px; border-radius: 10px; font-size: 13px; min-height: 42px; }
 .jd-filter-count { font-size: 12px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .jd-day { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
