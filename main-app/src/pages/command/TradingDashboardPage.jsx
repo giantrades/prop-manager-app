@@ -290,7 +290,7 @@ export default function TradingDashboardPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
-      <ModuleTabsWithPeriod module="trading" period={period} onChange={setPeriod}>
+      <ModuleTabsWithPeriod module="trading" period={period} onChange={setPeriod} controlsFirst>
         <AccountPicker selected={acctSel} onChange={setAcctSel} />
       </ModuleTabsWithPeriod>
       {error && <ActionableError stale error={error} onRetry={reload} label="o Trading" />}
