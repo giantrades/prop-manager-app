@@ -7,6 +7,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
+import AccountPicker from '../../AccountPicker';
+import PeriodPicker from '@apps/ui/PeriodPicker';
 import { PlaybookPanel } from './PlaybookPage';
 import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
@@ -88,29 +90,34 @@ export default function JournalPage() {
     const v = Number(localStorage.getItem('journalHistogramBucket'));
     return [0.25, 0.5, 1.0].includes(v) ? v : 0.5;
   });
-  // A5 — filtros do dashboard (período + conta), com persistência.
-  const [dashFilters, setDashFilters] = useState(() => {
+  // A5 — filtros do dashboard: período (PeriodPicker) + contas (AccountPicker, multi),
+  // com persistência. Layout igual ao Resumo do Trading.
+  const [periodFilter, setPeriodFilter] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('journalDashboardFilters') || '{}');
-      return {
-        period: ['all', '7', '30', '90'].includes(raw.period) ? raw.period : 'all',
-        accountId: typeof raw.accountId === 'string' ? raw.accountId : '',
-      };
+      if (raw.period && typeof raw.period === 'object') return raw.period;
     } catch {
-      return { period: 'all', accountId: '' };
+      /* noop */
     }
+    return { mode: 'all' };
   });
-  const setDashFilter = (k, v) => {
-    setDashFilters((prev) => {
-      const next = { ...prev, [k]: v };
-      try {
-        localStorage.setItem('journalDashboardFilters', JSON.stringify(next));
-      } catch {
-        /* noop */
-      }
-      return next;
-    });
-  };
+  const [acctFilter, setAcctFilter] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('journalDashboardFilters') || '{}');
+      if (Array.isArray(raw.accountIds)) return raw.accountIds;
+      if (typeof raw.accountId === 'string' && raw.accountId) return [raw.accountId];
+    } catch {
+      /* noop */
+    }
+    return [];
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('journalDashboardFilters', JSON.stringify({ period: periodFilter, accountIds: acctFilter }));
+    } catch {
+      /* noop */
+    }
+  }, [periodFilter, acctFilter]);
   // A3 — sessões custom do heatmap. Fonte da verdade: `meta` (`journal:sessions`, sincroniza
   // entre aparelhos); localStorage é só cache do 1º paint. Default = sessões de mercado.
   const [sessionDefs, setSessionDefs] = useState(() => {
@@ -170,22 +177,37 @@ export default function JournalPage() {
   }, [selectedDay]);
 
   const dashTrades = useMemo(() => {
-    const days = dashFilters.period === 'all' ? 0 : Number(dashFilters.period);
-    const cutoff = days > 0 ? Date.now() - days * 86400000 : 0;
+    // Período do PeriodPicker (mês | intervalo from→to | tudo).
+    const mode = periodFilter?.mode ?? 'all';
+    let fromMs = 0;
+    let toMs = 0;
+    if (mode === 'month' && periodFilter.ym) {
+      fromMs = Date.parse(`${periodFilter.ym}-01T00:00:00Z`);
+      const [y, m] = periodFilter.ym.split('-').map(Number);
+      toMs = Date.UTC(y, m, 1); // 1º dia do mês seguinte
+    } else if (mode === 'range') {
+      if (periodFilter.from) fromMs = Date.parse(`${periodFilter.from}-01T00:00:00Z`);
+      if (periodFilter.to) {
+        const [y, m] = periodFilter.to.split('-').map(Number);
+        toMs = Date.UTC(y, m, 1);
+      }
+    }
+    const acctSet = acctFilter.length ? new Set(acctFilter) : null;
     return trades.filter((t) => {
-      if (dashFilters.accountId) {
-        const inAcct = t.accountId === dashFilters.accountId ||
-          (t.accounts || []).some((a) => a.accountId === dashFilters.accountId);
+      if (acctSet) {
+        const inAcct = acctSet.has(t.accountId) || (t.accounts || []).some((a) => acctSet.has(a.accountId));
         if (!inAcct) return false;
       }
-      if (cutoff > 0) {
+      if (fromMs || toMs) {
         const stamp = t.exitDatetime || t.entryDatetime;
         const ts = stamp ? new Date(stamp).getTime() : 0;
-        if (!ts || ts < cutoff) return false;
+        if (!ts) return false;
+        if (fromMs && ts < fromMs) return false;
+        if (toMs && ts >= toMs) return false;
       }
       return true;
     });
-  }, [trades, dashFilters]);
+  }, [trades, periodFilter, acctFilter]);
   const handleHistBucket = (b) => {
     setHistBucket(b);
     try {
@@ -389,17 +411,9 @@ export default function JournalPage() {
             </div>
             {view === 'review' && (
               <div className="jd-filters" role="group" aria-label="Filtros do review">
-                <select className="jd-filter" value={dashFilters.period} onChange={(e) => setDashFilter('period', e.target.value)} aria-label="Período">
-                  <option value="all">Todo o período</option>
-                  <option value="7">Últimos 7 dias</option>
-                  <option value="30">Últimos 30 dias</option>
-                  <option value="90">Últimos 90 dias</option>
-                </select>
-                <select className="jd-filter" value={dashFilters.accountId} onChange={(e) => setDashFilter('accountId', e.target.value)} aria-label="Conta">
-                  <option value="">Todas as contas</option>
-                  {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
-                </select>
-                {(dashFilters.period !== 'all' || dashFilters.accountId) && (
+                <PeriodPicker period={periodFilter} onChange={setPeriodFilter} compact />
+                <AccountPicker selected={acctFilter} onChange={setAcctFilter} />
+                {(periodFilter?.mode !== 'all' || acctFilter.length > 0) && (
                   <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
                 )}
               </div>
@@ -443,7 +457,6 @@ const JD_TABS_CSS = `
   .jd-tabs { order: 3; width: 100%; }
   .jd-filters { margin-left: 0; }
 }
-.jd-filter { background: #111623; border: 1px solid #273044; color: var(--text, #e7eaf0); padding: 8px 10px; border-radius: 10px; font-size: 13px; min-height: 42px; }
 .jd-filter-count { font-size: 12px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .jd-day { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
 .jd-day-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }

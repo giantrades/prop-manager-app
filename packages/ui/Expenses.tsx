@@ -523,8 +523,10 @@ export default function Expenses({
     Saldo: s.balance,
   }));
 
+  const hasFilter = q.trim() !== '' || catFilter !== '' || typeFilter !== 'all';
+
   return (
-    <div className="ex-root">
+    <div className={`ex-root${hasFilter ? ' ex-filtering' : ''}`}>
       {/* Resumo do mês */}
       <div className="ex-hero">
         <div className="ex-summary">
@@ -591,6 +593,14 @@ export default function Expenses({
         <span className="ex-toolbar-spacer" />
         <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
       </div>
+
+      {/* Cabeçalho de resultados (só quando há filtro ativo) */}
+      {hasFilter && (
+        <div className="ex-results-head">
+          <span className="ex-section-title">Resultados · {monthTxs.length}</span>
+          <button className="ex-btn ex-btn-ghost ex-btn-sm" onClick={() => { setTypeFilter('all'); setCatFilter(''); setQ(''); }}>Limpar filtros</button>
+        </div>
+      )}
 
       {/* D1 — Contas a pagar / a receber */}
       {bills.length > 0 && (
@@ -1047,9 +1057,9 @@ export default function Expenses({
         </div>
       )}
 
-      {/* Ganhos */}
-      {typeFilter !== 'expense' && (
-        <div className="ex-section">
+      {/* Ganhos (não têm categoria; somem quando o filtro é por categoria) */}
+      {typeFilter !== 'expense' && !catFilter && (
+        <div className="ex-section ex-list">
           <div className="ex-section-title">Ganhos</div>
           {gains.length === 0 ? (
             <div className="ex-empty" role="status">Nenhum ganho neste mês.</div>
@@ -1075,7 +1085,7 @@ export default function Expenses({
 
       {/* Gastos agrupados */}
       {typeFilter !== 'income' && (
-        <div className="ex-section">
+        <div className="ex-section ex-list">
           <div className="ex-section-head">
             <span className="ex-section-title">Lançamentos do mês</span>
             <span className="ex-typefilter" role="group" aria-label="Agrupar lançamentos">
@@ -1334,6 +1344,13 @@ const EX_CSS = `
 
 .ex-toolbar { gap: 8px; }
 .ex-toolbar-spacer { flex: 1; }
+/* Modo filtro: filtros primeiro, resultados logo abaixo; esconde o resumo do mês. */
+.ex-root.ex-filtering .ex-hero { display: none; }
+.ex-root.ex-filtering .ex-toolbar { order: -3; }
+.ex-root.ex-filtering .ex-results-head { order: -2; }
+.ex-root.ex-filtering .ex-list { order: -1; }
+.ex-results-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ex-results-head .ex-section-title { margin: 0; }
 .ex-search { max-width: 240px; }
 .ex-catfilter { max-width: 220px; }
 @media (max-width: 900px) { .ex-search { flex: 1 1 160px; max-width: none; } .ex-catfilter { flex: 1 1 140px; max-width: none; } }
