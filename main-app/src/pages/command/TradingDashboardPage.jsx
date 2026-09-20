@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceDot, ReferenceLine,
 } from 'recharts';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import useEngineData from '../../useEngineData';
 import { fmtMoney } from '@apps/ui/currency';
 import PnLCalendar from '@apps/ui/PnLCalendar';
@@ -22,7 +22,6 @@ import {
   tradeAccountIds, weightForAccount, accountBalance,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 import AccountPicker from '../../AccountPicker';
 import { useEntityDrawer } from '@apps/ui/EntityDrawer';
 
@@ -291,12 +290,10 @@ export default function TradingDashboardPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
-      <ModuleTabs module="trading" />
-      {error && <ActionableError stale error={error} onRetry={reload} label="o Trading" />}
-      <div className="td-toolbar">
-        <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="trading" period={period} onChange={setPeriod}>
         <AccountPicker selected={acctSel} onChange={setAcctSel} />
-      </div>
+      </ModuleTabsWithPeriod>
+      {error && <ActionableError stale error={error} onRetry={reload} label="o Trading" />}
 
       <div className="td-cards">
         <StatCard label="PnL total" value={fmtMoney(stats.pnlTotal, 'USD')} sub={`${stats.trades.length} trades`} color={stats.pnlTotal >= 0 ? '#10b981' : '#ef4444'} glow={stats.pnlTotal >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'} />

@@ -7,7 +7,7 @@ import { NavLink } from 'react-router-dom';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, ComposedChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
 } from 'recharts';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
@@ -25,7 +25,6 @@ import {
   categoryTrend, shiftYm, ymToList, invoiceCycle,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
@@ -191,12 +190,8 @@ export default function GastosDashboardPage() {
         <h1 className="cmd-page-title">Gastos</h1>
         <NavLink className="cmd-refresh" to="/expenses" style={{ textDecoration: 'none' }}>Lançamentos →</NavLink>
       </div>
-      <ModuleTabs module="gastos" />
-
-      {/* Período: mês · intervalo X→Y · tudo. Toda a dashboard respeita o selecionado. */}
-      <div className="gd-monthbar">
-        <PeriodPicker period={period} onChange={setPeriod} />
-      </div>
+      {/* Abas + período na mesma linha (ganha espaço vertical). */}
+      <ModuleTabsWithPeriod module="gastos" period={period} onChange={setPeriod} />
 
       {error && view && <ActionableError stale error={error} onRetry={reload} label="os Gastos" />}
       {error && !view ? (
@@ -475,7 +470,6 @@ export default function GastosDashboardPage() {
 
 const GD_CSS = `
 
-.gd-monthbar { display: flex; flex-direction: column; gap: 8px; }
 .gd-monthnav { display: flex; align-items: center; gap: 8px; }
 .gd-mnav { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .gd-mnav:hover { background: rgba(124,92,255,0.12); border-color: rgba(124,92,255,0.35); }

@@ -6,7 +6,7 @@ function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { ResponsiveContainer, BarChart, Bar, LineChart as RLineChart, Line, Legend, Treemap, Cell, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import useEngineData from '../../useEngineData';
 import NetWorth from '@apps/ui/NetWorth';
 import AllocationPie from '@apps/ui/AllocationPie';
@@ -20,7 +20,6 @@ import {
   tradeNetPnl,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { useEntityDrawer } from '@apps/ui/EntityDrawer';
 
@@ -173,8 +172,7 @@ export default function InvestmentsDashboardPage() {
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Investimentos</h1>
       </div>
-      <ModuleTabs module="investimentos" />
-      <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="investimentos" period={period} onChange={setPeriod} />
 
       {error && pf && <ActionableError stale error={error} onRetry={reload} label="os Investimentos" />}
       {error && !pf ? (

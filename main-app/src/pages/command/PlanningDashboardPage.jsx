@@ -4,14 +4,13 @@ import { fmtMoney as fmtMoneyShared } from '@apps/ui/currency';
 function fmtMoney(v, cur = 'R$') { return fmtMoneyShared(v, cur); }
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import useEngineData from '../../useEngineData';
 import Goals from '@apps/ui/Goals';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
 import { Sparkles, ShoppingCart } from 'lucide-react';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { inPeriod } from '@apps/lib/db';
 
@@ -50,8 +49,7 @@ export default function PlanningDashboardPage() {
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Planejamento</h1>
       </div>
-      <ModuleTabs module="planejamento" />
-      <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="planejamento" period={period} onChange={setPeriod} />
 
       {error && data && <ActionableError stale error={error} onRetry={reload} label="o Planejamento" />}
       {error && !data ? (

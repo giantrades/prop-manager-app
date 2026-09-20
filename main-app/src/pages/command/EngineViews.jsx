@@ -11,7 +11,7 @@ import { useFinance, usePeriod } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { fmtMoney } from '@apps/ui/currency';
 import { nowIso } from '@apps/lib/db';
-import PeriodPicker from '@apps/ui/PeriodPicker';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import {
   firmPnlByFirm,
   computeFirmPnlByAccount,
@@ -654,8 +654,7 @@ export function TaxPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Tax Cockpit</h1></div>
-      <ModuleTabs module="gastos" />
-      <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="gastos" period={period} onChange={setPeriod} />
       <TaxCockpit cockpit={data} yearMonth={ym} loading={loading} onExportCSV={handleExportCSV} />
       <AssetSalesSection finance={finance} />
     </div>

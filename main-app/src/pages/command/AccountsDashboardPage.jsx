@@ -4,14 +4,13 @@
 import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Building2, Wallet, TrendingUp, Landmark, Banknote } from 'lucide-react';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import useEngineData from '../../useEngineData';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import AllocationPie from '@apps/ui/AllocationPie';
 import { fmtMoney } from '@apps/ui/currency';
 import { listFirms, computeAccountBalance, inPeriod, normalizePropPhase, tradeAccountIds, accountBalance } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 
 const KIND_META = {
@@ -131,9 +130,7 @@ export default function AccountsDashboardPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Contas</h1></div>
-      <ModuleTabs module="contas" />
-      <p className="ad-intro">Resumo do seu dinheiro e das contas prop: <b>saldo</b>, <b>risco (DD)</b>, <b>payouts</b> e <b>atividade</b> no período selecionado. Para cadastrar/editar, use a aba <b>Contas</b>.</p>
-      <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="contas" period={period} onChange={setPeriod} />
 
       {error && data && <ActionableError stale error={error} onRetry={reload} label="as Contas" />}
       {error && !data ? (

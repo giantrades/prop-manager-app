@@ -3,13 +3,12 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useFinance } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
-import ModuleTabs from '../../ModuleTabs';
+import ModuleTabsWithPeriod from '../../ModuleTabsWithPeriod';
 import usePageData from '../../usePageData';
 import { fmtMoney } from '@apps/ui/currency';
 import { Activity, LineChart, CalendarDays } from 'lucide-react';
 import { monthlySeries, computeFreeCash, computeFreeCashPeriod, inPeriod, tradeNetPnl } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
-import PeriodPicker from '@apps/ui/PeriodPicker';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import {
   ResponsiveContainer, BarChart, Bar, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -89,8 +88,7 @@ export default function ReportsPage() {
           <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
       </div>
-      <ModuleTabs module="relatorios" />
-      <PeriodPicker period={period} onChange={setPeriod} />
+      <ModuleTabsWithPeriod module="relatorios" period={period} onChange={setPeriod} />
 
       {error && data && <ActionableError stale error={error} onRetry={load} label="o Relatório" />}
       {error && !data ? (
