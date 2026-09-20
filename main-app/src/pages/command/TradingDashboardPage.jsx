@@ -220,7 +220,7 @@ export default function TradingDashboardPage() {
     return (
       <div className="cmd-page">
         <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
-        <ModuleTabs module="trading" />
+        <ModuleTabsWithPeriod module="trading" period={period} onChange={setPeriod} />
         <ActionableError error={error} onRetry={reload} label="o Trading" />
       </div>
     );
@@ -229,7 +229,7 @@ export default function TradingDashboardPage() {
     return (
       <div className="cmd-page">
         <div className="cmd-page-head"><h1 className="cmd-page-title">Trading</h1></div>
-        <ModuleTabs module="trading" />
+        <ModuleTabsWithPeriod module="trading" period={period} onChange={setPeriod} />
         <DashSkeleton cards={6} widgets={4} />
       </div>
     );
