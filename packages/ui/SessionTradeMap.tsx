@@ -6,15 +6,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Trade, SessionDef } from '@apps/lib/db';
 import { parseDate, tradeNetPnl } from '@apps/lib/db';
-import { sessionDisplaySegments, pct, fmtHM } from './sessionTime';
+import { sessionDisplaySegments, pct, fmtHM, dayKeyOfMs, dayStartMs } from './sessionTime';
 import { SESSION_COLORS } from './sessionIcons';
 import { fmtMoney } from './currency';
+import { useNowTick } from './Usenowtick';
 
 interface Props {
   trades: Trade[];
   sessions: SessionDef[];
   zone?: 'local' | 'utc';
   currency?: string;
+  /** Dia exibido ('YYYY-MM-DD'; null = hoje), controlado pelo pai. Quando presente, o seletor de dia
+   *  próprio some (o pai — HeatmapSection — mostra um só, no mapa-múndi). Sem ele: comportamento antigo. */
+  day?: string | null;
 }
 
 const HOUR_LABELS = [0, 6, 12, 18, 24];
@@ -24,23 +28,12 @@ const BAR_H = 16; // altura visual da barra
 // Na hora de empacotar em faixas reservamos ao menos 1h, senão dois trades próximos se sobrepõem.
 const MIN_LANE_H = 1;
 
-function pad2(n: number): string {
-  return String(n).padStart(2, '0');
-}
 function dayKeyOf(iso: string, zone: 'local' | 'utc'): string {
-  const d = parseDate(iso);
-  const y = zone === 'utc' ? d.getUTCFullYear() : d.getFullYear();
-  const m = (zone === 'utc' ? d.getUTCMonth() : d.getMonth()) + 1;
-  const day = zone === 'utc' ? d.getUTCDate() : d.getDate();
-  return `${y}-${pad2(m)}-${pad2(day)}`;
-}
-function dayStartMs(key: string, zone: 'local' | 'utc'): number {
-  const [y, m, d] = key.split('-').map(Number);
-  return zone === 'utc' ? Date.UTC(y, m - 1, d) : new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  return dayKeyOfMs(parseDate(iso).getTime(), zone);
 }
 
-export default function SessionTradeMap({ trades, sessions, zone = 'local', currency = 'USD' }: Props) {
-  const now = new Date();
+export default function SessionTradeMap({ trades, sessions, zone = 'local', currency = 'USD', day: dayProp }: Props) {
+  const now = useNowTick(); // o "agora" anda sozinho (a cada 60 s)
   const zoneLabel = zone === 'utc' ? 'UTC' : 'local';
   const offsetHours = -now.getTimezoneOffset() / 60;
   const delta = zone === 'utc' ? -offsetHours : 0;
@@ -58,16 +51,20 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
     return [...set].sort();
   }, [trades, zone]);
 
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const controlled = dayProp !== undefined;
+  const todayKey = dayKeyOfMs(now.getTime(), zone);
+  const [innerDay, setInnerDay] = useState<string | null>(null);
+  const selectedDay = controlled ? (dayProp ?? todayKey) : innerDay;
+  const setSelectedDay = setInnerDay;
   const [selectedId, setSelectedId] = useState<Trade['id'] | null>(null);
   // Só INICIALIZA o dia. Antes o efeito também "corrigia" qualquer dia fora de `days`,
   // então ◀/▶ e o seletor de data voltavam sozinhos ao último dia com trade ao cair
   // num fim de semana/feriado (e o "Sem trades neste dia." nunca aparecia).
   useEffect(() => {
-    if (selectedDay === null && days.length > 0) setSelectedDay(days[days.length - 1]);
-  }, [days, selectedDay]);
+    if (!controlled && innerDay === null && days.length > 0) setInnerDay(days[days.length - 1]);
+  }, [controlled, days, innerDay]);
 
-  const isToday = selectedDay === dayKeyOf(now.toISOString(), zone);
+  const isToday = selectedDay === todayKey;
 
   const bars = useMemo(() => {
     if (!selectedDay) return [];
@@ -79,7 +76,7 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
       const hasExit = !!t.exitDatetime;
       const x0 = hasExit ? (parseDate(t.exitDatetime as string).getTime() - ds) / 3600000 : NaN;
       const start = e0;
-      const end = hasExit ? x0 : (dayKeyOf(t.entryDatetime, zone) === dayKeyOf(now.toISOString(), zone) ? nowH : 24);
+      const end = hasExit ? x0 : (dayKeyOf(t.entryDatetime, zone) === todayKey ? nowH : 24);
       if (end <= 0 || start >= 24) continue;
       out.push({
         t,
@@ -90,7 +87,7 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
     }
     out.sort((a, b) => a.start - b.start);
     return out;
-  }, [trades, selectedDay, zone, nowH]);
+  }, [trades, selectedDay, zone, nowH, todayKey]);
 
   // Empacota em faixas: primeiro espaço livre sem sobrepor no tempo.
   const laid = useMemo(() => {
@@ -135,29 +132,31 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
           <span className="stm-chip"><i className="stm-lg-dot" aria-hidden="true" />abertura</span>
           <span className="stm-chip"><i className="stm-lg-arrow" aria-hidden="true" />fechamento</span>
         </div>
-        <div className="stm-day">
-          <button
-            type="button"
-            className="stm-btn"
-            onClick={() => prevDay && setSelectedDay(prevDay)}
-            disabled={!prevDay}
-            aria-label="Dia anterior com trades"
-          >◀</button>
-          <input
-            className="stm-date"
-            type="date"
-            value={selectedDay ?? ''}
-            onChange={(e) => e.target.value && setSelectedDay(e.target.value)}
-            aria-label="Dia do mapa"
-          />
-          <button
-            type="button"
-            className="stm-btn"
-            onClick={() => nextDay && setSelectedDay(nextDay)}
-            disabled={!nextDay}
-            aria-label="Próximo dia com trades"
-          >▶</button>
-        </div>
+        {!controlled && (
+          <div className="stm-day">
+            <button
+              type="button"
+              className="stm-btn"
+              onClick={() => prevDay && setSelectedDay(prevDay)}
+              disabled={!prevDay}
+              aria-label="Dia anterior com trades"
+            >◀</button>
+            <input
+              className="stm-date"
+              type="date"
+              value={selectedDay ?? ''}
+              onChange={(e) => e.target.value && setSelectedDay(e.target.value)}
+              aria-label="Dia do mapa"
+            />
+            <button
+              type="button"
+              className="stm-btn"
+              onClick={() => nextDay && setSelectedDay(nextDay)}
+              disabled={!nextDay}
+              aria-label="Próximo dia com trades"
+            >▶</button>
+          </div>
+        )}
       </div>
 
       <div className="stm-axis">

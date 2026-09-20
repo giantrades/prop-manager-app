@@ -35,3 +35,22 @@ export function fmtHM(h: number): string {
   const mm = String(total % 60).padStart(2, '0');
   return `${hh}:${mm}`;
 }
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Chave 'YYYY-MM-DD' do dia de um instante (ms) no fuso do eixo (local do aparelho ou UTC). */
+export function dayKeyOfMs(ms: number, zone: 'local' | 'utc'): string {
+  const d = new Date(ms);
+  const y = zone === 'utc' ? d.getUTCFullYear() : d.getFullYear();
+  const m = (zone === 'utc' ? d.getUTCMonth() : d.getMonth()) + 1;
+  const day = zone === 'utc' ? d.getUTCDate() : d.getDate();
+  return `${y}-${pad2(m)}-${pad2(day)}`;
+}
+
+/** Instante (ms) da 00:00 da chave 'YYYY-MM-DD' no fuso do eixo. */
+export function dayStartMs(key: string, zone: 'local' | 'utc'): number {
+  const [y, m, d] = key.split('-').map(Number);
+  return zone === 'utc' ? Date.UTC(y, m - 1, d) : new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+}

@@ -1,36 +1,47 @@
-// WorldSessionMap — "session map" estilo fxblue + qorix, na nossa identidade:
-//  (1) mapa-múndi PONTILHADO REAL: máscara de terra (Natural Earth 50m, domínio público)
-//      rasterizada numa grade hexagonal de pontos e embutida como bitmap base64
-//      (sem GeoJSON externo, sem fetch). Duas densidades: fina (desktop) e grossa
-//      (container < 600px) — a fina vira "névoa" quando o mapa encolhe no celular.
-//  (2) Etiquetas translúcidas por mercado em HTML (não em SVG): o texto fica SEMPRE
-//      em 11px, não encolhe junto com o viewBox no celular. Ponto = posição da cidade.
-//  (3) Linha "agora" atravessando mapa + histograma de volume, com relógio no topo
-//      preso à linha. Mapa e histograma vivem no mesmo card, com a mesma largura,
-//      então a coluna de hora fica alinhada 1:1 por construção.
-//  (4) Lista de mercados (ícone, nome, relógio, status).
-// Apresentação pura: usa `marketStatus` e hora de entrada dos trades.
-import React, { useMemo } from 'react';
+// WorldSessionMap — mapa de sessões estilo fxblue + qorix, na nossa identidade.
+//  • Eixo X = HORA DO DIA (local ou UTC). O mapa-múndi pontilhado (Natural Earth 50m,
+//    domínio público, embutido como bitmap base64 — sem fetch) é o fundo.
+//  • Cada sessão é uma FAIXA do início ao fim (quebra na meia-noite); a parte já percorrida
+//    fica mais forte e a faixa brilha enquanto o mercado está aberto.
+//  • Linha vermelha "agora" cruza o mapa e o gráfico e anda sozinha (atualiza a cada 60 s).
+//  • Trades: bolinha cheia na abertura (verde long / vermelha short), linha até a bolinha
+//    vazada do fechamento — cada bolinha na faixa da sessão daquela hora. Posição aberta
+//    (ao vivo) = linha tracejada até "agora". Hover/toque mostra os dados.
+//  • "Trades abertos por hora": curva suave no mesmo eixo X do mapa.
+// Apresentação pura: usa `marketStatus`, `sessionContains`, `tradeNetPnl`. Posição ao vivo
+// nunca entra em soma de PnL (o valor dela é só exibição).
+import React, { useMemo, useState } from 'react';
 import type { Trade, SessionDef } from '@apps/lib/db';
 import { marketStatus, parseDate, sessionContains } from '@apps/lib/db';
-import { sessionDisplaySegments, pct } from './sessionTime';
+import { sessionDisplaySegments, pct, fmtHM, mod24, dayKeyOfMs, dayStartMs } from './sessionTime';
 import { sessionIconFor, SESSION_COLORS } from './sessionIcons';
+import { fmtMoney } from './currency';
+import { useNowTick } from './Usenowtick';
+import {
+  tradeToMapTrade, positionToMapTrade, layoutDayTrades, laneCenterPct, rowOffsetPct,
+  type MapTrade, type OpenPosition, type PlacedTrade, type DotPos,
+} from './Sessionmapdata';
 
 interface Props {
   trades?: Trade[];
+  /** Posições abertas ao vivo (usePlatform). Só desenho — nunca entram em PnL. */
+  openPositions?: OpenPosition[];
   sessions: SessionDef[];
   zone?: 'local' | 'utc';
+  /** Congela o "agora" (teste). Sem ele, atualiza sozinho a cada 60 s. */
   now?: Date;
+  currency?: string;
+  /** Dia exibido ('YYYY-MM-DD' no fuso do eixo); null/undefined = hoje. Controlado se `onDayChange` existir. */
+  day?: string | null;
+  onDayChange?: (day: string | null) => void;
 }
 
-// Coordenadas das cidades (lon, lat). `dy` = deslocamento vertical (px) da etiqueta em
-// relação ao ponto da cidade (default −16 = acima). Londres e Nova York ficam a ~7°
-// de latitude uma da outra: no celular as etiquetas se sobreporiam sem esse desvio.
-const CITY: Record<string, { lat: number; lon: number; label: string; dy?: number }> = {
-  sydney: { lat: -33.9, lon: 151.2, label: 'Sydney' },
-  tokyo: { lat: 35.7, lon: 139.7, label: 'Tóquio' },
-  london: { lat: 51.5, lon: -0.1, label: 'Londres' },
-  newyork: { lat: 40.7, lon: -74.0, label: 'Nova York', dy: 16 },
+// Nome curto + latitude (só para ORDENAR as faixas de cima p/ baixo: Londres … Sydney).
+const CITY: Record<string, { lat: number; label: string }> = {
+  sydney: { lat: -33.9, label: 'Sydney' },
+  tokyo: { lat: 35.7, label: 'Tóquio' },
+  london: { lat: 51.5, label: 'Londres' },
+  newyork: { lat: 40.7, label: 'Nova York' },
 };
 
 const HOUR_LABELS = [0, 6, 12, 18, 24];
@@ -40,23 +51,38 @@ function fmtMin(min: number): string {
   const mm = String(min % 60).padStart(2, '0');
   return `${hh}:${mm}`;
 }
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+function fmtDur(ms: number): string {
+  const m = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(m / 60);
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  return h > 0 ? `${h}h ${pad2(m % 60)}min` : `${m}min`;
+}
+function fmtPrice(n: number): string {
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 5 });
+}
+function colorVars(color: string): React.CSSProperties {
+  return {
+    '--c': color,
+    '--c-bg': `${color}22`,
+    '--c-fill': `${color}55`,
+    '--c-dim': `${color}66`,
+    '--c-bd': `${color}e6`,
+    '--c-glow': `${color}66`,
+  } as React.CSSProperties;
+}
 
-// ─── MAPA-MÚNDI PONTILHADO ───────────────────────────────────────────────────
-// Projeção equiretangular recortada de 84°N a 60°S (sem Ártico profundo nem
-// Antártida — mesmo enquadramento dos mapas de sessão do fxblue/qorix).
-// x = (lon+180)/360 * W ; y = (LAT_TOP-lat)/(LAT_TOP-LAT_BOT) * H
-// Proporção W:H = 360:144 = 5:2 (igual ao aspect-ratio do CSS → nada é esticado).
+// ─── MAPA-MÚNDI PONTILHADO (fundo) ───────────────────────────────────────────
+// Projeção equiretangular recortada de 84°N a 60°S. 5:2 (W:H = 360:144).
 const W = 1000;
 const H = 400;
 const LAT_TOP = 84;
 const LAT_BOT = -60;
 
-function lonlatToSVG(lon: number, lat: number): [number, number] {
-  return [((lon + 180) / 360) * W, ((LAT_TOP - lat) / (LAT_TOP - LAT_BOT)) * H];
-}
-
-// Grade hexagonal (linhas ímpares deslocadas meia coluna). 1 bit por célula, MSB
-// primeiro, linha a linha; bit = 1 → célula com terra suficiente (Natural Earth 50m).
+// Grade hexagonal (linhas ímpares deslocadas meia coluna). 1 bit por célula, MSB primeiro,
+// linha a linha; bit = 1 → célula com terra suficiente (Natural Earth 50m).
 interface DotGrid {
   b64: string;
   cols: number;
@@ -168,7 +194,6 @@ function buildLandPath(g: DotGrid): string {
 }
 
 // Cada ponto é um traço de comprimento ~0 com ponta redonda (1 <path> por densidade).
-// Diâmetro do ponto ≈ 55% do passo horizontal (fina 4,17 → 2,3 ; grossa 8,33 → 4,4).
 const Dots = React.memo(function Dots() {
   const fine = useMemo(() => buildLandPath(FINE_GRID), []);
   const coarse = useMemo(() => buildLandPath(COARSE_GRID), []);
@@ -180,72 +205,139 @@ const Dots = React.memo(function Dots() {
   );
 });
 
-// ─── Etiqueta de mercado (HTML sobre o mapa) ────────────────────────────────
-interface CityMarkerProps {
-  city: { lat: number; lon: number; label: string; dy?: number };
-  color: string;
-  open: boolean;
-  Icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+// ─── Curva suave (Catmull-Rom → Bézier) para o gráfico de volume ─────────────
+function smoothPath(pts: Array<[number, number]>): string {
+  if (pts.length < 2) return '';
+  const cl = (v: number) => Math.min(98, Math.max(2, v));
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = cl(p1[1] + (p2[1] - p0[1]) / 6);
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = cl(p2[1] - (p3[1] - p1[1]) / 6);
+    d += `C${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2[0]} ${p2[1]}`;
+  }
+  return d;
 }
 
-function CityMarker({ city, color, open, Icon }: CityMarkerProps) {
-  const [cx, cy] = lonlatToSVG(city.lon, city.lat);
-  const xPct = (cx / W) * 100;
-  const yPct = (cy / H) * 100;
-  // Meia-largura estimada da etiqueta (px) — só p/ não vazar da borda do mapa.
-  const half = Math.ceil((city.label.length * 6.6 + 54) / 2);
-  const dy = city.dy ?? -16;
-  const vars = {
-    '--c': color,
-    '--c-bg': `${color}24`,
-    '--c-bd': `${color}e6`,
-    '--c-dim': `${color}59`,
-    '--c-glow': `${color}66`,
-  } as React.CSSProperties;
-
-  return (
-    <>
-      <span
-        className={`wsm-pin${open ? ' is-open' : ''}`}
-        style={{ left: `${xPct}%`, top: `${yPct}%`, ...vars }}
-        aria-hidden="true"
-      />
-      <div
-        className={`wsm-city${open ? ' is-open' : ''}`}
-        style={{
-          left: `clamp(${half}px, ${xPct}%, calc(100% - ${half}px))`,
-          top: `clamp(14px, calc(${yPct}% + ${dy}px), calc(100% - 14px))`,
-          ...vars,
-        }}
-        title={`${city.label} — ${open ? 'aberto' : 'fechado'}`}
-      >
-        <span className="wsm-city-icon"><Icon size={14} /></span>
-        <span className="wsm-city-name">{city.label}</span>
-        <span className="wsm-city-dot" aria-hidden="true" />
-        <span className="wsm-sr">{open ? ', aberto' : ', fechado'}</span>
-      </div>
-    </>
-  );
+interface Seg { start: number; end: number }
+interface Lane {
+  def: SessionDef;
+  idx: number; // índice original em `sessions` (define a cor)
+  color: string;
+  label: string;
+  segs: Seg[];
+  capSeg: Seg | null; // segmento que leva o nome (o mais largo)
+  Icon: ReturnType<typeof sessionIconFor>;
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
-export default function WorldSessionMap({ trades = [], sessions, zone = 'local', now }: Props) {
-  const ref = now ?? new Date();
+export default function WorldSessionMap({
+  trades = [], openPositions = [], sessions, zone = 'local', now: nowProp,
+  currency = 'USD', day: dayProp, onDayChange,
+}: Props) {
+  const ref = useNowTick(nowProp);
+  const zoneTag = zone === 'utc' ? 'UTC' : 'local';
   const status = useMemo(() => marketStatus(ref), [ref]);
   const offsetHours = -ref.getTimezoneOffset() / 60;
   const delta = zone === 'utc' ? -offsetHours : 0;
-  const utcH = ref.getUTCHours() + ref.getUTCMinutes() / 60;
-  const nowH = zone === 'utc' ? utcH : ref.getHours() + ref.getMinutes() / 60;
+  const nowH = zone === 'utc'
+    ? ref.getUTCHours() + ref.getUTCMinutes() / 60
+    : ref.getHours() + ref.getMinutes() / 60;
+  const localNowH = ref.getHours() + ref.getMinutes() / 60; // SessionDef é em hora LOCAL
   const nowPct = (nowH / 24) * 100;
-  const nowLabel = `${String(Math.floor(nowH)).padStart(2, '0')}:${String(Math.round((nowH % 1) * 60)).padStart(2, '0')}`;
-  const zoneTag = zone === 'utc' ? 'UTC' : 'local';
+  const nowLabel = fmtHM(nowH);
 
-  const sessionById = useMemo(() => {
-    const m = new Map<string, { i: number; def: SessionDef }>();
-    sessions.forEach((def, i) => m.set(def.id, { i, def }));
-    return m;
-  }, [sessions]);
+  // ── Dia exibido (null = hoje; segue a virada da meia-noite sozinho) ──
+  const todayKey = dayKeyOfMs(ref.getTime(), zone);
+  const [innerDay, setInnerDay] = useState<string | null>(null);
+  const controlled = onDayChange !== undefined;
+  const dayVal = controlled ? (dayProp ?? null) : innerDay;
+  const setDay = controlled ? onDayChange : setInnerDay;
+  const dayKey = dayVal ?? todayKey;
+  const isToday = dayKey === todayKey;
+  const pickDay = (k: string) => setDay(k === todayKey ? null : k);
 
+  // ── Trades da store + posições ao vivo → mesmo formato de desenho ──
+  const mapTrades = useMemo(() => {
+    const out: MapTrade[] = [];
+    for (const t of trades) {
+      const m = tradeToMapTrade(t);
+      if (m) out.push(m);
+    }
+    for (const p of openPositions) out.push(positionToMapTrade(p, ref.getTime()));
+    return out;
+  }, [trades, openPositions, ref]);
+
+  // ◀/▶ pulam entre dias com trades (hoje sempre existe).
+  const navDays = useMemo(() => {
+    const s = new Set<string>([todayKey]);
+    for (const m of mapTrades) {
+      s.add(dayKeyOfMs(m.entryMs, zone));
+      if (m.exitMs !== null) s.add(dayKeyOfMs(m.exitMs, zone));
+    }
+    return [...s].sort();
+  }, [mapTrades, zone, todayKey]);
+  const prevDay = useMemo(() => {
+    for (let i = navDays.length - 1; i >= 0; i--) if (navDays[i] < dayKey) return navDays[i];
+    return null;
+  }, [navDays, dayKey]);
+  const nextDay = useMemo(() => {
+    for (let i = 0; i < navDays.length; i++) if (navDays[i] > dayKey) return navDays[i];
+    return null;
+  }, [navDays, dayKey]);
+  const dayLabel = useMemo(() => {
+    const [y, m, d] = dayKey.split('-').map(Number);
+    return new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' })
+      .format(new Date(Date.UTC(y, m - 1, d, 12)));
+  }, [dayKey]);
+
+  // ── Faixas (uma por sessão), de cima p/ baixo por latitude; ids sem cidade por último ──
+  const lanes: Lane[] = useMemo(() => {
+    const all = sessions.map((def, idx) => ({ def, idx }));
+    const known = all.filter((x) => CITY[x.def.id]).sort((p, q) => CITY[q.def.id].lat - CITY[p.def.id].lat);
+    const unknown = all.filter((x) => !CITY[x.def.id]);
+    return [...known, ...unknown].map(({ def, idx }) => {
+      const segs = sessionDisplaySegments(def, delta);
+      const capSeg = segs.reduce<Seg | null>((best, s) => (!best || s.end - s.start > best.end - best.start ? s : best), null);
+      return {
+        def, idx,
+        color: SESSION_COLORS[idx % SESSION_COLORS.length],
+        label: CITY[def.id]?.label ?? def.label,
+        segs, capSeg,
+        Icon: sessionIconFor(def.id),
+      };
+    });
+  }, [sessions, delta]);
+  const laneCount = lanes.length;
+  const laneOfSession = useMemo(() => {
+    const a = new Array<number>(sessions.length).fill(0);
+    lanes.forEach((l, pos) => { a[l.idx] = pos; });
+    return a;
+  }, [lanes, sessions.length]);
+
+  // ── Layout dos trades no dia exibido ──
+  const dayStart = useMemo(() => dayStartMs(dayKey, zone), [dayKey, zone]);
+  const layout = useMemo(
+    () => layoutDayTrades({ trades: mapTrades, dayStartMs: dayStart, nowMs: ref.getTime(), sessions, laneOfSession }, laneCount),
+    [mapTrades, dayStart, ref, sessions, laneOfSession, laneCount],
+  );
+
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
+  const [pinKey, setPinKey] = useState<string | null>(null);
+  const activeKey = hoverKey ?? pinKey;
+  const active = layout.placed.find((p) => p.t.key === activeKey) ?? null;
+  const togglePin = (k: string) => setPinKey((cur) => (cur === k ? null : k));
+
+  const yOfDot = (d: DotPos) =>
+    laneCenterPct(d.lane, laneCount) + rowOffsetPct(d.row, layout.rowsInLane[d.lane] ?? 1, laneCount);
+  const xOfH = (h: number) => (h / 24) * 100;
+
+  // ── Volume: trades abertos por hora do dia (só trades da store; posição ao vivo fica de fora) ──
   const hours = useMemo(() => {
     const arr = new Array(24).fill(0) as number[];
     for (const t of trades) {
@@ -255,108 +347,314 @@ export default function WorldSessionMap({ trades = [], sessions, zone = 'local',
     }
     return arr;
   }, [trades, zone]);
-  const hourMax = Math.max(1, ...hours);
   const totalTrades = hours.reduce((a, b) => a + b, 0);
+  const hourMax = Math.max(1, ...hours);
+  const peakHour = hours.indexOf(Math.max(...hours));
+  const yVol = (v: number) => 92 - (v / hourMax) * 78;
+  const volLine = useMemo(() => {
+    const pts: Array<[number, number]> = hours.map((v, h) => [h + 0.5, yVol(v)]);
+    return smoothPath([[0, pts[0][1]], ...pts, [24, pts[23][1]]]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hours, hourMax]);
+  const [volHour, setVolHour] = useState<number | null>(null);
+
+  const sessionById = useMemo(() => {
+    const m = new Map<string, { i: number; def: SessionDef }>();
+    sessions.forEach((def, i) => m.set(def.id, { i, def }));
+    return m;
+  }, [sessions]);
+
+  const progressOf = (sg: Seg): number => {
+    if (!isToday) return dayKey < todayKey ? 1 : 0;
+    return Math.min(1, Math.max(0, (nowH - sg.start) / Math.max(0.0001, sg.end - sg.start)));
+  };
+  const isLive = (lane: Lane): boolean => {
+    if (!isToday) return false;
+    const market = status.find((s) => s.id === lane.def.id);
+    return sessionContains(lane.def, localNowH) && (market ? market.open : true);
+  };
+
+  // ── Texto de horário/dado no fuso do eixo ──
+  const fmtStamp = (ms: number): string => {
+    const d = new Date(ms);
+    const hh = zone === 'utc' ? d.getUTCHours() : d.getHours();
+    const mi = zone === 'utc' ? d.getUTCMinutes() : d.getMinutes();
+    const hm = `${pad2(hh)}:${pad2(mi)}`;
+    if (dayKeyOfMs(ms, zone) === dayKey) return hm;
+    const dd = zone === 'utc' ? d.getUTCDate() : d.getDate();
+    const mo = (zone === 'utc' ? d.getUTCMonth() : d.getMonth()) + 1;
+    return `${pad2(dd)}/${pad2(mo)} ${hm}`;
+  };
+
+  const renderDetail = (p: PlacedTrade) => {
+    const t = p.t;
+    const long = t.direction === 'long';
+    const isOpen = t.exitMs === null;
+    const nowMs = ref.getTime();
+    const laneA = lanes[p.laneStart]?.label;
+    const laneB = lanes[p.laneEnd]?.label;
+    return (
+      <>
+        <div className="wsm-detail-row">
+          <strong className="wsm-detail-sym">{t.symbol}</strong>
+          <span className={long ? 'wsm-up' : 'wsm-down'}>{long ? 'LONG' : 'SHORT'}</span>
+          {t.qty !== null && <span className="wsm-num">× {t.qty}</span>}
+          <span className={`wsm-badge${isOpen ? ' on' : ''}`}>{isOpen ? (t.live ? 'AO VIVO' : 'ABERTO') : 'FECHADO'}</span>
+          {t.account && <span className="wsm-muted">{t.account}</span>}
+        </div>
+        <div className="wsm-detail-row wsm-muted">
+          <span className="wsm-num">Entrada {fmtStamp(t.entryMs)}{t.entryPrice !== null ? ` @ ${fmtPrice(t.entryPrice)}` : ''}</span>
+          {isOpen ? (
+            <span className="wsm-num">
+              Agora {fmtStamp(nowMs)}{t.currentPrice !== null ? ` @ ${fmtPrice(t.currentPrice)}` : ''} · aberto há {fmtDur(nowMs - t.entryMs)}
+            </span>
+          ) : (
+            <span className="wsm-num">
+              Saída {fmtStamp(t.exitMs as number)}{t.exitPrice !== null ? ` @ ${fmtPrice(t.exitPrice)}` : ''} · {fmtDur((t.exitMs as number) - t.entryMs)}
+            </span>
+          )}
+        </div>
+        <div className="wsm-detail-row">
+          {t.pnl !== null ? (
+            <span className={`wsm-num ${t.pnl >= 0 ? 'wsm-up' : 'wsm-down'}`}>
+              {isOpen ? 'PnL em aberto ' : 'PnL '}{fmtMoney(t.pnl, currency)}
+            </span>
+          ) : (
+            <span className="wsm-muted">Sem PnL até fechar</span>
+          )}
+          {isOpen && t.pnl !== null && <span className="wsm-muted">(não realizado)</span>}
+          {t.r !== null && <span className="wsm-num">{t.r.toFixed(2)}R</span>}
+          {laneA && <span className="wsm-muted">{laneA === laneB || !laneB ? laneA : `${laneA} → ${laneB}`}</span>}
+        </div>
+      </>
+    );
+  };
 
   return (
     <div className="wsm-root">
 
-      {/* ── Card único: relógio + mapa + volume (mesma largura → hora alinhada 1:1) ── */}
+      {/* ── Dia + legenda ── */}
+      <div className="wsm-head">
+        <div className="wsm-day">
+          <button type="button" className="wsm-btn" onClick={() => prevDay && pickDay(prevDay)} disabled={!prevDay} aria-label="Dia anterior com trades">◀</button>
+          <input
+            className="wsm-date"
+            type="date"
+            value={dayKey}
+            onChange={(e) => e.target.value && pickDay(e.target.value)}
+            aria-label="Dia do mapa"
+          />
+          <button type="button" className="wsm-btn" onClick={() => nextDay && pickDay(nextDay)} disabled={!nextDay} aria-label="Próximo dia">▶</button>
+          {!isToday && <button type="button" className="wsm-btn wsm-btn-txt" onClick={() => setDay(null)}>Hoje</button>}
+        </div>
+        <div className="wsm-legend" role="group" aria-label="Legenda">
+          <span className="wsm-chip"><i className="wsm-lg wsm-lg-long" aria-hidden="true" />long</span>
+          <span className="wsm-chip"><i className="wsm-lg wsm-lg-short" aria-hidden="true" />short</span>
+          <span className="wsm-chip"><i className="wsm-lg wsm-lg-ring" aria-hidden="true" />fechamento</span>
+          <span className="wsm-chip"><i className="wsm-lg-dash" aria-hidden="true" />aberto</span>
+        </div>
+      </div>
+
+      {/* ── Card único: relógio + mapa + detalhe + volume (mesma largura → hora alinhada 1:1) ── */}
       <div className="wsm-stage">
 
-        {/* Cabeçalho: relógio preso à linha "agora" */}
         <div className="wsm-clockbar">
-          <span
-            className="wsm-clock"
-            style={{ left: `clamp(48px, ${nowPct}%, calc(100% - 48px))` }}
-            aria-label={`Agora: ${nowLabel} ${zoneTag}`}
-          >
-            {nowLabel} {zoneTag}
-          </span>
+          {isToday ? (
+            <span
+              className="wsm-clock"
+              style={{ left: `clamp(48px, ${nowPct}%, calc(100% - 48px))` }}
+              aria-label={`Agora: ${nowLabel} ${zoneTag}`}
+            >
+              {nowLabel} {zoneTag}
+            </span>
+          ) : (
+            <span className="wsm-daytag">{dayLabel} · eixo {zoneTag}</span>
+          )}
         </div>
 
-        {/* Mapa (proporção fixa 5:2) */}
         <div
           className="wsm-map"
           role="group"
-          aria-label="Mapa-múndi das sessões de mercado"
+          aria-label="Mapa das sessões de mercado e trades do dia"
+          style={{ '--wsm-lanes': Math.max(1, laneCount) } as React.CSSProperties}
         >
-          <svg
-            className="wsm-svg"
-            viewBox={`0 0 ${W} ${H}`}
-            preserveAspectRatio="xMidYMid meet"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <Dots />
-          </svg>
+          <div className="wsm-backdrop" aria-hidden="true">
+            <svg className="wsm-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" focusable="false">
+              <Dots />
+            </svg>
+          </div>
 
-          {/* Linha "agora" no mapa */}
-          <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />
+          {[6, 12, 18].map((h) => (
+            <span key={h} className="wsm-grid" style={{ left: pct(h) }} aria-hidden="true" />
+          ))}
 
-          {/* Etiquetas de mercado */}
-          {status.map((m) => {
-            const city = CITY[m.id];
-            if (!city) return null;
-            const s = sessionById.get(m.id);
-            const i = s ? s.i : 0;
-            const color = SESSION_COLORS[i % SESSION_COLORS.length];
-            const Icon = sessionIconFor(m.id);
+          {/* Sessões: faixa início→fim; parte percorrida mais forte; nome acima da faixa */}
+          {lanes.map((lane, pos) => {
+            const y = laneCenterPct(pos, laneCount);
+            const live = isLive(lane);
+            const cap = lane.capSeg;
+            const Icon = lane.Icon;
             return (
-              <CityMarker
-                key={m.id}
-                city={city}
-                color={color}
-                open={m.open}
-                Icon={Icon}
-              />
+              <React.Fragment key={lane.def.id}>
+                {lane.segs.map((sg) => (
+                  <span
+                    key={`${lane.def.id}-${sg.start}`}
+                    className={`wsm-band${live ? ' is-live' : ''}`}
+                    style={{ left: pct(sg.start), width: pct(sg.end - sg.start), top: `${y}%`, ...colorVars(lane.color) }}
+                    aria-hidden="true"
+                  >
+                    <span className="wsm-band-fill" style={{ width: `${progressOf(sg) * 100}%` }} />
+                  </span>
+                ))}
+                {cap && (
+                  <span
+                    className={`wsm-cap${live ? ' is-live' : ''}`}
+                    style={{
+                      // faixa na metade direita (ex.: Sydney 18→24): nome alinhado pela DIREITA da faixa,
+                      // senão o texto vazaria da borda ou ficaria longe da faixa
+                      ...(cap.start / 24 > 0.62 ? { right: `calc(100% - ${pct(cap.end)})` } : { left: pct(cap.start) }),
+                      top: `${y}%`,
+                      ...colorVars(lane.color),
+                    }}
+                  >
+                    <span className="wsm-cap-icon"><Icon size={12} /></span>
+                    <span className="wsm-cap-name">{lane.label}</span>
+                    <span className="wsm-cap-time">{fmtHM(mod24(lane.def.startH + delta))}–{fmtHM(mod24(lane.def.endH + delta))}</span>
+                    <span className="wsm-sr">{live ? ', aberto agora' : ', fechado agora'}</span>
+                  </span>
+                )}
+              </React.Fragment>
             );
           })}
+
+          {/* Linhas abertura → fechamento (coordenadas em % do mapa) */}
+          <svg className="wsm-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            {layout.placed.map((p) => {
+              const x0 = xOfH(p.a);
+              const x1 = xOfH(p.b);
+              const y0 = p.openDot ? yOfDot(p.openDot) : laneCenterPct(p.laneStart, laneCount);
+              const y1 = p.endDot ? yOfDot(p.endDot) : laneCenterPct(p.laneEnd, laneCount);
+              const k = p.t.key;
+              return (
+                <g
+                  key={k}
+                  className={`wsm-line ${p.t.direction === 'long' ? 'wsm-long' : 'wsm-short'}${p.t.exitMs === null ? ' is-open' : ''}${k === activeKey ? ' is-active' : ''}`}
+                  onMouseEnter={() => setHoverKey(k)}
+                  onMouseLeave={() => setHoverKey(null)}
+                  onClick={() => togglePin(k)}
+                >
+                  <line className="wsm-line-hit" x1={x0} y1={y0} x2={x1} y2={y1} />
+                  <line className="wsm-line-stroke" x1={x0} y1={y0} x2={x1} y2={y1} />
+                </g>
+              );
+            })}
+          </svg>
+
+          {/* Bolinhas: abertura (cheia), fechamento (vazada) e "agora" (posição aberta) */}
+          {layout.placed.map((p) => {
+            const t = p.t;
+            const k = t.key;
+            const dir = t.direction === 'long' ? 'wsm-long' : 'wsm-short';
+            const isOpen = t.exitMs === null;
+            const act = k === activeKey ? ' is-active' : '';
+            const common = {
+              onMouseEnter: () => setHoverKey(k),
+              onMouseLeave: () => setHoverKey(null),
+              onFocus: () => setHoverKey(k),
+              onBlur: () => setHoverKey(null),
+              onClick: () => togglePin(k),
+              'aria-pressed': k === pinKey,
+            };
+            const label = `${t.symbol} ${t.direction === 'long' ? 'long' : 'short'}`;
+            return (
+              <React.Fragment key={k}>
+                {p.startsBefore && (
+                  <span className={`wsm-edge wsm-edge-l ${dir}`} style={{ top: `${laneCenterPct(p.laneStart, laneCount)}%` }} aria-hidden="true" />
+                )}
+                {p.openDot && (
+                  <button
+                    type="button"
+                    className={`wsm-dot wsm-dot-open ${dir}${act}`}
+                    style={{ left: `${xOfH(p.openDot.x)}%`, top: `${yOfDot(p.openDot)}%` }}
+                    title={`${label} • abertura ${fmtStamp(t.entryMs)}`}
+                    aria-label={`${label}, abertura ${fmtStamp(t.entryMs)}`}
+                    {...common}
+                  />
+                )}
+                {p.endsAfter && (
+                  <span className={`wsm-edge wsm-edge-r ${dir}`} style={{ top: `${laneCenterPct(p.laneEnd, laneCount)}%` }} aria-hidden="true" />
+                )}
+                {p.endDot && (
+                  <button
+                    type="button"
+                    className={`wsm-dot ${isOpen ? 'wsm-dot-now' : 'wsm-dot-close'} ${dir}${act}`}
+                    style={{ left: `${xOfH(p.endDot.x)}%`, top: `${yOfDot(p.endDot)}%` }}
+                    title={isOpen ? `${label} • aberto (agora)` : `${label} • fechamento ${fmtStamp(t.exitMs as number)}`}
+                    aria-label={isOpen ? `${label}, posição aberta` : `${label}, fechamento ${fmtStamp(t.exitMs as number)}`}
+                    {...common}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Linha "agora": anda sozinha (atualiza a cada minuto) */}
+          {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
         </div>
 
-        {/* Volume por hora + linha do agora */}
-        <div className="wsm-vol-header">
-          <span className="wsm-vol-title">Volume por hora</span>
-          <span className="wsm-vol-sub">{totalTrades} trade(s) por hora de abertura</span>
+        {/* Dados do trade sob o mouse / tocado */}
+        <div className="wsm-detail" role="status" aria-live="polite">
+          {active ? renderDetail(active) : (
+            <span className="wsm-muted">
+              {layout.placed.length === 0 ? 'Sem trades neste dia.' : 'Passe o mouse ou toque numa bolinha/linha para ver os dados do trade.'}
+            </span>
+          )}
         </div>
-        <div className="wsm-vol-plot">
-          {/* Faixas coloridas das sessões ao fundo */}
-          {sessions.map((def, i) =>
-            sessionDisplaySegments(def, delta).map((sg) => (
+
+        {/* Trades abertos por hora (mesmo eixo X do mapa) */}
+        <div className="wsm-vol-header">
+          <span className="wsm-vol-title">Trades abertos por hora</span>
+          <span className="wsm-vol-sub">
+            {totalTrades === 0 ? 'sem trades' : `${totalTrades} trade(s) · pico às ${pad2(peakHour)}h (${hours[peakHour]})`}
+          </span>
+        </div>
+        <div
+          className="wsm-vol-plot"
+          role="img"
+          aria-label={totalTrades === 0 ? 'Trades abertos por hora: sem trades' : `Trades abertos por hora. Pico às ${peakHour}h com ${hours[peakHour]} trade(s).`}
+          onPointerMove={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            if (r.width > 0) setVolHour(Math.min(23, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 24))));
+          }}
+          onPointerLeave={() => setVolHour(null)}
+        >
+          {lanes.map((lane) =>
+            lane.segs.map((sg) => (
               <span
-                key={`${def.id}-${sg.start}`}
+                key={`${lane.def.id}-${sg.start}`}
                 className="wsm-vol-band"
-                style={{
-                  left: pct(sg.start),
-                  width: pct(sg.end - sg.start),
-                  background: `${SESSION_COLORS[i % SESSION_COLORS.length]}28`,
-                  borderTop: `1px solid ${SESSION_COLORS[i % SESSION_COLORS.length]}55`,
-                }}
+                style={{ left: pct(sg.start), width: pct(sg.end - sg.start), background: `${lane.color}22`, borderTop: `1px solid ${lane.color}55` }}
                 aria-hidden="true"
               />
             ))
           )}
-          {/* Barras de trade por hora */}
-          {hours.map((n, h) => {
-            const hitIdx = sessions.findIndex((d) => sessionContains(d, h));
-            const color = hitIdx >= 0 ? SESSION_COLORS[hitIdx % SESSION_COLORS.length] : 'rgba(255,255,255,0.25)';
-            return (
-              <span
-                key={h}
-                className="wsm-vol-bar"
-                style={{
-                  left: pct(h),
-                  width: `calc(${100 / 24}% - 1px)`,
-                  height: n ? `${Math.max(8, (n / hourMax) * 100)}%` : '0',
-                  background: color,
-                  boxShadow: n ? `0 0 4px ${color}66` : 'none',
-                }}
-                title={`${h}h · ${n} trade(s)`}
-              />
-            );
-          })}
-          {/* Linha do agora no volume (mesmo left% da linha do mapa) */}
-          <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />
+          {[6, 12, 18].map((h) => (
+            <span key={h} className="wsm-grid" style={{ left: pct(h) }} aria-hidden="true" />
+          ))}
+          <svg className="wsm-vol-svg" viewBox="0 0 24 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            {totalTrades > 0 && <path className="wsm-vol-area" d={`${volLine}L24 100L0 100Z`} />}
+            <path className={`wsm-vol-line${totalTrades === 0 ? ' is-empty' : ''}`} d={volLine} />
+          </svg>
+          {volHour !== null && (
+            <>
+              <span className="wsm-vol-cursor" style={{ left: `${((volHour + 0.5) / 24) * 100}%` }} aria-hidden="true" />
+              <span className="wsm-vol-point" style={{ left: `${((volHour + 0.5) / 24) * 100}%`, top: `${yVol(hours[volHour])}%` }} aria-hidden="true" />
+              <span className="wsm-vol-tip" style={{ left: `clamp(38px, ${((volHour + 0.5) / 24) * 100}%, calc(100% - 38px))` }}>
+                {pad2(volHour)}h · {hours[volHour]} trade(s)
+              </span>
+            </>
+          )}
+          {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
         </div>
         <div className="wsm-axis">
           {HOUR_LABELS.map((h) => (
@@ -392,7 +690,8 @@ export default function WorldSessionMap({ trades = [], sessions, zone = 'local',
       </div>
 
       <p className="wsm-hint">
-        Etiquetas coloridas = cada mercado (ponto = posição real da cidade). Linha vermelha = agora ({zone === 'utc' ? 'UTC' : 'horário local'}).
+        Eixo = hora do dia ({zone === 'utc' ? 'UTC' : 'horário local'}). Faixas = sessões do início ao fim; a parte mais forte já passou.
+        Bolinha cheia = abertura, vazada = fechamento, tracejado = posição aberta. Linha vermelha = agora (atualiza a cada minuto).
       </p>
     </div>
   );
@@ -401,17 +700,36 @@ export default function WorldSessionMap({ trades = [], sessions, zone = 'local',
 // ─── CSS injetado ─────────────────────────────────────────────────────────────
 const WSM_CSS = `
 .wsm-root {
+  --wsm-band-h: 21px;
+  --wsm-bg: rgba(11, 15, 28, 0.95);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   container-type: inline-size;
 }
+.wsm-long { --dir: var(--green, #2ecc71); }
+.wsm-short { --dir: var(--red, #e74c3c); }
 
-/* ── Card único (relógio + mapa + volume) ── */
+/* ── Dia + legenda ── */
+.wsm-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.wsm-day { display: flex; align-items: center; gap: 6px; flex: 1 1 220px; min-width: 0; }
+.wsm-btn { min-height: 40px; min-width: 40px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); cursor: pointer; }
+.wsm-btn:disabled { opacity: 0.4; cursor: default; }
+.wsm-btn-txt { padding: 0 12px; font-size: 12px; font-weight: 700; }
+.wsm-date { flex: 1; min-width: 0; min-height: 40px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 4px 8px; color: var(--text, #e7eaf0); font-size: 13px; font-family: inherit; color-scheme: dark; }
+.wsm-legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.wsm-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text, #e7eaf0); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; padding: 2px 9px; }
+.wsm-lg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; }
+.wsm-lg-long { background: var(--green, #2ecc71); }
+.wsm-lg-short { background: var(--red, #e74c3c); }
+.wsm-lg-ring { border: 2px solid var(--muted, #a1a7b3); }
+.wsm-lg-dash { display: inline-block; width: 14px; height: 0; border-top: 2px dashed var(--muted, #a1a7b3); }
+
+/* ── Card único (relógio + mapa + detalhe + volume) ── */
 .wsm-stage {
   position: relative;
   width: 100%;
-  background: rgba(11, 15, 28, 0.95);
+  background: var(--wsm-bg);
   border: 1px solid rgba(255,255,255,0.07);
   border-radius: 12px;
   overflow: hidden;
@@ -436,30 +754,94 @@ const WSM_CSS = `
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   z-index: 5;
+  transition: left 0.6s ease;
 }
+.wsm-daytag { position: absolute; left: 12px; top: 6px; font-size: 11px; font-weight: 700; color: var(--muted, #a1a7b3); text-transform: capitalize; white-space: nowrap; }
 
 /* ── Mapa ── */
 .wsm-map {
   position: relative;
   width: 100%;
   aspect-ratio: 5 / 2;
+  min-height: calc(var(--wsm-lanes, 4) * 38px);
 }
-.wsm-svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.wsm-land {
-  fill: none;
-  stroke: var(--muted, #a1a7b3);
-  stroke-linecap: round;
-}
-.wsm-land-fine { stroke-opacity: 0.42; }
-.wsm-land-coarse { stroke-opacity: 0.5; display: none; }
+.wsm-backdrop { position: absolute; inset: 0; overflow: hidden; }
+.wsm-svg { display: block; width: 100%; height: 100%; }
+.wsm-land { fill: none; stroke: var(--muted, #a1a7b3); stroke-linecap: round; }
+.wsm-land-fine { stroke-opacity: 0.3; }
+.wsm-land-coarse { stroke-opacity: 0.38; display: none; }
+.wsm-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.06); pointer-events: none; }
 
-/* Linha "agora" (mapa e volume) */
+/* Sessões: faixa + parte percorrida + nome acima */
+.wsm-band {
+  position: absolute;
+  height: var(--wsm-band-h);
+  margin-top: calc(var(--wsm-band-h) / -2);
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--c-dim);
+  background: var(--c-bg);
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+}
+.wsm-band-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c-fill); transition: width 0.6s ease; }
+.wsm-band.is-live { border-color: var(--c-bd); box-shadow: 0 0 14px var(--c-glow); }
+.wsm-cap {
+  position: absolute;
+  transform: translateY(-100%);
+  margin-top: calc(var(--wsm-band-h) / -2 - 2px);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted, #a1a7b3);
+  text-shadow: 0 0 3px var(--wsm-bg), 0 0 6px var(--wsm-bg);
+  white-space: nowrap;
+  z-index: 2;
+  pointer-events: none;
+}
+.wsm-cap-icon { display: inline-flex; color: var(--c); }
+.wsm-cap.is-live { color: var(--text, #e7eaf0); font-weight: 700; }
+.wsm-cap-time { font-size: 10px; font-weight: 400; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
+.wsm-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Linhas dos trades */
+.wsm-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; overflow: visible; pointer-events: none; }
+.wsm-line { pointer-events: none; }
+.wsm-line-stroke { fill: none; stroke: var(--dir); stroke-width: 1.5; stroke-opacity: 0.75; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
+.wsm-line-hit { fill: none; stroke: transparent; stroke-width: 14; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
+.wsm-line.is-open .wsm-line-stroke { stroke-dasharray: 5 4; }
+.wsm-line.is-active .wsm-line-stroke { stroke-width: 2.5; stroke-opacity: 1; }
+
+/* Bolinhas */
+.wsm-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid var(--dir);
+  background: var(--dir);
+  box-shadow: 0 0 0 2px var(--wsm-bg);
+  cursor: pointer;
+  z-index: 3;
+}
+.wsm-dot::before { content: ''; position: absolute; inset: -6px; }
+.wsm-dot-close { background: var(--wsm-bg); }
+.wsm-dot-now { background: var(--wsm-bg); box-shadow: 0 0 0 2px var(--wsm-bg), 0 0 10px var(--dir); }
+.wsm-dot.is-active { transform: scale(1.35); z-index: 4; }
+.wsm-dot:focus-visible { outline: 2px solid var(--text, #e7eaf0); outline-offset: 3px; z-index: 4; }
+.wsm-edge { position: absolute; width: 0; height: 0; margin-top: -5px; border-top: 5px solid transparent; border-bottom: 5px solid transparent; z-index: 3; pointer-events: none; }
+.wsm-edge-l { left: 0; border-right: 7px solid var(--dir); }
+.wsm-edge-r { right: 0; border-left: 7px solid var(--dir); }
+
+/* Linha "agora" (mapa e volume) — anda sozinha */
 .wsm-now {
   position: absolute;
   top: 0;
@@ -468,77 +850,32 @@ const WSM_CSS = `
   margin-left: -1px;
   background: var(--red, #e74c3c);
   box-shadow: 0 0 8px var(--red, #e74c3c);
-  z-index: 4;
+  z-index: 5;
   pointer-events: none;
+  transition: left 0.6s ease;
 }
 
-/* ── Etiquetas de mercado ── */
-.wsm-pin {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px 0 0 -3.5px;
-  border-radius: 50%;
-  background: var(--c-dim);
-  z-index: 2;
-  pointer-events: none;
-}
-.wsm-pin.is-open {
-  background: var(--c);
-  box-shadow: 0 0 0 3px var(--c-bg), 0 0 10px var(--c-glow);
-}
-.wsm-city {
-  position: absolute;
-  transform: translate(-50%, -50%);
+/* ── Dados do trade ── */
+.wsm-detail {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px 0 8px;
-  border-radius: 12px;
-  border: 1px solid var(--c-dim);
-  background: rgba(20, 24, 36, 0.6);
-  color: var(--muted, #a1a7b3);
-  font-family: Inter, system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  line-height: 1;
-  white-space: nowrap;
-  opacity: 0.78;
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  z-index: 3;
-}
-.wsm-city.is-open {
-  opacity: 1;
-  font-weight: 700;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px;
   color: var(--text, #e7eaf0);
-  border-color: var(--c-bd);
-  background: var(--c-bg);
-  box-shadow: 0 0 14px var(--c-glow);
 }
-.wsm-city-icon { display: inline-flex; color: var(--c); }
-.wsm-city-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--c-dim);
-}
-.wsm-city.is-open .wsm-city-dot {
-  background: var(--c);
-  box-shadow: 0 0 6px var(--c);
-}
-.wsm-sr {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+.wsm-detail-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.wsm-detail-sym { font-size: 13px; }
+.wsm-muted { color: var(--muted, #a1a7b3); }
+.wsm-num { font-variant-numeric: tabular-nums; }
+.wsm-up { color: var(--green, #2ecc71); font-weight: 700; }
+.wsm-down { color: var(--red, #e74c3c); font-weight: 700; }
+.wsm-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.6px; color: var(--muted, #a1a7b3); border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 1px 7px; }
+.wsm-badge.on { color: var(--text, #e7eaf0); border-color: var(--text, #e7eaf0); }
 
-/* ── Histograma de volume ── */
+/* ── Trades abertos por hora (curva) ── */
 .wsm-vol-header {
   display: flex;
   justify-content: space-between;
@@ -552,22 +889,19 @@ const WSM_CSS = `
 .wsm-vol-sub { font-size: 11px; font-weight: 400; color: var(--muted, #a1a7b3); }
 .wsm-vol-plot {
   position: relative;
-  height: 72px;
+  height: 84px;
   overflow: hidden;
   background: rgba(255,255,255,0.02);
+  touch-action: pan-y;
 }
-.wsm-vol-band {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  pointer-events: none;
-}
-.wsm-vol-bar {
-  position: absolute;
-  bottom: 0;
-  border-radius: 2px 2px 0 0;
-  transition: height 0.3s ease;
-}
+.wsm-vol-band { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.wsm-vol-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wsm-vol-line { fill: none; stroke: var(--brand, #7c5cff); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wsm-vol-line.is-empty { stroke: var(--muted, #a1a7b3); stroke-opacity: 0.4; stroke-dasharray: 4 4; }
+.wsm-vol-area { fill: var(--brand, #7c5cff); fill-opacity: 0.16; stroke: none; }
+.wsm-vol-cursor { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.25); pointer-events: none; }
+.wsm-vol-point { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--brand, #7c5cff); box-shadow: 0 0 0 2px var(--wsm-bg); pointer-events: none; }
+.wsm-vol-tip { position: absolute; top: 4px; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: var(--text, #e7eaf0); background: var(--wsm-bg); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 2px 7px; white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; z-index: 6; }
 .wsm-axis {
   position: relative;
   height: 22px;
@@ -645,18 +979,24 @@ const WSM_CSS = `
   color: var(--muted, #a1a7b3);
 }
 
-/* Celular / container estreito: pontos mais grossos (senão viram névoa) */
+@media (prefers-reduced-motion: reduce) {
+  .wsm-now, .wsm-clock, .wsm-band-fill { transition: none; }
+}
+
+/* Celular / container estreito: pontos mais grossos e sem o horário no nome da faixa */
 @container (max-width: 600px) {
   .wsm-land-fine { display: none; }
   .wsm-land-coarse { display: inline; }
+  .wsm-cap-time { display: none; }
 }
 @container (max-width: 460px) {
   .wsm-markets { grid-template-columns: 1fr; }
-  .wsm-vol-plot { height: 88px; }
+  .wsm-vol-plot { height: 96px; }
+  .wsm-dot { width: 10px; height: 10px; margin: -5px 0 0 -5px; }
 }
 @media (max-width: 420px) {
   .wsm-markets { grid-template-columns: 1fr; }
-  .wsm-vol-plot { height: 88px; }
+  .wsm-vol-plot { height: 96px; }
 }
 `;
 
