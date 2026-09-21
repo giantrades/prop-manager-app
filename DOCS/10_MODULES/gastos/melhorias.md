@@ -163,7 +163,30 @@
 > Contexto vivo: `/gastos` = `GastosDashboardPage` (usa `WidgetGrid storageKey="gastos"`);
 > `/expenses` = `Expenses.tsx` (toolbar única + modo filtro + bottom-sheet). Período global via
 > `usePeriod`/`PeriodPicker` (meta `ui:period`). Pendências anteriores: **B2** (próximas contas)
-> e D3/D4/F "próximos" — o Batch H consolida e prioriza.
+> e D3/D4/F "próximos" — o Batch H consolida e prioriza. O **H0** reestrutura as abas do módulo;
+> os itens H1+ assumem essa nova IA.
+
+### H0 — Arquitetura de abas do módulo Gastos (Orçamento/Categorias viram abas)
+- Status: [ ] a executar
+- Contexto: hoje o módulo tem só **Resumo** (`/gastos`), **Lançamentos** (`/expenses`) e
+  **Forecast** (`/forecast`). "Orçamento" e "Categorias" são apenas **toggles in-page**
+  (`showBudget`/`showCats`) dentro de `Expenses.tsx`, escondidos e sem foco; a página de
+  Lançamentos fica sobrecarregada (ledger + orçamento + editor de categorias + gráficos).
+- Proposta: transformar em **abas reais do módulo**:
+  `Resumo` `/gastos` · `Lançamentos` `/expenses` · `Orçamento` `/gastos/orcamento` ·
+  `Categorias` `/gastos/categorias` · `Forecast` `/forecast`.
+  Extrair de `Expenses.tsx` para páginas próprias: **`BudgetPage`** (orçamento por categoria +
+  rollover + alerta; usa `budgetStatus`/`rolloverAmount`/`BudgetEditor`) e **`CategoriesPage`**
+  (CRUD de categorias/ícone/cor; usa `CategoryEditor` — prepara H6 p/ subcategorias). Enxugar
+  `Expenses.tsx` para o **ledger** (filters + lista + entrada + importar/transferir) e expandir
+  ali o que ganhou foco (ver H3/H8). Registrar as rotas em `navConfig.js` (fonte única de nav,
+  entra no Cmd+K automaticamente), `routeLoaders.js`/`App.jsx` e atualizar `DOCS/11_PAGE_MAP.md`.
+- Arquivos: `main-app/src/navConfig.js`, `main-app/src/routeLoaders.js`, `main-app/src/App.jsx`,
+  novos `main-app/src/pages/command/BudgetPage.jsx` e `CategoriasPage.jsx` (ou via `EngineViews`),
+  `packages/ui/Expenses.tsx`, `DOCS/11_PAGE_MAP.md`
+- Aceite: 5 abas funcionando com deep-link direto; Cmd+K encontra as novas rotas; Lançamentos sem
+  os toggles (mais espaço/foco); estado vazio e mobile 360px OK; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: subcategorias (H6) e redução de duplicação de containers (refactor grande).
 
 ### H1 — Layout dos widgets do Resumo: esconder/mostrar + sincronizar
 - Status: [ ] a executar
@@ -255,6 +278,8 @@
 - Aceite: janela correta (inclui atrasados); ordenação por vencimento; `tsc` 0; testes verdes; build verde.
 
 ### DoD do Batch H
+- Módulo Gastos com 5 abas (Resumo · Lançamentos · Orçamento · Categorias · Forecast) e cada uma
+  com foco próprio (H0).
 - Resumo de Gastos com widgets organizáveis/sincronizados e com tendência; lançamento em poucos
   toques; cartão com ciclo de fatura; próximas contas e projeção visíveis.
 - Nenhuma fórmula financeira nova (só selectors + composição). `tsc` 0, testes verdes, `pnpm build:all` verde.
