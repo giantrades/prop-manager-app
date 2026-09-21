@@ -267,7 +267,7 @@ export default function LivePositions({ positions = [], compact: initialCompact 
 
               {/* Duration (compact+non-compact) */}
               <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>
-                {formatDuration(pos.openTime)}
+                {formatDuration(pos.openTime || pos.firstSeenAt)}
               </div>
 
               {/* PnL $ */}

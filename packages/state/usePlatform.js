@@ -129,7 +129,11 @@ export function usePlatform() {
   // reportar (com grace pós-conexão + confirmação de vazio), e NUNCA fecha por causa de conexão
   // desconectada. `connectedIdsRef` vem de `/status.connections` (atualizado a cada 60s).
   const reconcileRef = useRef(null);
-  if (!reconcileRef.current) reconcileRef.current = createReconcileState(readLocalSnap()?.positions ?? []);
+  if (!reconcileRef.current) {
+    const snap = readLocalSnap();
+    const seedAt = snap?.at ? Date.parse(snap.at) : NaN;
+    reconcileRef.current = createReconcileState(snap?.positions ?? [], Number.isFinite(seedAt) ? seedAt : Date.now());
+  }
   const connectedIdsRef = useRef([]);
   const handlePositions = useCallback((reported) => {
     if (!Array.isArray(reported)) return null;

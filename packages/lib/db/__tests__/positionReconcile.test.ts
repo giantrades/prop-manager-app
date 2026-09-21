@@ -65,4 +65,22 @@ describe('positionReconcile', () => {
     const out = reconcilePositions(st, { reported: [p('x', 'c1')], connectedIds: ['c1'], now: 20000 });
     expect(ids(out)).toEqual(['x']);
   });
+
+  it('firstSeenAt é estável (fallback de início) e some quando a posição fecha', () => {
+    const st = createReconcileState();
+    let out = reconcilePositions(st, { reported: [p('a', 'c1')], connectedIds: ['c1'], now: 5000 });
+    expect(out[0].firstSeenAt).toBe(5000);
+    out = reconcilePositions(st, { reported: [p('a', 'c1')], connectedIds: ['c1'], now: 6000 });
+    expect(out[0].firstSeenAt).toBe(5000); // não anda com o relógio
+    st.connectedSince.set('c1', 0);
+    reconcilePositions(st, { reported: [], connectedIds: ['c1'], now: 30000, clearConfirmMs: 1000 }); // inicia a confirmação
+    reconcilePositions(st, { reported: [], connectedIds: ['c1'], now: 32000, clearConfirmMs: 1000 }); // confirma
+    expect(st.firstSeen.has('a')).toBe(false);
+  });
+
+  it('seed define firstSeenAt a partir do instante do snapshot', () => {
+    const st = createReconcileState([p('a', 'c1')], 111);
+    expect(st.firstSeen.get('a')).toBe(111);
+    expect(st.known.get('a')?.firstSeenAt).toBe(111);
+  });
 });

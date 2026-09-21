@@ -5,7 +5,7 @@
 //    fica mais forte e a faixa brilha enquanto o mercado está aberto.
 //  • Linha vermelha "agora" cruza o mapa e o gráfico e anda sozinha (atualiza a cada 60 s).
 //  • Trades: bolinha cheia na abertura (verde long / vermelha short), linha até a bolinha
-//    vazada do fechamento — cada bolinha na faixa da sessão daquela hora. Posição aberta
+//    cheia (com anel branco) do fechamento — cada bolinha na faixa da sessão daquela hora. Posição aberta
 //    (ao vivo) = linha tracejada até "agora". Hover/toque mostra os dados.
 //  • "Trades abertos por hora": curva suave no mesmo eixo X do mapa.
 // Apresentação pura: usa `marketStatus`, `sessionContains`, `tradeNetPnl`. Posição ao vivo
@@ -639,7 +639,7 @@ export default function WorldSessionMap({
             })}
           </svg>
 
-          {/* Bolinhas: abertura (cheia), fechamento (vazada) e "agora" (posição aberta) */}
+          {/* Bolinhas: abertura (cheia), fechamento (cheia com anel branco) e "agora" (posição aberta, vazada) */}
           {layout.placed.map((p) => {
             const t = p.t;
             const k = t.key;
@@ -817,7 +817,7 @@ export default function WorldSessionMap({
 
       <p className="wsm-hint">
         Eixo = hora do dia ({zone === 'utc' ? 'UTC' : 'horário local'}). Faixas = sessões do início ao fim; a parte mais forte já passou.
-        Bolinha cheia = abertura, vazada = fechamento, tracejado = posição aberta. Linha vermelha = agora (atualiza a cada minuto).
+        Bolinha cheia = abertura, cheia com anel branco = fechamento, vazada/brilhando = posição aberta. Linha vermelha = agora (atualiza a cada minuto).
       </p>
     </div>
   );
@@ -848,7 +848,7 @@ const WSM_CSS = `
 .wsm-lg { display: inline-block; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; }
 .wsm-lg-long { background: var(--green, #2ecc71); }
 .wsm-lg-short { background: var(--red, #e74c3c); }
-.wsm-lg-ring { border: 2px solid var(--muted, #a1a7b3); }
+.wsm-lg-ring { background: var(--muted, #a1a7b3); border: 2px solid #fff; }
 .wsm-lg-dash { display: inline-block; width: 14px; height: 0; border-top: 2px dashed var(--muted, #a1a7b3); }
 
 /* ── Card único (relógio + mapa + detalhe + volume) ── */
@@ -959,7 +959,7 @@ const WSM_CSS = `
   z-index: 3;
 }
 .wsm-dot::before { content: ''; position: absolute; inset: -6px; }
-.wsm-dot-close { background: var(--wsm-bg); }
+.wsm-dot-close { background: var(--dir); border-color: #fff; }
 .wsm-dot-now { background: var(--wsm-bg); box-shadow: 0 0 0 2px var(--wsm-bg), 0 0 10px var(--dir); }
 .wsm-dot.is-active { transform: scale(1.35); z-index: 4; }
 .wsm-dot:focus-visible { outline: 2px solid var(--text, #e7eaf0); outline-offset: 3px; z-index: 4; }

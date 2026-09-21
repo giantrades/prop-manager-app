@@ -16,9 +16,11 @@ export interface OpenPosition {
   quantity?: number;
   openPrice?: number;
   currentPrice?: number;
-  openTime?: string; // ISO
+  openTime?: string; // ISO ('' quando a plataforma não informa)
   entryPrice?: number;
   entryTime?: string; // ISO
+  /** 1º instante (ms) em que o app viu a posição — fallback de início (reconciliador). */
+  firstSeenAt?: number;
   netPnl?: number; // PnL em aberto (não realizado)
   accountName?: string;
 }
@@ -68,11 +70,16 @@ export function tradeToMapTrade(t: Trade): MapTrade | null {
   };
 }
 
-/** Posição ao vivo → item do mapa (sempre aberto). Sem `openTime` válido, cai em "agora". */
+/**
+ * Posição ao vivo → item do mapa (sempre aberto). Sem `openTime` válido, usa o 1º instante em
+ * que o app viu a posição (`firstSeenAt`) como início; só se nem isso existir cai em "agora".
+ * (Cair em "agora" sempre fazia o início colapsar no "agora" e a linha sumir.)
+ */
 export function positionToMapTrade(p: OpenPosition, nowMs: number): MapTrade {
   const raw = p.openTime || p.entryTime;
   const parsed = raw ? parseDate(raw).getTime() : NaN;
-  const entryMs = Number.isFinite(parsed) ? parsed : nowMs;
+  const firstSeen = typeof p.firstSeenAt === 'number' && Number.isFinite(p.firstSeenAt) ? p.firstSeenAt : NaN;
+  const entryMs = Number.isFinite(parsed) ? parsed : (Number.isFinite(firstSeen) ? firstSeen : nowMs);
   const qty = num(p.quantity);
   return {
     key: `live:${p.platformPositionId ?? `${p.symbol}:${entryMs}`}`,

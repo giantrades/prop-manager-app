@@ -24,6 +24,8 @@ export interface LivePositionLike {
   symbol?: string;
   openTime?: string;
   entryTime?: string;
+  /** 1º instante (ms) em que o app viu a posição — fallback de início. */
+  firstSeenAt?: number;
   [k: string]: unknown;
 }
 
@@ -34,6 +36,9 @@ export interface ReconcileState {
   connectedSince: Map<string, number>;
   /** connectionId → instante em que passou a reportar vazio tendo posições conhecidas. */
   pendingClear: Map<string, number>;
+  /** platformPositionId → 1º instante em que o app viu a posição. Fallback de "início" quando a
+   *  plataforma não informa o horário de abertura (`openTime` vazio/`0001`). */
+  firstSeen: Map<string, number>;
 }
 
 /** Chave estável de uma posição (id da plataforma; fallback símbolo+conexão+abertura). */
@@ -41,11 +46,20 @@ export function posKey(p: LivePositionLike): string {
   return p.platformPositionId || `${p.connectionId ?? ''}:${p.symbol ?? ''}:${p.openTime ?? p.entryTime ?? ''}`;
 }
 
-/** Estado inicial (opcionalmente semeado com o último snapshot, para não "piscar" ao carregar). */
-export function createReconcileState(seed: LivePositionLike[] = []): ReconcileState {
+/**
+ * Estado inicial (opcionalmente semeado com o último snapshot, para não "piscar" ao carregar).
+ * `seedAt` (ms) é o instante do snapshot — vira o "primeiro visto" das posições semeadas.
+ */
+export function createReconcileState(seed: LivePositionLike[] = [], seedAt = Date.now()): ReconcileState {
   const known = new Map<string, LivePositionLike>();
-  for (const p of seed) known.set(posKey(p), p);
-  return { known, connectedSince: new Map(), pendingClear: new Map() };
+  const firstSeen = new Map<string, number>();
+  for (const p of seed) {
+    const k = posKey(p);
+    known.set(k, p);
+    firstSeen.set(k, seedAt);
+    if (p.firstSeenAt == null) p.firstSeenAt = seedAt;
+  }
+  return { known, connectedSince: new Map(), pendingClear: new Map(), firstSeen };
 }
 
 export interface ReconcileOptions {
@@ -99,8 +113,11 @@ export function reconcilePositions(state: ReconcileState, opts: ReconcileOptions
   const nextKnown = new Map<string, LivePositionLike>();
   const keep = (list: LivePositionLike[]) => {
     for (const p of list) {
+      const k = posKey(p);
+      if (!state.firstSeen.has(k)) state.firstSeen.set(k, now);
+      p.firstSeenAt = state.firstSeen.get(k); // fallback de início (quando a plataforma não informa)
       result.push(p);
-      nextKnown.set(posKey(p), p);
+      nextKnown.set(k, p);
     }
   };
 
@@ -140,5 +157,7 @@ export function reconcilePositions(state: ReconcileState, opts: ReconcileOptions
   }
 
   state.known = nextKnown;
+  // Esquece o "primeiro visto" das posições que fecharam.
+  for (const k of [...state.firstSeen.keys()]) if (!nextKnown.has(k)) state.firstSeen.delete(k);
   return result;
 }

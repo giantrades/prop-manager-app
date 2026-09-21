@@ -298,9 +298,12 @@ export class QuantowerAdapter extends BaseAdapter {
         quantity: p.quantity ?? 0,
         openPrice: p.openPrice ?? 0,
         currentPrice: p.currentPrice ?? 0,
-        openTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : new Date().toISOString(),
+        // Se a plataforma não informa a abertura (vazio/`0001`), deixa VAZIO — a UI usa o
+        // "primeiro visto" como fallback. Substituir por "agora" aqui fazia entrada e "agora"
+        // colapsarem no mesmo ponto no mapa (a linha some e só fica a bolinha).
+        openTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : '',
         entryPrice: p.openPrice ?? 0,
-        entryTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : new Date().toISOString(),
+        entryTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : '',
         grossPnl: p.grossPnl ?? 0,
         netPnl: p.netPnl ?? 0,
         fee: p.fee ?? 0,
