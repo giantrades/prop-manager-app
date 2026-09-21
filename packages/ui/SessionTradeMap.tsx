@@ -5,7 +5,7 @@
 // Toque/clique num trade abre o detalhe (no celular não existe hover para o `title`).
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Trade, SessionDef } from '@apps/lib/db';
-import { parseDate, tradeNetPnl } from '@apps/lib/db';
+import { parseDate, tradeNetPnl, marketSessionWindowsForDate } from '@apps/lib/db';
 import { sessionDisplaySegments, pct, fmtHM, dayKeyOfMs, dayStartMs } from './sessionTime';
 import { SESSION_COLORS } from './sessionIcons';
 import { fmtMoney } from './currency';
@@ -14,6 +14,8 @@ import { useNowTick } from './Usenowtick';
 interface Props {
   trades: Trade[];
   sessions: SessionDef[];
+  /** true = janelas reais de mercado (DST-exato); false = sessões custom no relógio local. */
+  marketSessions?: boolean;
   zone?: 'local' | 'utc';
   currency?: string;
   /** Dia exibido ('YYYY-MM-DD'; null = hoje), controlado pelo pai. Quando presente, o seletor de dia
@@ -32,7 +34,7 @@ function dayKeyOf(iso: string, zone: 'local' | 'utc'): string {
   return dayKeyOfMs(parseDate(iso).getTime(), zone);
 }
 
-export default function SessionTradeMap({ trades, sessions, zone = 'local', currency = 'USD', day: dayProp }: Props) {
+export default function SessionTradeMap({ trades, sessions, marketSessions = true, zone = 'local', currency = 'USD', day: dayProp }: Props) {
   const now = useNowTick(); // o "agora" anda sozinho (a cada 60 s)
   const zoneLabel = zone === 'utc' ? 'UTC' : 'local';
   const offsetHours = -now.getTimezoneOffset() / 60;
@@ -102,10 +104,16 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
   const laneCount = laid.reduce((m, x) => Math.max(m, x.lane + 1), 0);
   const plotH = Math.max(ROW_H, laneCount * ROW_H);
 
-  const sessionSegs = useMemo(
-    () => sessions.map((def, i) => ({ def, i, segs: sessionDisplaySegments(def, delta) })),
-    [sessions, delta],
+  const windows = useMemo(
+    () => (marketSessions && selectedDay ? marketSessionWindowsForDate(selectedDay, zone) : null),
+    [marketSessions, selectedDay, zone],
   );
+  const sessionSegs = useMemo(() => {
+    if (marketSessions) {
+      return (windows ?? []).map((w) => ({ id: w.id, i: w.index, segs: [{ start: w.startH, end: w.endH }] }));
+    }
+    return sessions.map((def, i) => ({ id: def.id, i, segs: sessionDisplaySegments(def, delta) }));
+  }, [marketSessions, windows, sessions, delta]);
 
   // ◀/▶ pulam entre dias COM trades; o seletor de data continua aceitando qualquer dia.
   const prevDay = useMemo(() => {
@@ -166,11 +174,11 @@ export default function SessionTradeMap({ trades, sessions, zone = 'local', curr
       </div>
 
       <div className="stm-plot" style={{ height: `${plotH}px` }}>
-        {sessionSegs.map(({ def, i, segs }) => (
-          <React.Fragment key={def.id}>
+        {sessionSegs.map(({ id, i, segs }) => (
+          <React.Fragment key={id}>
             {segs.map((s) => (
               <span
-                key={`${def.id}-${s.start}`}
+                key={`${id}-${s.start}`}
                 className="stm-band"
                 style={{
                   left: pct(s.start),

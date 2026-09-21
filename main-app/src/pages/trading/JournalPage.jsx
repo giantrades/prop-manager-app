@@ -5,7 +5,7 @@
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md + DOCS/08_STAGE7_INTEGRATION/00-plano.md (Fase 8).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import ModuleTabs from '../../ModuleTabs';
 import AccountPicker from '../../AccountPicker';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -15,6 +15,7 @@ import { useFinance } from '@apps/state';
 import {
   csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis,
   rDistribution, durationStats, listFirms, rememberDeletedTrades, tradeFingerprint, tradeNetPnl,
+  fetchEconomicEvents, monthRange,
 } from '@apps/lib/db';
 import Trades from '@apps/ui/Trades';
 import TradeForm from '@apps/ui/TradeForm';
@@ -80,8 +81,7 @@ export default function JournalPage() {
   const accounts = data?.accounts ?? [];
   const payouts = data?.payouts ?? [];
   const firms = data?.firms ?? [];
-  const [checklistBlocked, setChecklistBlocked] = useState(false);
-  const checklistOk = checklistBlocked ? false : (data?.checklistOk ?? null);
+  const [, setChecklistBlocked] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [view, setView] = useState('review');
@@ -147,18 +147,38 @@ export default function JournalPage() {
     return () => { alive = false; };
   }, [finance]);
   const handleSessions = (defs) => {
-    setSessionDefs(defs);
+    // `null` = limpar custom → volta às sessões reais de mercado (DST-exato).
+    const clean = defs && defs.length > 0 ? defs : null;
+    setSessionDefs(clean);
     try {
-      localStorage.setItem('journalSessions', JSON.stringify(defs));
+      if (clean) localStorage.setItem('journalSessions', JSON.stringify(clean));
+      else localStorage.removeItem('journalSessions');
     } catch {
       /* noop */
     }
     try {
-      finance?.ds?.meta?.setKey('journal:sessions', defs);
+      finance?.ds?.meta?.setKey('journal:sessions', clean ?? []);
     } catch {
       /* noop: próximo sync sobe */
     }
   };
+  // Dia exibido nos mapas (null = hoje). Sobe pro container: as notícias do mês exibido são
+  // buscadas aqui (cache offline no economicCalendar) e o WorldSessionMap só desenha.
+  const [mapDay, setMapDay] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const dayKey = mapDay ?? new Date().toLocaleDateString('en-CA');
+    const { from, to } = monthRange(dayKey.slice(0, 7));
+    setEventsLoading(true);
+    fetchEconomicEvents(from, to)
+      .then((list) => { if (alive) { setEvents(list); setEventsError(false); } })
+      .catch(() => { if (alive) setEventsError(true); })
+      .finally(() => { if (alive) setEventsLoading(false); });
+    return () => { alive = false; };
+  }, [mapDay]);
   // A4 — drill-down do dia do calendário.
   const [selectedDay, setSelectedDay] = useState(null);
   const dayKeyOf = (t) => {
@@ -386,12 +406,6 @@ export default function JournalPage() {
         <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleImportCsv(e.target.files[0])} />
       </div>
 
-      {checklistOk === false && !showForm && (
-        <div className="cmd-warn" role="note">
-          ⚠️ Checklist pré-trade incompleto — <Link to="/playbook">complete o checklist do dia</Link> para liberar novos trades.
-        </div>
-      )}
-
       {showForm ? (
         <TradeForm
           trade={editing}
@@ -421,7 +435,18 @@ export default function JournalPage() {
           </div>
           {view === 'review' ? (
             <>
-              <HeatmapSection trades={dashTrades} currency="USD" sessionDefs={sessionDefs} onSessions={handleSessions} loading={loading} />
+              <HeatmapSection
+                trades={dashTrades}
+                currency="USD"
+                sessionDefs={sessionDefs}
+                onSessions={handleSessions}
+                loading={loading}
+                day={mapDay}
+                onDayChange={setMapDay}
+                events={events}
+                eventsLoading={eventsLoading}
+                eventsError={eventsError}
+              />
               <BreakdownSection trades={dashTrades} currency="USD" loading={loading} />
               <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
               <DurationAnalysis trades={dashTrades} loading={loading} />

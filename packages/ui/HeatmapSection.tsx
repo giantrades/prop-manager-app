@@ -6,8 +6,8 @@
 
 import { fmtMoney } from './currency';
 import React, { useMemo, useState } from 'react';
-import { heatmapBySymbol, sessionAttribution, marketSessionsInLocalZone } from '@apps/lib/db';
-import type { Trade, SessionDef } from '@apps/lib/db';
+import { heatmapBySymbol, sessionAttribution, marketSessionAttribution, marketSessionsInLocalZone } from '@apps/lib/db';
+import type { Trade, SessionDef, EconomicEvent } from '@apps/lib/db';
 import { usePlatform } from '@apps/state';
 import SessionTradeMap from './SessionTradeMap';
 import WorldSessionMap from './WorldSessionMap';
@@ -32,33 +32,53 @@ interface HeatmapSectionProps {
   trades?: Trade[];
   currency?: string;
   sessionDefs?: SessionDef[];
-  onSessions?: (sessions: SessionDef[]) => void;
+  /** `null` = limpar custom e voltar às sessões reais de mercado. */
+  onSessions?: (sessions: SessionDef[] | null) => void;
   loading?: boolean;
+  /** Dia exibido nos mapas (null = hoje). Controlado pelo container. */
+  day?: string | null;
+  onDayChange?: (day: string | null) => void;
+  events?: EconomicEvent[];
+  eventsLoading?: boolean;
+  eventsError?: boolean;
 }
-export default function HeatmapSection({ trades = [], currency = 'USD', sessionDefs, onSessions, loading = false }: HeatmapSectionProps) {
-  // Sessões no relógio do aparelho; default = horários reais de mercado convertidos pro seu fuso.
+export default function HeatmapSection({
+  trades = [], currency = 'USD', sessionDefs, onSessions, loading = false,
+  day: mapDay, onDayChange, events = [], eventsLoading = false, eventsError = false,
+}: HeatmapSectionProps) {
+  // Sessões custom (relógio fixo) ou as reais de mercado (DST-exato, resolvidas por dia no mapa).
+  const custom = !!(sessionDefs && sessionDefs.length > 0);
   const defs: SessionDef[] = useMemo(
-    () => (sessionDefs && sessionDefs.length > 0 ? sessionDefs : marketSessionsInLocalZone()),
-    [sessionDefs],
+    () => (custom ? (sessionDefs as SessionDef[]) : marketSessionsInLocalZone()),
+    [custom, sessionDefs],
   );
   const [editing, setEditing] = useState<boolean>(false);
   const [draft, setDraft] = useState<SessionDef[] | null>(null);
   const [axisZone, setAxisZone] = useState<'local' | 'utc'>('local');
-  // Dia exibido nos dois mapas (null = hoje). Um só seletor, dentro do WorldSessionMap.
-  const [mapDay, setMapDay] = useState<string | null>(null);
   // Posições ABERTAS (ao vivo; offline/celular → último snapshot). Só desenho: nunca viram
   // Trade, nunca entram em PnL realizado nem nas somas por sessão (sessionAttribution só vê fechados).
   const platform = usePlatform() as
-    | { livePositions?: OpenPosition[]; lastSnapshot?: { positions?: OpenPosition[] } | null }
+    | {
+        livePositions?: OpenPosition[];
+        lastSnapshot?: { positions?: OpenPosition[] } | null;
+        statuses?: Array<{ online?: boolean }>;
+      }
     | undefined;
   const livePositions = platform?.livePositions;
   const snapshotPositions = platform?.lastSnapshot?.positions;
+  // Online: usa as posições AO VIVO (mesmo vazio = "não há posição aberta"). Offline: cai no
+  // último snapshot. O `length > 0` antigo mostrava posição fantasma: com a ponte online e
+  // zero posições, caía no snapshot velho e o trade ficava "aberto" no mapa.
+  const platformOnline = platform?.statuses?.some((s) => s.online) ?? false;
   const openPositions = useMemo<OpenPosition[]>(
-    () => (livePositions && livePositions.length > 0 ? livePositions : (snapshotPositions ?? [])),
-    [livePositions, snapshotPositions],
+    () => (platformOnline ? (livePositions ?? []) : (snapshotPositions ?? [])),
+    [platformOnline, livePositions, snapshotPositions],
   );
   const symbols = useMemo(() => heatmapBySymbol(trades, 12), [trades]);
-  const sessions = useMemo(() => sessionAttribution(trades, defs, { zone: 'local' }), [trades, defs]);
+  const sessions = useMemo(
+    () => (custom ? sessionAttribution(trades, defs, { zone: 'local' }) : marketSessionAttribution(trades)),
+    [custom, trades, defs],
+  );
   const maxAbs = useMemo(() => {
     const all = [...symbols.map((s) => s.pnl), ...sessions.map((s) => s.pnl)];
     return Math.max(1, ...all.map((v) => Math.abs(v)));
@@ -121,14 +141,18 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
         </div>
         <WorldSessionMap
           sessions={defs}
+          marketSessions={!custom}
           zone={axisZone}
           trades={trades}
           openPositions={openPositions}
           currency={currency}
           day={mapDay}
-          onDayChange={setMapDay}
+          onDayChange={onDayChange}
+          events={events}
+          eventsLoading={eventsLoading}
+          eventsError={eventsError}
         />
-        <SessionTradeMap trades={trades} sessions={defs} zone={axisZone} currency={currency} day={mapDay} />
+        <SessionTradeMap trades={trades} sessions={defs} marketSessions={!custom} zone={axisZone} currency={currency} day={mapDay} />
         <p className="hm-note">Cada trade é desenhado da abertura ao fechamento; some em uma sessão só — a de abertura — então os valores por sessão não inflam. Posições abertas (ao vivo) aparecem tracejadas no mapa e não entram nos valores por sessão.</p>
         <div className="hm-grid hm-grid-4">
           {sessions.map((s, i) => {
@@ -184,7 +208,7 @@ export default function HeatmapSection({ trades = [], currency = 'USD', sessionD
               <button
                 className="hm-edit-btn"
                 onClick={() => {
-                  onSessions(marketSessionsInLocalZone());
+                  onSessions(null);
                   setEditing(false);
                 }}
               >

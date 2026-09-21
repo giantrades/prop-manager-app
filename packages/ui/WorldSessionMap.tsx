@@ -11,8 +11,8 @@
 // Apresentação pura: usa `marketStatus`, `sessionContains`, `tradeNetPnl`. Posição ao vivo
 // nunca entra em soma de PnL (o valor dela é só exibição).
 import React, { useMemo, useState } from 'react';
-import type { Trade, SessionDef } from '@apps/lib/db';
-import { marketStatus, parseDate, sessionContains } from '@apps/lib/db';
+import type { Trade, SessionDef, EconomicEvent } from '@apps/lib/db';
+import { marketStatus, marketSessionWindowsForDate, marketOpenAt, MARKET_HOURS, parseDate, sessionContains } from '@apps/lib/db';
 import { sessionDisplaySegments, pct, fmtHM, mod24, dayKeyOfMs, dayStartMs } from './sessionTime';
 import { sessionIconFor, SESSION_COLORS } from './sessionIcons';
 import { fmtMoney } from './currency';
@@ -27,6 +27,9 @@ interface Props {
   /** Posições abertas ao vivo (usePlatform). Só desenho — nunca entram em PnL. */
   openPositions?: OpenPosition[];
   sessions: SessionDef[];
+  /** true = usa as janelas reais de mercado (DST-exato, resolvidas por dia). false = sessões
+   *  custom no relógio do aparelho (comportamento fixo). */
+  marketSessions?: boolean;
   zone?: 'local' | 'utc';
   /** Congela o "agora" (teste). Sem ele, atualiza sozinho a cada 60 s. */
   now?: Date;
@@ -34,6 +37,10 @@ interface Props {
   /** Dia exibido ('YYYY-MM-DD' no fuso do eixo); null/undefined = hoje. Controlado se `onDayChange` existir. */
   day?: string | null;
   onDayChange?: (day: string | null) => void;
+  /** Notícias econômicas (high impact) para a trilha inferior. Só desenho. */
+  events?: EconomicEvent[];
+  eventsLoading?: boolean;
+  eventsError?: boolean;
 }
 
 // Nome curto + latitude (só para ORDENAR as faixas de cima p/ baixo: Londres … Sydney).
@@ -227,18 +234,19 @@ function smoothPath(pts: Array<[number, number]>): string {
 interface Seg { start: number; end: number }
 interface Lane {
   def: SessionDef;
-  idx: number; // índice original em `sessions` (define a cor)
+  idx: number; // índice original (define a cor)
   color: string;
   label: string;
   segs: Seg[];
   capSeg: Seg | null; // segmento que leva o nome (o mais largo)
+  timeLabel: string; // "08:00–17:00" (mercado = relógio da bolsa; custom = no eixo)
   Icon: ReturnType<typeof sessionIconFor>;
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function WorldSessionMap({
-  trades = [], openPositions = [], sessions, zone = 'local', now: nowProp,
-  currency = 'USD', day: dayProp, onDayChange,
+  trades = [], openPositions = [], sessions, marketSessions = true, zone = 'local', now: nowProp,
+  currency = 'USD', day: dayProp, onDayChange, events = [], eventsLoading = false, eventsError = false,
 }: Props) {
   const ref = useNowTick(nowProp);
   const zoneTag = zone === 'utc' ? 'UTC' : 'local';
@@ -296,35 +304,85 @@ export default function WorldSessionMap({
       .format(new Date(Date.UTC(y, m - 1, d, 12)));
   }, [dayKey]);
 
+  // ── Janelas reais de mercado do dia (DST-exato); null quando são sessões custom ──
+  const windows = useMemo(
+    () => (marketSessions ? marketSessionWindowsForDate(dayKey, zone) : null),
+    [marketSessions, dayKey, zone],
+  );
+
   // ── Faixas (uma por sessão), de cima p/ baixo por latitude; ids sem cidade por último ──
   const lanes: Lane[] = useMemo(() => {
-    const all = sessions.map((def, idx) => ({ def, idx }));
-    const known = all.filter((x) => CITY[x.def.id]).sort((p, q) => CITY[q.def.id].lat - CITY[p.def.id].lat);
-    const unknown = all.filter((x) => !CITY[x.def.id]);
-    return [...known, ...unknown].map(({ def, idx }) => {
-      const segs = sessionDisplaySegments(def, delta);
-      const capSeg = segs.reduce<Seg | null>((best, s) => (!best || s.end - s.start > best.end - best.start ? s : best), null);
+    interface Raw { id: string; label: string; idx: number; segs: Seg[]; timeLabel: string }
+    let raw: Raw[];
+    if (marketSessions) {
+      const byId = new Map<string, { idx: number; label: string; segs: Seg[] }>();
+      for (const w of windows ?? []) {
+        const e = byId.get(w.id) ?? { idx: w.index, label: w.label, segs: [] as Seg[] };
+        e.segs.push({ start: w.startH, end: w.endH });
+        byId.set(w.id, e);
+      }
+      raw = [...byId.entries()].map(([id, e]) => {
+        const mk = MARKET_HOURS.find((m) => m.id === id);
+        return {
+          id, label: CITY[id]?.label ?? e.label, idx: e.idx,
+          segs: e.segs.sort((a, b) => a.start - b.start),
+          timeLabel: mk ? `${fmtHM(mk.startH)}–${fmtHM(mk.endH)}` : '',
+        };
+      });
+    } else {
+      raw = sessions.map((def, idx) => ({
+        id: def.id, label: CITY[def.id]?.label ?? def.label, idx,
+        segs: sessionDisplaySegments(def, delta),
+        timeLabel: `${fmtHM(mod24(def.startH + delta))}–${fmtHM(mod24(def.endH + delta))}`,
+      }));
+    }
+    // Ordena por latitude (conhecidas primeiro); ids desconhecidos por último, na ordem original.
+    raw.sort((a, b) => {
+      const la = CITY[a.id]?.lat;
+      const lb = CITY[b.id]?.lat;
+      if (la === undefined && lb === undefined) return a.idx - b.idx;
+      if (la === undefined) return 1;
+      if (lb === undefined) return -1;
+      return lb - la;
+    });
+    return raw.map((b) => {
+      const capSeg = b.segs.reduce<Seg | null>((best, s) => (!best || s.end - s.start > best.end - best.start ? s : best), null);
       return {
-        def, idx,
-        color: SESSION_COLORS[idx % SESSION_COLORS.length],
-        label: CITY[def.id]?.label ?? def.label,
-        segs, capSeg,
-        Icon: sessionIconFor(def.id),
+        def: { id: b.id, label: b.label, startH: 0, endH: 0 },
+        idx: b.idx,
+        color: SESSION_COLORS[b.idx % SESSION_COLORS.length],
+        label: b.label,
+        segs: b.segs, capSeg, timeLabel: b.timeLabel,
+        Icon: sessionIconFor(b.id),
       };
     });
-  }, [sessions, delta]);
+  }, [marketSessions, windows, sessions, delta]);
   const laneCount = lanes.length;
   const laneOfSession = useMemo(() => {
     const a = new Array<number>(sessions.length).fill(0);
     lanes.forEach((l, pos) => { a[l.idx] = pos; });
     return a;
   }, [lanes, sessions.length]);
+  const laneOfMarketId = useMemo(() => {
+    const m = new Map<string, number>();
+    lanes.forEach((l, pos) => m.set(l.def.id, pos));
+    return m;
+  }, [lanes]);
 
   // ── Layout dos trades no dia exibido ──
   const dayStart = useMemo(() => dayStartMs(dayKey, zone), [dayKey, zone]);
   const layout = useMemo(
-    () => layoutDayTrades({ trades: mapTrades, dayStartMs: dayStart, nowMs: ref.getTime(), sessions, laneOfSession }, laneCount),
-    [mapTrades, dayStart, ref, sessions, laneOfSession, laneCount],
+    () => layoutDayTrades({
+      trades: mapTrades, dayStartMs: dayStart, nowMs: ref.getTime(), sessions, laneOfSession,
+      laneForMs: marketSessions
+        ? (ms: number) => {
+            // Sem mercado aberto (fim de semana) → último da ordem, igual ao fallback da atribuição.
+            const id = marketOpenAt(ms) ?? MARKET_HOURS[MARKET_HOURS.length - 1].id;
+            return laneOfMarketId.get(id) ?? 0;
+          }
+        : undefined,
+    }, laneCount),
+    [mapTrades, dayStart, ref, sessions, laneOfSession, laneCount, marketSessions, lanes, laneOfMarketId],
   );
 
   const [hoverKey, setHoverKey] = useState<string | null>(null);
@@ -332,6 +390,32 @@ export default function WorldSessionMap({
   const activeKey = hoverKey ?? pinKey;
   const active = layout.placed.find((p) => p.t.key === activeKey) ?? null;
   const togglePin = (k: string) => setPinKey((cur) => (cur === k ? null : k));
+
+  // ── Notícias do dia exibido (high impact; instante absoluto → DST-correct de graça) ──
+  const hourOfMs = (ms: number): number => {
+    const d = new Date(ms);
+    return zone === 'utc' ? d.getUTCHours() + d.getUTCMinutes() / 60 : d.getHours() + d.getMinutes() / 60;
+  };
+  const dayEvents = useMemo(() => {
+    const out: Array<{ e: EconomicEvent; x: number }> = [];
+    for (const e of events) {
+      const ms = new Date(e.scheduledAt).getTime();
+      if (!Number.isFinite(ms)) continue;
+      if (dayKeyOfMs(ms, zone) !== dayKey) continue;
+      out.push({ e, x: hourOfMs(ms) });
+    }
+    return out.sort((a, b) => a.x - b.x);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, zone, dayKey]);
+  const [newsKey, setNewsKey] = useState<string | null>(null);
+  const activeNews = dayEvents.find((n) => n.e.id === newsKey) ?? null;
+  const fmtNewsTime = (iso: string): string => {
+    const ms = new Date(iso).getTime();
+    const d = new Date(ms);
+    const hh = zone === 'utc' ? d.getUTCHours() : d.getHours();
+    const mi = zone === 'utc' ? d.getUTCMinutes() : d.getMinutes();
+    return `${pad2(hh)}:${pad2(mi)}`;
+  };
 
   const yOfDot = (d: DotPos) =>
     laneCenterPct(d.lane, laneCount) + rowOffsetPct(d.row, layout.rowsInLane[d.lane] ?? 1, laneCount);
@@ -371,6 +455,7 @@ export default function WorldSessionMap({
   const isLive = (lane: Lane): boolean => {
     if (!isToday) return false;
     const market = status.find((s) => s.id === lane.def.id);
+    if (marketSessions) return market?.open ?? false; // status já é DST-exato
     return sessionContains(lane.def, localNowH) && (market ? market.open : true);
   };
 
@@ -519,7 +604,7 @@ export default function WorldSessionMap({
                   >
                     <span className="wsm-cap-icon"><Icon size={12} /></span>
                     <span className="wsm-cap-name">{lane.label}</span>
-                    <span className="wsm-cap-time">{fmtHM(mod24(lane.def.startH + delta))}–{fmtHM(mod24(lane.def.endH + delta))}</span>
+                    <span className="wsm-cap-time">{lane.timeLabel}</span>
                     <span className="wsm-sr">{live ? ', aberto agora' : ', fechado agora'}</span>
                   </span>
                 )}
@@ -600,6 +685,67 @@ export default function WorldSessionMap({
 
           {/* Linha "agora": anda sozinha (atualiza a cada minuto) */}
           {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
+        </div>
+
+        {/* Trilha de notícias: plaquinhas (!) nos horários reais, no mesmo eixo X */}
+        <div className="wsm-news">
+          <div className="wsm-news-head">
+            <span className="wsm-news-title">
+              <i className="wsm-news-key" aria-hidden="true">!</i>
+              Red folders (high impact)
+            </span>
+            <span className="wsm-news-sub">
+              {eventsError
+                ? 'calendário indisponível offline'
+                : eventsLoading
+                  ? 'carregando…'
+                  : dayEvents.length === 0
+                    ? 'sem notícias neste dia'
+                    : `${dayEvents.length} no dia`}
+            </span>
+          </div>
+          <div className="wsm-news-rail" role="list" aria-label="Notícias econômicas do dia">
+            {[6, 12, 18].map((h) => (
+              <span key={h} className="wsm-grid" style={{ left: pct(h) }} aria-hidden="true" />
+            ))}
+            {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
+            {dayEvents.map(({ e, x }) => (
+              <button
+                key={e.id}
+                type="button"
+                role="listitem"
+                className={`wsm-news-mark${newsKey === e.id ? ' is-active' : ''}`}
+                style={{ left: `clamp(8px, ${(x / 24) * 100}%, calc(100% - 8px))` }}
+                onMouseEnter={() => setNewsKey(e.id)}
+                onMouseLeave={() => setNewsKey(null)}
+                onFocus={() => setNewsKey(e.id)}
+                onBlur={() => setNewsKey(null)}
+                onClick={() => setNewsKey((cur) => (cur === e.id ? null : e.id))}
+                aria-label={`${fmtNewsTime(e.scheduledAt)} ${e.eventName}${e.periodLabel ? ` (${e.periodLabel})` : ''} — impacto alto`}
+              >
+                <span aria-hidden="true">!</span>
+              </button>
+            ))}
+          </div>
+          {activeNews && (
+            <div
+              className="wsm-news-tip"
+              role="status"
+              aria-live="polite"
+              style={{ left: `clamp(120px, ${(activeNews.x / 24) * 100}%, calc(100% - 120px))` }}
+            >
+              <span><strong>{fmtNewsTime(activeNews.e.scheduledAt)}</strong> {activeNews.e.eventName}</span>
+              {activeNews.e.periodLabel && <span className="wsm-muted">{activeNews.e.periodLabel}</span>}
+              <span className="wsm-num">
+                {activeNews.e.actual != null
+                  ? `atual ${activeNews.e.actual}${activeNews.e.unit ? ` ${activeNews.e.unit}` : ''}`
+                  : activeNews.e.forecast != null
+                    ? `previsto ${activeNews.e.forecast}${activeNews.e.unit ? ` ${activeNews.e.unit}` : ''}`
+                    : 'sem resultado ainda'}
+              </span>
+              {activeNews.e.previous != null && <span className="wsm-num wsm-muted">anterior {activeNews.e.previous}</span>}
+            </div>
+          )}
         </div>
 
         {/* Dados do trade sob o mouse / tocado */}
@@ -918,6 +1064,35 @@ const WSM_CSS = `
 }
 .wsm-hour:first-child { transform: translateX(0); }
 .wsm-hour:last-child  { transform: translateX(-100%); }
+
+/* ── Trilha de notícias (red folders) ── */
+.wsm-news { position: relative; padding: 6px 12px 8px; border-top: 1px solid rgba(255,255,255,0.06); }
+.wsm-news-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.wsm-news-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text, #e7eaf0); }
+.wsm-news-key { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 4px; background: var(--red, #e74c3c); color: #fff; font-style: normal; font-size: 9px; font-weight: 800; line-height: 1; }
+.wsm-news-sub { font-size: 10px; color: var(--muted, #a1a7b3); }
+.wsm-news-rail { position: relative; height: 20px; }
+.wsm-news-mark {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 14px; padding: 0; margin: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid #b7352a; border-radius: 4px;
+  background: var(--red, #e74c3c); color: #fff;
+  font-size: 9px; font-weight: 800; line-height: 1;
+  cursor: pointer; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.wsm-news-mark::before { content: ''; position: absolute; inset: -7px; } /* alvo de toque ≈ 28px */
+.wsm-news-mark.is-active, .wsm-news-mark:focus-visible { transform: translate(-50%, -50%) scale(1.3); outline: 2px solid var(--text, #e7eaf0); outline-offset: 2px; z-index: 3; }
+.wsm-news-tip {
+  position: absolute; bottom: calc(100% - 4px); transform: translateX(-50%);
+  z-index: 7; display: flex; flex-direction: column; gap: 1px;
+  max-width: 230px; padding: 6px 9px; border-radius: 8px;
+  background: var(--wsm-bg); border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+  font-size: 11px; color: var(--text, #e7eaf0); white-space: normal; word-break: break-word;
+}
+.wsm-news-tip strong { color: var(--red, #e74c3c); }
+.wsm-news-tip .wsm-num, .wsm-news-tip .wsm-muted { font-size: 10px; }
 
 /* ── Cards de mercado ── */
 .wsm-markets {

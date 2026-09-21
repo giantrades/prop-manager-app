@@ -137,6 +137,9 @@ export interface LayoutInput {
   sessions: SessionDef[];
   /** índice original da sessão → posição da faixa no mapa */
   laneOfSession: number[];
+  /** Resolve a faixa de um instante (ms). Quando presente, ignora `sessions`/`laneOfSession`
+   *  — usado pelo caminho DST-proof (`marketOpenAt`). */
+  laneForMs?: (ms: number) => number;
 }
 
 const HOUR_MS = 3600000;
@@ -145,12 +148,12 @@ export const DOT_GAP_H = 0.7;
 export const MAX_ROWS = 5;
 
 export function layoutDayTrades(input: LayoutInput, laneCount: number): DayLayout {
-  const { trades, dayStartMs, nowMs, sessions, laneOfSession } = input;
+  const { trades, dayStartMs, nowMs, sessions, laneOfSession, laneForMs } = input;
   const nowH = (nowMs - dayStartMs) / HOUR_MS;
-  const laneFor = (ms: number): number => {
+  const laneFor = laneForMs ?? ((ms: number): number => {
     const idx = sessionIndexAt(sessions, localHourOf(ms));
     return idx < 0 ? 0 : (laneOfSession[idx] ?? 0);
-  };
+  });
   const clamp = (h: number) => Math.min(24, Math.max(0, h));
 
   const placed: PlacedTrade[] = [];

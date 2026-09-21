@@ -343,14 +343,14 @@ export const MARKET_SESSIONS: SessionDef[] = [
 ];
 
 /** Horário local de referência de cada mercado (fuso IANA + horário comercial local). */
-interface MarketHoursDef {
+export interface MarketHoursDef {
   id: string;
   label: string;
   tz: string;
   startH: number; // hora local do mercado (0–24)
   endH: number;
 }
-const MARKET_HOURS: MarketHoursDef[] = [
+export const MARKET_HOURS: MarketHoursDef[] = [
   { id: 'sydney', label: 'Sydney', tz: 'Australia/Sydney', startH: 7, endH: 16 },
   { id: 'tokyo', label: 'Tokyo', tz: 'Asia/Tokyo', startH: 9, endH: 18 },
   { id: 'london', label: 'London', tz: 'Europe/London', startH: 8, endH: 17 },
@@ -431,6 +431,129 @@ export function marketStatus(ref: Date = new Date()): MarketStatus[] {
       open: weekday && sessionContains(def, h),
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// DST-exato: as janelas de sessão são resolvidas a partir do horário de parede
+// de cada mercado (fuso IANA) para uma dado DIA, com offset por borda. É o que
+// mantém faixas, "agora" e atribuição de PnL corretos quando o horário muda.
+// ---------------------------------------------------------------------------
+
+function dayKeyParts(key: string): [number, number, number] {
+  const [y, m, d] = key.split('-').map(Number);
+  return [y, m, d];
+}
+
+function addDaysIso(key: string, days: number): string {
+  const [y, m, d] = dayKeyParts(key);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * Horário de parede (no fuso IANA `tz`, na data `dateKey`, hora fracionária `hourFrac`)
+ * → instante UTC (ms). DST-exato: resolve o offset **no instante-alvo** com 2 passadas,
+ * então acerta tanto o dia da virada quanto horários fora de 0–24 (`hourFrac` > 24 avança o dia).
+ */
+function marketWallToUtc(tz: string, dateKey: string, hourFrac: number): number {
+  const [y, m, d] = dayKeyParts(dateKey);
+  const dayExtra = Math.floor(hourFrac / 24);
+  const h = hourFrac - dayExtra * 24;
+  const hh = Math.floor(h);
+  const mi = Math.round((h - hh) * 60);
+  const base = Date.UTC(y, m - 1, d + dayExtra, hh, mi);
+  let utc = base - tzOffsetMinutes(tz, new Date(base)) * 60000;
+  utc = base - tzOffsetMinutes(tz, new Date(utc)) * 60000;
+  return utc;
+}
+
+/** Segmento de sessão (de um mercado) recortado no dia do eixo, em horas fracionárias 0–24. */
+export interface SessionWindow {
+  id: string;
+  label: string;
+  index: number; // posição em MARKET_HOURS (define a cor, igual aos cards de mercado)
+  startH: number; // 0–24 no eixo (inclusivo)
+  endH: number; // 0–24 no eixo (exclusivo)
+}
+
+/**
+ * Janelas das 4 sessões de mercado que aparecem no dia `dateKey` no eixo pedido
+ * ('local' = relógio do aparelho, 'utc'). Resolve início e fim **separadamente** (offset
+ * por borda) e recorta no dia do eixo, então a sessão que atravessa a meia-noite aparece
+ * dividida (parte do dia anterior + parte deste). DST-exato por construção.
+ */
+export function marketSessionWindowsForDate(dateKey: string, zone: SessionZone): SessionWindow[] {
+  const [y, m, d] = dayKeyParts(dateKey);
+  const dayStart = zone === 'utc'
+    ? Date.UTC(y, m - 1, d, 0, 0, 0)
+    : new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  const dayEnd = dayStart + 86400000;
+  const hourInAxis = (utcMs: number): number => {
+    const dd = new Date(utcMs);
+    return zone === 'utc'
+      ? dd.getUTCHours() + dd.getUTCMinutes() / 60
+      : dd.getHours() + dd.getMinutes() / 60;
+  };
+  const out: SessionWindow[] = [];
+  MARKET_HOURS.forEach((mk, index) => {
+    const dur = ((mk.endH - mk.startH) % 24 + 24) % 24;
+    if (dur === 0) return;
+    for (const off of [-1, 0, 1]) {
+      const wallDate = addDaysIso(dateKey, off);
+      const startUtc = marketWallToUtc(mk.tz, wallDate, mk.startH);
+      const endUtc = marketWallToUtc(mk.tz, wallDate, mk.startH + dur);
+      const s = Math.max(startUtc, dayStart);
+      const e = Math.min(endUtc, dayEnd);
+      if (e <= s) continue;
+      out.push({
+        id: mk.id,
+        label: mk.label,
+        index,
+        startH: s <= dayStart ? 0 : hourInAxis(s),
+        endH: e >= dayEnd ? 24 : hourInAxis(e),
+      });
+    }
+  });
+  return out;
+}
+
+/** Primeiro mercado aberto no instante `ms` (relógio local do mercado + dia útil); null se nenhum. */
+export function marketOpenAt(ms: number): string | null {
+  const ref = new Date(ms);
+  for (const m of MARKET_HOURS) {
+    const off = tzOffsetMinutes(m.tz, ref);
+    const wall = new Date(ref.getTime() + off * 60000);
+    const h = wall.getUTCHours() + wall.getUTCMinutes() / 60;
+    const dow = wall.getUTCDay();
+    if (dow >= 1 && dow <= 5 && sessionContains({ id: m.id, label: m.label, startH: m.startH, endH: m.endH }, h)) {
+      return m.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Atribuição DST-proof das sessões de mercado: cada trade pertence ao primeiro mercado
+ * **aberto no instante da entrada** (relógio local do mercado), não à hora do aparelho.
+ * Usa a mesma regra do `sessionAttribution` (1x, sem inflar; fallback = último mercado).
+ */
+export function marketSessionAttribution(trades: Trade[]): SessionStat[] {
+  const closed = closedTrades(trades);
+  const buckets = new Map<string, Trade[]>();
+  for (const m of MARKET_HOURS) buckets.set(m.id, []);
+  const fallbackId = MARKET_HOURS[MARKET_HOURS.length - 1].id;
+  for (const t of closed) {
+    const ms = parseDate(t.entryDatetime).getTime();
+    const id = marketOpenAt(ms) ?? fallbackId;
+    (buckets.get(id) ?? []).push(t);
+  }
+  return MARKET_HOURS.map((m) => ({
+    session: m.id,
+    label: `${m.label} ${fmtHour(m.startH)}–${fmtHour(m.endH)}`,
+    ...groupStat(buckets.get(m.id) ?? []),
+  }));
 }
 
 /**

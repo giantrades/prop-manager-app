@@ -51,10 +51,14 @@ export function ctraderToTrade(q: CTraderTrade, accountId?: string): Omit<Trade,
     symbol: q.symbol || '',
     direction,
     entryDatetime,
-    exitDatetime: undefined,
+    // cTrader entrega DEALS (execuções já com PnL realizado), não pares entrada/saída.
+    // Sem `exitDatetime`, o `closedTrades` do journal o ignora e ele fica "aberto" PARA SEMPRE
+    // no mapa de sessões. Tratamos o deal como registro FECHADO no próprio instante/preço —
+    // o `resultNet` vem do `netPnl` do deal. (Duração fica 0: o bridge não separa as pernas.)
+    exitDatetime: entryDatetime,
     qty: q.quantity ?? 0,
     entryPrice: q.price ?? 0,
-    exitPrice: undefined,
+    exitPrice: q.price ?? 0,
     commission: 0,
     swap: 0,
     rebate: 0,

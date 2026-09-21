@@ -36,6 +36,7 @@ export * from './supabaseSync';
 export * from './seedDemo';
 export * from './demoMode';
 export * from './quantowerIngest';
+export * from './positionReconcile';
 export * from './ctraderIngest';
 export * from './firmTemplates';
 export * from './backup';

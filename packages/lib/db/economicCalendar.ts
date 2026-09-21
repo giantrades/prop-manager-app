@@ -13,7 +13,9 @@ export interface EconomicEvent {
   scheduledAt: string; // ISO 8601 UTC
   periodLabel?: string | null;
   previous?: string | null;
+  forecast?: string | null;
   actual?: string | null;
+  unit?: string | null;
 }
 
 export interface EconomicCalendarOptions {
@@ -69,7 +71,9 @@ function normalize(raw: unknown): EconomicEvent[] {
       scheduledAt,
       periodLabel: typeof rec.periodLabel === 'string' ? rec.periodLabel : null,
       previous: typeof rec.previous === 'string' ? rec.previous : null,
+      forecast: typeof rec.forecast === 'string' ? rec.forecast : null,
       actual: typeof rec.actual === 'string' ? rec.actual : null,
+      unit: typeof rec.unit === 'string' ? rec.unit : null,
     });
   }
   return out;
@@ -113,7 +117,7 @@ export function monthRange(yearMonth: string): { from: string; to: string } {
 }
 
 // ---------------------------------------------------------------------------
-// Feriados do mercado americano (US) — cálculo local, sem API.
+// Feriados do mercado americano (US) ï¿½ cï¿½lculo local, sem API.
 // ---------------------------------------------------------------------------
 export interface UsHoliday { date: string; name: string }
 

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
+import { createReconcileState, reconcilePositions } from '@apps/lib/db';
 import { useFinance } from './FinanceContext';
 
 const AUTO_KEY = 'qt:autoSync';
@@ -85,21 +86,61 @@ export function usePlatform() {
   const financeRef = useRef(finance);
   financeRef.current = finance;
   const snapMetaAtRef = useRef(0);
+  const snapSigRef = useRef('');
   if (!adapterRef.current) adapterRef.current = makeAdapter();
 
   // Persiste a última leitura boa: localStorage (device) + meta (sincroniza p/ o celular).
+  // IMPORTANTE: lista VAZIA é leitura VÁLIDA (a plataforma não tem posição aberta) e DEVE
+  // sobrescrever o snapshot — senão uma posição que sumiu (conexão caiu/religou) fica
+  // "aberta" para sempre no mapa/celular. Só ignora leitura que não é lista (falha).
   const persistSnapshot = useCallback((positions) => {
-    if (!Array.isArray(positions) || positions.length === 0) return;
+    if (!Array.isArray(positions)) return;
+    const sig = JSON.stringify(positions.map((p) => [
+      p.platformPositionId ?? '', p.symbol ?? '', p.quantity ?? '', p.openPrice ?? p.entryPrice ?? '',
+    ]));
+    if (sig === snapSigRef.current) return; // nada mudou (evita re-render/gravação a cada poll)
+    snapSigRef.current = sig;
     const snap = { at: new Date().toISOString(), positions };
     try { localStorage.setItem(SNAP_KEY, JSON.stringify(snap)); } catch { /* noop */ }
     setLastSnapshot(snap);
     const now = Date.now();
     const f = financeRef.current;
-    if (f?.ds && now - snapMetaAtRef.current > SNAP_META_THROTTLE_MS) {
+    // Limpar (lista vazia) sobe na hora para o meta; senão respeita o throttle.
+    if (f?.ds && (positions.length === 0 || now - snapMetaAtRef.current > SNAP_META_THROTTLE_MS)) {
       snapMetaAtRef.current = now;
       try { f.ds.meta.setKey(SNAP_META_KEY, snap).catch(() => {}); } catch { /* noop */ }
     }
   }, []);
+
+  // Publica a lista reconciliada (live + snapshot). A decisão de abrir/fechar é do
+  // `reconcilePositions` (por conexão); aqui é só estado.
+  const applyPositions = useCallback((list) => {
+    if (!Array.isArray(list)) return;
+    setLivePositions(list);
+    setLiveCount(list.length);
+    publishLiveCount(list.length);
+    setPositionsAt(Date.now());
+    persistSnapshot(list);
+  }, [persistSnapshot]);
+
+  // ── Reconciliação POR CONEXÃO ────────────────────────────────────────────────
+  // Conexões diferentes conectam em tempos diferentes; a plataforma pode demorar a carregar as
+  // posições de cada uma. `reconcilePositions` fecha só o que uma conexão CONECTADA deixou de
+  // reportar (com grace pós-conexão + confirmação de vazio), e NUNCA fecha por causa de conexão
+  // desconectada. `connectedIdsRef` vem de `/status.connections` (atualizado a cada 60s).
+  const reconcileRef = useRef(null);
+  if (!reconcileRef.current) reconcileRef.current = createReconcileState(readLocalSnap()?.positions ?? []);
+  const connectedIdsRef = useRef([]);
+  const handlePositions = useCallback((reported) => {
+    if (!Array.isArray(reported)) return null;
+    const reconciled = reconcilePositions(reconcileRef.current, {
+      reported,
+      connectedIds: connectedIdsRef.current,
+      now: Date.now(),
+    });
+    applyPositions(reconciled);
+    return reconciled;
+  }, [applyPositions]);
 
   // Sem snapshot local (ex.: celular novo), hidrata do meta sincronizado.
   useEffect(() => {
@@ -122,28 +163,30 @@ export function usePlatform() {
     try {
       const [s, positions] = await Promise.all([
         a.getStatus().catch(() => null),
-        a.getPositions().catch(() => []),
+        a.getPositions().catch(() => null),
       ]);
       if (!s) throw new Error('bridge offline');
+      const list = Array.isArray(positions) ? positions : null; // null = leitura falhou
+      // Conjunto de conexões CONECTADAS (define quais podem "fechar" posições).
+      connectedIdsRef.current = (s.connections ?? []).map((c) => c.id).filter(Boolean);
       setStatuses([
         {
           platformId: 'quantower',
           online: true,
           connections: [],
-          positionsCount: positions.length,
+          positionsCount: list ? list.length : 0,
           ...(s || {}),
         },
       ]);
-      setLivePositions(positions);
-      setLiveCount(positions.length);
-          publishLiveCount(positions.length);
-      setPositionsAt(Date.now());
-      persistSnapshot(positions);
+      // Só mexe nas posições quando a leitura de fato veio — falha não apaga o que já temos.
+      if (list) handlePositions(list);
     } catch {
+      // Offline: nenhuma conexão é confiável → nada é fechado (o reconciliador mantém tudo).
+      connectedIdsRef.current = [];
       setStatuses([{ platformId: 'quantower', online: false, connections: [], positionsCount: 0 }]);
     }
     setLastSync(localStorage.getItem(LAST_SYNC_KEY));
-  }, [persistSnapshot]);
+  }, [handlePositions]);
 
   // SSE: em página https exige URL https — EXCETO loopback (127.0.0.1/localhost), que o
   // navegador trata como contexto seguro. Antes o stream era descartado no PC (app em
@@ -166,13 +209,7 @@ export function usePlatform() {
     es.onmessage = (ev) => {
       try {
         const d = JSON.parse(ev.data);
-        if (Array.isArray(d.positions)) {
-          setLivePositions(d.positions);
-          setLiveCount(d.positions.length);
-          publishLiveCount(d.positions.length);
-          setPositionsAt(Date.now());
-          persistSnapshot(d.positions);
-        }
+        if (Array.isArray(d.positions)) handlePositions(d.positions);
         window.dispatchEvent(new CustomEvent('qt:stream', { detail: d }));
       } catch { /* payload inválido */ }
     };
@@ -192,7 +229,7 @@ export function usePlatform() {
       }
     };
     streamRef.current = es;
-  }, [persistSnapshot]);
+  }, [handlePositions]);
 
   const closeStream = useCallback(() => {
     try { streamRef.current?.close(); } catch { /* noop */ }
@@ -218,17 +255,11 @@ export function usePlatform() {
       if (streamingRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       adapterRef.current?.getPositions()
-        .then((positions) => {
-          setLivePositions(positions);
-          setLiveCount(positions.length);
-          publishLiveCount(positions.length);
-          setPositionsAt(Date.now());
-          persistSnapshot(positions);
-        })
+        .then((positions) => handlePositions(positions))
         .catch(() => { /* bridge fora: o status já cobre */ });
     }, FALLBACK_MS);
     return () => clearInterval(t);
-  }, [persistSnapshot]);
+  }, [handlePositions]);
 
   const online = statuses.some((s) => s.online);
   useEffect(() => {

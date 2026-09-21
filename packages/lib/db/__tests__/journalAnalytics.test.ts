@@ -15,6 +15,9 @@ import {
   DEFAULT_SESSIONS,
   MARKET_SESSIONS,
   marketSessionsInLocalZone,
+  marketSessionWindowsForDate,
+  marketOpenAt,
+  marketSessionAttribution,
   maeMfe,
   weeklyReview,
   tradeReplay,
@@ -218,6 +221,52 @@ describe('J2–J7 — análises (cálculo à mão)', () => {
       expect(x.endH).toBeLessThanOrEqual(24);
       expect(x.label.length).toBeGreaterThan(0);
     }
+  });
+
+  describe('DST — janelas e atribuição de mercado (fuso real)', () => {
+    const win = (dateKey: string, id: string) =>
+      marketSessionWindowsForDate(dateKey, 'utc').filter((w) => w.id === id);
+
+    it('NY 09:30–16:00 muda 1h entre verão (EDT) e inverno (EST) no eixo UTC', () => {
+      const summer = win('2026-06-15', 'newyork');
+      expect(summer).toHaveLength(1);
+      expect(summer[0]).toMatchObject({ startH: 13.5, endH: 20 });
+      const winter = win('2026-01-15', 'newyork');
+      expect(winter).toHaveLength(1);
+      expect(winter[0]).toMatchObject({ startH: 14.5, endH: 21 });
+    });
+
+    it('London 08:00–17:00 muda 1h entre verão (BST) e inverno (GMT)', () => {
+      expect(win('2026-06-15', 'london')[0]).toMatchObject({ startH: 7, endH: 16 });
+      expect(win('2026-01-15', 'london')[0]).toMatchObject({ startH: 8, endH: 17 });
+    });
+
+    it('resolve o dia da virada (spring-forward e fall-back dos EUA)', () => {
+      // 08/03/2026: às 09:30 NY já é EDT (UTC-4) → 13:30Z.
+      expect(win('2026-03-08', 'newyork')[0]).toMatchObject({ startH: 13.5, endH: 20 });
+      // 01/11/2026: às 09:30 NY já é EST (UTC-5) → 14:30Z.
+      expect(win('2026-11-01', 'newyork')[0]).toMatchObject({ startH: 14.5, endH: 21 });
+    });
+
+    it('marketOpenAt usa o relógio local do mercado (+ dia útil)', () => {
+      // 16/09/2026 14:00Z (quarta): Londres (07–16Z) e NY (13:30–20Z) abertas → 1ª da ordem = london.
+      expect(marketOpenAt(Date.parse('2026-09-16T14:00:00Z'))).toBe('london');
+      // 23:00Z = 09:00 do dia seguinte em Sydney (7–16 AEST) → sydney (Tóquio ainda fechada).
+      expect(marketOpenAt(Date.parse('2026-09-16T23:00:00Z'))).toBe('sydney');
+      // sábado → nenhum mercado.
+      expect(marketOpenAt(Date.parse('2026-09-19T14:00:00Z'))).toBeNull();
+    });
+
+    it('marketSessionAttribution atribui pela entrada no mercado (DST-proof, 1x)', () => {
+      // 13:45Z de 16/09/2026 cai em London e NY; atribui à 1ª da ordem (London).
+      const t = trade({ id: 'm1', resultNet: 10, exitPrice: 110, entryPrice: 100, exitDatetime: '2026-09-16T13:45:00Z', entryDatetime: '2026-09-16T13:45:00Z' });
+      const s = marketSessionAttribution([t as never]);
+      const by = Object.fromEntries(s.map((x) => [x.session, x]));
+      expect(s.map((x) => x.session)).toEqual(['sydney', 'tokyo', 'london', 'newyork']);
+      expect(by.london).toMatchObject({ trades: 1, pnl: 10 });
+      expect(by.newyork.trades).toBe(0);
+      expect(s.reduce((a, x) => a + x.trades, 0)).toBe(1);
+    });
   });
 
   it('J7 sessionAnalysis buckets UTC (Asian/London/NY/Off)', () => {

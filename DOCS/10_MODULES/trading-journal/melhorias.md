@@ -89,6 +89,38 @@
 - Aceite: default do journal = sessões reais no fuso local; mapa mostra trades abertura→fechamento sem dupla contagem; eixo local/UTC; editar sessão sincroniza; `DEFAULT_SESSIONS`/`sessionAnalysis` inalterados (back-compat J7); testes verdes; build verde.
 - Fora de escopo: icones SVG de mercado; rateio proporcional do PnL entre sessões atravessadas (hoje atribui 100% à abertura).
 
+## B4 — Sessões DST-exatas (horário de verão)
+- Status: [x] executada
+- Contexto: as sessões eram achatadas em **horas no relógio do aparelho** e persistidas assim
+  (`journal:sessions`). Quando qualquer bolsa (ou o aparelho) muda o relógio, o mapa e o PnL por
+  sessão ficavam ~1h errados; o botão "Restaurar padrão" gravava as horas convertidas como custom,
+  perdendo o ajuste de vez. O eixo UTC ainda usava o offset do "agora", não do dia exibido.
+- Proposta: resolver as janelas a partir do **horário de parede de cada mercado (IANA)** por data,
+  com offset por borda (início/fim separados) e recorte no dia do eixo — `marketSessionWindowsForDate()`;
+  atribuição DST-proof pelo mercado aberto no instante da entrada — `marketSessionAttribution()`
+  (relógio local do mercado via `marketOpenAt()`). Default = dinâmico; sessão custom continua relógio
+  fixo. "Restaurar padrão" agora limpa o custom (`onSessions(null)`).
+- Arquivos: `packages/lib/db/journalAnalytics.ts`, `packages/ui/WorldSessionMap.tsx`,
+  `packages/ui/SessionTradeMap.tsx`, `packages/ui/Sessionmapdata.ts`, `packages/ui/HeatmapSection.tsx`,
+  `main-app/src/pages/trading/JournalPage.jsx`, `__tests__/journalAnalytics.test.ts`
+- Aceite: janelas mudam 1h entre verão/inverno e no dia da virada (testes em UTC); mapa, cards de
+  mercado e PnL por sessão concordam; custom intacto; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: sessão custom com fuso IANA próprio (hoje é relógio do usuário).
+
+## B5 — Notícias (red folders) no mapa
+- Status: [x] executada
+- Contexto: o calendário econômico já existia (`economicCalendar.ts`, API XOOMAR só EUA, high impact),
+  mas só aparecia no FinancialCalendar; o mapa de sessões não mostrava onde caíam os eventos.
+- Proposta: trilha abaixo do mapa (acima do volume) com uma plaquinha `!` vermelha por evento, no
+  horário real do eixo; hover/foco/toque abre tooltip com hora, nome, período, atual/previsto e
+  anterior. `EconomicEvent` ganhou `forecast`/`unit` (aditivos). Fetch no container (JournalPage),
+  por mês do dia exibido, com o cache offline existente; sem dados → texto discreto (nunca inventa).
+- Arquivos: `packages/lib/db/economicCalendar.ts`, `packages/ui/WorldSessionMap.tsx`,
+  `packages/ui/HeatmapSection.tsx`, `main-app/src/pages/trading/JournalPage.jsx`
+- Aceite: plaquinhas na hora certa (instante absoluto → DST-correct); tooltip com os dados; offline
+  não quebra; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: med/low no mapa (hoje só high = red folder); realce de trades perto de evento.
+
 ## Batch C � dashboard Trading (reaproveitar app antigo)
 - Ideia: trazer os gr�ficos/cards/estilos da dashboard antiga do journal (calend�rio,
   heatmap, curvas) para a nova `/trading`, melhorando a UI. Ver `DOCS/11_PAGE_MAP.md`.
