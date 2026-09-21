@@ -104,48 +104,48 @@
 - **D6 Dashboard do módulo Dinheiro**: resumo de Gastos (mês, orçamento, top categorias)
   como porta de entrada, com abas — ver `shell-ux-foundation.md` Batch G.
 
-## Batch E � Gastos vira m�dulo pr�prio (�ncora) + dashboard (executado)
-- **E1 anchor**: Gastos saiu de dentro de Dinheiro e virou �ncora da sidebar (app pr�prio),
-  com dashboard `/gastos` (`GastosDashboardPage`: gasto do m�s, or�amento, a pagar, saldo,
-  pr�ximas contas, top categorias, �ltimos lan�amentos) e aba "Lan�amentos" (`/expenses`).
+## Batch E � Gastos vira m�dulo pr�prio (�ncora) + dashboard (executado)
+- **E1 anchor**: Gastos saiu de dentro de Dinheiro e virou �ncora da sidebar (app pr�prio),
+  com dashboard `/gastos` (`GastosDashboardPage`: gasto do m�s, or�amento, a pagar, saldo,
+  pr�ximas contas, top categorias, �ltimos lan�amentos) e aba "Lan�amentos" (`/expenses`).
 - **E2 payouts**: Dinheiro passa a ter "Payouts e Withdrawals" (nome atualizado) + Alocar.
 - **E3 criar empresa no modal da conta**: o seletor de firm em `Accounts.tsx` ganhou
-  "+ Nova empresa" (cria e j� vincula � conta) � `onSaveFirm`.
-- Pr�ximo (profundidade): separar or�amento/categorias/contas-a-pagar em abas pr�prias do
-  m�dulo Gastos (hoje s�o toggles in-page), e dashboard com gr�ficos.
+  "+ Nova empresa" (cria e j� vincula � conta) � `onSaveFirm`.
+- Pr�ximo (profundidade): separar or�amento/categorias/contas-a-pagar em abas pr�prias do
+  m�dulo Gastos (hoje s�o toggles in-page), e dashboard com gr�ficos.
 
-## Batch F � Resumo completo + UX estilo Mobills (executado)
-- **F1 Resumo refor�ado** (`GastosDashboardPage`): "Saldo em contas" (por moeda) no topo;
-  KPIs Entrou / Gastou / Saldo / A pagar / Or�amento (uso %) / Maior alta vs m�s passado.
-- **F2 Gr�ficos interativos**: donut "Gastos por categoria" clic�vel (filtra e destaca) com
-  **legenda mostrando % e valor**; barras "Entrou � Gastou (6 meses)" + linha de saldo.
-- **F3 Cart�es de cr�dito**: se��o com fatura do m�s por cart�o, valor e "em aberto".
-- **F4 Lan�amentos estilo Mobills**: cada linha com **�cone circular colorido** da categoria,
-  "categoria � conta", valor e **status (pago/pendente)** em dot; bot�o pagar inline.
-- **F5 Listas**: pr�ximas contas, onde mais gastei (estabelecimento) e �ltimos lan�amentos
-  com �cones; tudo lado a lado no desktop.
+## Batch F � Resumo completo + UX estilo Mobills (executado)
+- **F1 Resumo refor�ado** (`GastosDashboardPage`): "Saldo em contas" (por moeda) no topo;
+  KPIs Entrou / Gastou / Saldo / A pagar / Or�amento (uso %) / Maior alta vs m�s passado.
+- **F2 Gr�ficos interativos**: donut "Gastos por categoria" clic�vel (filtra e destaca) com
+  **legenda mostrando % e valor**; barras "Entrou � Gastou (6 meses)" + linha de saldo.
+- **F3 Cart�es de cr�dito**: se��o com fatura do m�s por cart�o, valor e "em aberto".
+- **F4 Lan�amentos estilo Mobills**: cada linha com **�cone circular colorido** da categoria,
+  "categoria � conta", valor e **status (pago/pendente)** em dot; bot�o pagar inline.
+- **F5 Listas**: pr�ximas contas, onde mais gastei (estabelecimento) e �ltimos lan�amentos
+  com �cones; tudo lado a lado no desktop.
 - Gate: `tsc` 0 + build verde + 237 testes.
-- Pr�ximo (Mobills): **subcategorias**, gest�o de **cart�o de cr�dito** (fatura fechada/paga,
-  pagamento parcial), proje��o de saldo e dashboard cards reorden�veis.
+- Pr�ximo (Mobills): **subcategorias**, gest�o de **cart�o de cr�dito** (fatura fechada/paga,
+  pagamento parcial), proje��o de saldo e dashboard cards reorden�veis.
 
-## Batch G-mes � historico por mes na dashboard (executado)
+## Batch G-mes � historico por mes na dashboard (executado)
 - `GastosDashboardPage`: o `ym` saiu do loader (estava fixo no mes atual) e virou estado.
-  Nova **barra de meses** (estilo Mobills): � Mes/Ano � + "Mes atual" + faixa de chips dos
-  ultimos 12 meses (com saldo) � clicar seleciona o mes e TODA a dashboard reflete ele
+  Nova **barra de meses** (estilo Mobills): � Mes/Ano � + "Mes atual" + faixa de chips dos
+  ultimos 12 meses (com saldo) � clicar seleciona o mes e TODA a dashboard reflete ele
   (KPIs, donut, orcamento, ranking, cartoes, ultimos lancamentos, "maior alta vs mes passado").
 - Sem formula nova: tudo reusa `expensesByCategory/incomeByKind/budgetStatus/computeFreeCash/
   monthlySeries/compareMonths/merchantRanking`.
 
-## Batch G-periodo � periodo global (mes/intervalo/tudo) (executado)
+## Batch G-periodo � periodo global (mes/intervalo/tudo) (executado)
 - Fundacao: `packages/lib/db/period.ts` (Period, periodMonths, inPeriod + agregadores por
   periodo que somam os resultados mensais do motor) e `packages/ui/PeriodPicker.tsx`.
-- Estado global `PeriodProvider`/`usePeriod` (meta `ui:period`, sincroniza) � default `all`.
+- Estado global `PeriodProvider`/`usePeriod` (meta `ui:period`, sincroniza) � default `all`.
 - `GastosDashboardPage` passou a usar o periodo em TUDO (KPIs, donut, orcamento, ranking,
   cartoes, ultimos lancamentos, "a pagar") + atalhos de mes. Grafico de 6m vira o periodo
   (cap 24 meses).
 - Teste `period.test.ts`. Gate: tsc 0 + build verde + 247 testes.
 
-## Batch G-impostos � tracker de impostos + fim do cap (executado)
+## Batch G-impostos � tracker de impostos + fim do cap (executado)
 - Categorias ganharam `group`; impostos viram categorias com `group=imposto` (IR, DARF, ITBI,
   IPTU, IOF, Cripto, Exterior + "Impostos"). Sem migration (categorias vivem no meta, que sincroniza).
 - Widget "Impostos" no Resumo do Gastos: total do periodo + quebra por tipo + "desde o inicio",
@@ -155,3 +155,107 @@
 - Fim do cap: graficos desenham o periodo inteiro; PnL acumulado passa a acumular DESDE O INICIO
   (inception-to-date) e so entao recorta a janela -> ultimo ponto = total real.
 - Gate: tsc 0 + build verde + 247 testes.
+
+## Batch H — Resumo/widgets, fluxo de lançamento e cartão (a executar)
+
+> Itens `[ ]` a executar UM a um (código + teste + doc + `pnpm build:all` verde). Motor primeiro
+> (selector puro + teste); UI depois. Sem fórmula financeira nova — só composição de selectors.
+> Contexto vivo: `/gastos` = `GastosDashboardPage` (usa `WidgetGrid storageKey="gastos"`);
+> `/expenses` = `Expenses.tsx` (toolbar única + modo filtro + bottom-sheet). Período global via
+> `usePeriod`/`PeriodPicker` (meta `ui:period`). Pendências anteriores: **B2** (próximas contas)
+> e D3/D4/F "próximos" — o Batch H consolida e prioriza.
+
+### H1 — Layout dos widgets do Resumo: esconder/mostrar + sincronizar
+- Status: [ ] a executar
+- Contexto: o `WidgetGrid` já reordena (arrastar) e alterna 1x/2x, mas persiste em
+  `localStorage('widgetLayout:gastos')` — **não sincroniza** entre PC/celular — e não dá para
+  esconder um widget, só reposicionar.
+- Proposta: persistir o layout no `meta` (ex.: `ui:widgets:gastos`, que já sincroniza via
+  Supabase) reaproveitando o mecanismo atual do `WidgetGrid`; adicionar toggle "mostrar/ocultar"
+  por widget (como a Home faz com `homeWidgetsHidden`) + botão "Restaurar padrão".
+- Arquivos: `packages/ui/WidgetGrid.tsx`, `packages/state/*` (se precisar de meta), `main-app/src/pages/command/GastosDashboardPage.jsx`
+- Aceite: mover/ocultar no celular reflete no PC (e vice-versa); restaura padrão; 360px; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: layout específico por breakpoint.
+
+### H2 — Cada widget com tendência (Δ vs período anterior + sparkline)
+- Status: [ ] a executar
+- Contexto: os widgets mostram o número do período, sem indicar se piorou/melhorou.
+- Proposta: badge de variação (Δ%) e mini-sparkline por widget, reusando `compareMonths`/
+  `monthlySeries`/`rollingExpectancy` (nada de série nova inventada); cor por sinal.
+- Arquivos: `GastosDashboardPage.jsx`, `packages/lib/db/money.ts` (selector de delta se necessário + teste)
+- Aceite: Δ coerente na virada de ano; sem fórmula nova; `tsc` 0; testes verdes; build verde.
+
+### H3 — Lançamento rápido (Quick Add) em ≤3 toques
+- Status: [ ] a executar
+- Contexto: lançar hoje exige abrir o bottom-sheet e preencher ~6 campos. Mobills resolve com
+  entrada rápida.
+- Proposta: barra "Quick Add" no topo de `/expenses` (e atalho pela palette): digita/tecla o
+  **valor** → escolhe **categoria** (chips com ícone) → **Salvar** (conta/carteira default
+  lembrada da última vez). "Repetir último lançamento" em 1 toque. O sheet completo continua
+  para casos avançados (parcelas, cartão, vencimento, anexo).
+- Arquivos: novo `packages/ui/QuickAddExpense.tsx`, `packages/ui/Expenses.tsx`, `main-app/src/CommandContext` (atalho)
+- Aceite: lança em ≤3 toques; default de conta/categoria lembrado (localStorage/meta); 360px; toast; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: entrada por linguagem natural (ver H4).
+
+### H4 — Campo de valor com cálculo e formato BR/US
+- Status: [ ] a executar
+- Contexto: escrever `1.234,56` ou `12*3` no campo de valor falha/interpreta errado.
+- Proposta: parser puro `parseAmount(text)` que aceita vírgula/ponto e expressões simples
+  (`+ - * /`), com preview; usar no Quick Add e no sheet.
+- Arquivos: novo helper em `packages/lib/db` (ou `packages/ui`) + teste, `Expenses.tsx`/`QuickAddExpense`
+- Aceite: `"12*3"=36`, `"1.234,56"=1234.56`, `"45,90"=45.9`; inválido não salva; teste; `tsc` 0; build verde.
+
+### H5 — Cartão de crédito: fatura aberta/fechada/paga + pagamento parcial
+- Status: [ ] a executar
+- Contexto: `Card` já tem `closingDay`/`dueDay` e existe `invoiceCycle`; `Expenses` mostra
+  "fatura por cartão", mas não há estado (aberta/fechada/paga) nem baixa parcial.
+- Proposta: selector puro `invoiceStatus(card, txs, ref)` → `{ competencia, fechamento, vencimento, total, pago, restante, estado: 'aberta'|'fechada'|'paga'|'parcial' }`
+  (reusa `invoiceCycle` + despesas do cartão). UI: no widget "Cartões" e na fatura, botão
+  **"Pagar fatura"** que cria a quitação (transferência interna, neutra no caixa) — **sugere,
+  nunca cria sozinho**; pagamento parcial abate e mostra "restante".
+- Arquivos: `packages/lib/db/money.ts` (+ testes), `GastosDashboardPage.jsx`, `Expenses.tsx`
+- Aceite: competência correta na virada (usa `invoiceCycle`); parcial abate; nada criado sem confirmação; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: conciliação automática com extrato do banco.
+
+### H6 — Categorias: subcategorias (1 nível) com roll-up
+- Status: [ ] a executar
+- Contexto: `CategoryDef` tem `group` (ex.: `imposto`), mas não hierarquia pai/filho.
+- Proposta: `CategoryDef.parent?` (1 nível). Donut/relatórios agrupam pelo **pai** com
+  drill-down (clica e abre subcategorias); o form deixa escolher subcategoria. Legado sem
+  `parent` continua igual.
+- Arquivos: `packages/lib/db/money.ts` (`categoryOf`/`expensesByCategory` + testes), `Expenses.tsx`, `GastosDashboardPage.jsx`
+- Aceite: soma por pai = soma das filhas; legado intacto; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: mais de 1 nível.
+
+### H7 — Widget "Projeção de caixa" no Resumo de Gastos
+- Status: [ ] a executar
+- Contexto: a projeção vive só em Planejamento (`ForecastPage`); no dia a dia de gastos não se
+  vê "para onde o caixa vai".
+- Proposta: widget no Resumo com projeção 30/60/90d, reusando `wealth.forecast`/`safeAvailable`
+  + `recurringDue` + `pendingBills` (composição, sem duplicar fórmula). Respeita o período global.
+- Arquivos: `GastosDashboardPage.jsx` (widget), reuso dos selectors existentes
+- Aceite: projeção bate com a de Planejamento; sem fórmula nova; `tsc` 0; testes verdes; build verde.
+
+### H8 — Visão por Dia com saldo acumulado (extrato)
+- Status: [ ] a executar
+- Contexto: o agrupamento por Dia existe com subtotal, mas não mostra o **saldo corrente**.
+- Proposta: no modo "Dia", coluna de saldo acumulado do período + "saldo do dia" (parte do
+  saldo inicial do período + lançamentos). Selector puro + teste.
+- Arquivos: `packages/ui/Expenses.tsx`, `packages/lib/db/money.ts` (+ teste)
+- Aceite: saldo final fecha com `computeFreeCash` do período; sem fórmula nova; `tsc` 0; testes verdes; build verde.
+
+### H9 — Próximas contas a vencer (consolida o B2)
+- Status: [ ] a executar
+- Contexto: B2 pede a visão "o que vence nos próximos 15 dias"; hoje só existe a lista de
+  pendentes (qualquer data).
+- Proposta: seção/widget no topo com os próximos N dias (recorrentes + `dueDate`), ordenados
+  por data, com total a pagar a receber e atalho "Pagar/Receber"; base = `pendingBills` +
+  `recurringDue` estendidos para uma janela de dias (`refIso`).
+- Arquivos: `packages/lib/db/money.ts` (`pendingBills`/`recurringDue` com janela + teste), `GastosDashboardPage.jsx`, `Expenses.tsx`
+- Aceite: janela correta (inclui atrasados); ordenação por vencimento; `tsc` 0; testes verdes; build verde.
+
+### DoD do Batch H
+- Resumo de Gastos com widgets organizáveis/sincronizados e com tendência; lançamento em poucos
+  toques; cartão com ciclo de fatura; próximas contas e projeção visíveis.
+- Nenhuma fórmula financeira nova (só selectors + composição). `tsc` 0, testes verdes, `pnpm build:all` verde.
+- Mobile 360px, off-line, sem `alert`, CSS por variáveis, `aria-*` + toast.
