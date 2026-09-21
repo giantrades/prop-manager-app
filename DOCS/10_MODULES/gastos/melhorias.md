@@ -186,7 +186,8 @@
   `packages/ui/Expenses.tsx`, `DOCS/11_PAGE_MAP.md`
 - Aceite: 5 abas funcionando com deep-link direto; Cmd+K encontra as novas rotas; Lançamentos sem
   os toggles (mais espaço/foco); estado vazio e mobile 360px OK; `tsc` 0; testes verdes; build verde.
-- Fora de escopo: subcategorias (H6) e redução de duplicação de containers (refactor grande).
+- Fora de escopo: subcategorias (H6) e redução de duplicação de containers (refactor grande);
+  aprofundar Orçamento/Categorias fica em H11/H12, e o importador em H10.
 
 ### H1 — Layout dos widgets do Resumo: esconder/mostrar + sincronizar
 - Status: [ ] a executar
@@ -277,9 +278,60 @@
 - Arquivos: `packages/lib/db/money.ts` (`pendingBills`/`recurringDue` com janela + teste), `GastosDashboardPage.jsx`, `Expenses.tsx`
 - Aceite: janela correta (inclui atrasados); ordenação por vencimento; `tsc` 0; testes verdes; build verde.
 
+### H10 — Importar extrato v2 (resolve as limitações do A3)
+- Status: [ ] a executar
+- Contexto: o importador (`bankImport.ts` + preview em `Expenses.tsx` + `onImportBatch` em
+  `EngineViews.jsx`) já lê OFX/CSV, deduplica e sugere categoria, mas tem 7 limitações:
+  (a) cai tudo na **primeira conta** (`accounts[0]`); (b) moeda **fixa USD** (extrato BRL entra
+  cru); (c) dedup **frágil** (data+valor+descrição exata); (d) preview mostra **só 30**; (e) sem
+  **mapeamento de coluna**; (f) palavras-chave **fixas no código**; (g) `.qif` no `accept` mas
+  **sem parser**.
+- Proposta (resolver uma a uma):
+  1. **Conta do lote**: seletor de conta no preview (default = última usada; heurística pelo nome do banco).
+  2. **Moeda**: campo "moeda do extrato"; se ≠ USD, converter na data pela taxa existente
+     (`getFxUSD`/`saveFxUSD`, meta `fx:USDBRL`) — **sem inventar câmbio** — guardando o valor original na nota.
+  3. **Dedup forte**: usar `<FITID>` do OFX quando existir; fallback = descrição **normalizada**
+     (minúscula, sem pontuação) + valor com tolerância ±0,01.
+  4. **Preview completo**: listar TODOS os itens (scroll; virtualizar se preciso) + contador.
+  5. **Mapeamento de coluna**: quando a auto-detecção falhar, UI para escolher data/valor/descrição;
+     salvar o mapeamento por banco (meta).
+  6. **Regras de categoria editáveis**: mover `KEYWORD_CATEGORY` para `meta`
+     (`expense:import-rules`) com CRUD simples ("se descrição contém X → categoria Y") e
+     **aprender** ao confirmar (ex.: categoria escolhida no preview vira regra).
+  7. **QIF**: parser QIF (`!Type`, `D`, `T`, `P`, `M`) **ou** remover `.qif` do `accept`.
+- Arquivos: `packages/lib/db/bankImport.ts` (+ testes), `packages/ui/Expenses.tsx`,
+  `main-app/src/pages/command/EngineViews.jsx` (`onImportBatch` com conta + moeda)
+- Aceite: importa na conta/moeda escolhidas; BRL convertido pela taxa do app; reimportar o mesmo
+  arquivo não duplica (FITID); todos os itens revisáveis; regra editável aplica; QIF funciona ou
+  não é aceito; `tsc` 0; testes verdes; build verde.
+- Fora de escopo: Open Finance / API do banco (integração automática).
+
+### H11 — Aba Orçamento (aprofundar além do editor atual)
+- Status: [ ] a executar
+- Contexto: o H0 cria a aba `/gastos/orcamento`; hoje o `BudgetEditor` só define meta por categoria.
+- Proposta: na aba: **"quanto ainda posso gastar"** no período e **por dia** (restante ÷ dias
+  restantes); **sugerir meta** pela média de 3 meses (reusa `monthlySeries`/`expensesByCategory`);
+  **copiar orçamento** do mês anterior; visão por **grupo** (ex.: Impostos) com roll-up; alerta
+  ao passar de X% (toast). Rollover (B1) explícito e visível.
+- Arquivos: novo `main-app/src/pages/command/BudgetPage.jsx`, `packages/lib/db/money.ts`
+  (selector "restante/dia" se necessário + teste)
+- Aceite: restante/dia coerente; sugestão = média real; rollover visível; sem fórmula nova;
+  `tsc` 0; testes verdes; build verde.
+
+### H12 — Aba Categorias (aprofundar além do CRUD atual)
+- Status: [ ] a executar
+- Contexto: o H0 cria a aba `/gastos/categorias` com o `CategoryEditor` (nome/ícone/cor).
+- Proposta: **mesclar** categorias (move os lançamentos da origem para o destino); **reatribuir**
+  ao excluir (nunca deixar órfão em "outros"); **reordenar**; **preview** do impacto no donut;
+  paleta de ícones/cores; pack de impostos. Base para o H6 (subcategorias).
+- Arquivos: novo `main-app/src/pages/command/CategoriasPage.jsx`, `packages/lib/db/money.ts`
+  (helpers de remap + teste), consumo em `Expenses.tsx`/`GastosDashboardPage.jsx`
+- Aceite: mesclar move todos os lançamentos; excluir exige destino; ordem persiste (meta);
+  `tsc` 0; testes verdes; build verde.
+
 ### DoD do Batch H
 - Módulo Gastos com 5 abas (Resumo · Lançamentos · Orçamento · Categorias · Forecast) e cada uma
-  com foco próprio (H0).
+  com foco próprio (H0), aprofundadas em H11/H12.
 - Resumo de Gastos com widgets organizáveis/sincronizados e com tendência; lançamento em poucos
   toques; cartão com ciclo de fatura; próximas contas e projeção visíveis.
 - Nenhuma fórmula financeira nova (só selectors + composição). `tsc` 0, testes verdes, `pnpm build:all` verde.
