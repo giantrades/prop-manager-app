@@ -246,7 +246,7 @@ interface Lane {
 // ─── Componente principal ────────────────────────────────────────────────────
 export default function WorldSessionMap({
   trades = [], openPositions = [], sessions, marketSessions = true, zone = 'local', now: nowProp,
-  currency = 'USD', day: dayProp, onDayChange, events = [], eventsLoading = false, eventsError = false,
+  currency = 'USD', day: dayProp, onDayChange, events = [],
 }: Props) {
   const ref = useNowTick(nowProp);
   const zoneTag = zone === 'utc' ? 'UTC' : 'local';
@@ -417,8 +417,12 @@ export default function WorldSessionMap({
     return `${pad2(hh)}:${pad2(mi)}`;
   };
 
+  // Reserva a parte de baixo do mapa para as plaquinhas de notícias (red folders) — as faixas e
+  // bolinhas são comprimidas para cima nessa fração, então nada se sobrepõe à trilha.
+  const NEWS_RESERVE = 0.14;
+  const yScale = (v: number) => v * (1 - NEWS_RESERVE);
   const yOfDot = (d: DotPos) =>
-    laneCenterPct(d.lane, laneCount) + rowOffsetPct(d.row, layout.rowsInLane[d.lane] ?? 1, laneCount);
+    yScale(laneCenterPct(d.lane, laneCount) + rowOffsetPct(d.row, layout.rowsInLane[d.lane] ?? 1, laneCount));
   const xOfH = (h: number) => (h / 24) * 100;
 
   // ── Volume: trades abertos por hora do dia (só trades da store; posição ao vivo fica de fora) ──
@@ -575,7 +579,7 @@ export default function WorldSessionMap({
 
           {/* Sessões: faixa início→fim; parte percorrida mais forte; nome acima da faixa */}
           {lanes.map((lane, pos) => {
-            const y = laneCenterPct(pos, laneCount);
+            const y = yScale(laneCenterPct(pos, laneCount));
             const live = isLive(lane);
             const cap = lane.capSeg;
             const Icon = lane.Icon;
@@ -617,8 +621,8 @@ export default function WorldSessionMap({
             {layout.placed.map((p) => {
               const x0 = xOfH(p.a);
               const x1 = xOfH(p.b);
-              const y0 = p.openDot ? yOfDot(p.openDot) : laneCenterPct(p.laneStart, laneCount);
-              const y1 = p.endDot ? yOfDot(p.endDot) : laneCenterPct(p.laneEnd, laneCount);
+              const y0 = p.openDot ? yOfDot(p.openDot) : yScale(laneCenterPct(p.laneStart, laneCount));
+              const y1 = p.endDot ? yOfDot(p.endDot) : yScale(laneCenterPct(p.laneEnd, laneCount));
               const k = p.t.key;
               return (
                 <g
@@ -654,7 +658,7 @@ export default function WorldSessionMap({
             return (
               <React.Fragment key={k}>
                 {p.startsBefore && (
-                  <span className={`wsm-edge wsm-edge-l ${dir}`} style={{ top: `${laneCenterPct(p.laneStart, laneCount)}%` }} aria-hidden="true" />
+                  <span className={`wsm-edge wsm-edge-l ${dir}`} style={{ top: `${yScale(laneCenterPct(p.laneStart, laneCount))}%` }} aria-hidden="true" />
                 )}
                 {p.openDot && (
                   <button
@@ -667,7 +671,7 @@ export default function WorldSessionMap({
                   />
                 )}
                 {p.endsAfter && (
-                  <span className={`wsm-edge wsm-edge-r ${dir}`} style={{ top: `${laneCenterPct(p.laneEnd, laneCount)}%` }} aria-hidden="true" />
+                  <span className={`wsm-edge wsm-edge-r ${dir}`} style={{ top: `${yScale(laneCenterPct(p.laneEnd, laneCount))}%` }} aria-hidden="true" />
                 )}
                 {p.endDot && (
                   <button
@@ -685,48 +689,24 @@ export default function WorldSessionMap({
 
           {/* Linha "agora": anda sozinha (atualiza a cada minuto) */}
           {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
-        </div>
 
-        {/* Trilha de notícias: plaquinhas (!) nos horários reais, no mesmo eixo X */}
-        <div className="wsm-news">
-          <div className="wsm-news-head">
-            <span className="wsm-news-title">
-              <i className="wsm-news-key" aria-hidden="true">!</i>
-              Red folders (high impact)
-            </span>
-            <span className="wsm-news-sub">
-              {eventsError
-                ? 'calendário indisponível offline'
-                : eventsLoading
-                  ? 'carregando…'
-                  : dayEvents.length === 0
-                    ? 'sem notícias neste dia'
-                    : `${dayEvents.length} no dia`}
-            </span>
-          </div>
-          <div className="wsm-news-rail" role="list" aria-label="Notícias econômicas do dia">
-            {[6, 12, 18].map((h) => (
-              <span key={h} className="wsm-grid" style={{ left: pct(h) }} aria-hidden="true" />
-            ))}
-            {isToday && <span className="wsm-now" style={{ left: `${nowPct}%` }} aria-hidden="true" />}
-            {dayEvents.map(({ e, x }) => (
-              <button
-                key={e.id}
-                type="button"
-                role="listitem"
-                className={`wsm-news-mark${newsKey === e.id ? ' is-active' : ''}`}
-                style={{ left: `clamp(8px, ${(x / 24) * 100}%, calc(100% - 8px))` }}
-                onMouseEnter={() => setNewsKey(e.id)}
-                onMouseLeave={() => setNewsKey(null)}
-                onFocus={() => setNewsKey(e.id)}
-                onBlur={() => setNewsKey(null)}
-                onClick={() => setNewsKey((cur) => (cur === e.id ? null : e.id))}
-                aria-label={`${fmtNewsTime(e.scheduledAt)} ${e.eventName}${e.periodLabel ? ` (${e.periodLabel})` : ''} — impacto alto`}
-              >
-                <span aria-hidden="true">!</span>
-              </button>
-            ))}
-          </div>
+          {/* Red folders: notícias de alto impacto DIRETO no mapa, no horário real (sem seção/título) */}
+          {dayEvents.map(({ e, x }) => (
+            <button
+              key={e.id}
+              type="button"
+              className={`wsm-news-mark${newsKey === e.id ? ' is-active' : ''}`}
+              style={{ left: `clamp(8px, ${(x / 24) * 100}%, calc(100% - 8px))` }}
+              onMouseEnter={() => setNewsKey(e.id)}
+              onMouseLeave={() => setNewsKey(null)}
+              onFocus={() => setNewsKey(e.id)}
+              onBlur={() => setNewsKey(null)}
+              onClick={() => setNewsKey((cur) => (cur === e.id ? null : e.id))}
+              aria-label={`${fmtNewsTime(e.scheduledAt)} ${e.eventName}${e.periodLabel ? ` (${e.periodLabel})` : ''} — impacto alto`}
+            >
+              <span aria-hidden="true">!</span>
+            </button>
+          ))}
           {activeNews && (
             <div
               className="wsm-news-tip"
@@ -1065,26 +1045,20 @@ const WSM_CSS = `
 .wsm-hour:first-child { transform: translateX(0); }
 .wsm-hour:last-child  { transform: translateX(-100%); }
 
-/* ── Trilha de notícias (red folders) ── */
-.wsm-news { position: relative; padding: 6px 12px 8px; border-top: 1px solid rgba(255,255,255,0.06); }
-.wsm-news-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-.wsm-news-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--text, #e7eaf0); }
-.wsm-news-key { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 4px; background: var(--red, #e74c3c); color: #fff; font-style: normal; font-size: 9px; font-weight: 800; line-height: 1; }
-.wsm-news-sub { font-size: 10px; color: var(--muted, #a1a7b3); }
-.wsm-news-rail { position: relative; height: 20px; }
+/* ── Notícias (red folders) direto no mapa ── */
 .wsm-news-mark {
-  position: absolute; top: 50%; transform: translate(-50%, -50%);
-  width: 14px; height: 14px; padding: 0; margin: 0;
+  position: absolute; bottom: 3px; transform: translateX(-50%);
+  width: 15px; height: 15px; padding: 0; margin: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid #b7352a; border-radius: 4px;
   background: var(--red, #e74c3c); color: #fff;
-  font-size: 9px; font-weight: 800; line-height: 1;
-  cursor: pointer; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  font-size: 10px; font-weight: 800; line-height: 1;
+  cursor: pointer; z-index: 4; box-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
-.wsm-news-mark::before { content: ''; position: absolute; inset: -7px; } /* alvo de toque ≈ 28px */
-.wsm-news-mark.is-active, .wsm-news-mark:focus-visible { transform: translate(-50%, -50%) scale(1.3); outline: 2px solid var(--text, #e7eaf0); outline-offset: 2px; z-index: 3; }
+.wsm-news-mark::before { content: ''; position: absolute; inset: -7px; } /* alvo de toque ≈ 29px */
+.wsm-news-mark.is-active, .wsm-news-mark:focus-visible { transform: translateX(-50%) scale(1.35); outline: 2px solid var(--text, #e7eaf0); outline-offset: 2px; z-index: 6; }
 .wsm-news-tip {
-  position: absolute; bottom: calc(100% - 4px); transform: translateX(-50%);
+  position: absolute; bottom: 24px; transform: translateX(-50%);
   z-index: 7; display: flex; flex-direction: column; gap: 1px;
   max-width: 230px; padding: 6px 9px; border-radius: 8px;
   background: var(--wsm-bg); border: 1px solid rgba(255,255,255,0.15);

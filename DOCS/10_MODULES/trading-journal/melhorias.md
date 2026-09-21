@@ -111,10 +111,11 @@
 - Status: [x] executada
 - Contexto: o calendário econômico já existia (`economicCalendar.ts`, API XOOMAR só EUA, high impact),
   mas só aparecia no FinancialCalendar; o mapa de sessões não mostrava onde caíam os eventos.
-- Proposta: trilha abaixo do mapa (acima do volume) com uma plaquinha `!` vermelha por evento, no
-  horário real do eixo; hover/foco/toque abre tooltip com hora, nome, período, atual/previsto e
-  anterior. `EconomicEvent` ganhou `forecast`/`unit` (aditivos). Fetch no container (JournalPage),
-  por mês do dia exibido, com o cache offline existente; sem dados → texto discreto (nunca inventa).
+- Proposta: plaquinhas `!` vermelhas **direto no mapa** (sem seção/título), no horário real do eixo;
+  a parte de baixo do mapa é reservada para elas (as faixas são comprimidas para cima). Hover/foco/
+  toque abre tooltip com hora, nome, período, atual/previsto e anterior. `EconomicEvent` ganhou
+  `forecast`/`unit` (aditivos). Fetch no container (JournalPage), por mês do dia exibido, com o
+  cache offline existente; sem dados → não mostra nada (nunca inventa).
 - Arquivos: `packages/lib/db/economicCalendar.ts`, `packages/ui/WorldSessionMap.tsx`,
   `packages/ui/HeatmapSection.tsx`, `main-app/src/pages/trading/JournalPage.jsx`
 - Aceite: plaquinhas na hora certa (instante absoluto → DST-correct); tooltip com os dados; offline

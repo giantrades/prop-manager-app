@@ -197,5 +197,5 @@
 - **cTrader**: um "deal" (execução já com PnL) entrava como trade **aberto para sempre**. Agora
   entra como **fechado**, no próprio instante/preço do deal.
 - **Mapa de sessões do Journal**: horários das sessões agora são **DST-exatos** (se ajustam sozinhos
-  quando cada bolsa muda o horário de verão) e há uma **trilha de notícias** (red folders USD/EUA)
-  com os eventos de alto impacto na hora certa, com tooltip ao passar o mouse/toque.
+  quando cada bolsa muda o horário de verão) e as **notícias** (red folders USD/EUA) aparecem como
+  plaquinhas **direto no mapa**, no horário certo, com tooltip ao passar o mouse/toque.
