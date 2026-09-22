@@ -84,6 +84,12 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 - **LivePositionsPage** (`/live-positions`) — posições **abertas/ao vivo** da plataforma
   (`usePlatform().livePositions`); edita SL/TP (`modifyPosition`) e fecha (`closePosition`).
   Fonte é o bridge (Quantower/cTrader) — sem storage próprio.
+  SL/TP: usa o que o bridge manda em `/positions` (`sl`/`tp`); quando vem vazio (plataforma
+  guarda SL/TP como ordens separadas), `mergeOrdersIntoPositions`
+  (`packages/utils/livePositionSlTp.ts`) infere das **ordens pendentes** (casa por `positionId`
+  e, em fallback, conta+símbolo+lado oposto; `stop`→SL, `limit`→TP). Valores inferidos
+  aparecem como "sugeridos" (input tracejado) e só vão ao bridge quando o usuário salva.
+  `getOrders` expõe `positionId` e `QuantowerAdapter.normalizeOrder` normaliza também o SSE.
 
 ### Contas (âncora `contas`) — dashboard `/contas`
 - **AccountsDashboardPage** — contas prop ativas, equity total, risco (STOP/WARN/SAFE),

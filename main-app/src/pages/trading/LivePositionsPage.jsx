@@ -9,6 +9,7 @@ import { useToast } from '@apps/ui/Toast';
 import { listFirms, listConnectionFirms } from '@apps/lib/db';
 import ModuleTabs from '../../ModuleTabs';
 import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
+import { mergeOrdersIntoPositions } from '@apps/utils/livePositionSlTp';
 import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
 import { useWakeLock } from '../../useWakeLock';
 import { Activity, RefreshCw, X, Clock, Zap, ZapOff } from 'lucide-react';
@@ -70,7 +71,14 @@ export default function LivePositionsPage() {
   // Ao vivo quando conectado; senão a ÚLTIMA leitura (fallback offline/remoto).
   // Online = SEMPRE a leitura ao vivo (mesmo com 0 posições). O snapshot só entra quando
   // o bridge está FORA — senão uma posição fechada "voltava" como fantasma pela última leitura.
-  const positions = online ? livePositions : (lastSnapshot?.positions ?? []);
+  const rawPositions = online ? livePositions : (lastSnapshot?.positions ?? []);
+  // Preenche SL/TP que a plataforma não mandou na posição, derivando das ordens pendentes
+  // (stop→SL, limit→TP). Os valores inferidos vêm marcados (`slDerived`/`tpDerived`) e a UI
+  // mostra como "sugerido" — só vai para o bridge se você salvar.
+  const positions = useMemo(
+    () => mergeOrdersIntoPositions(rawPositions, orders),
+    [rawPositions, orders],
+  );
   const isStale = !online && positions.length > 0;
   // PnL somado das posições abertas: net (o que a plataforma reporta), gross e fees.
   const openPnl = useMemo(() => positions.reduce(
@@ -157,7 +165,7 @@ export default function LivePositionsPage() {
   useEffect(() => {
     const onStream = (e) => {
       const d = e.detail;
-      if (Array.isArray(d?.orders)) setOrders(d.orders);
+      if (Array.isArray(d?.orders)) setOrders(d.orders.map((o) => QuantowerAdapter.normalizeOrder(o)));
     };
     window.addEventListener('qt:stream', onStream);
     return () => window.removeEventListener('qt:stream', onStream);
@@ -436,6 +444,9 @@ export default function LivePositionsPage() {
                 const slVal = 'sl' in e ? e.sl : (p.sl ?? '');
                 const tpVal = 'tp' in e ? e.tp : (p.tp ?? '');
                 const dirty = 'sl' in e || 'tp' in e;
+                // Valor inferido das ordens (não veio do bridge e o usuário ainda não editou).
+                const slDerived = !('sl' in e) && p.slDerived;
+                const tpDerived = !('tp' in e) && p.tpDerived;
                 const confirming = confirmId === p.platformPositionId;
                 const partial = partialId === p.platformPositionId;
                 const firm = firmOf(p);
@@ -450,8 +461,8 @@ export default function LivePositionsPage() {
                       <span className="lp-num">{fmtPrice(p.currentPrice)}</span>
                       <span className={`lp-num ${(p.netPnl ?? 0) >= 0 ? 'dash-pos' : 'dash-neg'}`}>{fmtMoney(p.netPnl)}</span>
                       <span className={`lp-num ${vp == null ? '' : vp >= 0 ? 'dash-pos' : 'dash-neg'}`}>{vp != null ? `${vp.toFixed(2)}%` : '—'}</span>
-                      <input className="lp-input" type="number" step="0.00001" value={slVal} placeholder="SL" onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}`} />
-                      <input className="lp-input" type="number" step="0.00001" value={tpVal} placeholder="TP" onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}`} />
+                      <input className={`lp-input${slDerived ? ' lp-input-inferred' : ''}`} type="number" step="0.00001" value={slVal} placeholder="SL" title={slDerived ? 'Sugerido pelas ordens pendentes — confira antes de salvar' : undefined} onChange={(ev) => setEdit(p.platformPositionId, 'sl', ev.target.value)} aria-label={`Stop loss ${p.symbol}${slDerived ? ' (sugerido)' : ''}`} />
+                      <input className={`lp-input${tpDerived ? ' lp-input-inferred' : ''}`} type="number" step="0.00001" value={tpVal} placeholder="TP" title={tpDerived ? 'Sugerido pelas ordens pendentes — confira antes de salvar' : undefined} onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}${tpDerived ? ' (sugerido)' : ''}`} />
                       <span className="lp-actions">
                         {dirty && <button className="lp-btn lp-btn-primary" disabled={busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>}
                         <button className={`lp-btn${partial ? ' lp-btn-on' : ''}`} onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId} aria-expanded={partial}>Parcial</button>
@@ -611,6 +622,8 @@ const LP_CSS = `
 .lp-num { font-variant-numeric: tabular-nums; }
 .lp-input { width: 100%; min-width: 64px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text, #e7eaf0); font-size: 12px; padding: 7px 8px; min-height: 38px; font-family: inherit; }
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
+/* SL/TP sugeridos pelas ordens pendentes: itálico + borda tracejada (não é valor confirmado). */
+.lp-input-inferred { color: var(--muted, #a1a7b3); border-style: dashed; font-style: italic; }
 .lp-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; justify-content: flex-end; }
 /* Botões de linha: compactos, para caber no grid da tabela (antes usavam .ac3-btn, 40px de altura). */
 .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); cursor: pointer; white-space: nowrap; font-family: inherit; }

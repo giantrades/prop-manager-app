@@ -309,6 +309,8 @@ export class QuantowerAdapter extends BaseAdapter {
         fee: p.fee ?? 0,
         sl: p.sl ?? p.stopLoss ?? null,
         tp: p.tp ?? p.takeProfit ?? null,
+        // id bruto da posição na plataforma (usado para casar com ordens por positionId).
+        positionId: p.id || '',
         platformAccountId: p.accountId || '',
         accountName: p.accountName || '',
         connectionId: p.connectionId || '',
@@ -318,24 +320,37 @@ export class QuantowerAdapter extends BaseAdapter {
     });
   }
 
-  async getOrders() {
-    const data = await this._fetch('/orders');
-    this._markSynced();
-    return (data.orders || []).map((o) => ({
+  /**
+   * Normaliza uma ordem do bridge para o shape do app. Aceita tanto o payload CRU do
+   * `/orders` (e do SSE) quanto um já normalizado (idempotente). É estático para o SSE
+   * (que recebe o payload cru) usar a MESMA normalização do polling.
+   */
+  static normalizeOrder(o) {
+    if (!o) return o;
+    if (o.platformOrderId) return o; // já normalizado
+    return {
       platformOrderId: `qt_ord_${o.id}`,
       symbol: o.symbol || '',
-      side: ['short', 'sell'].includes((o.side || '').toLowerCase()) ? 'Short' : 'Long',
+      side: ['short', 'sell'].includes(String(o.side || '').toLowerCase()) ? 'Short' : 'Long',
       quantity: o.quantity ?? 0,
       filledQuantity: o.filledQuantity ?? 0,
       remainingQuantity: o.remainingQuantity ?? 0,
       price: o.price ?? 0,
-      type: o.orderTypeId || '',
+      type: o.orderTypeId || o.type || '',
       status: o.status || '',
-      platformAccountId: o.accountId || '',
+      // Ordem pendente ligada a uma posição (SL/TP costumam vir assim na plataforma).
+      positionId: o.positionId || '',
+      platformAccountId: o.accountId || o.platformAccountId || '',
       accountName: o.accountName || '',
       connectionId: o.connectionId || '',
       connectionName: o.connectionName || '',
-    }));
+    };
+  }
+
+  async getOrders() {
+    const data = await this._fetch('/orders');
+    this._markSynced();
+    return (data.orders || []).map((o) => QuantowerAdapter.normalizeOrder(o));
   }
 
   // ── v2: escrita com clientOrderId idempotente ─────────────────────────────
