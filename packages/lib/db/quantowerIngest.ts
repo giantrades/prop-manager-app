@@ -83,7 +83,11 @@ export async function clearDeletedTrades(ds: DataService): Promise<void> {
  * `qt_` (nunca colide com UUID manual). `resultNet` usa o `netPnl` do bridge; `fees`
  * recebe a `fee` da plataforma.
  */
-export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Trade, 'updatedAt' | 'deviceId' | 'version'> {
+export function quantowerToTrade(
+  q: QuantowerTrade,
+  accountId?: string,
+  opts?: { symbolMultiplier?: number },
+): Omit<Trade, 'updatedAt' | 'deviceId' | 'version'> {
   const direction: TradeDirection = (q.side || '').toLowerCase() === 'short' ? 'short' : 'long';
   const entryDatetime = q.entryDateTime ?? nowIso();
   const exitPrice = q.exitPrice && q.exitPrice !== 0 ? q.exitPrice : undefined;
@@ -99,14 +103,24 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     // v2.1.0: o bridge já manda o valor do ponto calculado no lado dele.
     if (typeof q.contractSize === 'number' && Number.isFinite(q.contractSize) && q.contractSize > 0) return q.contractSize;
     const gross = Number(q.grossPnl);
-    if (!Number.isFinite(gross) || gross === 0 || exitPrice == null || qty === 0) return undefined;
-    const dirSign = direction === 'short' ? -1 : 1;
-    const denom = (exitPrice - entryPrice) * dirSign * qty;
-    if (!Number.isFinite(denom) || Math.abs(denom) < 1e-9) return undefined;
-    const m = Math.abs(gross / denom);
-    if (!Number.isFinite(m) || m <= 0) return undefined;
-    const snapped = Math.abs(m - Math.round(m)) < 0.02 ? Math.round(m) : m; // 1.9998 → 2
-    return Number(snapped.toFixed(4));
+    if (Number.isFinite(gross) && gross !== 0 && exitPrice != null && qty !== 0) {
+      const dirSign = direction === 'short' ? -1 : 1;
+      const denom = (exitPrice - entryPrice) * dirSign * qty;
+      if (Number.isFinite(denom) && Math.abs(denom) >= 1e-9) {
+        const m = Math.abs(gross / denom);
+        if (Number.isFinite(m) && m > 0) {
+          const snapped = Math.abs(m - Math.round(m)) < 0.02 ? Math.round(m) : m; // 1.9998 → 2
+          return Number(snapped.toFixed(4));
+        }
+      }
+    }
+    // Fallback: valor do ponto já conhecido para o MESMO símbolo (outro trade da série).
+    // Cobre o fill "externo": quando o trade é aberto/fechado com o Quantower desligado,
+    // o broker devolve o fill sem `GrossPnl` (0) e sem contractSize → sem isto o PnL e o
+    // R ficariam errados (quase só a fee), gerando mismatch saldo × soma dos trades.
+    const fb = opts?.symbolMultiplier;
+    if (typeof fb === 'number' && Number.isFinite(fb) && fb > 0) return fb;
+    return undefined;
   })();
   // [PATCH C] MAE/MFE reais do bridge — `maeMfe()` os prefere ao proxy via fills.
   const mae = typeof q.mae === 'number' ? q.mae : undefined;
@@ -158,9 +172,13 @@ export function quantowerToTrade(q: QuantowerTrade, accountId?: string): Omit<Tr
     resultR: null as number | null,
   };
   // Se o bridge NÃO trouxe netPnl, deriva via fórmula única (para Equity funcionar).
-  if (!hasNet && exitPrice != null) {
+  // Também recomputa quando o gross NÃO veio (bridge mandou 0): fill "externo" — trade
+  // aberto/fechado com o Quantower desligado, cujo `netPnl` do bridge foi derivado de
+  // gross=0 e ficaria quase só a fee (resultado errado → mismatch saldo × trades).
+  // Com o multiplier da série, a fórmula única (que já desconta as fees) corrige.
+  if (exitPrice != null && (!hasNet || (!hasGross && multiplier != null))) {
     const computed = tradePnl(trade as Trade);
-    if (computed !== 0) trade.resultNet = Number(computed.toFixed(2));
+    if (Number.isFinite(computed)) trade.resultNet = Number(computed.toFixed(2));
   }
   // R via fórmula única quando o bridge expôs o stop (PATCH B no bridge).
   if (stopPrice != null && exitPrice != null) {
@@ -249,6 +267,18 @@ export async function ingestQuantowerTrades(
     byFp.set(fpOf(t), t);
   }
 
+  // Valor do ponto (multiplier) por símbolo: aprendido dos trades que TÊM gross/contractSize
+  // do bridge e do histórico já gravado. Serve de fallback para os fills "externos"
+  // (gross=0) — ex.: trade aberto/fechado com o Quantower desligado, que o broker devolve
+  // sem GrossPnl. Sem isto, o PnL/R desses trades sairia errado (quase só a fee).
+  const symbolMultiplier = new Map<string, number>();
+  const learnMultiplier = (sym?: string | null, m?: number | null) => {
+    if (!sym || symbolMultiplier.has(sym)) return;
+    if (typeof m === 'number' && Number.isFinite(m) && m > 0) symbolMultiplier.set(sym, m);
+  };
+  for (const t of existingAll) learnMultiplier(t.symbol, t.multiplier);
+  for (const q of trades) learnMultiplier(q.symbol, quantowerToTrade(q).multiplier);
+
   // Sanidade: nunca ingerir "fantasma". Sem entrada, sem saída (não é trade fechado)
   // ou com data absurdamente no futuro → fora (eram os trades "de amanhã" sem conta
   // que poluíam heat/calendário).
@@ -280,7 +310,7 @@ export async function ingestQuantowerTrades(
       accountId = (matches.find((a) => !a.disabled) ?? matches[0])?.id;
     }
 
-    const trade = quantowerToTrade(q, accountId);
+    const trade = quantowerToTrade(q, accountId, { symbolMultiplier: symbolMultiplier.get(q.symbol || '') });
     const fp = fpOf(trade);
     if (deleted.has(q.platformTradeId) || deleted.has(fp)) {
       skipped += 1;

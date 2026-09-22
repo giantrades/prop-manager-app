@@ -1067,6 +1067,11 @@ namespace QuantowerBridge
                 allTrades.AddRange(trades);
             }
 
+            // Fills "externos" (trade aberto/fechado com o Quantower desligado) chegam do
+            // histórico do broker SEM `GrossPnl` (0). Reconstrói o PnL em dinheiro antes de
+            // serializar, senão o app grava resultado ≈ só a fee → mismatch saldo × trades.
+            RepairMissingGross(allTrades);
+
             var jsonTrades = allTrades.Select(t => new
             {
                 id = t.Id,
@@ -1137,6 +1142,42 @@ namespace QuantowerBridge
             if (m <= 0) return 0m;
             var rounded = Math.Round(m);
             return Math.Abs(m - rounded) < 0.02m ? rounded : Math.Round(m, 4);
+        }
+
+        /**
+         * Reconstrói o `GrossPnL` dos trades que a plataforma devolveu com gross = 0.
+         * Acontece quando o fill veio do histórico do broker (posição aberta/fechada com o
+         * Quantower fechado): o broker não calcula o PnL, então `fill.GrossPnl` vem 0 e o
+         * `netPnl` calculado fica ≈ só a fee. Aqui inferimos o multiplicador do contrato
+         * pelos outros trades do MESMO símbolo (que têm gross válido) e aplicamos sobre o
+         * PnL em PONTOS (`CalculatedGrossPnL`), refazendo `GrossPnL` e `NetPnL`.
+         *
+         * Não toca em breakeven real (CalculatedGrossPnL == 0) nem em trade que já tem PnL.
+         * Também NÃO mexe no `NetPnL` quando não há amostra de multiplicador (fica como veio).
+         */
+        private static void RepairMissingGross(List<TradeDto> trades)
+        {
+            // 1) Multiplicador inferido por símbolo (primeira amostra válida).
+            var multiplierBySymbol = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in trades)
+            {
+                if (t.GrossPnL == 0 || t.CalculatedGrossPnL == 0) continue;
+                var m = ComputeContractSize(t.GrossPnL, t.CalculatedGrossPnL, t.Quantity);
+                if (m > 0 && !multiplierBySymbol.ContainsKey(t.Symbol)) multiplierBySymbol[t.Symbol] = m;
+            }
+
+            // 2) Aplica nos trades sem gross.
+            foreach (var t in trades)
+            {
+                if (t.GrossPnL != 0) continue;          // já tem PnL da plataforma
+                if (t.CalculatedGrossPnL == 0) continue; // sem movimento de preço (breakeven real)
+                if (!multiplierBySymbol.TryGetValue(t.Symbol, out var m) || m <= 0) continue;
+
+                var repairedGross = Math.Round(t.CalculatedGrossPnL * m, 2);
+                t.GrossPnL = repairedGross;
+                t.NetPnL = Math.Round(repairedGross - t.Fee - t.Swaps, 2);
+                QuantowerBridge.FileLog($"[REPAIR] GrossPnl ausente (fill externo): Symbol={t.Symbol} Calculated={t.CalculatedGrossPnL:F2} Mult={m} => Gross={t.GrossPnL:F2} Net={t.NetPnL:F2}");
+            }
         }
 
         private static string BuildPositionsJson()

@@ -112,6 +112,43 @@ describe('contract size (multiplier) derivado do dinheiro da plataforma', () => 
   });
 });
 
+describe('fill externo (trade aberto/fechado com o Quantower desligado) não zera o PnL', () => {
+  // O broker devolve o fill sem GrossPnl (gross=0) e o bridge deriva net = 0 − fee.
+  // Com o valor do ponto da MESMA série (symbolMultiplier), a fórmula única corrige.
+  const external = {
+    platformTradeId: 'qt_ext', symbol: 'MGC', side: 'Long', quantity: 2,
+    entryPrice: 4385.9, exitPrice: 4395.7, entryDateTime: '2026-09-21T21:41:00Z',
+    exitDateTime: '2026-09-22T15:19:00Z', grossPnl: 0, netPnl: -3.06, fee: 3.06,
+  };
+
+  it('recomputa pelo multiplier da série (MGC ×10): 9.8×2×10 − 3.06 = 192.94', () => {
+    const t = quantowerToTrade(external, undefined, { symbolMultiplier: 10 });
+    expect(t.multiplier).toBe(10);
+    expect(t.resultNet).toBe(192.94);
+  });
+
+  it('sem multiplier conhecido, mantém o net do bridge (não inventa)', () => {
+    const t = quantowerToTrade(external);
+    expect(t.multiplier).toBeUndefined();
+    expect(t.resultNet).toBe(-3.06);
+  });
+
+  it('ingest aprende o multiplier de outro trade da série e corrige o fill externo', async () => {
+    const { ds, chain } = makeEngine();
+    await ingestQuantowerTrades(ds, chain, [
+      {
+        platformTradeId: 'qt_mgc_ok', symbol: 'MGC', side: 'Short', quantity: 2,
+        entryPrice: 4400, exitPrice: 4390, entryDateTime: '2026-09-20T10:00:00Z',
+        exitDateTime: '2026-09-20T11:00:00Z', grossPnl: 200, netPnl: 198, fee: 2,
+      },
+      external,
+    ]);
+    const t = (await ds.trades.list()).find((x) => x.quantowerId === 'qt_ext');
+    expect(t?.multiplier).toBe(10);
+    expect(t?.resultNet).toBe(192.94);
+  });
+});
+
 describe('A8 — dedup no re-sync', () => {
   it('ingerir o mesmo lote 2x: 2º não duplica nem reescreve (sem mudança)', async () => {
     const { ds, chain } = makeEngine();

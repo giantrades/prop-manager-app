@@ -16,7 +16,14 @@ const URL_KEY = 'qt:bridgeUrl';
 const TOKEN_KEY = 'qt:bridgeToken';
 const LAST_SYNC_KEY = 'qt:lastSync';
 const META_KEY = 'bridge:quantower:lastSync';
+const FULL_SYNC_KEY = 'bridge:quantower:lastFullSync';
 const INTERVAL_MS = 2 * 60 * 1000;
+// Janela normal: 30 dias de FOLGA (o bridge precisa do fill de ENTRADA para reconstruir).
+// Reconciliação AMPLA: 1x/dia lê 1 ano, para pegar trades cuja entrada é mais antiga que a
+// janela normal (posição segurada > 30 dias) e reimportar qualquer buraco antigo.
+const NORMAL_LOOKBACK_DAYS = 30;
+const FULL_LOOKBACK_DAYS = 365;
+const FULL_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 async function readCursor(ds) {
   try {
@@ -26,6 +33,16 @@ async function readCursor(ds) {
     /* sem cursor */
   }
   return new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+}
+
+async function readFullSync(ds) {
+  try {
+    const rec = await ds.meta.getKey(FULL_SYNC_KEY);
+    if (typeof rec?.value === 'string' && rec.value) return rec.value;
+  } catch {
+    /* sem marca */
+  }
+  return null;
 }
 
 async function writeCursor(ds, iso) {
@@ -74,12 +91,18 @@ export default function BridgeAutoSync() {
         return;
       }
       try {
-        // Janela com FOLGA de 30 dias (mínimo): a reconstrução do trade no bridge precisa
-        // do fill de ENTRADA, que pode ser anterior ao último cursor. Sem folga, um trade
-        // que fecha agora vinha só com o fill de saída → mal reconstruído/não pego.
+        // Janela com FOLGA (mínimo): a reconstrução do trade no bridge precisa do fill de
+        // ENTRADA, que pode ser anterior ao último cursor. Sem folga, um trade que fecha
+        // agora vinha só com o fill de saída → mal reconstruído/não pego.
         // (Overlap não gera escrita à toa: o ingest ignora update idêntico.)
+        // 1x/dia a janela é ampliada para 1 ano (reconciliação) — cobre posição segurada
+        // mais que a folga normal e reimporta buracos antigos.
         const cursor = await readCursor(f.ds);
-        const from = new Date(Math.min(Date.parse(cursor) || 0, Date.now() - 30 * 86400000)).toISOString();
+        const lastFull = await readFullSync(f.ds);
+        const fullDue = !lastFull || !Number.isFinite(Date.parse(lastFull))
+          || Date.now() - Date.parse(lastFull) > FULL_INTERVAL_MS;
+        const lookbackDays = fullDue ? FULL_LOOKBACK_DAYS : NORMAL_LOOKBACK_DAYS;
+        const from = new Date(Math.min(Date.parse(cursor) || 0, Date.now() - lookbackDays * 86400000)).toISOString();
         const a = new QuantowerAdapter({ bridgeUrl, bridgeToken });
         const trades = await a.getTrades(from, undefined);
         const res = trades.length > 0
@@ -93,7 +116,14 @@ export default function BridgeAutoSync() {
           /* sem contas agora — segue */
         }
         await writeCursor(f.ds, new Date().toISOString());
-        record({ at: new Date().toISOString(), ok: true, url: bridgeUrl, fetched: trades.length, ...res });
+        if (fullDue) {
+          try {
+            await f.ds.meta.setKey(FULL_SYNC_KEY, new Date().toISOString());
+          } catch {
+            /* noop */
+          }
+        }
+        record({ at: new Date().toISOString(), ok: true, url: bridgeUrl, fetched: trades.length, full: fullDue, ...res });
       } catch (e) {
         const status = e && typeof e === 'object' && 'status' in e ? e.status : undefined;
         const code = status === 401 ? 'auth_failed' : 'bridge_offline';
