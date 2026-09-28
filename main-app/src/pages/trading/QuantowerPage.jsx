@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import LivePositions from '@apps/ui/LivePositions';
 import { useFinance, usePlatform } from '@apps/state';
-import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION } from '@apps/utils/adapters/quantowerAdapter.js';
+import { QuantowerAdapter, EXPECTED_BRIDGE_VERSION, normalizeBridgeUrl } from '@apps/utils/adapters/quantowerAdapter.js';
 import {
   ingestQuantowerTrades,
 } from '@apps/lib/db';
@@ -65,7 +65,11 @@ export default function QuantowerPage() {
   }, [finance, result]);
 
   const savePrefs = useCallback(() => {
-    localStorage.setItem('qt:bridgeUrl', bridgeUrl);
+    // Normaliza (página HTTPS: sem esquema vira https; http não-loopback vira https)
+    // e reflete na UI, para o usuário ver a URL realmente usada pelo adapter.
+    const norm = normalizeBridgeUrl(bridgeUrl);
+    if (norm !== bridgeUrl) setBridgeUrl(norm);
+    localStorage.setItem('qt:bridgeUrl', norm);
     localStorage.setItem('qt:bridgeToken', bridgeToken);
     // Token compartilhado (sync, só o usuário vê): evita recolar em cada aparelho.
     try {

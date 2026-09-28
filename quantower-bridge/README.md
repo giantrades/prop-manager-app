@@ -105,3 +105,29 @@ position_not_found | order_not_found | quantower_disconnected | duplicate_client
 
 - **Port**: Porta do servidor (default: 8787). Configurável nos parâmetros da strategy.
 - **Allow External Access**: Se true, aceita conexões de outros PCs na rede (ex.: via Tailscale).
+
+## Recuperação após reboot / hibernação
+
+Depois de desligar o PC, o fluxo remoto (celular) depende de 3 partes: o **Quantower**
+rodando a strategy `QuantowerBridge` (não auto-inicia), o **Tailscale** conectado e o
+**Funnel** aplicado na porta 8787.
+
+Sintoma clássico: `tailscale status` retorna `unexpected state: NoState` (ou "Tailscale is
+starting"). Isso acontece quando a **GUI/IPN** (`tailscale-ipn.exe`) não subiu no logon —
+o serviço `Tailscale` roda, mas o backend nunca conecta.
+
+Recuperação em um clique (PowerShell **como administrador**):
+
+```powershell
+scripts\fix-bridge.bat
+# ou
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fix-bridge.ps1
+```
+
+O script: sobe `NlaSvc`/`netprofm`, inicia `tailscale-ipn`, espera o Tailscale sair do
+`NoState`, reinicia o serviço se travar, reaplica `tailscale funnel --bg 8787`, verifica o
+bridge local (`/status` com token) e o acesso público, e cria um atalho da GUI na pasta
+Inicializar (evita o `NoState` voltar no próximo boot) — remova com `-RemoveAutoStart`.
+
+Endereços: **PC** = `http://127.0.0.1:8787`; **celular** = `https://gian-note.tailbafabd.ts.net`.
+

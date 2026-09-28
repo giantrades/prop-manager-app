@@ -5,14 +5,45 @@ import { BaseAdapter } from './baseAdapter.js';
 // Em produção HTTPS sem `options.bridgeUrl`, a tentativa primária era bloqueada como
 // mixed content e a lista de fallback (só http://) ficava vazia — o adapter nunca
 // conectava, silenciosamente. Agora o default passa pelo MESMO filtro.
+//
+// Bridge alcançável de qualquer aparelho (Tailscale Funnel, HTTPS público). Serve de
+// fallback seguro: em página HTTPS o navegador bloqueia http (mixed content) e, no
+// celular, `http://127.0.0.1` aponta para o PRÓPRIO celular -> "Failed to fetch".
+export const BRIDGE_HTTPS_URL = 'https://gian-note.tailbafabd.ts.net';
 const FALLBACK_URLS = [
   'http://127.0.0.1:8787',
   'http://100.80.100.89:8787',
+  BRIDGE_HTTPS_URL,
 ];
 const isPageSecure = typeof window !== 'undefined' && window.location.protocol === 'https:';
 // Aplica o filtro à lista toda (default + fallbacks) — nunca deixa http em https.
 const SECURE_FALLBACKS = FALLBACK_URLS.filter((u) => u.startsWith('https://'));
 const FILTERED_FALLBACKS = isPageSecure ? SECURE_FALLBACKS : FALLBACK_URLS;
+const SECURE_DEFAULT = SECURE_FALLBACKS[0] || '';
+// IP do Tailscale (http, só na tailnet) -> nome do Funnel (https público) em página segura.
+const TAILSCALE_IP = '100.80.100.89';
+const FUNNEL_HOST = (() => {
+  try { return new URL(BRIDGE_HTTPS_URL).hostname; } catch { return ''; }
+})();
+
+/**
+ * Normaliza a URL do bridge digitada pelo usuário:
+ *  - sem esquema (`gian-note...ts.net`) vira `https://` em página segura (senão `http://`);
+ *  - em página segura, o IP do Tailscale (ou o host do Funnel, com/sem porta) vira o
+ *    próprio `BRIDGE_HTTPS_URL` (o IP não tem TLS e o Funnel é 443, não 8787);
+ *  - loopback continua http (o browser trata como contexto seguro no PC).
+ * Não converte `http://` genérico em `https://` (o host pode não ter TLS) — nesse caso
+ * o adapter simplesmente ignora e usa o fallback seguro.
+ */
+export function normalizeBridgeUrl(raw, secure = isPageSecure) {
+  let s = String(raw ?? '').trim();
+  if (!s) return '';
+  if (!/^[a-z]+:\/\//i.test(s)) s = `${secure ? 'https' : 'http'}://${s}`;
+  let host = '';
+  try { host = new URL(s).hostname; } catch { host = ''; }
+  if (secure && (host === TAILSCALE_IP || (FUNNEL_HOST && host === FUNNEL_HOST))) return BRIDGE_HTTPS_URL;
+  return s.replace(/\/+$/, '');
+}
 
 const FETCH_TIMEOUT_MS = 5000;
 const RETRY_DELAYS = [5000, 10000, 30000, 60000];
@@ -63,11 +94,12 @@ export class QuantowerAdapter extends BaseAdapter {
       logoUrl: '/assets/logos/quantower-mini.svg',
     });
 
-    // default passa pelo filtro (fix 04-BRIDGE_V2_SPEC.md)
+    // default passa pelo filtro (fix 04-BRIDGE_V2_SPEC.md) e é normalizado (esquema).
+    const configured = normalizeBridgeUrl(options.bridgeUrl, isPageSecure);
     const defaultUrl = isPageSecure
-      ? (options.bridgeUrl?.startsWith('https://') ? options.bridgeUrl : '')
-      : (options.bridgeUrl || FALLBACK_URLS[0]);
-    this.bridgeUrl = defaultUrl || FALLBACK_URLS[0];
+      ? (configured.startsWith('https://') ? configured : '')
+      : (configured || FALLBACK_URLS[0]);
+    this.bridgeUrl = defaultUrl || (isPageSecure ? SECURE_DEFAULT : FALLBACK_URLS[0]);
     this.bridgeToken = options.bridgeToken || '';
     this._retryCount = 0;
     this._retryTimer = null;
@@ -464,11 +496,9 @@ export class QuantowerAdapter extends BaseAdapter {
   }
 
   setBridgeUrl(url) {
-    // aplica o mesmo filtro de segurança ao setar manualmente
-    if (isPageSecure && url && !url.startsWith('https://')) {
-      url = '';
-    }
-    this.bridgeUrl = url || (isPageSecure ? '' : FALLBACK_URLS[0]) || FALLBACK_URLS[0];
+    // normaliza + aplica o mesmo filtro de segurança ao setar manualmente
+    const norm = normalizeBridgeUrl(url, isPageSecure);
+    this.bridgeUrl = norm || (isPageSecure ? SECURE_DEFAULT : FALLBACK_URLS[0]);
     this._cancelRetry();
     this._retryCount = 0;
     this._versionChecked = false;
