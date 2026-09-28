@@ -38,11 +38,22 @@ export function CommandProvider({ children }) {
   const financeRef = useRef(finance);
   const periodRef = useRef(period);
   periodRef.current = period;
+  // Coalesce: uma escrita em rajada (ex.: pull do sync aplicando N registros) NÃO pode
+  // disparar N rebuilds nem piscar o skeleton. Enquanto um refresh roda, o próximo é
+  // marcado como "pendente" e roda UMA vez no fim.
+  const runningRef = useRef(false);
+  const queuedRef = useRef(false);
+  const debounceRef = useRef(null);
 
   const refresh = useCallback(async () => {
+    if (runningRef.current) { queuedRef.current = true; return; }
+    runningRef.current = true;
     const f = financeRef.current;
-    if (!f) return;
-    setState((s) => ({ ...s, loading: true }));
+    if (!f) { runningRef.current = false; return; }
+    // SWR: só mostra skeleton na 1ª carga. Refresh em background mantém o snapshot
+    // atual visível — antes, todo `datastore:change` ligava `loading` e a Home trocava
+    // os widgets pelo skeleton (o "flicker" durante o sync).
+    setState((s) => (s.snapshot ? s : { ...s, loading: true }));
     try {
       const snapshot = await buildCommandSnapshot(f, periodRef.current);
       const [rules, manual] = await Promise.all([getActionRules(f.ds), listManualActions(f.ds)]);
@@ -57,6 +68,9 @@ export function CommandProvider({ children }) {
       // eslint-disable-next-line no-console
       console.error('[command] falha ao montar snapshot', err);
       setState((s) => ({ ...s, loading: false, error: err }));
+    } finally {
+      runningRef.current = false;
+      if (queuedRef.current) { queuedRef.current = false; refresh(); }
     }
   }, []);
 
@@ -70,13 +84,18 @@ export function CommandProvider({ children }) {
     if (finance) refresh();
   }, [period, finance, refresh]);
 
-  // Reatividade: qualquer escrita (datastore:change) re-monta o snapshot.
+  // Reatividade: qualquer escrita (datastore:change) re-monta o snapshot, com debounce
+  // para que uma rajada de escritas vire UM rebuild.
   useEffect(() => {
-    if (!finance) return;
+    if (!finance) return undefined;
     const off = finance.ds.bus.on('datastore:change', () => {
-      refresh();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => { debounceRef.current = null; refresh(); }, 200);
     });
-    return off;
+    return () => {
+      off();
+      if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    };
   }, [finance, refresh]);
 
   const value = useMemo(() => ({

@@ -79,10 +79,10 @@ function Widget({ id, title, to = null, hide, children }: WidgetProps) {  if (hi
   );
 }
 
-export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, loading = false, hidden = [] }: HomeCommandCenterProps) {
+export default function HomeCommandCenter({ snapshot = null, actions = [], insights = [], calendar = { events: [], holidays: [] }, hidden = [] }: HomeCommandCenterProps) {
   const hide = (id: string): boolean => (hidden || []).includes(id);
   const drawer = useEntityDrawer();
-  if (loading || !snapshot) {
+  if (!snapshot) {
     return (
       <div className="hc-root hc-loading" role="status" aria-live="polite">
         <div className="hc-skeleton" /><div className="hc-skeleton" /><div className="hc-skeleton" />

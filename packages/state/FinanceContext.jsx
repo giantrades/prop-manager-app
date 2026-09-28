@@ -136,7 +136,13 @@ export function FinanceProvider({ children, adapter = null }) {
       // Espelha o estado do sync para a UI (Settings → Sincronização).
       ds.bus.on(EVENTS.SYNC_PULLED, (p) => publishCloudStatus({ applied: p?.count ?? 0, entityCounts: p?.entityCounts ?? {}, error: null }));
       ds.bus.on(EVENTS.SYNC_PUSHED, (p) => publishCloudStatus({ pushed: p?.count ?? 0, error: null }));
-      ds.bus.on(EVENTS.SYNC_ERROR, (p) => publishCloudStatus({ error: p?.message ?? 'erro no sync', phase: p?.phase ?? null }));
+      ds.bus.on(EVENTS.SYNC_ERROR, (p) => {
+        // Loga o motivo REAL (tabela/coluna/constraint) — antes só aparecia o 400 cru no
+        // console e o usuário não sabia qual campo quebrava o push.
+        // eslint-disable-next-line no-console
+        console.error(`[sync] ${p?.phase ?? 'sync'} falhou: ${p?.message ?? 'erro desconhecido'}`);
+        publishCloudStatus({ error: p?.message ?? 'erro no sync', phase: p?.phase ?? null });
+      });
       publishCloudStatus({ userId: (await getUserId()) ? 'ok' : 'sem-login' });
 
       // Enfileira mudanças locais (ignora pull/restore pra não re-push em loop).
