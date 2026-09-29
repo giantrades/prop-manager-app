@@ -113,8 +113,12 @@ rodando a strategy `QuantowerBridge` (não auto-inicia), o **Tailscale** conecta
 **Funnel** aplicado na porta 8787.
 
 Sintoma clássico: `tailscale status` retorna `unexpected state: NoState` (ou "Tailscale is
-starting"). Isso acontece quando a **GUI/IPN** (`tailscale-ipn.exe`) não subiu no logon —
-o serviço `Tailscale` roda, mas o backend nunca conecta.
+starting"), com o serviço `Tailscale` rodando. No Windows isso vem do **NlaSvc**
+(Reconhecimento de Locais de Rede) subir tarde/parado: o `tailscaled` trava em "starting"
+e não consegue marcar o adaptador como rede privada. **Reiniciar o serviço Tailscale com o
+NlaSvc de pé resolve.** A GUI (`tailscale-ipn.exe`) NÃO é necessária para o app (ele fala
+com o bridge HTTP) e, se iniciada antes do tray existir, quebra com
+`walk.NewNotifyIcon` — por isso não é mais auto-iniciada.
 
 Recuperação em um clique (PowerShell **como administrador**):
 
@@ -124,10 +128,14 @@ scripts\fix-bridge.bat
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fix-bridge.ps1
 ```
 
-O script: sobe `NlaSvc`/`netprofm`, inicia `tailscale-ipn`, espera o Tailscale sair do
-`NoState`, reinicia o serviço se travar, reaplica `tailscale funnel --bg 8787`, verifica o
-bridge local (`/status` com token) e o acesso público, e cria um atalho da GUI na pasta
-Inicializar (evita o `NoState` voltar no próximo boot) — remova com `-RemoveAutoStart`.
+O script: sobe `NlaSvc`/`netprofm`, espera o Tailscale conectar (sem a GUI), reinicia o
+serviço se travar, reaplica `tailscale funnel --bg 8787`, verifica o bridge local
+(`/status` com token) e o acesso público. A GUI só é usada como **último recurso**, depois
+do Explorer pronto.
+
+Automação (instalada ao rodar sem `-NoAutoStart`): tarefa agendada
+`QuantowerBridge-AutoRecover` roda o script `-Silent` a cada logon e remove o antigo atalho
+da GUI. Remova tudo com `-RemoveAutoStart`.
 
 Endereços: **PC** = `http://127.0.0.1:8787`; **celular** = `https://gian-note.tailbafabd.ts.net`.
 
