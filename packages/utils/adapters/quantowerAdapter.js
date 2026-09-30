@@ -131,9 +131,11 @@ export class QuantowerAdapter extends BaseAdapter {
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { ...this._authHeaders(), ...fetchOptions.headers },
         ...fetchOptions,
+        signal: controller.signal,
+        // headers SEMPRE por último: o spread de fetchOptions (POST) traz
+        // `Content-Type` e não pode sobrescrever o X-Bridge-Token.
+        headers: { ...this._authHeaders(), ...fetchOptions.headers },
       });
       // 401 = token inválido/ausente — erro específico, não só "bridge offline".
       if (res.status === 401) {
