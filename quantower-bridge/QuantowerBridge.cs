@@ -678,7 +678,7 @@ namespace QuantowerBridge
                     TimeInForce = TimeInForce.Day,
                     OrderTypeId = OrderType.Market,
                     StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Absolute) : null,
-                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Absolute) : null
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateTP(req.Tp.Value, PriceMeasurement.Absolute) : null
                 };
                 var result = Core.Instance.PlaceOrder(orderParams);
                 if (!IsSuccess(result))
@@ -687,7 +687,7 @@ namespace QuantowerBridge
                 string positionId = req.ClientOrderId;
                 string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = positionId, filledPrice = symbol.Ask, filledQty = req.Qty }, JsonOptions);
                 RememberIdempotent(req.ClientOrderId, resp);
-                FileLog($"[OPEN] {req.Symbol} {side} {req.Qty} @ {account.Id}");
+                FileLog($"[OPEN] {req.Symbol} {side} {req.Qty} @ {account.Id} sl={req.Sl} tp={req.Tp}");
                 return resp;
             }
             catch (Exception ex)
@@ -806,7 +806,7 @@ namespace QuantowerBridge
                     Price = isLimit ? req.Price : -1,
                     TriggerPrice = isLimit ? -1 : req.Price,
                     StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Absolute) : null,
-                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateSL(req.Tp.Value, PriceMeasurement.Absolute) : null
+                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateTP(req.Tp.Value, PriceMeasurement.Absolute) : null
                 };
                 var result = Core.Instance.PlaceOrder(orderParams);
                 if (!IsSuccess(result))
@@ -814,7 +814,7 @@ namespace QuantowerBridge
 
                 string resp = JsonSerializer.Serialize(new { success = true, platformOrderId = req.ClientOrderId }, JsonOptions);
                 RememberIdempotent(req.ClientOrderId, resp);
-                FileLog($"[ORDERS/PLACE] {req.Symbol} {side} {req.Qty} type={req.Type}");
+                FileLog($"[ORDERS/PLACE] {req.Symbol} {side} {req.Qty} type={req.Type} price={req.Price} sl={req.Sl} tp={req.Tp}");
                 return resp;
             }
             catch (Exception ex)
