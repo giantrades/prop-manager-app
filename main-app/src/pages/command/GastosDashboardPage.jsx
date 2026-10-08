@@ -23,11 +23,52 @@ import {
   budgetStatusPeriod, monthlySeries, computeFreeCashPeriod, pendingBills, pendingSummary,
   merchantRankingPeriod, compareMonths, categoryOf, periodMonths, inPeriod, currentYm,
   categoryTrend, shiftYm, ymToList, invoiceCycle,
+  previousPeriod, rollupByParent, subcategoriesOf, invoiceStatus, recurringDue,
+  upcomingBills, upcomingSummary,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 
+const WIDGETS_KEY = 'ui:widgets:gastos';
+
+/** Δ% entre dois valores (null quando não há base anterior). */
+function pctDelta(cur, prev) {
+  if (prev == null || prev === 0) return null;
+  return Number((((cur - prev) / Math.abs(prev)) * 100).toFixed(1));
+}
+
+/** Sparkline SVG mínima (sem lib) — só desenha a série normalizada. */
+function Sparkline({ values = [], color = 'var(--brand, #7c5cff)', width = 72, height = 22 }) {
+  const pts = values.filter((v) => Number.isFinite(v));
+  if (pts.length < 2) return null;
+  const min = Math.min(...pts);
+  const max = Math.max(...pts);
+  const span = max - min || 1;
+  const step = width / (pts.length - 1);
+  const d = pts.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(height - ((v - min) / span) * height).toFixed(1)}`).join(' ');
+  return (
+    <svg className="gd-spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
+      <path d={d} fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Badge de tendência (Δ vs período anterior). */
+function TrendBadge({ delta, invert = false }) {
+  if (delta == null) return null;
+  const up = delta > 0;
+  // invert: subir é ruim (gastos). Sem invert: subir é bom (entradas/saldo).
+  const good = invert ? !up : up;
+  return (
+    <span className={`gd-trend ${good ? 'gd-pos' : 'gd-neg'}`} title="vs período anterior">
+      {up ? '▲' : '▼'}{Math.abs(delta)}%
+    </span>
+  );
+}
+
 const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
 const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
+
+const INVOICE_LABEL = { aberta: 'Aberta', fechada: 'Fechada', paga: 'Paga', parcial: 'Parcial' };
 
 function CatIcon({ name, color, size = 16 }) {
   const Cmp = ICONS[name] || Tag;
@@ -40,14 +81,48 @@ function CatIcon({ name, color, size = 16 }) {
 
 export default function GastosDashboardPage() {
   const [focusCat, setFocusCat] = useState(null);
+  const [payCard, setPayCard] = useState(null);
+  const [payAccount, setPayAccount] = useState('');
+  const [payAmount, setPayAmount] = useState('');
   const drawer = useEntityDrawer();
   const { period, setPeriod } = usePeriod();
-  const { loading, data, error, reload } = useEngineData(async (f) => {
-    const [txs, categories, budgets, savingsGoal, wallets, cards] = await Promise.all([
+  const { loading, data, error, reload, finance } = useEngineData(async (f) => {
+    const [txs, categories, budgets, savingsGoal, wallets, cards, layoutRec, forecast, safeAvailable, accounts] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getSavingsGoal(f.ds), f.money.walletSummary(), f.ds.cards.list(),
+      f.ds.meta.getKey(WIDGETS_KEY), f.wealth.forecast(), f.wealth.safeAvailable(), f.ds.accounts.list(),
     ]);
-    return { txs, categories, budgets, savingsGoal, wallets, cards };
+    return { txs, categories, budgets, savingsGoal, wallets, cards, layout: layoutRec?.value ?? null, forecast, safeAvailable, accounts };
   });
+
+  // H1 — layout dos widgets persistido no meta (sincroniza entre dispositivos).
+  const onLayoutChange = useMemo(() => (layout) => {
+    try { finance?.ds?.meta?.setKey(WIDGETS_KEY, layout); } catch { /* noop */ }
+  }, [finance]);
+
+  // H5 — abrir o modal "Pagar fatura".
+  const openPay = (card, status) => {
+    setPayCard({ card, status });
+    setPayAccount(card.accountId || (data?.accounts ?? [])[0]?.id || '');
+    setPayAmount(String(status.restante ?? ''));
+  };
+  const confirmPay = async () => {
+    if (!payCard || !finance) return;
+    const amt = Number(payAmount);
+    if (!(amt > 0) || !payAccount) return;
+    const cards = await finance.ds.cards.list();
+    const card = cards.find((c) => c.id === payCard.card.id);
+    await finance.money.payCardInvoice({
+      cardId: payCard.card.id, competencia: payCard.status.competencia,
+      accountId: payAccount, toAccountId: card?.accountId, amount: amt, currency: 'USD',
+    });
+    setPayCard(null);
+  };
+
+  // H9 — quitar/receber uma conta direto do Resumo.
+  const payBill = async (tx) => {
+    if (!finance || !tx) return;
+    await finance.money.updateTransaction(tx.id, { paid: true });
+  };
 
   // Histórico não é mais necessário (atalhos removidos; o período global cobre tudo).
   const view = useMemo(() => {
@@ -151,24 +226,55 @@ export default function GastosDashboardPage() {
       .reduce((s, t) => s + Math.abs(t.amount || 0), 0);
     // Pendências ("a pagar") escopadas ao período selecionado.
     const periodTxs = txs.filter((t) => inPeriod(t.dueDate || t.date, period, txs));
+    // H2 — Δ vs período anterior (composição de selectors; sem série nova).
+    const prevPeriod = previousPeriod(period, txs);
+    const prevFc = prevPeriod ? computeFreeCashPeriod(txs, prevPeriod) : null;
+    const delta = {
+      income: prevFc ? pctDelta(fc.income, prevFc.income) : null,
+      expenses: prevFc ? pctDelta(fc.expenses, prevFc.expenses) : null,
+      freeCash: prevFc ? pctDelta(fc.freeCash, prevFc.freeCash) : null,
+      merchants: null,
+    };
+    // H6 — donut consolidado pelo PAI (drill-down para as filhas).
+    const rollup = rollupByParent(groups, cats);
+    // H5 — estado das faturas (aberta/fechada/paga/parcial).
+    const cardInvoices = (data.cards ?? [])
+      .map((c) => ({ card: c, status: invoiceStatus(c, txs) }))
+      .filter((x) => x.status.total > 0 || x.status.pago > 0)
+      .sort((a, b) => b.status.total - a.status.total);
+    // H7 — projeção de caixa (reusa wealth.forecast/safeAvailable + pendências).
+    const projection = data.forecast
+      ? {
+        ...data.forecast,
+        safe: data.safeAvailable,
+        pending: pendingSummary(txs),
+        dueCount: recurringDue(txs, currentYm()).length,
+      }
+      : null;
     return {
       ym: period.mode === 'month' ? period.ym : null, catById, groups, gains, budget, spentBudget, fc, series,
       bStatus,
       pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
+      upcoming: upcomingBills(txs, undefined, 15).slice(0, 8), upcomingSum: upcomingSummary(txs, undefined, 15),
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
       taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
       taxPending: Number(taxPending.toFixed(2)),
+      delta, rollup, cardInvoices, projection,
+      spark: { income: series.map((s) => s.Entradas), expenses: series.map((s) => s.Gastos), balance: series.map((s) => s.Saldo) },
     };
   }, [data, period]);
 
   const catName = (id) => view?.catById.get(id)?.name ?? id;
   const catMeta = (id) => view?.catById.get(id) ?? { name: id, icon: 'Tag', color: 'gray' };
-
-  const donut = (view?.groups ?? []).map((g) => ({
+  // H6 — subcategorias diretas de um pai (para drill-down do donut).
+  const subsOf = (parentId) => (view?.groups ?? []).filter((g) => catMeta(g.categoryId).parent === parentId);
+  const hasSubs = !!focusCat && subsOf(focusCat).length > 0;
+  const donutBase = hasSubs ? subsOf(focusCat) : (view?.rollup ?? []);
+  const donut = donutBase.map((g) => ({
     id: g.categoryId, name: catName(g.categoryId), value: g.total,
     color: COLORS[catMeta(g.categoryId).color] || COLORS.gray,
   }));
-  const donutShown = focusCat ? donut.filter((d) => d.id === focusCat) : donut;
+  const donutShown = hasSubs ? donut : (focusCat ? donut.filter((d) => d.id === focusCat) : donut);
 
   // B6 — abrir o lançamento sem sair da dashboard.
   const openTx = (t, meta) => drawer.open({
@@ -209,9 +315,9 @@ export default function GastosDashboardPage() {
 
           {/* KPIs */}
           <div className="gd-cards">
-            <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'USD')}</span><span className="gd-sub">{view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span></div>
-            <div className="gd-card gd-out"><span className="gd-ico-badge gd-neg"><TrendingDown size={15} /></span><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'USD')}</span><span className="gd-sub">{view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span></div>
-            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-ico-badge"><Wallet size={15} /></span><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'USD')}</span><span className="gd-sub">entrou − gastou</span></div>
+            <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'USD')}</span><span className="gd-sub"><TrendBadge delta={view.delta.income} /> {view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span><Sparkline values={view.spark.income} color="var(--green, #2ecc71)" /></div>
+            <div className="gd-card gd-out"><span className="gd-ico-badge gd-neg"><TrendingDown size={15} /></span><span className="gd-label">Gastou no mês</span><span className="gd-value gd-neg">{fmtMoney(view.fc.expenses, 'USD')}</span><span className="gd-sub"><TrendBadge delta={view.delta.expenses} invert /> {view.groups.reduce((s, g) => s + g.count, 0)} despesa(s)</span><Sparkline values={view.spark.expenses} color="var(--red, #e74c3c)" /></div>
+            <div className={`gd-card ${view.fc.freeCash >= 0 ? 'gd-net' : 'gd-out'}`}><span className="gd-ico-badge"><Wallet size={15} /></span><span className="gd-label">Saldo do mês</span><span className="gd-value">{fmtMoney(view.fc.freeCash, 'USD')}</span><span className="gd-sub"><TrendBadge delta={view.delta.freeCash} /> entrou − gastou</span><Sparkline values={view.spark.balance} color="var(--brand, #7c5cff)" /></div>
             <div className="gd-card gd-warn"><span className="gd-ico-badge gd-warn-t"><Landmark size={15} /></span><span className="gd-label">A pagar</span><span className="gd-value">{fmtMoney(view.pending.payable, 'USD')}</span><span className="gd-sub">{view.pending.count} título(s){view.pending.overdue ? ` · ${view.pending.overdue} atrasado(s)` : ''}</span></div>
             <div className={`gd-card ${view.budget > 0 && view.spentBudget > view.budget ? 'gd-out' : 'gd-budget'}`}>
               <span className="gd-ico-badge"><PiggyBank size={15} /></span>
@@ -228,9 +334,9 @@ export default function GastosDashboardPage() {
           </div>
 
           {/* Gráficos */}
-          <WidgetGrid storageKey="gastos">
-            <div className="dash-section" key="donut">
-              <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria</span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>limpar filtro</button>}</div>
+          <WidgetGrid storageKey="gastos" layout={data?.layout} onLayoutChange={onLayoutChange}>
+            <div className="dash-section" key="donut" data-label="Gastos por categoria">
+              <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria <TrendBadge delta={view.delta.expenses} invert /></span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>{hasSubs ? '← voltar' : 'limpar filtro'}</button>}</div>
               {donut.length === 0 ? (
                 <div className="gd-empty">Sem despesas no período. <NavLink className="dash-link" to="/expenses">lançar →</NavLink></div>
               ) : (
@@ -247,7 +353,7 @@ export default function GastosDashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="gd-legend">
-                    {donut.map((d) => {
+                    {donutShown.map((d) => {
                       const total = donut.reduce((s, x) => s + x.value, 0) || 1;
                       return (
                         <button key={d.id} className={`gd-legend-row${focusCat === d.id ? ' active' : ''}`} onClick={() => setFocusCat((c) => (c === d.id ? null : d.id))}>
@@ -264,7 +370,7 @@ export default function GastosDashboardPage() {
               )}
             </div>
 
-            <div className="dash-section" key="cashflow">
+            <div className="dash-section" key="cashflow" data-label="Entrou × Gastou">
               <div className="dash-title"><span><Activity size={14} /> Entrou × Gastou (6 meses)</span></div>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={view.series} margin={{ top: 10, right: 12, left: 4, bottom: 4 }}>
@@ -290,7 +396,7 @@ export default function GastosDashboardPage() {
               </ResponsiveContainer>
             </div>
 
-            <div className="dash-section" key="savings">
+            <div className="dash-section" key="savings" data-label="Taxa de poupança">
               <div className="dash-title"><span><PiggyBank size={14} /> Taxa de poupança</span></div>
               {view.savingsRate == null ? (
                 <div className="gd-empty">Sem entradas no período.</div>
@@ -310,7 +416,20 @@ export default function GastosDashboardPage() {
               )}
             </div>
 
-            <div className="dash-section" key="budget">
+            {view.projection && (
+              <div className="dash-section" key="projection" data-label="Projeção de caixa">
+                <div className="dash-title"><span><Activity size={14} /> Projeção de caixa</span><span className="gd-row-sub">30/60/90 dias</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><Wallet size={14} /></span><span className="gd-row-name">Caixa hoje</span><span className="gd-row-val">{fmtMoney(view.projection.today, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><TrendingUp size={14} /></span><span className="gd-row-name">Em 30 dias</span><span className="gd-row-val">{fmtMoney(view.projection.d30, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><TrendingUp size={14} /></span><span className="gd-row-name">Em 60 dias</span><span className="gd-row-val">{fmtMoney(view.projection.d60, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><TrendingUp size={14} /></span><span className="gd-row-name">Em 90 dias</span><span className="gd-row-val">{fmtMoney(view.projection.d90, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><PiggyBank size={14} /></span><span className="gd-row-name">Fluxo mensal líquido</span><span className={`gd-row-val ${view.projection.netMonthly >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(view.projection.netMonthly, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><Activity size={14} /></span><span className="gd-row-name">Posso comprar (safe)</span><span className="gd-row-val">{fmtMoney(view.projection.safe, 'USD')}</span></div>
+                <div className="gd-hint">A pagar {fmtMoney(view.projection.pending.payable, 'USD')} · {view.projection.dueCount} recorrente(s) a gerar</div>
+              </div>
+            )}
+
+            <div className="dash-section" key="budget" data-label="Orçado × realizado">
               <div className="dash-title"><span><PiggyBank size={14} /> Orçado × realizado</span></div>
               {(() => {
                 const rows = (view.bStatus ?? []).filter((b) => b.budget > 0 || b.spent > 0).sort((a, b) => (b.pct || 0) - (a.pct || 0));
@@ -327,7 +446,7 @@ export default function GastosDashboardPage() {
               })()}
             </div>
 
-            <div className="dash-section" key="trend">
+            <div className="dash-section" key="trend" data-label="Composição dos gastos">
               <div className="dash-title"><span><Activity size={14} /> Composição dos gastos (por mês)</span></div>
               {view.trend.length < 2 ? (
                 <div className="gd-empty">Período curto para tendência.</div>
@@ -348,8 +467,36 @@ export default function GastosDashboardPage() {
               )}
             </div>
 
+            {view.upcoming.length > 0 && (
+              <div className="dash-section" key="upcoming" data-label="Próximas a vencer">
+                <div className="dash-title">
+                  <span><CalendarClock size={14} /> Próximas a vencer (15 dias)</span>
+                  <span className="gd-row-sub">
+                    {view.upcomingSum.payable > 0 ? `a pagar ${fmtMoney(view.upcomingSum.payable, 'USD')}` : ''}
+                    {view.upcomingSum.receivable > 0 ? ` · a receber ${fmtMoney(view.upcomingSum.receivable, 'USD')}` : ''}
+                  </span>
+                </div>
+                {view.upcoming.map((b) => {
+                  const isIncome = b.tx.kind !== 'expense';
+                  const meta = catMeta(categoryOf(b.tx, data.categories) ?? 'outros');
+                  return (
+                    <div key={`${b.tx.id}-${b.dueDate}`} className={`gd-row${b.overdue ? ' gd-row-late' : ''}`}>
+                      <CatIcon name={isIncome ? 'Gift' : meta.icon} color={isIncome ? 'green' : meta.color} />
+                      <span className="gd-row-name">{b.tx.note || meta.name}</span>
+                      <span className="gd-row-sub">
+                        {b.overdue ? `${Math.abs(b.days)}d atrasado` : b.days === 0 ? 'hoje' : `em ${b.days}d`}
+                        {b.source === 'recurring' ? ' · recorrente' : ''}
+                      </span>
+                      <span className={`gd-row-val ${isIncome ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(Math.abs(b.tx.amount), 'USD')}</span>
+                      <button className="gd-pay" onClick={() => payBill(b.tx)}>{isIncome ? 'Receber' : 'Pagar'}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {view.bills.length > 0 && (
-              <div className="dash-section" key="bills">
+              <div className="dash-section" key="bills" data-label="Próximas contas">
                 <div className="dash-title"><span><CalendarClock size={14} /> Próximas contas</span><NavLink className="dash-link" to="/expenses">gerenciar →</NavLink></div>
                 {view.bills.map((b) => (
                   <div key={b.tx.id} className={`gd-row${b.overdue ? ' gd-row-late' : ''}`}>
@@ -363,7 +510,7 @@ export default function GastosDashboardPage() {
             )}
 
             {view.merchants.length > 0 && (
-              <div className="dash-section" key="merchants">
+              <div className="dash-section" key="merchants" data-label="Onde mais gastei">
                 <div className="dash-title"><span><Store size={14} /> Onde mais gastei</span></div>
                 {(() => {
                   const max = Math.max(1, ...view.merchants.map((m) => m.total));
@@ -381,7 +528,7 @@ export default function GastosDashboardPage() {
             )}
 
             {view.taxGroups.length > 0 && (
-              <div className="dash-section" key="tax">
+              <div className="dash-section" key="tax" data-label="Impostos">
                 <div className="dash-title">
                   <span><Landmark size={14} /> Impostos</span>
                   <span className="gd-row-sub">desde o início {fmtMoney(view.taxAllTime, 'USD')}</span>
@@ -411,7 +558,7 @@ export default function GastosDashboardPage() {
               </div>
             )}
 
-            <div className="dash-section" key="recent">
+            <div className="dash-section" key="recent" data-label="Últimos lançamentos">
               <div className="dash-title"><span><List size={14} /> Últimos lançamentos</span><NavLink className="dash-link" to="/expenses">ver todos →</NavLink></div>
               {view.recent.length === 0 ? (
                 <div className="gd-empty">Nada lançado neste mês.</div>
@@ -428,22 +575,27 @@ export default function GastosDashboardPage() {
               })}
             </div>
 
-            {view.cards.length > 0 && (
-              <div className="dash-section" key="cards">
+            {view.cardInvoices.length > 0 && (
+              <div className="dash-section" key="cards" data-label="Cartões de crédito">
                 <div className="dash-title"><span><CreditCard size={14} /> Cartões de crédito</span></div>
-                {view.cards.map((c) => {
-                  const limit = c.limit || 0;
-                  const usedPct = limit > 0 ? Math.min(100, (c.invoice / limit) * 100) : null;
+                {view.cardInvoices.map(({ card, status }) => {
+                  const limit = card.creditLimit || 0;
+                  const usedPct = limit > 0 ? Math.min(100, (status.total / limit) * 100) : null;
                   return (
-                    <div key={c.key} className="gd-card-row">
+                    <div key={card.id} className="gd-card-row">
                       <span className="gd-card-badge"><Landmark size={14} /></span>
                       <div className="gd-card-info">
-                        <div className="gd-row-name">{c.card}</div>
-                        <div className="gd-row-sub">
-                          {c.pending > 0 ? `${c.pending} em aberto · ` : ''}
-                          {c.closingDay ? `fecha dia ${c.closingDay}` : 'fatura do período'}
-                          {c.dueDay ? ` · vence dia ${c.dueDay}` : ''}
+                        <div className="gd-row-name">
+                          {card.name}
+                          <span className={`gd-st gd-st-${status.estado}`}>{INVOICE_LABEL[status.estado]}</span>
                         </div>
+                        <div className="gd-row-sub">
+                          competência {status.competencia} · fecha {status.fechamento.slice(0, 10)}
+                          {status.dueDay ? ` · vence ${status.vencimento.slice(0, 10)}` : ''}
+                        </div>
+                        {status.pago > 0 && (
+                          <div className="gd-row-sub">pago {fmtMoney(status.pago, 'USD')} · restante {fmtMoney(status.restante, 'USD')}</div>
+                        )}
                         {usedPct != null && (
                           <div className="gd-card-bar" aria-label={`Uso do limite ${Math.round(usedPct)}%`}>
                             <span className="gd-card-fill" style={{ width: `${usedPct}%`, background: usedPct >= 80 ? 'var(--red, #e74c3c)' : 'var(--brand, #7c5cff)' }} />
@@ -451,9 +603,10 @@ export default function GastosDashboardPage() {
                         )}
                       </div>
                       <div className="gd-card-amt">
-                        <span className="gd-row-val gd-neg">{fmtMoney(c.total, 'USD')}</span>
-                        {c.invoice > 0 && <span className="gd-card-open">fatura aberta {fmtMoney(c.invoice, 'USD')}{limit > 0 ? ` · ${Math.round(usedPct)}% do limite` : ''}</span>}
-                        {c.invoice === 0 && c.open > 0 && <span className="gd-card-open">em aberto {fmtMoney(c.open, 'USD')}</span>}
+                        <span className="gd-row-val gd-neg">{fmtMoney(status.total, 'USD')}</span>
+                        {status.restante > 0 && (
+                          <button className="gd-pay" onClick={() => openPay(card, status)}>Pagar fatura</button>
+                        )}
                       </div>
                     </div>
                   );
@@ -462,6 +615,33 @@ export default function GastosDashboardPage() {
             )}
           </WidgetGrid>
         </>
+      )}
+      {payCard && (
+        <div className="gd-overlay" onClick={() => setPayCard(null)}>
+          <div className="gd-modal" role="dialog" aria-modal="true" aria-label="Pagar fatura do cartão" onClick={(e) => e.stopPropagation()}>
+            <div className="gd-modal-head">
+              <span>Pagar fatura · {payCard.card.name}</span>
+              <button className="gd-modal-x" onClick={() => setPayCard(null)} aria-label="Fechar">✕</button>
+            </div>
+            <div className="gd-modal-body">
+              <div className="gd-modal-line">Competência <b>{payCard.status.competencia}</b> · total {fmtMoney(payCard.status.total, 'USD')} · restante {fmtMoney(payCard.status.restante, 'USD')}</div>
+              <label className="gd-modal-field"><span>Conta de origem</span>
+                <select className="gd-modal-input" value={payAccount} onChange={(e) => setPayAccount(e.target.value)} aria-label="Conta de origem">
+                  <option value="">—</option>
+                  {(data?.accounts ?? []).map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+                </select>
+              </label>
+              <label className="gd-modal-field"><span>Valor (pode ser parcial)</span>
+                <input className="gd-modal-input" type="number" min="0" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} aria-label="Valor do pagamento" />
+              </label>
+              <div className="gd-modal-note">É um transferência interna (neutra no caixa) — os gastos já contam quando lançados no cartão.</div>
+              <div className="gd-modal-actions">
+                <button className="gd-btn-primary" onClick={confirmPay} disabled={!(Number(payAmount) > 0) || !payAccount}>Confirmar pagamento</button>
+                <button className="gd-btn-ghost" onClick={() => setPayCard(null)}>Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {drawer.node}
     </div>
@@ -534,6 +714,31 @@ const GD_CSS = `
 .gd-row-val { font-variant-numeric: tabular-nums; font-weight: 700; }
 @media (max-width: 800px) { .gd-charts, .gd-lists { grid-template-columns: 1fr; } }
 @media (max-width: 380px) { .gd-cards { grid-template-columns: 1fr 1fr; gap: 8px; } }
+
+/* ── H2: tendência + sparkline ── */
+.gd-spark { display: block; margin-top: 4px; opacity: 0.85; }
+.gd-trend { font-weight: 800; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.gd-hint { font-size: 11px; color: var(--muted, #a1a7b3); }
+
+/* ── H5: faturas + pagar ── */
+.gd-st { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted, #a1a7b3); margin-left: 8px; }
+.gd-st-aberta { color: var(--blue, #3498db); border-color: rgba(52,152,219,0.45); }
+.gd-st-fechada, .gd-st-parcial { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.45); }
+.gd-st-paga { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.45); }
+.gd-pay { margin-top: 5px; background: rgba(124,92,255,0.14); border: 1px solid rgba(124,92,255,0.4); color: var(--brand, #7c5cff); border-radius: 9px; font-size: 11px; font-weight: 700; padding: 5px 9px; cursor: pointer; min-height: 34px; }
+.gd-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(7,9,14,0.72); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.gd-modal { width: 100%; max-width: 420px; background: linear-gradient(180deg, #171c27 0%, #12161f 100%); border: 1px solid #1f2734; border-radius: 18px; box-shadow: 0 18px 50px rgba(0,0,0,0.5); }
+.gd-modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); font-weight: 800; }
+.gd-modal-x { background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: var(--muted, #a1a7b3); width: 30px; height: 30px; cursor: pointer; }
+.gd-modal-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.gd-modal-line { font-size: 12px; color: var(--muted, #a1a7b3); }
+.gd-modal-field { display: grid; gap: 6px; font-size: 11px; color: var(--muted, #a1a7b3); }
+.gd-modal-input { background: #111623; border: 1px solid #273044; color: var(--text, #e7eaf0); padding: 9px 10px; border-radius: 10px; font-size: 13px; min-height: 42px; font-family: inherit; }
+.gd-modal-note { font-size: 11px; color: var(--muted, #a1a7b3); }
+.gd-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gd-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); color: #fff; border: none; border-radius: 11px; font-weight: 800; font-size: 13px; padding: 10px 14px; min-height: 42px; cursor: pointer; }
+.gd-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.gd-btn-ghost { background: rgba(255,255,255,0.03); border: 1px solid #2a3246; color: var(--text, #e7eaf0); border-radius: 11px; font-weight: 700; font-size: 13px; padding: 10px 14px; min-height: 42px; cursor: pointer; }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('gd-styles')) {
   const style = document.createElement('style');

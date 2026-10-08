@@ -15,6 +15,7 @@ const WIDGETS = [
   { id: 'risk', label: 'Trading' },
   { id: 'money', label: 'Gastos' },
   { id: 'investments', label: 'Investimentos' },
+  { id: 'options', label: 'Opções' },
   { id: 'payouts', label: 'Contas & Payouts' },
   { id: 'goals', label: 'Metas' },
   { id: 'actions', label: 'Ações' },

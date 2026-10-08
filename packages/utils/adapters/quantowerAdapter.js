@@ -387,6 +387,26 @@ export class QuantowerAdapter extends BaseAdapter {
     return (data.orders || []).map((o) => QuantowerAdapter.normalizeOrder(o));
   }
 
+  // ── Opções (F3) — DOCS/04_STAGE3_TRADING_OS/06-OPTIONS_BRIDGE_SPEC.md ──────
+
+  /** Vencimentos disponíveis para um subjacente. */
+  async getOptionExpiries(underlying) {
+    const data = await this._fetch('/options/expiries', { underlying });
+    return data.expiries || [];
+  }
+
+  /** Cadeia de um vencimento (quotes + gregas + IV). Retorna o payload cru p/ normalizar. */
+  async getOptionChain(underlying, expiry, depth = 15) {
+    const data = await this._fetch('/options/chain', { underlying, expiry, depth });
+    return data;
+  }
+
+  /** Posições de opções (pernas) abertas na plataforma. */
+  async getOptionPositions() {
+    const data = await this._fetch('/options/positions');
+    return data.positions || [];
+  }
+
   // ── v2: escrita com clientOrderId idempotente ─────────────────────────────
 
   /** Gera um clientOrderId (UUID) para idempotência. */

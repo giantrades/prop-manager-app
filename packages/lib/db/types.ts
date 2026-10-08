@@ -3,9 +3,9 @@
 // Proibido snake_case aqui (só na borda Supabase, marcado // SUPABASE BOUNDARY).
 
 export const DB_NAME = 'app-db';
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
-/** Nomes finais das stores do IndexedDB v3 (contrato 01-DATA_CONTRACT.md). */
+/** Nomes finais das stores do IndexedDB (contrato 01-DATA_CONTRACT.md). */
 export type StoreName =
   | 'accounts'
   | 'prop_extensions'
@@ -18,6 +18,9 @@ export type StoreName =
   | 'snapshots_networth'
   | 'firm_costs'
   | 'cards'
+  | 'option_legs'
+  | 'option_templates'
+  | 'option_chain'
   | 'meta';
 
 export const STORE_NAMES: StoreName[] = [
@@ -32,6 +35,9 @@ export const STORE_NAMES: StoreName[] = [
   'snapshots_networth',
   'firm_costs',
   'cards',
+  'option_legs',
+  'option_templates',
+  'option_chain',
   'meta',
 ];
 
@@ -131,6 +137,7 @@ export type TransactionKind =
   | 'expense'
   | 'income'
   | 'dividend'
+  | 'option_premium'
   | 'transfer'
   | 'buy'
   | 'sell'
@@ -170,6 +177,11 @@ export interface Transaction extends SyncedRecord {
   cardId?: string;
   // D4 — tags livres (ex.: 'viagem', 'trabalho').
   tags?: string[];
+  // H5 — baixa da fatura do cartão (quitação/parcial). Marca a competência paga.
+  // A transação é um `transfer` (neutro no caixa) — nunca vira despesa de novo.
+  invoice?: { cardId: string; competencia: string };
+  // H10 — id externo do extrato (FITID do OFX) para dedup forte na reimportação.
+  externalId?: string;
 }
 
 export interface Position {
@@ -345,6 +357,94 @@ export interface Card extends SyncedRecord {
   dueDay?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Opções (Options Analytics) — ver DOCS/10_MODULES/options/00-spec.md
+// Fórmulas em DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md § Opções.
+// ---------------------------------------------------------------------------
+
+export type OptionRight = 'call' | 'put';
+
+export interface Greeks {
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+  rho: number;
+}
+
+export type OptionSource = 'manual' | 'quantower';
+
+/**
+ * Perna de opção. `qty` com SINAL (+ long / − short), `entryPrice` em preço por ação
+ * (prêmio), `multiplier` DO CONTRATO (US equity = 100) — nunca presumir 100.
+ * Estratégias/posições são DERIVADAS (agrupadas por `groupId`), nunca duplicadas.
+ */
+export interface OptionLeg extends SyncedRecord {
+  accountId: string;
+  underlying: string;
+  symbol: string;
+  right: OptionRight;
+  strike: number;
+  expiry: string; // ISO date (vencimento) no fuso do mercado
+  qty: number;
+  multiplier: number;
+  entryPrice: number;
+  entryDatetime: string;
+  exitPrice?: number;
+  exitDatetime?: string;
+  fees: number;
+  ivEntry?: number;
+  ivExit?: number;
+  greeksEntry?: Greeks;
+  groupId?: string;
+  strategyId?: string;
+  source: OptionSource;
+  quantowerId?: string;
+  tags?: string[];
+}
+
+export type OptionTemplateCategory = 'up' | 'down' | 'vol' | 'arb';
+
+/** Perna de template: `strikeOffset` = 'atm' (no dinheiro) ou nº de passos do grid. */
+export interface OptionTemplateLeg {
+  right: OptionRight;
+  qty: number;
+  strikeOffset: 'atm' | number;
+}
+
+export interface OptionStrategyTemplate {
+  id: string;
+  name: string;
+  category: OptionTemplateCategory;
+  legs: OptionTemplateLeg[];
+  description: string;
+}
+
+/** Template custom persistido (built-ins vivem no código — `options.ts`). */
+export interface StoredOptionTemplate extends OptionStrategyTemplate, SyncedRecord {}
+
+export type OptionQuoteSource = 'bridge' | 'computed' | 'manual';
+
+/** Linha da cadeia — CACHE volátil (nunca fonte de verdade de posição). */
+export interface OptionChainQuote {
+  id: string; // `${underlying}:${expiry}:${strike}:${right}`
+  underlying: string;
+  expiry: string;
+  strike: number;
+  right: OptionRight;
+  symbol: string;
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
+  iv?: number | null;
+  oi?: number | null;
+  volume?: number | null;
+  greeks?: Greeks | null;
+  multiplier: number;
+  at: string;
+  source: OptionQuoteSource;
+}
+
 /** Payload exato de `datastore:change` (contrato 01-DATA_CONTRACT.md). */
 export interface DatastoreChangePayload {
   timestamp: number;
@@ -361,6 +461,8 @@ export interface DatastoreChangePayload {
     | 'tax_record'
     | 'snapshot_networth'
     | 'firm_cost'
+    | 'option_leg'
+    | 'option_template'
     | 'meta';
   entityIds?: string[];
 }

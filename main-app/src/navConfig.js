@@ -18,12 +18,15 @@ import {
   ShieldAlert,
   TrendingUp,
   LineChart,
+  ListOrdered,
+  Sigma,
   Database,
   Receipt,
   Zap,
   FileText,
   PiggyBank,
   Sparkles,
+  Tag,
 } from "lucide-react";
 
 /* 7 âncoras do visao-produto.md (resto é drill-down por abas) + grupo Sistema
@@ -57,7 +60,9 @@ export const MODULES = [
     dashboard: "/trading",
     children: [
       { to: "/trading", label: "Resumo", icon: Activity, end: true, keywords: "trading dashboard resumo" },
-      { to: "/journal", label: "Journal", icon: BookOpen, keywords: "trades journal review playbook" },
+      { to: "/journal", label: "Journal", icon: BookOpen, keywords: "journal review heatmap desempenho analise" },
+      { to: "/trades", label: "Trades", icon: ListOrdered, keywords: "trades lista tabela importar exportar csv editar excluir" },
+      { to: "/options", label: "Opções", icon: Sigma, keywords: "opções options chain gregas delta gamma theta vega payoff strike calls puts renda covered call analyzer" },
       { to: "/live-positions", label: "Positions & Orders", icon: TrendingUp, keywords: "posições abertas ordens live stoploss takeprofit fechar cancelar" },
     ],
   },
@@ -68,7 +73,9 @@ export const MODULES = [
     dashboard: "/gastos",
     children: [
       { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
-      { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills orçamento extratos" },
+      { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills lançamentos extrato" },
+      { to: "/gastos/orcamento", label: "Orçamento", icon: PiggyBank, keywords: "orçamento metas limite mensal quanto posso gastar" },
+      { to: "/gastos/categorias", label: "Categorias", icon: Tag, keywords: "categorias subcategorias ícones cores mesclar" },
       { to: "/forecast", label: "Forecast", icon: LineChart, keywords: "previsão fluxo caixa" },
     ],
   },

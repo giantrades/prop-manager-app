@@ -76,6 +76,19 @@
 - `recordExpense` grava categoria em campo (note limpa); legado com prefixo continua lendo.
 - Ganhos agrupados por kind (Payouts/Rebates/Outros); sem categoria própria (decisão).
 
+## Batch H (H0–H12) — executado
+- Motor: `amount.ts` (`parseAmount` BR/US + expressões), `period.previousPeriod`,
+  `money.invoiceStatus`/`CategoryDef.parent`/`rollupByParent`/`subcategoriesOf`,
+  `suggestBudget`/`openingBalance`/`dailyBalance`/`upcomingBills`,
+  `mergeCategories`/`removeCategory`/`get/setCategoryOrder`/`categoryUsage`,
+  `MoneyService.payCardInvoice`, `bankImport` v2 (FITID/QIF/mapeamento/regras).
+  Aditivos: `Transaction.invoice`, `Transaction.externalId`, `CategoryDef.parent`.
+- UI: `WidgetGrid` sincronizado no meta `ui:widgets:gastos` (ocultar/mover/restaurar),
+  tendência (Δ/sparkline), `QuickAddExpense`, subcategoria no form, donut com drill-down,
+  faturas de cartão (estado + pagar), widget de projeção, saldo por dia, próximas a vencer,
+  import v2, e as abas **Orçamento** (`BudgetPage`) e **Categorias** (`CategoriasPage`).
+- Detalhes/estado item a item em `melhorias.md`. Sem fórmula financeira nova.
+
 ## Melhorias futuras (pasta melhorias.md)
 
 > Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,

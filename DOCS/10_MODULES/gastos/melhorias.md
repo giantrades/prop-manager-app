@@ -167,7 +167,12 @@
 > os itens H1+ assumem essa nova IA.
 
 ### H0 — Arquitetura de abas do módulo Gastos (Orçamento/Categorias viram abas)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: 5 abas reais em `navConfig.js` (fonte única → sidebar + Cmd+K): `Resumo` `/gastos`,
+  `Lançamentos` `/expenses`, **`Orçamento` `/gastos/orcamento`** (`BudgetPage`),
+  **`Categorias` `/gastos/categorias`** (`CategoriasPage`), `Forecast` `/forecast`. Rotas em
+  `routeLoaders.js` + `App.jsx`; `Expenses.tsx` foi **enxugado** (toggles in-page de
+  orçamento/categorias removidos, foco no ledger). `DOCS/11_PAGE_MAP.md` atualizado.
 - Contexto: hoje o módulo tem só **Resumo** (`/gastos`), **Lançamentos** (`/expenses`) e
   **Forecast** (`/forecast`). "Orçamento" e "Categorias" são apenas **toggles in-page**
   (`showBudget`/`showCats`) dentro de `Expenses.tsx`, escondidos e sem foco; a página de
@@ -190,7 +195,11 @@
   aprofundar Orçamento/Categorias fica em H11/H12, e o importador em H10.
 
 ### H1 — Layout dos widgets do Resumo: esconder/mostrar + sincronizar
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `WidgetGrid` aceita layout controlado (`layout`/`onLayoutChange`) e persiste no
+  meta `ui:widgets:gastos` (sincroniza PC↔celular) mantendo o localStorage como cache. Cada
+  widget tem **ocultar/mostrar** (botão `–` + "Mostrar ocultos"), **mover ↑/↓** (funciona no
+  mobile, onde não há hover) além do arrastar, largura 1x/2x e **"Restaurar padrão"**.
 - Contexto: o `WidgetGrid` já reordena (arrastar) e alterna 1x/2x, mas persiste em
   `localStorage('widgetLayout:gastos')` — **não sincroniza** entre PC/celular — e não dá para
   esconder um widget, só reposicionar.
@@ -202,7 +211,11 @@
 - Fora de escopo: layout específico por breakpoint.
 
 ### H2 — Cada widget com tendência (Δ vs período anterior + sparkline)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `previousPeriod()` (motor puro + teste) dá o período anterior de mesma duração;
+  KPIs Entrou/Gastou/Saldo ganharam **Δ%** (`TrendBadge`, cor por sinal) e **sparkline** SVG
+  (sem lib nova); o donut "Gastos por categoria" mostra Δ do gasto. Reusa `monthlySeries`/
+  `computeFreeCashPeriod` — nenhuma série inventada.
 - Contexto: os widgets mostram o número do período, sem indicar se piorou/melhorou.
 - Proposta: badge de variação (Δ%) e mini-sparkline por widget, reusando `compareMonths`/
   `monthlySeries`/`rollingExpectancy` (nada de série nova inventada); cor por sinal.
@@ -210,7 +223,11 @@
 - Aceite: Δ coerente na virada de ano; sem fórmula nova; `tsc` 0; testes verdes; build verde.
 
 ### H3 — Lançamento rápido (Quick Add) em ≤3 toques
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: novo `packages/ui/QuickAddExpense.tsx` no topo de `/expenses`: valor → chip de
+  categoria (com ícone) → **Salvar** (≤3 toques). Lembra a última conta/categoria
+  (`localStorage expense:quick:last`) e tem **"Repetir último"** em 1 toque. O sheet completo
+  (parcelas/cartão/vencimento/anexo) continua para casos avançados.
 - Contexto: lançar hoje exige abrir o bottom-sheet e preencher ~6 campos. Mobills resolve com
   entrada rápida.
 - Proposta: barra "Quick Add" no topo de `/expenses` (e atalho pela palette): digita/tecla o
@@ -222,7 +239,11 @@
 - Fora de escopo: entrada por linguagem natural (ver H4).
 
 ### H4 — Campo de valor com cálculo e formato BR/US
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `packages/lib/db/amount.ts` (`parseAmount`/`parseNumberToken`, puro + 9 testes):
+  aceita `1.234,56`, `1,234.56`, `45,90` e expressões `+ - * /` (`12*3`=36) sem `eval`.
+  Usado no Quick Add, no sheet e na transferência, com **preview** do valor interpretado;
+  inválido não salva.
 - Contexto: escrever `1.234,56` ou `12*3` no campo de valor falha/interpreta errado.
 - Proposta: parser puro `parseAmount(text)` que aceita vírgula/ponto e expressões simples
   (`+ - * /`), com preview; usar no Quick Add e no sheet.
@@ -230,7 +251,13 @@
 - Aceite: `"12*3"=36`, `"1.234,56"=1234.56`, `"45,90"=45.9`; inválido não salva; teste; `tsc` 0; build verde.
 
 ### H5 — Cartão de crédito: fatura aberta/fechada/paga + pagamento parcial
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: seletor puro `invoiceStatus(card, txs, ref)` → `{competencia, fechamento,
+  vencimento, total, pago, restante, estado}` (reusa `invoiceCycle`; + testes). `Transaction.invoice`
+  (aditivo) marca a baixa; `MoneyService.payCardInvoice` cria **transfer neutro no caixa**
+  (dupla entrada quando o cartão tem conta). UI: widget "Cartões" no Resumo com estado
+  (Aberta/Fechada/Paga/Parcial) + modal **"Pagar fatura"** (valor parcial permitido); em
+  `/expenses` a seção "Faturas dos cartões". Nada é criado sem confirmação.
 - Contexto: `Card` já tem `closingDay`/`dueDay` e existe `invoiceCycle`; `Expenses` mostra
   "fatura por cartão", mas não há estado (aberta/fechada/paga) nem baixa parcial.
 - Proposta: selector puro `invoiceStatus(card, txs, ref)` → `{ competencia, fechamento, vencimento, total, pago, restante, estado: 'aberta'|'fechada'|'paga'|'parcial' }`
@@ -242,7 +269,11 @@
 - Fora de escopo: conciliação automática com extrato do banco.
 
 ### H6 — Categorias: subcategorias (1 nível) com roll-up
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `CategoryDef.parent?` (aditivo) + `subcategoriesOf`/`rollupByParent` (motor puro
+  + testes; soma por pai = soma das filhas). O donut do Resumo agrupa pelo **pai** com
+  **drill-down** (clica e abre as filhas); o form de lançamento deixa escolher a subcategoria
+  (`↳`). Legado sem `parent` fica intacto.
 - Contexto: `CategoryDef` tem `group` (ex.: `imposto`), mas não hierarquia pai/filho.
 - Proposta: `CategoryDef.parent?` (1 nível). Donut/relatórios agrupam pelo **pai** com
   drill-down (clica e abre subcategorias); o form deixa escolher subcategoria. Legado sem
@@ -252,7 +283,11 @@
 - Fora de escopo: mais de 1 nível.
 
 ### H7 — Widget "Projeção de caixa" no Resumo de Gastos
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: widget "Projeção de caixa" no Resumo com caixa hoje / 30 / 60 / 90 dias, fluxo
+  mensal líquido e **safe available**, reusando `wealth.forecast()`/`safeAvailable()` +
+  `pendingSummary`/`recurringDue` (composição, sem duplicar fórmula). Nota: a projeção é
+  global (forward), não recortada pelo período — o período governa os demais widgets.
 - Contexto: a projeção vive só em Planejamento (`ForecastPage`); no dia a dia de gastos não se
   vê "para onde o caixa vai".
 - Proposta: widget no Resumo com projeção 30/60/90d, reusando `wealth.forecast`/`safeAvailable`
@@ -261,7 +296,10 @@
 - Aceite: projeção bate com a de Planejamento; sem fórmula nova; `tsc` 0; testes verdes; build verde.
 
 ### H8 — Visão por Dia com saldo acumulado (extrato)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `openingBalance` + `dailyBalance` (motor puro + testes). No modo "Dia" de
+  `/expenses`, cabeçalho mostra saldo inicial do mês, cada dia traz o **saldo acumulado** e o
+  total do dia; o saldo final fecha com `computeFreeCash` do mês.
 - Contexto: o agrupamento por Dia existe com subtotal, mas não mostra o **saldo corrente**.
 - Proposta: no modo "Dia", coluna de saldo acumulado do período + "saldo do dia" (parte do
   saldo inicial do período + lançamentos). Selector puro + teste.
@@ -269,7 +307,11 @@
 - Aceite: saldo final fecha com `computeFreeCash` do período; sem fórmula nova; `tsc` 0; testes verdes; build verde.
 
 ### H9 — Próximas contas a vencer (consolida o B2)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `upcomingBills(transactions, refIso, days)` + `upcomingSummary` (motor puro +
+  testes) unem títulos pendentes (incl. atrasados) e templates recorrentes do mês na janela de
+  N dias, ordenados por vencimento. UI: widget "Próximas a vencer (15 dias)" no Resumo (com
+  Pagar/Receber inline) e seção equivalente em `/expenses`.
 - Contexto: B2 pede a visão "o que vence nos próximos 15 dias"; hoje só existe a lista de
   pendentes (qualquer data).
 - Proposta: seção/widget no topo com os próximos N dias (recorrentes + `dueDate`), ordenados
@@ -279,7 +321,21 @@
 - Aceite: janela correta (inclui atrasados); ordenação por vencimento; `tsc` 0; testes verdes; build verde.
 
 ### H10 — Importar extrato v2 (resolve as limitações do A3)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado (as 7 limitações):
+  1. **Conta do lote** — seletor no preview; default = última usada (`expense:import-account`).
+  2. **Moeda** — seletor USD/BRL; BRL é convertido pela taxa do app (`getFxUSD`, nunca inventa
+     câmbio) guardando o valor original na nota.
+  3. **Dedup forte** — `<FITID>` do OFX (guardado em `Transaction.externalId`) > fallback
+     descrição normalizada + valor com tolerância ±0,01.
+  4. **Preview completo** — lista todos os itens (sem o corte de 30) + contador.
+  5. **Mapeamento de coluna** — `detectCsvColumns` + UI de escolha de data/valor/descrição
+     quando a auto-detecção falha.
+  6. **Regras editáveis** — `DEFAULT_IMPORT_RULES` saiu do código para o meta
+     `expense:import-rules` (`get/save/learnImportRule`); ao confirmar, aprende a regra.
+  7. **QIF** — parser `parseQif` (`D1/T/P/M/^`) implementado (não removido do accept).
+- Arquivos: `bankImport.ts` (+ testes), `Expenses.tsx`, `EngineViews.jsx` (`onImportBatch` com
+  conta/moeda/externalId + aprendizado), `Transaction.externalId`/`MoneyService` (aditivo).
 - Contexto: o importador (`bankImport.ts` + preview em `Expenses.tsx` + `onImportBatch` em
   `EngineViews.jsx`) já lê OFX/CSV, deduplica e sugere categoria, mas tem 7 limitações:
   (a) cai tudo na **primeira conta** (`accounts[0]`); (b) moeda **fixa USD** (extrato BRL entra
@@ -307,7 +363,11 @@
 - Fora de escopo: Open Finance / API do banco (integração automática).
 
 ### H11 — Aba Orçamento (aprofundar além do editor atual)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `BudgetPage` (`/gastos/orcamento`) com **"quanto ainda posso gastar"** no mês e
+  **por dia** (restante ÷ dias restantes), **sugestão de meta** pela média real de 3 meses
+  (`suggestBudget`, motor + testes), **copiar do mês anterior**, visão por **grupo** (roll-up) e
+  rollover (B1) visível. Alerta (toast) ao passar de 80% da meta ao salvar.
 - Contexto: o H0 cria a aba `/gastos/orcamento`; hoje o `BudgetEditor` só define meta por categoria.
 - Proposta: na aba: **"quanto ainda posso gastar"** no período e **por dia** (restante ÷ dias
   restantes); **sugerir meta** pela média de 3 meses (reusa `monthlySeries`/`expensesByCategory`);
@@ -319,7 +379,12 @@
   `tsc` 0; testes verdes; build verde.
 
 ### H12 — Aba Categorias (aprofundar além do CRUD atual)
-- Status: [ ] a executar
+- Status: [x] executada
+- Resultado: `CategoriasPage` (`/gastos/categorias`) com CRUD (nome/ícone/cor/**pai**),
+  **mesclar** (`mergeCategories`), **remover com reatribuição** (`removeCategory` — nunca órfão;
+  defaults ficam ocultas via meta), **reordenar** (`get/setCategoryOrder`), **preview** de uso
+  (`categoryUsage` + barra) e **pack de impostos**. `listCategories` filtra ocultas e aplica a
+  ordem. Motor puro/`DataService` + testes.
 - Contexto: o H0 cria a aba `/gastos/categorias` com o `CategoryEditor` (nome/ícone/cor).
 - Proposta: **mesclar** categorias (move os lançamentos da origem para o destino); **reatribuir**
   ao excluir (nunca deixar órfão em "outros"); **reordenar**; **preview** do impacto no donut;
@@ -336,3 +401,36 @@
   toques; cartão com ciclo de fatura; próximas contas e projeção visíveis.
 - Nenhuma fórmula financeira nova (só selectors + composição). `tsc` 0, testes verdes, `pnpm build:all` verde.
 - Mobile 360px, off-line, sem `alert`, CSS por variáveis, `aria-*` + toast.
+
+## Batch H — executado (H0–H12) ✅
+
+> Rodada focada nos 4 pontos pedidos: (1) widgets do Resumo, (2) visualização da dashboard,
+> (3) fluxo de lançamento, (4) cartão de crédito + subcategorias + projeção — depois completada
+> com H0/H8–H12.
+
+- **H0** 5 abas reais (`/gastos` · `/expenses` · `/gastos/orcamento` · `/gastos/categorias` ·
+  `/forecast`); `Expenses` enxugado.
+- **H1** WidgetGrid controlado pelo meta `ui:widgets:gastos` (sincroniza), ocultar/mostrar,
+  mover ↑/↓ (mobile), 1x/2x e "Restaurar padrão".
+- **H2** Δ% + sparkline nos KPIs; Δ no donut (`previousPeriod` no motor).
+- **H3** `QuickAddExpense` (≤3 toques) + "Repetir último".
+- **H4** `parseAmount` (BR/US + expressões) no Quick Add/sheet/transferência.
+- **H5** `invoiceStatus` + `MoneyService.payCardInvoice` (fatura aberta/fechada/paga/parcial;
+  baixa parcial; transfer neutro) + UI (widget + modal + seção).
+- **H6** `CategoryDef.parent` + `rollupByParent`/`subcategoriesOf`; donut com roll-up e drill-down;
+  subcategoria no form.
+- **H7** Widget "Projeção de caixa" (30/60/90d + safe) reusando `wealth.forecast`.
+- **H8** Saldo acumulado por dia no modo "Dia" (`openingBalance`/`dailyBalance`).
+- **H9** Próximas a vencer em 15 dias (`upcomingBills`/`upcomingSummary`) — consolida B2.
+- **H10** Import extrato v2: conta, moeda (taxa do app), FITID, preview completo, mapeamento,
+  regras editáveis/aprendidas e QIF.
+- **H11** Aba Orçamento (restante/dia, sugestão 3m, copiar, grupo, rollover, alerta).
+- **H12** Aba Categorias (CRUD, mesclar, remover com reatribuição, reordenar, preview, pack).
+- Gate: `tsc` 0 + `pnpm build:all` verde + **364 testes** verdes.
+
+### Observações / dívidas conscientes
+- A projeção de caixa (H7) é forward e global — não é recortada pelo período (o período governa
+  os demais widgets).
+- O importador converte BRL→USD pela taxa do app (`getFxUSD`); sem taxa salva, mantém o valor
+  original e a nota registra a moeda.
+- `Transaction.externalId` e `Transaction.invoice` são aditivos (sem migração).

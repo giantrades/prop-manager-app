@@ -30,6 +30,20 @@ import {
   merchantRanking,
   computeAccountBalance,
   invoiceCycle,
+  invoiceStatus,
+  subcategoriesOf,
+  rollupByParent,
+  suggestBudget,
+  openingBalance,
+  dailyBalance,
+  upcomingBills,
+  upcomingSummary,
+  reassignCategory,
+  mergeCategories,
+  removeCategory,
+  getCategoryOrder,
+  setCategoryOrder,
+  categoryUsage,
   dividendHistory,
   dividendIncomeByMonth,
   dividendByAsset,
@@ -421,3 +435,230 @@ describe('#4 — dividendos (histórico, renda e calendário)', () => {
   });
 });
 
+describe('H5 — fatura do cartão: aberta/fechada/paga/parcial', () => {
+  const CARD = { id: 'card-1', name: 'Nubank', closingDay: 15, dueDay: 25 };
+  const exp = (id, day, amount, cardId = 'card-1') => tx({
+    id, kind: 'expense', amount: -amount, cardId, date: `2026-09-${String(day).padStart(2, '0')}T12:00:00Z`,
+  });
+
+  it('fatura aberta: ciclo corrente, total e vencimento após fechamento', () => {
+    const txs = [exp('e1', 5, 100), exp('e2', 10, 50)];
+    const st = invoiceStatus(CARD, txs, new Date(Date.UTC(2026, 8, 10))); // 10/set, fecha 15
+    expect(st.competencia).toBe('2026-09');
+    expect(st.fechamento.slice(0, 10)).toBe('2026-09-15');
+    expect(st.vencimento.slice(0, 10)).toBe('2026-09-25'); // dia 25 após o fechamento 15
+    expect(st.total).toBe(150);
+    expect(st.estado).toBe('aberta');
+    expect(st.restante).toBe(150);
+  });
+
+  it('após o fechamento fica "fechada"; sem despesas fica "aberta"', () => {
+    const txs = [exp('e1', 5, 100)];
+    const st = invoiceStatus(CARD, txs, new Date(Date.UTC(2026, 8, 20))); // 20/set > 15
+    expect(st.competencia).toBe('2026-10'); // a aberta agora fecha em out
+    expect(st.total).toBe(0);
+    expect(st.estado).toBe('aberta');
+    // E a fatura de setembro (fechada) — referência 10/set mostra o ciclo ainda aberto.
+    const set = invoiceStatus(CARD, txs, new Date(Date.UTC(2026, 8, 16)));
+    expect(set.competencia).toBe('2026-10');
+  });
+
+  it('baixa total marca "paga"; parcial abate e marca "parcial"', () => {
+    const txs = [exp('e1', 5, 100), exp('e2', 10, 50)];
+    const st = invoiceStatus(CARD, txs, new Date(Date.UTC(2026, 8, 10)));
+    const pay = (amount) => tx({ id: `p-${amount}`, kind: 'transfer', amount: -amount, date: '2026-09-12T12:00:00Z', invoice: { cardId: 'card-1', competencia: st.competencia } });
+    const parcial = invoiceStatus(CARD, [...txs, pay(60)], new Date(Date.UTC(2026, 8, 10)));
+    expect(parcial.pago).toBe(60);
+    expect(parcial.restante).toBe(90);
+    expect(parcial.estado).toBe('parcial');
+    const paga = invoiceStatus(CARD, [...txs, pay(150)], new Date(Date.UTC(2026, 8, 10)));
+    expect(paga.restante).toBe(0);
+    expect(paga.estado).toBe('paga');
+  });
+
+  it('payCardInvoice cria transfer neutro no caixa e casa pela competência', async () => {
+    const { ds, money } = makeService();
+    for (const t of [exp('e1', 5, 200)]) await ds.transactions.put(t, { source: 'local' });
+    const st = invoiceStatus(CARD, await ds.transactions.list(), new Date(Date.UTC(2026, 8, 10)));
+    await money.payCardInvoice({ cardId: 'card-1', competencia: st.competencia, accountId: 'banco', amount: 120, currency: 'BRL', date: '2026-09-12T12:00:00Z' });
+    const all = await ds.transactions.list();
+    expect(computeFreeCash(all, '2026-09')).toEqual({ income: 0, expenses: 200, freeCash: -200 });
+    const after = invoiceStatus(CARD, all, new Date(Date.UTC(2026, 8, 10)));
+    expect(after.pago).toBe(120);
+    expect(after.estado).toBe('parcial');
+    await money.payCardInvoice({ cardId: 'card-1', competencia: st.competencia, accountId: 'banco', amount: 80, currency: 'BRL', date: '2026-09-13T12:00:00Z' });
+    const done = invoiceStatus(CARD, await ds.transactions.list(), new Date(Date.UTC(2026, 8, 10)));
+    expect(done.estado).toBe('paga');
+  });
+
+  it('payCardInvoice rejeita valor 0 e competência ausente', async () => {
+    const { money } = makeService();
+    await expect(money.payCardInvoice({ cardId: 'c', competencia: '2026-09', accountId: 'a', amount: 0, currency: 'BRL' })).rejects.toThrow();
+    await expect(money.payCardInvoice({ cardId: '', competencia: '', accountId: 'a', amount: 10, currency: 'BRL' })).rejects.toThrow();
+  });
+});
+
+describe('H6 — subcategorias (1 nível) com roll-up', () => {
+  const CATS = [
+    { id: 'moradia', name: 'Moradia', icon: 'House', color: 'blue' },
+    { id: 'moradia-aluguel', name: 'Aluguel', icon: 'House', color: 'blue', parent: 'moradia' },
+    { id: 'moradia-cond', name: 'Condomínio', icon: 'House', color: 'blue', parent: 'moradia' },
+    { id: 'lazer', name: 'Lazer', icon: 'Gamepad2', color: 'brand' },
+  ];
+
+  it('subcategoriesOf lista as filhas diretas', () => {
+    expect(subcategoriesOf(CATS, 'moradia').map((c) => c.id)).toEqual(['moradia-aluguel', 'moradia-cond']);
+    expect(subcategoriesOf(CATS, 'lazer')).toEqual([]);
+  });
+
+  it('rollupByParent soma as filhas no pai; raiz intacta; pai inexistente fica', () => {
+    const rows = [
+      { categoryId: 'moradia-aluguel', total: 1000, count: 1 },
+      { categoryId: 'moradia-cond', total: 300, count: 1 },
+      { categoryId: 'lazer', total: 200, count: 1 },
+      { categoryId: 'orfa', total: 50, count: 1, parent: 'nao-existe' } as never,
+    ];
+    const out = rollupByParent(rows, CATS as never);
+    expect(out.find((r) => r.categoryId === 'moradia')).toEqual({ categoryId: 'moradia', total: 1300, count: 2 });
+    expect(out.find((r) => r.categoryId === 'lazer')?.total).toBe(200);
+    expect(out.find((r) => r.categoryId === 'orfa')?.total).toBe(50);
+  });
+
+  it('soma por pai = soma das filhas (via expensesByCategory)', () => {
+    const list = [
+      tx({ id: 's1', kind: 'expense', category: 'moradia-aluguel', amount: -1000, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 's2', kind: 'expense', category: 'moradia-cond', amount: -300, date: '2026-09-06T12:00:00Z' }),
+    ];
+    const byCat = expensesByCategory(list, '2026-09', CATS as never);
+    const roll = rollupByParent(byCat, CATS as never);
+    expect(roll).toHaveLength(1);
+    expect(roll[0]).toEqual({ categoryId: 'moradia', total: 1300, count: 2 });
+  });
+
+  it('saveCategory/listCategories preservam parent', async () => {
+    const { ds } = makeService();
+    await saveCategory(ds, { id: 'moradia-iptu', name: 'IPTU', icon: 'House', color: 'blue', parent: 'moradia' });
+    const all = await listCategories(ds);
+    expect(all.find((c) => c.id === 'moradia-iptu')?.parent).toBe('moradia');
+  });
+});
+
+
+describe('H11 — sugestao de meta (media 3 meses)', () => {
+  const e = (id, ym, day, category, amount) => tx({ id, kind: 'expense', category, amount: -amount, date: `${ym}-${String(day).padStart(2, '0')}T12:00:00Z` });
+  const list = [
+    e('a', '2026-06', 5, 'alimentacao', 300),
+    e('b', '2026-07', 5, 'alimentacao', 600),
+    e('c', '2026-08', 5, 'alimentacao', 900),
+    e('d', '2026-08', 6, 'moradia', 1000),
+    e('x', '2026-09', 1, 'alimentacao', 9999),
+  ];
+
+  it('media dos 3 meses anteriores (mes sem gasto conta 0)', () => {
+    const s = suggestBudget(list, '2026-09', 3);
+    expect(s.find((r) => r.categoryId === 'alimentacao')).toMatchObject({ average: 600, months: 3 });
+    expect(s.find((r) => r.categoryId === 'moradia')).toMatchObject({ average: 333.33 });
+    expect(s.some((r) => r.categoryId === 'outros')).toBe(false);
+  });
+});
+
+describe('H8 — saldo acumulado por dia (extrato)', () => {
+  const list = [
+    tx({ id: 'i1', kind: 'income', amount: 1000, date: '2026-09-05T12:00:00Z' }),
+    tx({ id: 'e1', kind: 'expense', amount: -200, date: '2026-09-06T12:00:00Z' }),
+    tx({ id: 'e2', kind: 'expense', amount: -100, date: '2026-09-10T12:00:00Z', paid: false }),
+    tx({ id: 'prev', kind: 'income', amount: 500, date: '2026-08-20T12:00:00Z' }),
+  ];
+
+  it('openingBalance soma meses anteriores (ignora pendentes)', () => {
+    expect(openingBalance(list, '2026-09')).toBe(500);
+  });
+
+  it('saldo final fecha com computeFreeCash do mes', () => {
+    const opening = openingBalance(list, '2026-09');
+    const rows = dailyBalance(list, ['2026-09'], opening);
+    expect(rows.map((r) => r.day)).toEqual(['2026-09-05', '2026-09-06']);
+    expect(rows[0]).toMatchObject({ income: 1000, expenses: 0, net: 1000, balance: 1500 });
+    expect(rows[1]).toMatchObject({ income: 0, expenses: 200, net: -200, balance: 1300 });
+    const fc = computeFreeCash(list, '2026-09');
+    expect(rows[rows.length - 1].balance).toBe(opening + fc.freeCash);
+  });
+});
+
+describe('H9 — proximas contas a vencer (janela)', () => {
+  const list = [
+    tx({ id: 'p1', kind: 'expense', amount: -100, paid: false, dueDate: '2026-09-20T00:00:00Z' }),
+    tx({ id: 'p2', kind: 'expense', amount: -50, paid: false, dueDate: '2026-09-10T00:00:00Z' }),
+    tx({ id: 'far', kind: 'expense', amount: -900, paid: false, dueDate: '2026-10-30T00:00:00Z' }),
+    tx({ id: 'r1', kind: 'expense', amount: -80, category: 'lazer', date: '2026-08-25T12:00:00Z', recurrence: { freq: 'monthly', day: 25 } }),
+  ];
+
+  it('inclui atrasados + janela + recorrentes do mes, ordenado por vencimento', () => {
+    const rows = upcomingBills(list, '2026-09-15T12:00:00Z', 15);
+    expect(rows.map((r) => r.tx.id)).toEqual(['p2', 'p1', 'r1']);
+    expect(rows.find((r) => r.tx.id === 'p2').overdue).toBe(true);
+    expect(rows.find((r) => r.tx.id === 'p1').days).toBe(5);
+    expect(rows.find((r) => r.tx.id === 'r1').source).toBe('recurring');
+    expect(rows.some((r) => r.tx.id === 'far')).toBe(false);
+  });
+
+  it('upcomingSummary soma a pagar/receber e atrasos', () => {
+    const s = upcomingSummary(list, '2026-09-15T12:00:00Z', 15);
+    expect(s.payable).toBe(230); // 100 + 50 + 80
+    expect(s.count).toBe(3);
+    expect(s.overdue).toBe(1);
+  });
+});
+
+describe('H12 — mesclar / remover / reordenar categorias', () => {
+  it('reassignCategory move campo estruturado e legado por prefixo', async () => {
+    const { ds } = makeService();
+    for (const t of [
+      tx({ id: 'e1', kind: 'expense', category: 'lazer', amount: -10, date: '2026-09-01T12:00:00Z' }),
+      tx({ id: 'e2', kind: 'expense', amount: -20, date: '2026-09-02T12:00:00Z', note: 'Lazer — cinema' }),
+    ]) await ds.transactions.put(t, { source: 'local' });
+    const moved = await reassignCategory(ds, 'lazer', 'alimentacao');
+    expect(moved).toBe(2);
+    const all = await ds.transactions.list();
+    expect(all.find((t) => t.id === 'e1')?.category).toBe('alimentacao');
+    expect(all.find((t) => t.id === 'e2')?.category).toBe('alimentacao');
+    expect(all.find((t) => t.id === 'e2')?.note).toBe('cinema');
+  });
+
+  it('mergeCategories oculta a origem e lista deixa de mostra-la', async () => {
+    const { ds } = makeService();
+    await ds.transactions.put(tx({ id: 'e1', kind: 'expense', category: 'lazer', amount: -10, date: '2026-09-01T12:00:00Z' }), { source: 'local' });
+    await mergeCategories(ds, 'lazer', 'alimentacao');
+    const cats = await listCategories(ds);
+    expect(cats.some((c) => c.id === 'lazer')).toBe(false);
+    expect(cats.some((c) => c.id === 'alimentacao')).toBe(true);
+  });
+
+  it('removeCategory reatribui e oculta (default nao some do codigo, mas da lista)', async () => {
+    const { ds } = makeService();
+    await ds.transactions.put(tx({ id: 'e1', kind: 'expense', category: 'saude', amount: -10, date: '2026-09-01T12:00:00Z' }), { source: 'local' });
+    await removeCategory(ds, 'saude', 'outros');
+    expect((await ds.transactions.list())[0].category).toBe('outros');
+    expect((await listCategories(ds)).some((c) => c.id === 'saude')).toBe(false);
+  });
+
+  it('ordem customizada persiste e e aplicada', async () => {
+    const { ds } = makeService();
+    expect(await getCategoryOrder(ds)).toEqual([]);
+    await setCategoryOrder(ds, ['lazer', 'moradia', 'lazer']);
+    expect(await getCategoryOrder(ds)).toEqual(['lazer', 'moradia']);
+    const cats = await listCategories(ds);
+    expect(cats[0].id).toBe('lazer');
+    expect(cats[1].id).toBe('moradia');
+  });
+
+  it('categoryUsage soma o uso por categoria', async () => {
+    const { ds } = makeService();
+    for (const t of [
+      tx({ id: 'e1', kind: 'expense', category: 'lazer', amount: -30, date: '2026-09-01T12:00:00Z' }),
+      tx({ id: 'e2', kind: 'expense', category: 'lazer', amount: -20, date: '2026-09-02T12:00:00Z' }),
+    ]) await ds.transactions.put(t, { source: 'local' });
+    const usage = await categoryUsage(ds);
+    expect(usage.find((u) => u.categoryId === 'lazer')).toEqual({ categoryId: 'lazer', total: 50, count: 2 });
+  });
+});

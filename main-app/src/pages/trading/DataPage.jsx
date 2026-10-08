@@ -58,7 +58,7 @@ export default function DataPage() {
       <ModuleTabs module="system" />
       <div className="dp-card">
         <div className="dp-title">Dados de demonstração</div>
-        <p className="dp-desc">Popula o app com contas, trades, payout, goals e posições de exemplo. O demo <b>convive</b> com seus dados reais — apague quando quiser (nunca toca nos seus dados).</p>
+        <p className="dp-desc">Popula o app com contas, trades, payout, goals, posições e opções (cadeia PETR4 + estratégias) de exemplo. O demo <b>convive</b> com seus dados reais — apague quando quiser (nunca toca nos seus dados).</p>
         <div className="dp-row">
           <button className="dp-btn" onClick={handleSeed} disabled={busy || !finance}>
             {busy ? '…' : 'Criar dados demo'}
@@ -71,7 +71,7 @@ export default function DataPage() {
         {result && (
           <div className="dp-result" role="status">
             {result.type === 'demo'
-              ? <>Dados demo criados: <b>{result.count} trades</b> + contas/payout/goals/posições.</>
+              ? <>Dados demo criados: <b>{result.count} trades</b> + contas/payout/goals/posições/opções.</>
               : result.type === 'clear'
                 ? (result.trades || result.accounts)
                   ? <>Dados demo apagados: <b>{result.trades} trades</b> · <b>{result.accounts} contas</b>.</>

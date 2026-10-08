@@ -13,10 +13,14 @@ export default function AuthGate({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    // Fonte da verdade: a sessão persistida (lida do storage, SEM rede). `getUser()` faz
+    // uma chamada de rede e, se ela falhava transitoriamente (rede instável, reload
+    // durante um deploy), devolvia user=null e derrubava para o login mesmo com sessão
+    // válida. getSession() evita esse falso logout.
     supabase.auth
-      .getUser()
+      .getSession()
       .then(({ data }) => {
-        if (mounted) setUser(data?.user ?? null);
+        if (mounted) setUser(data?.session?.user ?? null);
       })
       .catch(() => {
         if (mounted) setUser(null);

@@ -18,29 +18,63 @@ import { PALETTE_ROUTES } from "./navConfig";
 
 // Recarrega UMA vez quando um chunk falha (um deploy novo removeu o chunk antigo que
 // este bundle em memória ainda referencia → "MIME text/html"/"Failed to fetch module").
+// Reset duro: desregistra o SW e apaga os caches do app — só `reload()` não bastava porque
+// o service worker velho continuava servindo o index.html/chunk obsoleto em loop.
 const CHUNK_RELOAD_KEY = 'chunkReloadAt';
+
+function hardResetAndReload() {
+  try {
+    const now = Date.now();
+    const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+    if (now - last <= 15000) return; // já tentamos agora há pouco — evita loop
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+  } catch { /* sem storage: segue com o reload */ }
+
+  const reload = () => window.location.reload();
+  const jobs = [];
+  try {
+    if (navigator.serviceWorker) {
+      jobs.push(
+        navigator.serviceWorker.getRegistrations()
+          .then((rs) => Promise.all(rs.map((r) => r.unregister())))
+          .catch(() => {}),
+      );
+    }
+  } catch { /* noop */ }
+  try {
+    if (window.caches) {
+      jobs.push(
+        caches.keys()
+          .then((ks) => Promise.all(
+            ks.filter((k) => k.indexOf('financeos-') === 0).map((k) => caches.delete(k)),
+          ))
+          .catch(() => {}),
+      );
+    }
+  } catch { /* noop */ }
+  if (jobs.length === 0) { reload(); return; }
+  Promise.all(jobs).then(reload, reload);
+}
+
 function lazyRetry(loader) {
   return lazy(() => loader().catch((err) => {
-    try {
-      const now = Date.now();
-      const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
-      if (now - last > 15000) {
-        sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
-        window.location.reload();
-      }
-    } catch { /* noop */ }
+    hardResetAndReload();
     throw err;
   }));
 }
 
 const HomePage = lazyRetry(pageLoaders['/']);
 const GastosDashboardPage = lazyRetry(pageLoaders['/gastos']);
+const BudgetPage = lazyRetry(pageLoaders['/gastos/orcamento']);
+const CategoriasPage = lazyRetry(pageLoaders['/gastos/categorias']);
 const AccountsDashboardPage = lazyRetry(pageLoaders['/contas']);
 const TradingDashboardPage = lazyRetry(pageLoaders['/trading']);
 const InvestmentsDashboardPage = lazyRetry(pageLoaders['/investimentos']);
 const PlanningDashboardPage = lazyRetry(pageLoaders['/planejamento']);
 
 const JournalPage = lazyRetry(pageLoaders['/journal']);
+const TradesPage = lazyRetry(pageLoaders['/trades']);
+const OptionsPage = lazyRetry(pageLoaders['/options']);
 const PlaybookPage = lazyRetry(pageLoaders['/playbook']);
 const AccountsPage = lazyRetry(pageLoaders['/accounts']);
 const PayoutsPage = lazyRetry(pageLoaders['/payouts']);
@@ -147,7 +181,7 @@ export default function App() {
       ...PALETTE_ROUTES.map((r) => ({
         id: `route:${r.to}`, label: r.label, hint: 'Página', keywords: r.keywords, run: go(r.to),
       })),
-      { id: 'action:new-trade', label: 'Novo trade', hint: 'Ação', keywords: 'criar registrar journal', run: () => navigate('/journal?new=1') },
+      { id: 'action:new-trade', label: 'Novo trade', hint: 'Ação', keywords: 'criar registrar trades', run: () => navigate('/trades?new=1') },
       { id: 'action:refresh-prices', label: 'Atualizar preços', hint: 'Ação', keywords: 'portfolio live cotação', run: () => navigate('/portfolio') },
       { id: 'action:recurring', label: 'Gerar recorrentes', hint: 'Ação', keywords: 'gastos despesas mensais', run: () => navigate('/expenses') },
       ...entities.accounts.map((a) => ({
@@ -179,7 +213,7 @@ export default function App() {
         e.preventDefault();
         setPaletteOpen(true);
       } else if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        navigate('/journal?new=1');
+        navigate('/trades?new=1');
       }
     };
     document.addEventListener('keydown', onKey);
@@ -247,6 +281,8 @@ export default function App() {
             {/* Command Center (novo, motor-driven) */}
             <Route path="/" element={<HomePage />} />
             <Route path="/gastos" element={<GastosDashboardPage />} />
+            <Route path="/gastos/orcamento" element={<BudgetPage />} />
+            <Route path="/gastos/categorias" element={<CategoriasPage />} />
             <Route path="/contas" element={<AccountsDashboardPage />} />
             <Route path="/trading" element={<TradingDashboardPage />} />
             <Route path="/investimentos" element={<InvestmentsDashboardPage />} />
@@ -265,6 +301,8 @@ export default function App() {
             {/* Trading Journal (engine-driven — parte do Command, sem reload) */}
             <Route path="/journal" element={<JournalPage />} />
             <Route path="/journal/*" element={<JournalPage />} />
+            <Route path="/trades" element={<TradesPage />} />
+            <Route path="/options" element={<OptionsPage />} />
             <Route path="/playbook" element={<PlaybookPage />} />
 
             {/* Money OS (engine-driven) */}

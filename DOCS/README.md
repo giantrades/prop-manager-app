@@ -33,6 +33,7 @@ DOCS/
     03-mobile-trading-PWA.md       <- abrir/editar/fechar pelo celular, copy-trade
     04-BRIDGE_V2_SPEC.md           <- endpoints open/modify/orders, X-Bridge-Token, idempotência
     05-PWA_MOBILE_SPEC.md          <- manifest, SW por rota, 360px, critérios numéricos
+    06-OPTIONS_BRIDGE_SPEC.md      <- extensão p/ opções: chain/greeks/positions/orders (F3)
   05_STAGE4_MONEY_OS/
     00-produto.md                  <- Transactions, Wallets, Payouts, Expenses, Tax, Firm P&L
     01-tasks.md                    <- T4.0–T4.6
@@ -50,6 +51,7 @@ DOCS/
     gastos/00-spec.md              <- Mobills-like + melhorias/ (4 itens)
     portfolio/00-spec.md           <- dados LIVE + melhorias/ (4 itens)
     propfirm/00-spec.md            <- Prop/Firm + melhorias/ (4 itens)
+    options/00-spec.md             <- Options Analytics (Quantower-like) + renda/portfólio — SPEC APROVADA + melhorias/ (7 itens)
   12_AUDITORIA_IA/                 <- auditoria externa (PDF) + analise critica + backlog rastreavel
     00-analise-auditoria-profissional.md  <- leitura critica por modulo (o que faz sentido/adiar)
     01-backlog.md                  <- MEMORIA: checklist de execucao (P0/P1/P2) - marcar [x] ao fazer

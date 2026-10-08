@@ -1,11 +1,11 @@
-// STAGE 7/8 — JournalPage (engine-driven). Aba Dashboard (equity/drawdown/métricas) +
-// lista de trades + TradeForm. Persiste via `DataChainEngine.syncTrade` (ledger + equity)
-// + `ds.trades.put`. NUNCA escreve saldo direto; nada de fórmula nova.
+// STAGE 7/8 — JournalPage (engine-driven). Modos internos Review (heatmaps/breakdowns/
+// distribuição de R/duração/review semanal) + Playbook. A lista/tabela de trades agora
+// vive na aba própria `Trades` (`/trades`), antes de Positions & Orders.
+// Só leitura/analytics aqui; NUNCA escreve saldo direto; nada de fórmula nova.
 //
 // Fonte: DOCS/07_STAGE6_COMMAND/00-produto.md + DOCS/08_STAGE7_INTEGRATION/00-plano.md (Fase 8).
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import AccountPicker from '../../AccountPicker';
 import PeriodPicker from '@apps/ui/PeriodPicker';
@@ -13,77 +13,24 @@ import { PlaybookPanel } from './PlaybookPage';
 import usePageData from '../../usePageData';
 import { useFinance } from '@apps/state';
 import {
-  csvToTrades, isDayComplete, calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis,
-  rDistribution, durationStats, listFirms, rememberDeletedTrades, tradeFingerprint, tradeNetPnl,
+  calendarPnl, symbolBreakdown, directionSplit, sessionAnalysis,
+  rDistribution, durationStats,
   fetchEconomicEvents, monthRange,
 } from '@apps/lib/db';
-import Trades from '@apps/ui/Trades';
-import TradeForm from '@apps/ui/TradeForm';
-import JournalDashboard from '@apps/ui/JournalDashboard';
-import PnLCalendar from '@apps/ui/PnLCalendar';
 import HeatmapSection from '@apps/ui/HeatmapSection';
 import BreakdownSection from '@apps/ui/BreakdownSection';
 import HistogramR from '@apps/ui/HistogramR';
 import DurationAnalysis from '@apps/ui/DurationAnalysis';
 import WeeklyReview from '@apps/ui/WeeklyReview';
-import { useToast } from '@apps/ui/Toast';
-
-// A4 — detalhe inline dos trades de um dia (drill-down do calendário).
-function DayTrades({ dateKey, trades, onClose, onEdit }) {
-  // Mesma fonte do calendário/demais widgets (`tradeNetPnl`), para o total do dia bater.
-  const dayPnl = trades.reduce((s, t) => s + tradeNetPnl(t), 0);
-  return (
-    <div className="jd-day" role="region" aria-label={`Trades do dia ${dateKey}`}>
-      <div className="jd-day-head">
-        <span className="jd-day-title">
-          {dateKey.slice(8, 10)}/{dateKey.slice(5, 7)} · {trades.length} trades ·{' '}
-          <b style={{ color: dayPnl >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {dayPnl >= 0 ? '+' : ''}{dayPnl.toFixed(2)}
-          </b>
-        </span>
-        <button className="jd-tab" onClick={onClose} aria-label="Fechar detalhe do dia">Fechar ✕ (Esc)</button>
-      </div>
-      {trades.map((t) => (
-        <div key={t.id} className="jd-day-row">
-          <span className="jd-day-sym">{t.symbol} <span className={`tr-dir tr-${t.direction}`}>{t.direction}</span></span>
-          <span className="jd-day-num" style={{ color: tradeNetPnl(t) >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {tradeNetPnl(t).toFixed(2)}
-          </span>
-          <span className="jd-day-num">{t.resultR != null ? `${Number(t.resultR).toFixed(2)}R` : '—'}</span>
-          <button className="jd-tab" onClick={() => onEdit(t)}>Editar</button>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function JournalPage() {
   const finance = useFinance();
-  const { toast } = useToast();
   // Cache SWR por rota: voltar p/ a aba não refaz skeleton.
-  const { loading, data, reload: load } = usePageData('journal', async (f) => {
-    const [t, a, ok, p, firms] = await Promise.all([
-      f.ds.trades.list(),
-      f.ds.accounts.list(),
-      isDayComplete(f.ds),
-      f.ds.payouts.list(),
-      listFirms(f.ds),
-    ]);
-    return {
-      trades: t.sort((x, y) => (y.entryDatetime || '').localeCompare(x.entryDatetime || '')),
-      accounts: a,
-      checklistOk: ok,
-      payouts: p,
-      firms,
-    };
+  const { loading, data } = usePageData('journal', async (f) => {
+    const t = await f.ds.trades.list();
+    return { trades: t.sort((x, y) => (y.entryDatetime || '').localeCompare(x.entryDatetime || '')) };
   });
   const trades = data?.trades ?? [];
-  const accounts = data?.accounts ?? [];
-  const payouts = data?.payouts ?? [];
-  const firms = data?.firms ?? [];
-  const [, setChecklistBlocked] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
   const [view, setView] = useState('review');
   // A7 — bucket do histograma com persistência.
   const [histBucket, setHistBucket] = useState(() => {
@@ -179,22 +126,6 @@ export default function JournalPage() {
       .finally(() => { if (alive) setEventsLoading(false); });
     return () => { alive = false; };
   }, [mapDay]);
-  // A4 — drill-down do dia do calendário.
-  const [selectedDay, setSelectedDay] = useState(null);
-  const dayKeyOf = (t) => {
-    const stamp = t.exitDatetime || t.entryDatetime;
-    if (!stamp) return '';
-    const d = new Date(stamp);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-  useEffect(() => {
-    if (!selectedDay) return;
-    const onKey = (e) => {
-      if (e.key === 'Escape') setSelectedDay(null);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [selectedDay]);
 
   const dashTrades = useMemo(() => {
     // Período do PeriodPicker (mês | intervalo from→to | tudo).
@@ -236,84 +167,6 @@ export default function JournalPage() {
       /* noop */
     }
   };
-  const csvRef = useRef(null);
-  const financeRef = useRef(finance);
-  financeRef.current = finance;
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // UX foundation: "?new=1" (palette / atalho N) abre o form direto.
-  useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      setShowForm(true);
-      setSearchParams({}, { replace: true });
-    }
-  }, [searchParams, setSearchParams]);
-
-  const strategies = useMemo(() => {
-    const ids = [...new Set(trades.map((t) => t.strategyId).filter((s) => !!s))];
-    return ids.map((id) => ({ id, name: id }));
-  }, [trades]);
-
-  const handleSubmit = useCallback(
-    async (trade) => {
-      if (!financeRef.current) return;
-      const f = financeRef.current;
-      if (!(await isDayComplete(f.ds))) {
-        setChecklistBlocked(true);
-        toast('Checklist pré-trade incompleto — complete o checklist do dia para operar.', { type: 'warn' });
-        return;
-      }
-      await f.ds.trades.put(trade, { source: 'local' });
-      await f.chain.syncTrade(trade);
-      setShowForm(false);
-      setEditing(null);
-      load();
-    },
-    [load],
-  );
-
-  // Lápide: ao excluir, grava id/impressão digital para o sync NÃO reimportar.
-  const tombstone = useCallback(async (f, ids) => {
-    const keys = [];
-    for (const id of ids) {
-      const t = trades.find((x) => x.id === id);
-      if (!t) continue;
-      if (t.quantowerId) keys.push(t.quantowerId);
-      keys.push(tradeFingerprint(t));
-    }
-    if (keys.length) await rememberDeletedTrades(f.ds, keys);
-  }, [trades]);
-
-  const handleDelete = useCallback(
-    async (tradeId) => {
-      const f = financeRef.current;
-      if (!f) return;
-      await tombstone(f, [tradeId]);
-      await f.chain.deleteTrade(tradeId);
-      await f.ds.trades.remove(tradeId);
-      load();
-    },
-    [load, tombstone],
-  );
-
-  // Exclusão em lote (seleção múltipla na tabela de trades).
-  const handleDeleteMany = useCallback(
-    async (tradeIds) => {
-      const f = financeRef.current;
-      if (!f || !Array.isArray(tradeIds) || tradeIds.length === 0) return;
-      await tombstone(f, tradeIds);
-      for (const id of tradeIds) {
-        try {
-          await f.chain.deleteTrade(id);
-        } catch {
-          /* trade já removido do ledger — segue */
-        }
-        await f.ds.trades.remove(id);
-      }
-      load();
-    },
-    [load, tombstone],
-  );
 
   // J8 — Exportar análise (resumo do mês + breakdowns). Só formata; números vêm do motor.
   const handleExportAnalysis = useCallback(() => {
@@ -354,119 +207,53 @@ export default function JournalPage() {
     URL.revokeObjectURL(url);
   }, [trades]);
 
-  const handleExport = useCallback(() => {
-    const header = ['symbol', 'direction', 'qty', 'entryPrice', 'exitPrice', 'entryDatetime', 'exitDatetime', 'resultNet', 'resultR', 'strategyId'];
-    const rows = trades.map((t) => [
-      t.symbol, t.direction, t.qty, t.entryPrice, t.exitPrice ?? '', t.entryDatetime, t.exitDatetime ?? '', t.resultNet ?? 0, t.resultR ?? '', t.strategyId ?? '',
-    ].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
-    const csv = [header.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `trades-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [trades]);
-
-  const handleImportCsv = useCallback(async (file) => {
-    if (!financeRef.current) return;
-    const f = financeRef.current;
-    try {
-      const text = await file.text();
-      const parsed = csvToTrades(text, { defaultAccountId: accounts[0]?.id });
-      let imported = 0;
-      for (const { trade } of parsed) {
-        await f.ds.trades.put(trade, { source: 'local' });
-        await f.chain.syncTrade(trade);
-        imported += 1;
-      }
-      toast(`Importados ${imported} trades do CSV.`);
-      load();
-    } catch (e) {
-      toast(`Falha ao importar CSV: ${e instanceof Error ? e.message : e}`, { type: 'error' });
-    }
-  }, [accounts, load, toast]);
-
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Trading Journal</h1>
         <div className="cmd-actions">
-          {!showForm && (
-            <>
-              <button className="cmd-refresh" onClick={() => csvRef.current?.click()}>Importar CSV</button>
-              <button className="cmd-refresh" onClick={handleExport}>Exportar CSV</button>
-              <button className="cmd-refresh" onClick={handleExportAnalysis}>Exportar análise</button>
-              <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
-              <button className="cmd-refresh" onClick={() => setShowForm(true)}>+ Novo trade</button>
-            </>
-          )}
+          <button className="cmd-refresh" onClick={handleExportAnalysis}>Exportar análise</button>
+          <button className="cmd-refresh no-print" onClick={() => window.print()}>Imprimir</button>
         </div>
-        <input ref={csvRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleImportCsv(e.target.files[0])} />
       </div>
 
-      {showForm ? (
-        <TradeForm
-          trade={editing}
-          accounts={accounts}
-          strategies={strategies}
-          onSubmit={handleSubmit}
-          onCancel={() => { setShowForm(false); setEditing(null); }}
-        />
-      ) : (
-        <>
-          <div className="jd-topbar">
-            <ModuleTabs module="trading" />
-            <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
-              <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
-              <button className={`jd-tab${view === 'trades' ? ' active' : ''}`} role="tab" aria-selected={view === 'trades'} onClick={() => setView('trades')}>Trades</button>
-              <button className={`jd-tab${view === 'playbook' ? ' active' : ''}`} role="tab" aria-selected={view === 'playbook'} onClick={() => setView('playbook')}>Playbook</button>
-            </div>
-            {view === 'review' && (
-              <div className="jd-filters" role="group" aria-label="Filtros do review">
-                <PeriodPicker period={periodFilter} onChange={setPeriodFilter} compact />
-                <AccountPicker selected={acctFilter} onChange={setAcctFilter} />
-                {(periodFilter?.mode !== 'all' || acctFilter.length > 0) && (
-                  <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
-                )}
-              </div>
+      <div className="jd-topbar">
+        <ModuleTabs module="trading" />
+        <div className="jd-tabs" role="tablist" aria-label="Visão do Journal">
+          <button className={`jd-tab${view === 'review' ? ' active' : ''}`} role="tab" aria-selected={view === 'review'} onClick={() => setView('review')}>Review</button>
+          <button className={`jd-tab${view === 'playbook' ? ' active' : ''}`} role="tab" aria-selected={view === 'playbook'} onClick={() => setView('playbook')}>Playbook</button>
+        </div>
+        {view === 'review' && (
+          <div className="jd-filters" role="group" aria-label="Filtros do review">
+            <PeriodPicker period={periodFilter} onChange={setPeriodFilter} compact />
+            <AccountPicker selected={acctFilter} onChange={setAcctFilter} />
+            {(periodFilter?.mode !== 'all' || acctFilter.length > 0) && (
+              <span className="jd-filter-count" aria-live="polite">{dashTrades.length} trades</span>
             )}
           </div>
-          {view === 'review' ? (
-            <>
-              <HeatmapSection
-                trades={dashTrades}
-                currency="USD"
-                sessionDefs={sessionDefs}
-                onSessions={handleSessions}
-                loading={loading}
-                day={mapDay}
-                onDayChange={setMapDay}
-                events={events}
-                eventsLoading={eventsLoading}
-                eventsError={eventsError}
-              />
-              <BreakdownSection trades={dashTrades} currency="USD" loading={loading} />
-              <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
-              <DurationAnalysis trades={dashTrades} loading={loading} />
-              <WeeklyReview trades={dashTrades} currency="USD" loading={loading} />
-            </>
-          ) : view === 'trades' ? (
-            <Trades
-              trades={trades}
-              accounts={accounts}
-              firms={firms}
-              loading={loading}
-              onNew={() => setShowForm(true)}
-              onDeleteMany={handleDeleteMany}
-              onEdit={(t) => { setEditing(t); setShowForm(true); }}
-              onDelete={handleDelete}
-            />
-          ) : (
-            <PlaybookPanel />
-          )}
+        )}
+      </div>
+      {view === 'review' ? (
+        <>
+          <HeatmapSection
+            trades={dashTrades}
+            currency="USD"
+            sessionDefs={sessionDefs}
+            onSessions={handleSessions}
+            loading={loading}
+            day={mapDay}
+            onDayChange={setMapDay}
+            events={events}
+            eventsLoading={eventsLoading}
+            eventsError={eventsError}
+          />
+          <BreakdownSection trades={dashTrades} currency="USD" loading={loading} />
+          <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
+          <DurationAnalysis trades={dashTrades} loading={loading} />
+          <WeeklyReview trades={dashTrades} currency="USD" loading={loading} />
         </>
+      ) : (
+        <PlaybookPanel />
       )}
     </div>
   );
@@ -483,12 +270,6 @@ const JD_TABS_CSS = `
   .jd-filters { margin-left: 0; }
 }
 .jd-filter-count { font-size: 12px; color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
-.jd-day { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-.jd-day-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.jd-day-title { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.jd-day-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: center; font-size: 12px; padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; }
-.jd-day-sym { font-weight: 700; }
-.jd-day-num { font-variant-numeric: tabular-nums; font-weight: 600; }
 .jd-tab { padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--muted, #a1a7b3); font-size: 13px; cursor: pointer; font-weight: 600; }
 .jd-tab.active { background: rgba(124,92,255,0.14); border-color: rgba(124,92,255,0.4); color: var(--text, #e7eaf0); }
 `;

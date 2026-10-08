@@ -11,9 +11,10 @@
  *   - Imagens/anexos de comprovante: cache-first com expiração longa (30 dias).
  *   - pushManager registrado vazio (para não exigir reinstall quando push chegar).
  */
-const CACHE = "financeos-shell-v4";
-const CACHE_ASSETS = "financeos-assets-v4";
-const CACHE_ATTACHMENTS = "financeos-attachments-v4";
+// v5: purga o cache v4 (que podia conter index.html/chunks velhos servidos como JS).
+const CACHE = "financeos-shell-v5";
+const CACHE_ASSETS = "financeos-assets-v5";
+const CACHE_ATTACHMENTS = "financeos-attachments-v5";
 const DATA_READ_HINTS = ["/api/", "/accounts", "/trades", "/positions"];
 const BRIDGE_STATUS_PATHS = ["/status", "/health"];
 const ATTACHMENT_RE = /\.(png|jpe?g|gif|webp|pdf|svg)$/i;

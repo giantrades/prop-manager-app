@@ -27,6 +27,9 @@ import {
   FirmCostsRepo,
   GoalsRepo,
   MetaRepo,
+  OptionChainRepo,
+  OptionLegsRepo,
+  OptionTemplatesRepo,
   PayoutsRepo,
   PositionsRepo,
   PropExtensionsRepo,
@@ -69,6 +72,8 @@ const ENTITY_TYPE_BY_STORE: Partial<Record<StoreName, DatastoreChangePayload['en
   tax_records: 'tax_record',
   snapshots_networth: 'snapshot_networth',
   firm_costs: 'firm_cost',
+  option_legs: 'option_leg',
+  option_templates: 'option_template',
   meta: 'meta',
 };
 
@@ -92,6 +97,9 @@ export class DataService {
   readonly snapshotsNetworth: SnapshotsNetworthRepo;
   readonly firmCosts: FirmCostsRepo;
   readonly cards: CardsRepo;
+  readonly optionLegs: OptionLegsRepo;
+  readonly optionTemplates: OptionTemplatesRepo;
+  readonly optionChain: OptionChainRepo;
   readonly meta: MetaRepo;
 
   constructor(opts: DataServiceOptions) {
@@ -114,6 +122,9 @@ export class DataService {
     this.snapshotsNetworth = new SnapshotsNetworthRepo(this);
     this.firmCosts = new FirmCostsRepo(this);
     this.cards = new CardsRepo(this);
+    this.optionLegs = new OptionLegsRepo(this);
+    this.optionTemplates = new OptionTemplatesRepo(this);
+    this.optionChain = new OptionChainRepo(this);
     this.meta = new MetaRepo(this);
   }
 

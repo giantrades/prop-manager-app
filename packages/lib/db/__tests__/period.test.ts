@@ -1,6 +1,6 @@
 // Período global — helpers e agregação por período (soma dos resultados mensais).
 import { describe, it, expect } from 'vitest';
-import { periodMonths, expensesByCategoryPeriod, inPeriod, shiftYm, ymToList, periodLabel } from '../period';
+import { periodMonths, expensesByCategoryPeriod, inPeriod, shiftYm, ymToList, periodLabel, previousPeriod } from '../period';
 
 const tx = (id, date, amount, kind = 'expense', category = 'moradia') => ({
   id, date, amount, kind, category, accountId: 'a', currency: 'BRL',
@@ -38,5 +38,16 @@ describe('período — helpers', () => {
     expect(g.find((x) => x.categoryId === 'moradia')?.count).toBe(3);
     const jan = expensesByCategoryPeriod(TXS, { mode: 'month', ym: '2026-01' });
     expect(jan.find((x) => x.categoryId === 'moradia')?.count).toBe(1);
+  });
+
+  it('H2 — previousPeriod: mês, intervalo (mesmo tamanho) e all = null', () => {
+    expect(previousPeriod({ mode: 'all' }, TXS)).toBeNull();
+    expect(previousPeriod({ mode: 'month', ym: '2026-01' }, TXS)).toEqual({ mode: 'month', ym: '2025-12' });
+    expect(previousPeriod({ mode: 'range', from: '2026-03', to: '2026-05' }, TXS)).toEqual({
+      mode: 'range', from: '2025-12', to: '2026-02',
+    });
+    expect(previousPeriod({ mode: 'range', from: '2026-03', to: '2026-03' }, TXS)).toEqual({
+      mode: 'range', from: '2026-02', to: '2026-02',
+    });
   });
 });

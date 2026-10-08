@@ -9,11 +9,14 @@ import type {
   FirmCost,
   Goal,
   Meta,
+  OptionChainQuote,
+  OptionLeg,
   Payout,
   Position,
   PropExtension,
   SnapshotNetworth,
   StoreName,
+  StoredOptionTemplate,
   SyncedRecord,
   TaxRecord,
   Trade,
@@ -159,6 +162,36 @@ export class FirmCostsRepo extends BaseRepository<FirmCost> {
 export class CardsRepo extends BaseRepository<Card> {
   constructor(ds: DataService) {
     super(ds, 'cards');
+  }
+}
+
+export class OptionLegsRepo extends BaseRepository<OptionLeg> {
+  constructor(ds: DataService) {
+    super(ds, 'option_legs');
+  }
+  byUnderlyingExpiry(underlying: string, expiry: string): Promise<OptionLeg[]> {
+    return this.queryByIndex('underlying_expiry', [underlying, expiry] as unknown as string);
+  }
+  byGroup(groupId: string): Promise<OptionLeg[]> {
+    return this.queryByIndex('groupId', groupId);
+  }
+  byQuantowerId(quantowerId: string): Promise<OptionLeg[]> {
+    return this.queryByIndex('quantowerId', quantowerId);
+  }
+}
+
+export class OptionTemplatesRepo extends BaseRepository<StoredOptionTemplate> {
+  constructor(ds: DataService) {
+    super(ds, 'option_templates');
+  }
+}
+
+export class OptionChainRepo extends BaseRepository<OptionChainQuote> {
+  constructor(ds: DataService) {
+    super(ds, 'option_chain');
+  }
+  byUnderlyingExpiry(underlying: string, expiry: string): Promise<OptionChainQuote[]> {
+    return this.queryByIndex('underlying_expiry', [underlying, expiry] as unknown as string);
   }
 }
 

@@ -20,9 +20,22 @@ export interface DemoIds {
   positions: string[];
   propExtensions: string[];
   firms: string[];
+  optionLegs?: string[];
+  optionTemplates?: string[];
+  optionChain?: string[];
 }
 
-type StoreKey = 'accounts' | 'transactions' | 'trades' | 'payouts' | 'goals' | 'positions' | 'propExtensions';
+type StoreKey =
+  | 'accounts'
+  | 'transactions'
+  | 'trades'
+  | 'payouts'
+  | 'goals'
+  | 'positions'
+  | 'propExtensions'
+  | 'optionLegs'
+  | 'optionTemplates'
+  | 'optionChain';
 
 const STORES: Array<[keyof DemoIds, StoreKey]> = [
   ['accounts', 'accounts'],
@@ -32,6 +45,9 @@ const STORES: Array<[keyof DemoIds, StoreKey]> = [
   ['goals', 'goals'],
   ['positions', 'positions'],
   ['propExtensions', 'propExtensions'],
+  ['optionLegs', 'optionLegs'],
+  ['optionTemplates', 'optionTemplates'],
+  ['optionChain', 'optionChain'],
 ];
 
 /** Ids gravados pelo seed (null se o seed nunca rodou). */

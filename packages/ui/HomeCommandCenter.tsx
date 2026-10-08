@@ -6,10 +6,11 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, ReferenceDot,
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
-import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays } from 'lucide-react';
+import { Activity, Receipt, TrendingUp, Wallet, Target, Bell, CalendarDays, Sigma } from 'lucide-react';
 import { fmtMoney as fmtMoneyShared } from './currency';
 import WidgetGrid from './WidgetGrid';
 import StatRow from './StatRow';
+import OptionIncome from './options/OptionIncome';
 import { useEntityDrawer } from './EntityDrawer';
 import type { ActionItem, CommandSnapshot, Insight } from '@apps/lib/db';
 import type { EconomicEvent, UsHoliday } from '@apps/lib/db';
@@ -32,7 +33,7 @@ interface HomeCommandCenterProps {
 
 function fmtMoney(v: unknown, cur: string = 'R$'): string { return fmtMoneyShared(v, cur); }
 
-const WIDGET_ICONS: Record<string, WidgetIcon> = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays };
+const WIDGET_ICONS: Record<string, WidgetIcon> = { risk: Activity, money: Receipt, investments: TrendingUp, payouts: Wallet, goals: Target, actions: Bell, calendar: CalendarDays, options: Sigma };
 
 function fmtPct(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return '—';
@@ -213,6 +214,10 @@ export default function HomeCommandCenter({ snapshot = null, actions = [], insig
               </div>
             </div>
           ) : <div className="hc-empty">Cadastre posições/contas para ver a alocação.</div>}
+        </Widget>)}
+
+        {!hide('options') && (<Widget key="options" id="options" title="Renda de opções" to="/options" hide={hide}>
+          <OptionIncome height={150} />
         </Widget>)}
 
         {!hide('payouts') && (<Widget key="payouts" id="payouts" title="Contas (PnL por conta)" to="/contas" hide={hide}>

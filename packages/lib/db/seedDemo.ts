@@ -7,7 +7,20 @@ import type { DataChainEngine } from './DataChainEngine';
 import { nowIso } from './dateUtils';
 import { saveFirm, listFirms } from './firms';
 import { setDemoIds } from './demoMode';
-import type { Account, Goal, Payout, Position, PropExtension, Trade } from './types';
+import { bsmGreeks, bsmPrice } from './financialFormulas';
+import { optionQuoteId } from './options';
+import { recordOptionPremium } from './optionsIntegrations';
+import type {
+  Account,
+  Goal,
+  OptionChainQuote,
+  OptionLeg,
+  Payout,
+  Position,
+  PropExtension,
+  StoredOptionTemplate,
+  Trade,
+} from './types';
 
 const now = () => nowIso();
 function daysAgo(n: number, hour = 10): string {
@@ -95,6 +108,67 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
   ];
   await Promise.all(positions.map((p) => ds.positions.put(p, { source: 'restore' })));
 
+  // -------------------------------------------------------------------------
+  // Opções demo — cadeia (cache), pernas (posições) e um template custom.
+  // Preços/gregas via BSM (mesmo motor do Analyzer), então a UI offline já tem dado.
+  // -------------------------------------------------------------------------
+  const optUnderlying = 'PETR4';
+  const optSpot = 38;
+  const optMultiplier = 100;
+  const optExpiries = [
+    { expiry: '2026-11-21', days: 44 },
+    { expiry: '2026-12-19', days: 72 },
+  ];
+  const optStrikes = [34, 35, 36, 37, 38, 39, 40, 41, 42];
+  const chainQuotes: OptionChainQuote[] = [];
+  for (const { expiry, days } of optExpiries) {
+    const T = days / 365;
+    for (const strike of optStrikes) {
+      const moneyness = (strike - optSpot) / optSpot;
+      const iv = Number((0.3 + 1.2 * moneyness * moneyness).toFixed(4));
+      for (const right of ['call', 'put'] as const) {
+        const price = bsmPrice({ S: optSpot, K: strike, T, r: 0.11, sigma: iv, right, q: 0 }) ?? 0;
+        const spread = Math.max(0.02, price * 0.05);
+        chainQuotes.push({
+          id: optionQuoteId(optUnderlying, expiry, strike, right),
+          underlying: optUnderlying,
+          expiry,
+          strike,
+          right,
+          symbol: `${optUnderlying}${right[0].toUpperCase()}${strike}`,
+          bid: Number(Math.max(0.01, price - spread).toFixed(2)),
+          ask: Number((price + spread).toFixed(2)),
+          last: Number(price.toFixed(2)),
+          iv,
+          oi: Math.round(200 + Math.random() * 3000),
+          volume: Math.round(50 + Math.random() * 800),
+          greeks: bsmGreeks({ S: optSpot, K: strike, T, r: 0.11, sigma: iv, right, q: 0 }),
+          multiplier: optMultiplier,
+          at: now(),
+          source: 'computed',
+        });
+      }
+    }
+  }
+
+  const optionLegs: OptionLeg[] = [
+    { id: 'leg-demo-cc', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C40', right: 'call', strike: 40, expiry: '2026-11-21', qty: -1, multiplier: optMultiplier, entryPrice: 1.2, entryDatetime: daysAgo(10), fees: 1.5, ivEntry: 0.28, groupId: 'grp-demo-cc', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+    { id: 'leg-demo-bcs-long', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C38', right: 'call', strike: 38, expiry: '2026-12-19', qty: 1, multiplier: optMultiplier, entryPrice: 1.85, entryDatetime: daysAgo(6), fees: 1.5, ivEntry: 0.29, groupId: 'grp-demo-bcs', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+    { id: 'leg-demo-bcs-short', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C40', right: 'call', strike: 40, expiry: '2026-12-19', qty: -1, multiplier: optMultiplier, entryPrice: 0.95, entryDatetime: daysAgo(6), fees: 1.5, ivEntry: 0.28, groupId: 'grp-demo-bcs', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+    { id: 'leg-demo-csp', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4P36', right: 'put', strike: 36, expiry: '2026-09-19', qty: -1, multiplier: optMultiplier, entryPrice: 1.5, entryDatetime: daysAgo(50), exitPrice: 0.3, exitDatetime: daysAgo(20), fees: 1.5, ivEntry: 0.31, groupId: 'grp-demo-csp', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+    { id: 'leg-demo-cc2', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C41', right: 'call', strike: 41, expiry: '2026-10-17', qty: -1, multiplier: optMultiplier, entryPrice: 0.8, entryDatetime: daysAgo(35), exitPrice: 0.1, exitDatetime: daysAgo(5), fees: 1.5, ivEntry: 0.27, groupId: 'grp-demo-cc2', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+  ];
+
+  const customTemplates: StoredOptionTemplate[] = [
+    { id: 'tpl-demo-wheel', name: 'Wheel (renda)', category: 'up', legs: [{ right: 'put', qty: -1, strikeOffset: -1 }], description: 'Vender put garantida; se exercido, vender covered call.', updatedAt: now(), deviceId: 'demo', version: 0 },
+  ];
+
+  await Promise.all(chainQuotes.map((q) => ds.optionChain.put(q, { source: 'restore' })));
+  await Promise.all(optionLegs.map((l) => ds.optionLegs.put(l, { source: 'restore' })));
+  await Promise.all(customTemplates.map((t) => ds.optionTemplates.put(t, { source: 'restore' })));
+  // Renda: prêmio das estratégias fechadas entra no ledger (kind option_premium).
+  await recordOptionPremium(ds, optionLegs, { currency: 'USD' });
+
   // Marca tudo que é demo: quando o usuário criar a 1ª conta própria, isso é limpo.
   const seedFirmNames = ['FTMO', 'E8 Markets', 'XP'];
   await setDemoIds(ds, {
@@ -106,6 +180,9 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
     positions: positions.map((p) => p.id),
     propExtensions: props.map((p) => p.accountId),
     firms: firms.filter((f) => seedFirmNames.includes(f.name)).map((f) => f.id),
+    optionLegs: optionLegs.map((l) => l.id),
+    optionTemplates: customTemplates.map((t) => t.id),
+    optionChain: chainQuotes.map((q) => q.id),
   });
 
   return trades.length;

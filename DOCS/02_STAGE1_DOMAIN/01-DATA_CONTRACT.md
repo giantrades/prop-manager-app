@@ -18,8 +18,14 @@ IndexedDB('quantower-ledger', v1)     <- dedup de trade por plataforma, COM back
 
 ## Stores IndexedDB v3 (nomes finais)
 
-`app-db v3`: `accounts, prop_extensions, transactions, positions, trades, payouts, goals,
-tax_records, snapshots_networth, firm_costs, meta`
+`app-db` (DB_VERSION 5): `accounts, prop_extensions, transactions, positions, trades, payouts, goals,
+tax_records, snapshots_networth, firm_costs, cards, option_legs, option_templates, option_chain, meta`
+
+> v5 adicionou as 3 stores de opções (F0 do `DOCS/10_MODULES/options/00-spec.md`):
+> `option_legs` (pernas; índices `underlying_expiry`, `account_entry`, `groupId`, `quantowerId`),
+> `option_templates` (custom; built-ins no código) e `option_chain` (CACHE volátil da cadeia).
+> `option_chain` não tem `entityType` mapeado (não sincroniza). `option_legs`/`option_templates`
+> sincronizarão quando houver tabela Supabase (fase F4).
 
 Legado (read-only até confirmar migração, depreciar depois):
 `propmanager-data-v1` (localStorage), `journal-db v2`, `quantower-ledger v1`.
@@ -47,7 +53,7 @@ Legado (read-only até confirmar migração, depreciar depois):
 'datastore:change' -> {
   timestamp: number,
   source: 'local'|'sync:pull'|'sync:push'|'restore'|'quantower',
-  entityType?: 'account'|'transaction'|'trade'|'payout'|'goal'|'position',
+  entityType?: 'account'|'transaction'|'trade'|'payout'|'goal'|'position'|'option_leg'|'option_template',
   entityIds?: string[],           // quais registros mudaram, pra listener seletivo
                                    // (hoje o handler dispara push pra QUALQUER mudança,
                                    // sem saber o que mudou — impossível de debounce

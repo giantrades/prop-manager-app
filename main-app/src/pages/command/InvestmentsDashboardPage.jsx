@@ -14,6 +14,7 @@ import WidgetGrid from '@apps/ui/WidgetGrid';
 import StatRow from '@apps/ui/StatRow';
 import { TrendingUp, CalendarDays, LineChart, Store, Coins } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
+import OptionIncome from '@apps/ui/options/OptionIncome';
 import {
   applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries,
   dividendHistory, dividendIncomeByMonth, dividendByAsset, getAnnouncedDividends, upcomingDividends,
@@ -281,6 +282,12 @@ export default function InvestmentsDashboardPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              ) },
+              { id: 'options', node: (
+                <div className="dash-section">
+                  <div className="dash-title"><span><Coins size={14} /> Renda de opções</span><NavLink className="dash-link" to="/options">opções →</NavLink></div>
+                  <OptionIncome />
                 </div>
               ) },
               { id: 'relative', node: (

@@ -67,7 +67,7 @@ describe('barrel @apps/lib/db — consumo sem circular import', () => {
     expect(typeof deriveJournalEvents).toBe('function');
   });
 
-  it('STORE_NAMES contém os 12 stores do contrato', () => {
+  it('STORE_NAMES contém os 15 stores do contrato', () => {
     expect(STORE_NAMES).toEqual([
       'accounts',
       'prop_extensions',
@@ -80,6 +80,9 @@ describe('barrel @apps/lib/db — consumo sem circular import', () => {
       'snapshots_networth',
       'firm_costs',
       'cards',
+      'option_legs',
+      'option_templates',
+      'option_chain',
       'meta',
     ]);
   });

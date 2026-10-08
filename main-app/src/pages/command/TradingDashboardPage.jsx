@@ -15,6 +15,7 @@ import DrawdownSection from '@apps/ui/DrawdownSection';
 import WidgetGrid from '@apps/ui/WidgetGrid';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { CalendarDays, BarChart3, ShieldAlert } from 'lucide-react';
+import OptionIncome from '@apps/ui/options/OptionIncome';
 import {
   winrate, profitFactor, inPeriod, periodMonths,
   dailyPnlSeries, rollingExpectancy, rBoxStats, heatmapByWeekday, heatmapBySession, maeMfeSummary, allStrategyMetrics,
@@ -251,7 +252,7 @@ export default function TradingDashboardPage() {
     drawer.open({
       title: `Dia ${d.date}`,
       subtitle: `Drill-down · ${dayTrades.length} trade(s)`,
-      href: '/journal',
+      href: '/trades',
       rows: [
         { k: 'PnL do dia', v: fmtMoney(d.pnl, 'USD'), color: d.pnl >= 0 ? 'var(--green)' : 'var(--red)' },
         { k: 'Trades', v: String(dayTrades.length) },
@@ -266,7 +267,7 @@ export default function TradingDashboardPage() {
   const openStrategy = (s) => drawer.open({
     title: `Estratégia — ${s.strategyId}${s.version ? ` · ${s.version}` : ''}`,
     subtitle: `${s.n} trade(s)${s.sampleSufficient ? '' : ' · amostra insuficiente'}`,
-    href: '/journal',
+    href: '/trades',
     rows: [
       ...(s.version ? [{ k: 'Versão do playbook', v: s.version }] : []),
       { k: 'Winrate', v: `${(s.winRate * 100).toFixed(1)}%` },
@@ -368,6 +369,12 @@ export default function TradingDashboardPage() {
                   </div>
                 );
               })}
+            </div>
+          ) },
+          { id: 'options', node: (
+            <div className="td-widget">
+              <div className="td-chart-title"><BarChart3 size={14} /> Renda de opções</div>
+              <OptionIncome />
             </div>
           ) },
           { id: 'daily', defaultSpan: 2, node: (
@@ -509,7 +516,7 @@ export default function TradingDashboardPage() {
               {(() => {
                 const rows = stratByVersion ? analytics.strategyVersions : analytics.strategies;
                 if (rows.length === 0) {
-                  return <div className="muted">Sem trades com estratégia no período. Atribua a estratégia no <a className="dash-link" href="/journal">Journal</a>.</div>;
+                  return <div className="muted">Sem trades com estratégia no período. Atribua a estratégia na aba <a className="dash-link" href="/trades">Trades</a>.</div>;
                 }
                 return (
                   <>

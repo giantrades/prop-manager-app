@@ -810,8 +810,8 @@ export function FirmPnlPage() {
 
 export function ExpensesPage() {
   const { loading, data, finance } = useEngineData(async (f) => {
-    const { getSavingsGoal, getRolloverCats } = await import('@apps/lib/db');
-    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards] = await Promise.all([
+    const { getSavingsGoal, getRolloverCats, getImportRules } = await import('@apps/lib/db');
+    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules] = await Promise.all([
       f.ds.transactions.list(),
       f.ds.accounts.list(),
       listCategories(f.ds),
@@ -819,8 +819,9 @@ export function ExpensesPage() {
       getSavingsGoal(f.ds),
       getRolloverCats(f.ds),
       f.ds.cards.list(),
+      getImportRules(f.ds),
     ]);
-    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards };
+    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -902,24 +903,33 @@ export function ExpensesPage() {
     await saveSavingsGoal(f.ds, ym, amount);
   }, []);
 
-  // A3 — importa lote do extrato (despesa/ganho por sinal, categoria confirmada).
-  const onImportBatch = useCallback(async (entries) => {
+  // A3/H10 — importa lote do extrato: conta/moeda escolhidas, conversão pela taxa do app,
+  // FITID como `externalId` (dedup forte) e aprendizado de regra de categoria.
+  const onImportBatch = useCallback(async (entries, meta) => {
     const f = financeRef.current;
     if (!f || !entries?.length) return;
+    const { getFxUSD, learnImportRule } = await import('@apps/lib/db');
     const accounts = await f.ds.accounts.list();
-    const accountId = accounts[0]?.id;
+    const accountId = meta?.accountId || accounts[0]?.id;
     if (!accountId) return;
+    const cur = meta?.currency || 'USD';
+    let rate = 1;
+    if (cur !== 'USD') {
+      const fx = await getFxUSD(f.ds);
+      if (fx?.rate > 0) rate = fx.rate; // BRL -> USD = valor / taxa
+    }
+    const learned = new Set();
     for (const en of entries) {
+      const amount = cur === 'USD' ? Math.abs(en.amount) : Math.abs(en.amount) / rate;
+      const note = cur === 'USD' ? en.description : `${en.description} (${cur} ${Math.abs(en.amount).toFixed(2)})`;
       if (en.kind === 'income') {
-        await f.money.recordIncome({
-          accountId, amount: Math.abs(en.amount), currency: 'USD',
-          date: en.date, note: en.description,
-        });
+        await f.money.recordIncome({ accountId, amount, currency: 'USD', date: en.date, note, externalId: en.externalId });
       } else {
-        await f.money.recordExpense({
-          accountId, amount: Math.abs(en.amount), currency: 'USD',
-          category: en.categoryId ?? undefined, date: en.date, note: en.description,
-        });
+        await f.money.recordExpense({ accountId, amount, currency: 'USD', category: en.categoryId ?? undefined, date: en.date, note, externalId: en.externalId });
+      }
+      if (en.categoryId && !learned.has(en.description)) {
+        learned.add(en.description);
+        await learnImportRule(f.ds, en.description, en.categoryId);
       }
     }
   }, []);
@@ -936,6 +946,15 @@ export function ExpensesPage() {
     const f = financeRef.current;
     if (!f) return;
     await f.money.recordTransferBetween(input);
+  }, []);
+
+  // H5 — baixa da fatura (total/parcial): transfer neutro, casando a conta do cartão.
+  const onPayInvoice = useCallback(async (input) => {
+    const f = financeRef.current;
+    if (!f) return;
+    const cards = await f.ds.cards.list();
+    const card = cards.find((c) => c.id === input.cardId);
+    await f.money.payCardInvoice({ ...input, toAccountId: card?.accountId });
   }, []);
 
   return (
@@ -959,6 +978,7 @@ export function ExpensesPage() {
         onImportBatch={onImportBatch}
         onAddInstallments={onAddInstallments}
         onTransfer={onTransfer}
+        onPayInvoice={onPayInvoice}
         rolloverCats={data?.rolloverCats ?? []}
         onToggleRollover={onToggleRollover}
         onSaveCategory={onSaveCategory}

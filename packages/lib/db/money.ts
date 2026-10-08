@@ -13,7 +13,7 @@
 import type { DataService } from './DataService';
 import type { DataChainEngine } from './DataChainEngine';
 import { tradeNetPnl } from './financialFormulas';
-import { nowIso, parseDate, startOfDay, compareIso } from './dateUtils';
+import { nowIso, parseDate, startOfDay, compareIso, addDaysIso, daysBetween } from './dateUtils';
 import type {
   Account,
   Payout,
@@ -64,6 +64,7 @@ export const INCOME_KINDS: ReadonlySet<TransactionKind> = new Set([
   'rebate',
   'income',
   'dividend',
+  'option_premium',
 ]);
 
 /**
@@ -76,6 +77,7 @@ export const PERSONAL_INCOME_KINDS: ReadonlySet<TransactionKind> = new Set([
   'payout_in',
   'income',
   'dividend',
+  'option_premium',
 ]);
 export const PERSONAL_EXPENSE_KINDS: ReadonlySet<TransactionKind> = new Set([
   'expense',
@@ -312,6 +314,90 @@ export function invoiceCycle(closingDay?: number, ref: Date = new Date()): Invoi
   const end = new Date(Date.UTC(closeY, closeM, d, 23, 59, 59, 999));
   const prevClose = new Date(Date.UTC(closeY, closeM - 1, d, 23, 59, 59, 999));
   return { start: new Date(prevClose.getTime() + 1).toISOString(), end: end.toISOString() };
+}
+
+// ---------------------------------------------------------------------------
+// H5 — Fatura do cartão: aberta / fechada / paga / parcial
+// ---------------------------------------------------------------------------
+
+export type CardInvoiceState = 'aberta' | 'fechada' | 'paga' | 'parcial';
+
+export interface CardInvoiceStatus {
+  /** 'YYYY-MM' do fechamento (competência). */
+  competencia: string;
+  /** Fechamento da fatura (ISO, inclusivo). */
+  fechamento: string;
+  /** Vencimento (ISO; primeiro dia `dueDay` em/após o fechamento). */
+  vencimento: string;
+  /** Total gasto no cartão dentro do ciclo. */
+  total: number;
+  /** Já pago desta competência (baixas `invoice`). */
+  pago: number;
+  /** Falta pagar (nunca negativo). */
+  restante: number;
+  estado: CardInvoiceState;
+  closingDay?: number;
+  dueDay?: number;
+}
+
+/** Cartão mínimo aceito pelo seletor (evita dependência de `Card` completo). */
+export interface InvoiceCardLike {
+  id: string;
+  name: string;
+  closingDay?: number;
+  dueDay?: number;
+}
+
+/**
+ * H5 — estado da fatura de um cartão. Reusa `invoiceCycle` (janela por fechamento) e
+ * as despesas do cartão no ciclo. `pago` = Σ baixas (`transfer` com `invoice`) da
+ * competência. Sem fórmula financeira nova — só agregação.
+ * `registry` é a lista de cartões (para casar `cardId`/nome); opcional.
+ */
+export function invoiceStatus(
+  card: InvoiceCardLike,
+  transactions: Transaction[],
+  ref: Date = new Date(),
+): CardInvoiceStatus {
+  const cyc = invoiceCycle(card.closingDay, ref);
+  const competencia = cyc.end.slice(0, 7);
+  const fechamento = cyc.end;
+  // Vencimento: primeiro dia `dueDay` (ou o fechamento, se não houver) em/após o fechamento.
+  const dd = Math.min(28, Math.max(1, Math.floor(card.dueDay || card.closingDay || 1)));
+  const endDate = new Date(cyc.end);
+  let vy = endDate.getUTCFullYear();
+  let vm = endDate.getUTCMonth();
+  if (dd <= endDate.getUTCDate()) {
+    vm += 1;
+    if (vm > 11) { vm = 0; vy += 1; }
+  }
+  const vencimento = new Date(Date.UTC(vy, vm, dd, 12, 0, 0)).toISOString();
+
+  const matches = (t: Transaction) => t.cardId === card.id || (!t.cardId && t.card === card.name);
+  let total = 0;
+  for (const t of transactions) {
+    if (t.kind !== 'expense') continue;
+    if (!matches(t)) continue;
+    if (t.date < cyc.start || t.date > cyc.end) continue;
+    total += Math.abs(t.amount);
+  }
+  let pago = 0;
+  for (const t of transactions) {
+    if (t.invoice?.cardId !== card.id) continue;
+    if (t.invoice.competencia !== competencia) continue;
+    pago += Math.abs(t.amount);
+  }
+  total = r2(total);
+  pago = r2(pago);
+  const restante = r2(Math.max(0, total - pago));
+  const nowIsoStr = ref.toISOString();
+  let estado: CardInvoiceState;
+  if (total <= 0) estado = 'aberta';
+  else if (pago > 0 && pago >= total) estado = 'paga';
+  else if (pago > 0) estado = 'parcial';
+  else if (nowIsoStr > fechamento) estado = 'fechada';
+  else estado = 'aberta';
+  return { competencia, fechamento, vencimento, total, pago, restante, estado, closingDay: card.closingDay, dueDay: card.dueDay };
 }
 
 // ---------------------------------------------------------------------------
@@ -682,6 +768,66 @@ export function computeFreeCash(transactions: Transaction[], yearMonth: string):
 }
 
 // ---------------------------------------------------------------------------
+// H8 — Extrato: saldo acumulado por dia (derivado, sem fórmula nova)
+// ---------------------------------------------------------------------------
+
+export interface DailyBalanceRow {
+  /** 'YYYY-MM-DD' */
+  day: string;
+  income: number;
+  expenses: number;
+  /** income - expenses do dia. */
+  net: number;
+  /** Saldo acumulado (opening + Σ net até o dia, inclusive). */
+  balance: number;
+}
+
+/** H8 — saldo pessoal acumulado ANTES de `beforeYm` (meses anteriores). */
+export function openingBalance(transactions: Transaction[], beforeYm: string): number {
+  let bal = 0;
+  for (const t of transactions) {
+    if (t.paid === false) continue;
+    const ym = (t.date || '').slice(0, 7);
+    if (!ym || ym >= beforeYm) continue;
+    if (PERSONAL_INCOME_KINDS.has(t.kind)) bal += t.amount;
+    else if (PERSONAL_EXPENSE_KINDS.has(t.kind)) bal -= Math.abs(t.amount);
+  }
+  return r2(bal);
+}
+
+/**
+ * H8 — saldo acumulado dia a dia nos meses de `months`, partindo de `opening`.
+ * Só inclui dias com movimento (pagos). O saldo do último dia = `opening` +
+ * `computeFreeCash` do período (fecha por construção).
+ */
+export function dailyBalance(
+  transactions: Transaction[],
+  months: string[],
+  opening = 0,
+): DailyBalanceRow[] {
+  const set = new Set(months);
+  const map = new Map<string, { income: number; expenses: number }>();
+  for (const t of transactions) {
+    if (t.paid === false) continue;
+    const day = (t.date || '').slice(0, 10);
+    if (!day) continue;
+    if (!set.has(day.slice(0, 7))) continue;
+    const e = map.get(day) ?? { income: 0, expenses: 0 };
+    if (PERSONAL_INCOME_KINDS.has(t.kind)) e.income = r2(e.income + t.amount);
+    else if (PERSONAL_EXPENSE_KINDS.has(t.kind)) e.expenses = r2(e.expenses + Math.abs(t.amount));
+    map.set(day, e);
+  }
+  let bal = r2(opening);
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, v]) => {
+      const net = r2(v.income - v.expenses);
+      bal = r2(bal + net);
+      return { day, income: v.income, expenses: v.expenses, net, balance: bal };
+    });
+}
+
+// ---------------------------------------------------------------------------
 // D1 — Contas a pagar/receber (títulos pendentes)
 // ---------------------------------------------------------------------------
 
@@ -717,6 +863,58 @@ export function pendingSummary(
     if (b.overdue) overdue += 1;
   }
   return { payable: r2(payable), receivable: r2(receivable), count: pendingBills(transactions, refIso).length, overdue };
+}
+
+export interface UpcomingBill {
+  tx: Transaction;
+  dueDate: string;
+  overdue: boolean;
+  /** Dias até o vencimento (negativo = atrasado). */
+  days: number;
+  source: 'pending' | 'recurring';
+}
+
+/**
+ * H9 — próximos vencimentos (janela de `days`) = títulos pendentes com vencimento até
+ * `refIso + days` (inclui atrasados) + templates recorrentes do mês ainda não gerados
+ * cujo dia cai na janela. Ordenado por vencimento. Base para "o que vence em N dias".
+ */
+export function upcomingBills(transactions: Transaction[], refIso?: string, days = 15): UpcomingBill[] {
+  const today = (refIso ?? nowIso()).slice(0, 10);
+  const horizon = addDaysIso(`${today}T12:00:00.000Z`, days).slice(0, 10);
+  const out: UpcomingBill[] = [];
+  for (const b of pendingBills(transactions, refIso)) {
+    if (b.dueDate && b.dueDate <= horizon) {
+      out.push({ tx: b.tx, dueDate: b.dueDate, overdue: b.overdue, days: daysBetween(today, b.dueDate), source: 'pending' });
+    }
+  }
+  const ym = today.slice(0, 7);
+  for (const tpl of recurringDue(transactions, ym)) {
+    const day = Math.min(28, Math.max(1, tpl.recurrence?.day ?? 1));
+    const due = `${ym}-${String(day).padStart(2, '0')}`;
+    if (due <= horizon) {
+      out.push({ tx: tpl, dueDate: due, overdue: due < today, days: daysBetween(today, due), source: 'recurring' });
+    }
+  }
+  return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+/** H9 — totais da janela de próximos vencimentos. */
+export function upcomingSummary(
+  transactions: Transaction[],
+  refIso?: string,
+  days = 15,
+): { payable: number; receivable: number; count: number; overdue: number } {
+  let payable = 0;
+  let receivable = 0;
+  let overdue = 0;
+  const rows = upcomingBills(transactions, refIso, days);
+  for (const b of rows) {
+    if (b.tx.kind === 'expense') payable += Math.abs(b.tx.amount);
+    else receivable += b.tx.amount;
+    if (b.overdue) overdue += 1;
+  }
+  return { payable: r2(payable), receivable: r2(receivable), count: rows.length, overdue };
 }
 
 // ---------------------------------------------------------------------------
@@ -764,6 +962,8 @@ export interface CategoryDef {
   color: string; // token: 'blue'|'green'|'yellow'|'red'|'brand'|'gray'
   /** Agrupamento opcional. `imposto` = entra no widget de Impostos. */
   group?: string;
+  /** H6 — categoria-pai (1 nível). Ausente = categoria raiz. Aditivo. */
+  parent?: string;
 }
 
 /** Categoria de imposto (usado pelo widget de Impostos). */
@@ -792,10 +992,37 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
 const CATEGORY_META_KEY = 'expense:categories';
 const BUDGET_META_KEY = 'expense:budgets';
 const ROLLOVER_META_KEY = 'expense:rollover';
+const HIDDEN_CATEGORY_META_KEY = 'expense:categories:hidden';
+const CATEGORY_ORDER_META_KEY = 'expense:categories:order';
 
-/** Lista categorias (custom salvas em meta + defaults). Custom sobrescreve default de mesmo id. */
+/** H12 — categorias ocultas/removidas (defaults não podem sair do código; ficam ocultas). */
+async function readHiddenCats(ds: DataService): Promise<string[]> {
+  const rec = await ds.meta.getKey(HIDDEN_CATEGORY_META_KEY);
+  const v = rec?.value;
+  return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+}
+
+/** H12 — ordem customizada das categorias. */
+export async function getCategoryOrder(ds: DataService): Promise<string[]> {
+  const rec = await ds.meta.getKey(CATEGORY_ORDER_META_KEY);
+  const v = rec?.value;
+  return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+}
+
+export async function setCategoryOrder(ds: DataService, ids: string[]): Promise<string[]> {
+  const clean = [...new Set(ids.filter((x) => typeof x === 'string' && x))];
+  await ds.meta.setKey(CATEGORY_ORDER_META_KEY, clean);
+  return getCategoryOrder(ds);
+}
+
+/** Lista categorias (custom salvas em meta + defaults). Custom sobrescreve default de mesmo id.
+ * H12: filtra as ocultas e aplica a ordem customizada (quando existir). */
 export async function listCategories(ds: DataService): Promise<CategoryDef[]> {
-  const rec = await ds.meta.getKey(CATEGORY_META_KEY);
+  const [rec, hidden, order] = await Promise.all([
+    ds.meta.getKey(CATEGORY_META_KEY),
+    readHiddenCats(ds),
+    getCategoryOrder(ds),
+  ]);
   const custom = Array.isArray(rec?.value) ? (rec.value as CategoryDef[]) : [];
   const byId = new Map<string, CategoryDef>();
   for (const c of DEFAULT_CATEGORIES) byId.set(c.id, c);
@@ -807,10 +1034,17 @@ export async function listCategories(ds: DataService): Promise<CategoryDef[]> {
         icon: typeof c.icon === 'string' && c.icon ? c.icon : 'Tag',
         color: typeof c.color === 'string' && c.color ? c.color : 'gray',
         group: typeof c.group === 'string' ? c.group : undefined,
+        parent: typeof c.parent === 'string' && c.parent ? c.parent : undefined,
       });
     }
   }
-  return [...byId.values()];
+  const hiddenSet = new Set(hidden);
+  const list = [...byId.values()].filter((c) => !hiddenSet.has(c.id));
+  if (order.length) {
+    const idx = new Map(order.map((id, i) => [id, i]));
+    list.sort((a, b) => (idx.get(a.id) ?? 9999) - (idx.get(b.id) ?? 9999));
+  }
+  return list;
 }
 
 /** Salva categoria custom (upsert por id). */
@@ -820,6 +1054,95 @@ export async function saveCategory(ds: DataService, cat: CategoryDef): Promise<C
   const next = custom.filter((c) => c?.id !== cat.id).concat([cat]);
   await ds.meta.setKey(CATEGORY_META_KEY, next);
   return listCategories(ds);
+}
+
+/**
+ * H12 — move TODOS os lançamentos de `fromId` para `toId` (campo estruturado + legado
+ * por prefixo na note). Retorna quantos foram movidos. Nunca deixa órfão.
+ */
+export async function reassignCategory(
+  ds: DataService,
+  fromId: string,
+  toId: string,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): Promise<number> {
+  if (!fromId || !toId || fromId === toId) return 0;
+  const from = cats.find((c) => c.id === fromId);
+  const txs = await ds.transactions.list();
+  const updates: Transaction[] = [];
+  for (const t of txs) {
+    if (t.kind !== 'expense') continue;
+    let changed = false;
+    let note = t.note;
+    let category = t.category;
+    if (t.category === fromId) {
+      category = toId;
+      changed = true;
+    } else if (!t.category && from && note) {
+      const p1 = `${from.name} — `;
+      const p2 = `${from.name} - `;
+      if (note === from.name) { note = undefined; category = toId; changed = true; }
+      else if (note.startsWith(p1)) { note = note.slice(p1.length); category = toId; changed = true; }
+      else if (note.startsWith(p2)) { note = note.slice(p2.length); category = toId; changed = true; }
+    }
+    if (changed) updates.push({ ...t, category, note, updatedAt: nowIso(), version: (t.version ?? 0) + 1 });
+  }
+  if (updates.length) await ds.transactions.bulkPut(updates, { source: 'local' });
+  return updates.length;
+}
+
+async function hideCategory(ds: DataService, id: string): Promise<void> {
+  const rec = await ds.meta.getKey(CATEGORY_META_KEY);
+  const custom = Array.isArray(rec?.value) ? (rec.value as CategoryDef[]) : [];
+  await ds.meta.setKey(CATEGORY_META_KEY, custom.filter((c) => c?.id !== id));
+  const hidden = await readHiddenCats(ds);
+  if (!hidden.includes(id)) await ds.meta.setKey(HIDDEN_CATEGORY_META_KEY, [...hidden, id]);
+}
+
+/** H12 — mescla `fromId` em `toId`: move lançamentos e oculta a origem. */
+export async function mergeCategories(
+  ds: DataService,
+  fromId: string,
+  toId: string,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): Promise<number> {
+  if (!fromId || !toId || fromId === toId) return 0;
+  const moved = await reassignCategory(ds, fromId, toId, cats);
+  await hideCategory(ds, fromId);
+  return moved;
+}
+
+/** H12 — remove `id`, reatribuindo os lançamentos a `reassignTo` (nunca órfão). */
+export async function removeCategory(
+  ds: DataService,
+  id: string,
+  reassignTo: string,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): Promise<number> {
+  if (!id || !reassignTo || id === reassignTo) return 0;
+  const moved = await reassignCategory(ds, id, reassignTo, cats);
+  await hideCategory(ds, id);
+  return moved;
+}
+
+/** H12 — uso por categoria (para preview de impacto no donut). */
+export async function categoryUsage(
+  ds: DataService,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): Promise<CategoryTotal[]> {
+  const txs = await ds.transactions.list();
+  const map = new Map<string, { total: number; count: number }>();
+  for (const t of txs) {
+    if (t.kind !== 'expense') continue;
+    const id = categoryOf(t, cats) ?? 'outros';
+    const e = map.get(id) ?? { total: 0, count: 0 };
+    e.total = r2(e.total + Math.abs(t.amount));
+    e.count += 1;
+    map.set(id, e);
+  }
+  return [...map.entries()]
+    .map(([categoryId, v]) => ({ categoryId, ...v }))
+    .sort((a, b) => b.total - a.total);
 }
 
 /**
@@ -857,6 +1180,32 @@ export function expensesByCategory(
     map.set(id, e);
   }
   return [...map.entries()]
+    .map(([categoryId, v]) => ({ categoryId, ...v }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** H6 — subcategorias (filhas diretas) de uma categoria-pai. */
+export function subcategoriesOf(cats: CategoryDef[], parentId: string): CategoryDef[] {
+  return cats.filter((c) => c.parent === parentId);
+}
+
+/**
+ * H6 — consolida totais de categoria pelo PAI (1 nível). Filhas viram o total do pai;
+ * categorias sem `parent` (ou com pai inexistente) ficam como estão. Soma por pai =
+ * soma das filhas; legado sem `parent` fica intacto. Ordenado por total desc.
+ */
+export function rollupByParent(rows: CategoryTotal[], cats: CategoryDef[] = DEFAULT_CATEGORIES): CategoryTotal[] {
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  const acc = new Map<string, { total: number; count: number }>();
+  for (const row of rows) {
+    const cat = byId.get(row.categoryId);
+    const target = cat?.parent && byId.has(cat.parent) ? cat.parent : row.categoryId;
+    const cur = acc.get(target) ?? { total: 0, count: 0 };
+    cur.total = r2(cur.total + row.total);
+    cur.count += row.count;
+    acc.set(target, cur);
+  }
+  return [...acc.entries()]
     .map(([categoryId, v]) => ({ categoryId, ...v }))
     .sort((a, b) => b.total - a.total);
 }
@@ -1008,6 +1357,43 @@ export function budgetStatus(
       };
     })
     .sort((a, b) => b.pct - a.pct);
+}
+
+export interface BudgetSuggestion {
+  categoryId: string;
+  /** Média real dos últimos `months` meses (meses sem gasto contam como 0). */
+  average: number;
+  months: number;
+}
+
+/**
+ * H11 — sugere meta por categoria a partir da média dos últimos `months` meses
+ * (antes de `refYm`). Reusa `categoryOf`; ignora pendentes. Sem fórmula nova —
+ * só média dos totais mensais.
+ */
+export function suggestBudget(
+  transactions: Transaction[],
+  refYm: string,
+  months = 3,
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+): BudgetSuggestion[] {
+  const [y, m] = refYm.split('-').map(Number);
+  const window = new Set<string>();
+  for (let i = 1; i <= months; i += 1) {
+    const d = new Date(y, m - 1 - i, 1);
+    window.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const acc = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.kind !== 'expense' || t.paid === false) continue;
+    const ym = (t.date || '').slice(0, 7);
+    if (!window.has(ym)) continue;
+    const id = categoryOf(t, cats) ?? 'outros';
+    acc.set(id, r2((acc.get(id) ?? 0) + Math.abs(t.amount)));
+  }
+  return [...acc.entries()]
+    .map(([categoryId, total]) => ({ categoryId, average: r2(total / Math.max(1, months)), months }))
+    .sort((a, b) => b.average - a.average);
 }
 
 /** G6 — templates recorrentes (expense com `recurrence`). */
@@ -1394,6 +1780,8 @@ export class MoneyService {
     card?: string;
     cardId?: string;
     tags?: string[];
+    invoice?: { cardId: string; competencia: string };
+    externalId?: string;
   }): Promise<Transaction> {
     if (input.rate != null && input.rate <= 0) {
       throw new Error(`rate=0 PROIBIDO para ${input.kind} (zera cálculo silenciosamente)`);
@@ -1420,6 +1808,8 @@ export class MoneyService {
       card: input.card,
       cardId: input.cardId,
       tags: input.tags,
+      invoice: input.invoice,
+      externalId: input.externalId,
       updatedAt: nowIso(),
       deviceId: this.ds.deviceId,
       version: 0,
@@ -1451,6 +1841,7 @@ export class MoneyService {
     cardId?: string;
     tags?: string[];
     installments?: { n: number; of: number; groupId: string };
+    externalId?: string;
   }): Promise<Transaction> {
     // G1 — categoria em campo estruturado (note fica limpa; legado lia prefixo).
     return this.addTransaction({
@@ -1568,6 +1959,7 @@ export class MoneyService {
     currency: string;
     date?: string;
     note?: string;
+    externalId?: string;
   }): Promise<Transaction> {
     return this.addTransaction({ ...input, kind: 'income', amount: Math.abs(input.amount) });
   }
@@ -1641,6 +2033,42 @@ export class MoneyService {
       currency: input.currency, date: input.date, note: input.note, ref: { type: 'transfer', id },
     });
     return [out, inn];
+  }
+
+  /**
+   * H5 — baixa (total ou parcial) da fatura de um cartão. Cria `transfer` (neutro no
+   * caixa) marcado com `invoice {cardId, competencia}`; com `toAccountId` faz dupla
+   * entrada (banco → conta do cartão) e sem ele só debita a origem. NUNCA chamado
+   * sozinho: a UI confirma (sugere, não cria).
+   */
+  async payCardInvoice(input: {
+    cardId: string;
+    competencia: string;
+    accountId: string;
+    toAccountId?: string;
+    amount: number;
+    currency: string;
+    date?: string;
+    note?: string;
+  }): Promise<Transaction[]> {
+    const amt = r2(Math.abs(input.amount));
+    if (!(amt > 0)) throw new Error('pagamento da fatura precisa de valor > 0');
+    if (!input.cardId || !input.competencia) throw new Error('pagamento da fatura precisa de cartão e competência');
+    const invoice = { cardId: input.cardId, competencia: input.competencia };
+    const ref: TransactionRef = { type: 'transfer', id: `inv-${input.cardId}-${input.competencia}-${Date.now().toString(36)}` };
+    const note = input.note ?? `Fatura ${input.competencia}`;
+    const out = await this.addTransaction({
+      accountId: input.accountId, kind: 'transfer', amount: -amt,
+      currency: input.currency, date: input.date, note, ref, invoice,
+    });
+    if (input.toAccountId && input.toAccountId !== input.accountId) {
+      const inn = await this.addTransaction({
+        accountId: input.toAccountId, kind: 'transfer', amount: amt,
+        currency: input.currency, date: input.date, note, ref, invoice,
+      });
+      return [out, inn];
+    }
+    return [out];
   }
 
   /** Compra/venda de ativo (kind=buy|sell). `asset` alimenta o FIFO de IR (A4). */

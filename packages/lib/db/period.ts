@@ -62,6 +62,26 @@ export function periodMonths(period: Period, transactions: Transaction[]): strin
   return ymToList(months[0], months[months.length - 1]);
 }
 
+/**
+ * H2 — período IMEDIATAMENTE anterior de mesma duração (para Δ% dos widgets).
+ * `all` não tem anterior (null); `month` = mês anterior; `range` = intervalo do
+ * mesmo tamanho logo antes. Reusa `ymToList`/`shiftYm` (sem série nova).
+ */
+export function previousPeriod(period: Period, transactions: Transaction[] = []): Period | null {
+  if (period.mode === 'all') return null;
+  if (period.mode === 'month') {
+    const ym = period.ym ?? currentYm();
+    return { mode: 'month', ym: shiftYm(ym, -1) };
+  }
+  const from = period.from ?? '';
+  const to = period.to ?? '';
+  if (!from || !to) return null;
+  const len = ymToList(from, to).length || 1;
+  const prevTo = shiftYm(from, -1);
+  const prevFrom = shiftYm(prevTo, -(len - 1));
+  return { mode: 'range', from: prevFrom, to: prevTo };
+}
+
 /** Rótulo curto para a UI. */
 export function periodLabel(period: Period): string {
   const pt = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];

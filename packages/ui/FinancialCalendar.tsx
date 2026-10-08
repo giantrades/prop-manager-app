@@ -17,6 +17,7 @@ const LAYERS = [
   { id: 'bills', label: 'Contas', emoji: '🧾' },
   { id: 'payouts', label: 'Payouts', emoji: '💸' },
   { id: 'tax', label: 'Imposto', emoji: '🏛️' },
+  { id: 'options', label: 'Opções', emoji: '🎯' },
 ] as const;
 
 export type LayerId = (typeof LAYERS)[number]['id'];
@@ -70,6 +71,11 @@ export interface TaxMark {
   label?: string;
 }
 
+export interface OptionExpiryMark {
+  date: string;
+  label?: string;
+}
+
 export interface CalendarMarker {
   kind: string;
   pnl?: number;
@@ -94,6 +100,7 @@ export interface FinancialCalendarProps {
   bills?: BillMark[];
   payouts?: PayoutMark[];
   tax?: TaxMark[];
+  options?: OptionExpiryMark[];
   loading?: boolean;
   economicLoading?: boolean;
   economicError?: string | null;
@@ -109,10 +116,11 @@ export default function FinancialCalendar({
   bills = [],
   payouts = [],
   tax = [],
+  options = [],
   loading = false,
   economicLoading = false,
   economicError = null,
-  activeLayers = ['trading', 'economic', 'bills', 'payouts', 'tax'],
+  activeLayers = ['trading', 'economic', 'bills', 'payouts', 'tax', 'options'],
   onToggleLayer,
   onPrevMonth,
   onNextMonth,
@@ -134,8 +142,9 @@ export default function FinancialCalendar({
     for (const b of bills) push(b.date, 'bills', { amount: b.amount, label: b.label });
     for (const p of payouts) push(p.date, 'payouts', { amount: p.amount, status: p.status });
     for (const tx of tax) push(tx.date, 'tax', { amount: tx.amount, label: tx.label });
+    for (const o of options) push(o.date, 'options', { label: o.label });
     return map;
-  }, [trading, economic, bills, payouts, tax]);
+  }, [trading, economic, bills, payouts, tax, options]);
 
   const cells = useMemo(() => buildMonthGrid(yearMonth), [yearMonth]);
 
@@ -251,6 +260,7 @@ function markTitle(m: CalendarMarker): string {
     case 'bills': return `Conta: ${fmtMoney(m.amount, 'USD')}${m.label ? ` · ${m.label}` : ''}`;
     case 'payouts': return `Payout: ${fmtMoney(m.amount, 'USD')} (${m.status})`;
     case 'tax': return `Imposto: ${fmtMoney(m.amount, 'USD')}${m.label ? ` · ${m.label}` : ''}`;
+    case 'options': return `Vencimento de opções: ${m.label ?? 'perna aberta'}`;
     default: return '';
   }
 }
@@ -325,6 +335,7 @@ const FC_CSS = `
 .fc-mark-bills { background: var(--gray, #5b6270); }
 .fc-mark-payouts { background: var(--green, #2ecc71); }
 .fc-mark-tax { background: var(--red, #e74c3c); }
+.fc-mark-options { background: var(--brand, #7c5cff); }
 .fc-pnl { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 719px) {

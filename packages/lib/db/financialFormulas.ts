@@ -7,7 +7,7 @@
 //  - PF: grossLoss=0 && grossWin=0 => "n/a"; grossLoss=0 && grossWin>0 => "∞".
 //  - Sharpe por dia, nunca por trade. Amostra < 20 dias => "amostra insuficiente".
 
-import type { Trade, TradeDirection } from './types';
+import type { Trade, TradeDirection, Greeks, OptionLeg, OptionRight } from './types';
 import { parseDate, startOfDayInTimezone } from './dateUtils';
 
 export interface PnlInput {
@@ -302,4 +302,351 @@ export function profitFactor(trades: Trade[]): ProfitFactor {
   if (grossLoss === 0 && grossWin === 0) return 'n/a';
   if (grossLoss === 0) return 'infinity'; // renderizar como "∞", nunca JS Infinity cru
   return Number((grossWin / grossLoss).toFixed(4));
+}
+
+// ---------------------------------------------------------------------------
+// Opções — Black-Scholes-Merton, gregas, IV, payoff, exposição.
+// Fonte: DOCS/02_STAGE1_DOMAIN/02-FINANCIAL_FORMULAS.md § Opções.
+// Proibido calcular na UI: estas funções são a única implementação.
+// ---------------------------------------------------------------------------
+
+/** Normal padrão densidade. */
+export function normalPdf(x: number): number {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
+
+/** Normal padrão acumulada (Abramowitz-Stegun 26.2.17; erro < 7.5e-8). */
+export function normalCdf(x: number): number {
+  const sign = x < 0 ? -1 : 1;
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const poly =
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+  return 0.5 * (1 + sign * (1 - poly * Math.exp(-z * z)));
+}
+
+export interface BsmInput {
+  S: number; // preço do subjacente
+  K: number; // strike
+  T: number; // anos até o vencimento (ACT/365)
+  r: number; // taxa livre de risco (decimal; ex. 0.05)
+  sigma: number; // vol (decimal; ex. 0.20 = 20%)
+  right: OptionRight;
+  q?: number; // dividend yield (default 0)
+}
+
+/** Valor intrínseco (payoff no vencimento). */
+export function optionIntrinsic(S: number, K: number, right: OptionRight): number {
+  return right === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
+}
+
+/**
+ * Preço BSM. `sigma<=0` ou `T<=0` => intrínseco (nunca preço determinístico falso).
+ * `S<=0`/`K<=0` => null.
+ */
+export function bsmPrice(input: BsmInput): number | null {
+  const { S, K, T, r, sigma, right } = input;
+  const q = input.q ?? 0;
+  if (!(S > 0) || !(K > 0)) return null;
+  if (!(sigma > 0) || !(T > 0)) return optionIntrinsic(S, K, right);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r - q + (sigma * sigma) / 2) * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  const price =
+    right === 'call'
+      ? S * Math.exp(-q * T) * normalCdf(d1) - K * Math.exp(-r * T) * normalCdf(d2)
+      : K * Math.exp(-r * T) * normalCdf(-d2) - S * Math.exp(-q * T) * normalCdf(-d1);
+  return Number(price.toFixed(8));
+}
+
+/** Gregas BSM. Retorna null quando `sigma<=0`/`T<=0`/`S<=0` (n/a, nunca zero mudo).
+ *  Escala crua do contrato: theta por ANO, vega/rho por 1.00 — a UI formata. */
+export function bsmGreeks(input: BsmInput): Greeks | null {
+  const { S, K, T, r, sigma, right } = input;
+  const q = input.q ?? 0;
+  if (!(S > 0) || !(K > 0) || !(sigma > 0) || !(T > 0)) return null;
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r - q + (sigma * sigma) / 2) * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  const nd1 = normalPdf(d1);
+  const eq = Math.exp(-q * T);
+  const er = Math.exp(-r * T);
+
+  const delta = right === 'call' ? eq * normalCdf(d1) : eq * (normalCdf(d1) - 1);
+  const gamma = (eq * nd1) / (S * sigma * sqrtT);
+  const vega = S * eq * nd1 * sqrtT;
+  const theta =
+    right === 'call'
+      ? -(S * eq * nd1 * sigma) / (2 * sqrtT) - r * K * er * normalCdf(d2) + q * S * eq * normalCdf(d1)
+      : -(S * eq * nd1 * sigma) / (2 * sqrtT) + r * K * er * normalCdf(-d2) - q * S * eq * normalCdf(-d1);
+  const rho = right === 'call' ? K * T * er * normalCdf(d2) : -K * T * er * normalCdf(-d2);
+
+  return {
+    delta: Number(delta.toFixed(6)),
+    gamma: Number(gamma.toFixed(8)),
+    theta: Number(theta.toFixed(8)),
+    vega: Number(vega.toFixed(8)),
+    rho: Number(rho.toFixed(8)),
+  };
+}
+
+export interface IvInput extends Omit<BsmInput, 'sigma'> {
+  price: number;
+}
+
+/**
+ * Volatilidade implícita por bisseção em `[1e-4, 5]`. Sem bracket (preço abaixo do
+ * limite arbitrário) => null. NUNCA devolve aproximação chutada.
+ */
+export function impliedVolatility(input: IvInput): number | null {
+  const { S, K, T, r, right, price } = input;
+  const q = input.q ?? 0;
+  if (!(price > 0) || !(S > 0) || !(K > 0) || !(T > 0)) return null;
+  const f = (sigma: number) => (bsmPrice({ S, K, T, r, sigma, right, q }) ?? 0) - price;
+  let a = 1e-4;
+  let b = 5;
+  let fa = f(a);
+  let fb = f(b);
+  if (Math.abs(fa) < 1e-8) return a;
+  if (Math.abs(fb) < 1e-8) return b;
+  if (fa * fb > 0) return null; // sem bracket
+  for (let i = 0; i < 100; i += 1) {
+    const m = (a + b) / 2;
+    const fm = f(m);
+    if (Math.abs(fm) < 1e-8 || b - a < 1e-8) return Number(m.toFixed(6));
+    if (fa * fm <= 0) {
+      b = m;
+      fb = fm;
+    } else {
+      a = m;
+      fa = fm;
+    }
+  }
+  void fb;
+  return Number(((a + b) / 2).toFixed(6));
+}
+
+/** Anos até o vencimento (ACT/365). `expiry` ISO. */
+export function timeToExpiry(expiry: string, now: Date = new Date()): number {
+  const days = (parseDate(expiry).getTime() - now.getTime()) / 86400000;
+  return Math.max(0, days / 365);
+}
+
+/** P/L da perna no vencimento de um subjacente `S` (inclui fees da perna). */
+export function optionLegPayoffAtExpiry(leg: OptionLeg, S: number): number {
+  const mult = leg.multiplier || 1;
+  const gross = leg.qty * mult * (optionIntrinsic(S, leg.strike, leg.right) - leg.entryPrice);
+  return Number((gross - (leg.fees || 0)).toFixed(6));
+}
+
+/** P/L realizado da perna (exitPrice presente). null se ainda aberta. */
+export function optionLegRealizedPnl(leg: OptionLeg): number | null {
+  if (leg.exitPrice == null) return null;
+  const mult = leg.multiplier || 1;
+  return Number((leg.qty * mult * (leg.exitPrice - leg.entryPrice) - (leg.fees || 0)).toFixed(6));
+}
+
+/** Prêmio líquido do grupo: positivo = crédito recebido; negativo = débito pago. */
+export function optionNetPremium(legs: OptionLeg[]): number {
+  let premium = 0;
+  let fees = 0;
+  for (const leg of legs) {
+    premium -= leg.qty * (leg.multiplier || 1) * leg.entryPrice;
+    fees += leg.fees || 0;
+  }
+  return Number((premium - fees).toFixed(6));
+}
+
+/** P/L do grupo no vencimento, para um subjacente `S`. */
+export function optionStrategyPnlAtExpiry(legs: OptionLeg[], S: number): number {
+  return Number(legs.reduce((s, l) => s + optionLegPayoffAtExpiry(l, S), 0).toFixed(6));
+}
+
+export interface PayoffPoint {
+  S: number;
+  pnl: number;
+}
+
+/** Curva de payoff amostrada entre `min` e `max`. */
+export function optionPayoffCurve(
+  legs: OptionLeg[],
+  opts: { min: number; max: number; points: number },
+): PayoffPoint[] {
+  const { min, max, points } = opts;
+  if (!(max > min) || points < 2) return [];
+  const out: PayoffPoint[] = [];
+  for (let i = 0; i < points; i += 1) {
+    const S = min + ((max - min) * i) / (points - 1);
+    out.push({ S: Number(S.toFixed(4)), pnl: optionStrategyPnlAtExpiry(legs, S) });
+  }
+  return out;
+}
+
+/** Breakevens no vencimento: raízes de P/L=0, ordenadas (0, 1 ou mais). */
+export function optionBreakevens(legs: OptionLeg[], opts: { min: number; max: number; step?: number }): number[] {
+  const { min, max } = opts;
+  const step = opts.step ?? (max - min) / 1000;
+  if (!(max > min) || !(step > 0)) return [];
+  const f = (S: number) => optionStrategyPnlAtExpiry(legs, S);
+  const roots: number[] = [];
+  let prevS = min;
+  let prev = f(min);
+  if (Math.abs(prev) < 1e-9) roots.push(Number(min.toFixed(4)));
+  for (let S = min + step; S <= max + 1e-9; S += step) {
+    const cur = f(S);
+    if (Math.abs(cur) < 1e-9) {
+      roots.push(Number(S.toFixed(4)));
+    } else if (prev * cur < 0) {
+      let a = prevS;
+      let b = S;
+      let fa = prev;
+      for (let k = 0; k < 60; k += 1) {
+        const m = (a + b) / 2;
+        const fm = f(m);
+        if (fa * fm <= 0) b = m;
+        else {
+          a = m;
+          fa = fm;
+        }
+      }
+      roots.push(Number(((a + b) / 2).toFixed(4)));
+    }
+    prevS = S;
+    prev = cur;
+  }
+  const out: number[] = [];
+  for (const r of roots) if (!out.some((x) => Math.abs(x - r) < 1e-3)) out.push(r);
+  return out;
+}
+
+export interface MaxProfitLoss {
+  maxProfit: number;
+  maxLoss: number;
+  maxProfitUnbounded: boolean;
+  maxLossUnbounded: boolean;
+}
+
+/** Máx lucro/perda na janela `[min,max]` + flag de ilimitado pelas inclinações das pontas. */
+export function optionMaxProfitLoss(legs: OptionLeg[], opts: { min: number; max: number }): MaxProfitLoss {
+  const { min, max } = opts;
+  const curve = optionPayoffCurve(legs, { min, max, points: 401 });
+  let maxProfit = -Infinity;
+  let maxLoss = Infinity;
+  for (const p of curve) {
+    if (p.pnl > maxProfit) maxProfit = p.pnl;
+    if (p.pnl < maxLoss) maxLoss = p.pnl;
+  }
+  const f = (S: number) => optionStrategyPnlAtExpiry(legs, S);
+  const eps = (max - min) * 1e-3;
+  const slopeMax = (f(max) - f(max - eps)) / eps;
+  const slopeMin = (f(min + eps) - f(min)) / eps;
+  return {
+    maxProfit: Number((Number.isFinite(maxProfit) ? maxProfit : 0).toFixed(2)),
+    maxLoss: Number((Number.isFinite(maxLoss) ? maxLoss : 0).toFixed(2)),
+    maxProfitUnbounded: slopeMax > 1e-6 || slopeMin < -1e-6,
+    maxLossUnbounded: slopeMax < -1e-6 || slopeMin > 1e-6,
+  };
+}
+
+export interface OptionMarketPoint {
+  S: number;
+  r: number;
+  q?: number;
+  now?: Date;
+}
+
+/** Gregas líquidas do grupo (Δ em ações-equivalentes; Γ/Θ/V/ρ em dólares se ×multiplier).
+ *  Usa `ivEntry` da perna; pernas sem IV/T são ignoradas. */
+export function netOptionGreeks(legs: OptionLeg[], market: OptionMarketPoint): Greeks {
+  const q = market.q ?? 0;
+  const now = market.now ?? new Date();
+  const acc: Greeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  for (const leg of legs) {
+    const T = timeToExpiry(leg.expiry, now);
+    const sigma = leg.ivEntry;
+    if (!(sigma && sigma > 0) || !(T > 0)) continue;
+    const g = bsmGreeks({ S: market.S, K: leg.strike, T, r: market.r, sigma, right: leg.right, q });
+    if (!g) continue;
+    const mult = leg.multiplier || 1;
+    acc.delta += g.delta * leg.qty * mult;
+    acc.gamma += g.gamma * leg.qty * mult;
+    acc.theta += g.theta * leg.qty * mult;
+    acc.vega += g.vega * leg.qty * mult;
+    acc.rho += g.rho * leg.qty * mult;
+  }
+  return {
+    delta: Number(acc.delta.toFixed(4)),
+    gamma: Number(acc.gamma.toFixed(6)),
+    theta: Number(acc.theta.toFixed(6)),
+    vega: Number(acc.vega.toFixed(4)),
+    rho: Number(acc.rho.toFixed(4)),
+  };
+}
+
+/** Delta notional do grupo (|Δ| × S) e delta líquido em ações-equivalentes. */
+export function optionDeltaNotional(
+  legs: OptionLeg[],
+  market: OptionMarketPoint,
+): { netDelta: number; deltaNotional: number } {
+  const g = netOptionGreeks(legs, market);
+  return { netDelta: g.delta, deltaNotional: Number((Math.abs(g.delta) * market.S).toFixed(2)) };
+}
+
+/** Cost basis por ação ao exercer uma PUT vendida (strike pago − prêmio líquido recebido). */
+export function assignmentPutCostBasis(input: { strike: number; shares: number; netPremium: number }): number {
+  if (!(input.shares > 0)) return 0;
+  return Number(((input.strike * input.shares - input.netPremium) / input.shares).toFixed(6));
+}
+
+/** Recebido por ação ao ser exercido numa CALL vendida (strike + prêmio líquido). */
+export function assignmentCallProceeds(input: { strike: number; shares: number; netPremium: number }): number {
+  if (!(input.shares > 0)) return 0;
+  return Number(((input.strike * input.shares + input.netPremium) / input.shares).toFixed(6));
+}
+
+/** Yield de renda (prêmio / base). `annualize` multiplica por 365/dias. */
+export function optionIncomeYield(input: {
+  netPremium: number;
+  basis: number;
+  daysToExpiry: number;
+  annualize?: boolean;
+}): number | null {
+  const { netPremium, basis, daysToExpiry } = input;
+  if (!(basis > 0) || !(daysToExpiry > 0)) return null;
+  const y = netPremium / basis;
+  return input.annualize ? Number(((y * 365) / daysToExpiry).toFixed(6)) : Number(y.toFixed(6));
+}
+
+/** Covered call: prêmio / (spot × multiplier × contratos). */
+export function coveredCallYield(input: {
+  netPremium: number;
+  spot: number;
+  multiplier: number;
+  contracts: number;
+  daysToExpiry: number;
+  annualize?: boolean;
+}): number | null {
+  return optionIncomeYield({
+    netPremium: input.netPremium,
+    basis: input.spot * input.multiplier * input.contracts,
+    daysToExpiry: input.daysToExpiry,
+    annualize: input.annualize,
+  });
+}
+
+/** Cash-secured put: prêmio / (strike × multiplier × contratos). */
+export function cashSecuredPutYield(input: {
+  netPremium: number;
+  strike: number;
+  multiplier: number;
+  contracts: number;
+  daysToExpiry: number;
+  annualize?: boolean;
+}): number | null {
+  return optionIncomeYield({
+    netPremium: input.netPremium,
+    basis: input.strike * input.multiplier * input.contracts,
+    daysToExpiry: input.daysToExpiry,
+    annualize: input.annualize,
+  });
 }

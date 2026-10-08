@@ -8,9 +8,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import FinancialCalendar from '@apps/ui/FinancialCalendar';
 import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
-import { fetchEconomicEvents, monthRange, tradePnl, nowIso } from '@apps/lib/db';
+import { fetchEconomicEvents, monthRange, tradePnl, nowIso, optionExpiryEvents } from '@apps/lib/db';
 
-const LAYER_IDS = ['trading', 'economic', 'bills', 'payouts', 'tax'];
+const LAYER_IDS = ['trading', 'economic', 'bills', 'payouts', 'tax', 'options'];
 
 export default function CalendarPage() {
   const finance = useFinance();
@@ -20,6 +20,7 @@ export default function CalendarPage() {
   const [bills, setBills] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [tax, setTax] = useState([]);
+  const [optionMarks, setOptionMarks] = useState([]);
   const [economic, setEconomic] = useState([]);
   const [economicLoading, setEconomicLoading] = useState(false);
   const [economicError, setEconomicError] = useState(null);
@@ -29,10 +30,11 @@ export default function CalendarPage() {
     if (!finance) return;
     setLoading(true);
     try {
-      const [trades, transactions, payoutList] = await Promise.all([
+      const [trades, transactions, payoutList, optionLegs] = await Promise.all([
         finance.ds.trades.list(),
         finance.ds.transactions.list(),
         finance.ds.payouts.list(),
+        finance.ds.optionLegs.list(),
       ]);
 
       // Trading por dia (PnL usa tradePnl — fórmula única dos motores).
@@ -58,6 +60,14 @@ export default function CalendarPage() {
       setTax(taxArr);
 
       setPayouts(payoutList.map((p) => ({ date: p.date ?? p.updatedAt, amount: p.net ?? 0, status: p.status })));
+
+      // Vencimentos de opções (pernas abertas) — camada "Opções".
+      setOptionMarks(
+        optionExpiryEvents(optionLegs, { withinDays: 60 }).map((e) => ({
+          date: e.date,
+          label: `${e.symbol} ${e.qty > 0 ? 'long' : 'short'} (${e.dte}d)`,
+        })),
+      );
     } finally {
       setLoading(false);
     }
@@ -131,6 +141,7 @@ export default function CalendarPage() {
         bills={bills}
         payouts={payouts}
         tax={tax}
+        options={optionMarks}
         loading={loading}
         economicLoading={economicLoading}
         economicError={economicError}

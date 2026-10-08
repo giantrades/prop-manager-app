@@ -38,6 +38,18 @@ describe('seedDemoData', () => {
     const positions = await ds.positions.list();
     expect(positions.find((p) => p.assetKind === 'other')).toBeTruthy();
     expect(positions.find((p) => p.assetKind === 'fixed')).toBeTruthy();
+
+    // Opções demo: cadeia (cache), pernas e template custom.
+    const optChain = await ds.optionChain.list();
+    expect(optChain.length).toBe(36); // 2 vencimentos × 9 strikes × 2 lados
+    expect(optChain.every((q) => q.multiplier === 100 && q.iv != null)).toBe(true);
+    const optLegs = await ds.optionLegs.list();
+    expect(optLegs).toHaveLength(5);
+    expect(optLegs.some((l) => l.groupId === 'grp-demo-cc' && l.right === 'call' && l.qty < 0)).toBe(true);
+    const optTemplates = await ds.optionTemplates.list();
+    expect(optTemplates.map((t) => t.id)).toContain('tpl-demo-wheel');
+    const txs = await ds.transactions.list();
+    expect(txs.filter((t) => t.kind === 'option_premium')).toHaveLength(2);
   });
 
   it('conta própria liga hasUserData; clearDemoData remove só o demo e desliga', async () => {
@@ -55,6 +67,9 @@ describe('seedDemoData', () => {
     const accounts = await ds.accounts.list();
     expect(accounts.map((a) => a.id)).toEqual(['acct-user']);
     expect(await ds.trades.list()).toHaveLength(0);
+    expect(await ds.optionLegs.list()).toHaveLength(0);
+    expect(await ds.optionChain.list()).toHaveLength(0);
+    expect(await ds.optionTemplates.list()).toHaveLength(0);
     expect(await isDemoDisabled(ds)).toBe(true);
   });
 });

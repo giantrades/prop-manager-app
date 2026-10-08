@@ -24,6 +24,9 @@ DOCS/10_MODULES/
   propfirm/
     00-spec.md                     <- spec Prop/Firm Manager
     melhorias.md                   <- batch A (A1–A4)
+  options/
+    00-spec.md                     <- Options Analytics (Quantower-like) + renda + portfólio — SPEC APROVADA (F0–F4 pendentes)
+    melhorias.md                   <- batch A (A1–A7)
 ```
 
 > O mapa de código (rota → container → UI → motor) vive em `DOCS/11_PAGE_MAP.md`.
@@ -90,3 +93,5 @@ Cada módulo tem **um agente** em `.opencode/agent/module-*.md`. Para rodar um m
 3. **Portfolio Live** ✅ FEITO (P1–P8) — restam as **8 melhorias** (01–08).
 4. **Gastos** → próximo (maior valor visual pendente).
 5. **PropFirm** → depois.
+6. **Opções** → spec aprovada (`options/00-spec.md`); executar F0–F4. Ao iniciar a F0,
+   criar `.opencode/agent/module-options.md` no padrão dos demais agentes de módulo.

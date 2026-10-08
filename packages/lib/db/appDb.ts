@@ -41,6 +41,17 @@ interface AppDbSchema extends DBSchema {
   snapshots_networth: { key: string; value: Record<string, unknown> & { id: string } };
   firm_costs: { key: string; value: Record<string, unknown> & { id: string } };
   cards: { key: string; value: Record<string, unknown> & { id: string } };
+  option_legs: {
+    key: string;
+    value: Record<string, unknown> & { id: string };
+    indexes: { underlying_expiry: string[]; account_entry: string[]; groupId: string; quantowerId: string };
+  };
+  option_templates: { key: string; value: Record<string, unknown> & { id: string } };
+  option_chain: {
+    key: string;
+    value: Record<string, unknown> & { id: string };
+    indexes: { underlying_expiry: string[] };
+  };
   meta: { key: string; value: Record<string, unknown> & { id: string } };
 }
 
@@ -87,6 +98,20 @@ const STORE_DEFS: Record<StoreName, StoreDef> = {
   snapshots_networth: { keyPath: 'id' },
   firm_costs: { keyPath: 'id' },
   cards: { keyPath: 'id' },
+  option_legs: {
+    keyPath: 'id',
+    indexes: {
+      underlying_expiry: ['underlying', 'expiry'],
+      account_entry: ['accountId', 'entryDatetime'],
+      groupId: 'groupId',
+      quantowerId: 'quantowerId',
+    },
+  },
+  option_templates: { keyPath: 'id' },
+  option_chain: {
+    keyPath: 'id',
+    indexes: { underlying_expiry: ['underlying', 'expiry'] },
+  },
   meta: { keyPath: 'id' },
 };
 
@@ -118,7 +143,7 @@ function upgradeStores(database: IDBDatabase): void {
     const store = database.createObjectStore(name, { keyPath: def.keyPath });
     if (def.indexes) {
       for (const [indexName, keyPath] of Object.entries(def.indexes)) {
-        store.createIndex(indexName, keyPath, { unique: indexName === 'quantowerId' });
+        store.createIndex(indexName, keyPath, { unique: indexName === 'quantowerId' && name === 'trades' });
       }
     }
   }
