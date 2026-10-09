@@ -1280,11 +1280,25 @@ namespace QuantowerBridge
         // OpenInterest, ExpirationDate, Root, Underlier, LotSize).
         // O strike/right NÃO é derivado aqui: o bridge manda o `symbol` cru e o APP deriva
         // (parseOptionSymbol) — assim uma variação de nomenclatura se corrige no app, sem
-        // recompilar o bridge. VALIDAR AO VIVO: o nome do membro do enum `SymbolType.Option`
-        // e a unidade do multiplicador (`LotSize`).
+        // recompilar o bridge. VALIDAR AO VIVO: a unidade do multiplicador (`LotSize`).
+        // O nome do membro do enum `SymbolType` varia por versão do Quantower (e a doc do
+        // enum está fora do ar). Por isso NÃO referenciamos `SymbolType.Option` — comparamos
+        // o TEXTO do enum ("Option"/"Options"/"VanillaOption"…) e, se inconclusivo, caímos num
+        // heurístico por nome (contrato C/P). Assim compila em qualquer versão.
         private static bool IsOptionSymbol(Symbol s)
         {
-            try { return s != null && s.SymbolType == SymbolType.Option; }
+            try
+            {
+                if (s == null) return false;
+                var t = s.SymbolType.ToString();
+                if (t.IndexOf("option", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                // Fallback: derivado com vencimento + underlier E nome com padrão C/P.
+                if (s.ExpirationDate == default(DateTime)) return false;
+                bool hasUnderlier = !string.IsNullOrEmpty(s.Root) || !string.IsNullOrEmpty(s.UnderlierId) || s.Underlier != null;
+                if (!hasUnderlier) return false;
+                var name = (s.Name ?? "").ToUpperInvariant();
+                return System.Text.RegularExpressions.Regex.IsMatch(name, @"\d\s*[CP]\b|\b[CP]\s*\d");
+            }
             catch { return false; }
         }
 
