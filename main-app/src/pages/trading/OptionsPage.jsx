@@ -61,6 +61,7 @@ export default function OptionsPage() {
   const [preload, setPreload] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [bridgeList, setBridgeList] = useState([]);
   const settingsLoaded = useRef(false);
 
   const ds = finance?.ds;
@@ -86,6 +87,19 @@ export default function OptionsPage() {
     if (!ds) return undefined;
     return ds.bus.on('datastore:change', () => reload());
   }, [ds, reload]);
+
+  // Lista de subjacentes com opções no Quantower (para a busca). Best-effort (bridge off = []).
+  const loadBridgeList = useCallback(async () => {
+    try {
+      const { bridgeUrl, bridgeToken } = bridgePrefs();
+      const adapter = new QuantowerAdapter({ bridgeUrl, bridgeToken });
+      const list = await adapter.getOptionUnderlyings();
+      setBridgeList(Array.isArray(list) ? list : []);
+    } catch {
+      /* bridge off */
+    }
+  }, []);
+  useEffect(() => { loadBridgeList(); }, [loadBridgeList]);
 
   // Parâmetros persistidos (carrega uma vez; depois o estado local é a fonte).
   useEffect(() => {
@@ -117,6 +131,12 @@ export default function OptionsPage() {
     () => [...new Set([...quotes.map((q) => q.underlying), ...legs.map((l) => l.underlying), ...Object.keys(spots)])].sort(),
     [quotes, legs, spots],
   );
+  const underlyingOptions = useMemo(() => {
+    const map = new Map();
+    for (const x of bridgeList) if (x?.underlying) map.set(x.underlying, { underlying: x.underlying, count: x.count });
+    for (const u of underlyings) if (!map.has(u)) map.set(u, { underlying: u });
+    return [...map.values()];
+  }, [bridgeList, underlyings]);
   const multipliers = useMemo(() => {
     const m = {};
     for (const l of legs) if (l.multiplier > 0) m[l.underlying] = l.multiplier;
@@ -244,24 +264,28 @@ export default function OptionsPage() {
   // Sync com o bridge Quantower: puxa vencimentos + cadeia + posições de opções.
   const handleSync = useCallback(async () => {
     if (!ds) return;
-    if (underlyings.length === 0) { toast('Informe um subjacente nos Parâmetros antes de sincronizar.', { type: 'warn' }); return; }
     const { bridgeUrl, bridgeToken } = bridgePrefs();
     const adapter = new QuantowerAdapter({ bridgeUrl, bridgeToken });
     setSyncing(true);
     try {
       const res = await syncOptionsFromBridge(ds, {
+        underlyings: () => adapter.getOptionUnderlyings(),
         expiries: (u) => adapter.getOptionExpiries(u),
         chain: (u, e, depth) => adapter.getOptionChain(u, e, depth),
         positions: () => adapter.getOptionPositions().then((positions) => ({ positions })),
       }, { underlyings, depth: 15, defaultMultiplier: settings.defaultMultiplier ?? undefined });
-      toast(`Quantower: ${res.quotes} cotação(ões) · ${res.legs} posição(ões)${res.rejectedQuotes ? ` · ${res.rejectedQuotes} rejeitada(s)` : ''}.`);
+      if (res.quotes === 0 && res.legs === 0) {
+        toast('Quantower: nenhuma opção encontrada. Carregue a cadeia na plataforma (Option Analytics / watchlist) e tente de novo.', { type: 'warn', durationMs: 10000 });
+      } else {
+        toast(`Quantower: ${res.quotes} cotação(ões) · ${res.legs} posição(ões)${res.rejectedQuotes ? ` · ${res.rejectedQuotes} rejeitada(s)` : ''}.`);
+      }
       reload();
     } catch (e) {
       toast(`Falha no sync: ${e?.message ?? e}`, { type: 'error' });
     } finally {
       setSyncing(false);
     }
-  }, [ds, underlyings, settings.defaultMultiplier, toast, reload]);
+  }, [ds, underlyings, settings.defaultMultiplier, toast, reload, loadBridgeList]);
 
   const importLegs = useCallback(async (list) => {
     if (!ds) return;
@@ -446,6 +470,7 @@ export default function OptionsPage() {
         {tab === 'analyzer' && (
           <OptionAnalyzer
             underlyings={underlyings}
+            underlyingOptions={underlyingOptions}
             quotes={quotes}
             spots={spots}
             rate={rate}

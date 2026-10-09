@@ -98,7 +98,7 @@ namespace QuantowerBridge
         private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromMinutes(10);
         private static readonly object _idempotencyLock = new();
 
-        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream", "/options/expiries", "/options/chain", "/options/positions" };
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream", "/options/underlyings", "/options/expiries", "/options/chain", "/options/positions" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -477,6 +477,7 @@ namespace QuantowerBridge
                     // keep as-is
                 }
                 else if (path.StartsWith("/orders")) path = "/orders";
+                else if (path.StartsWith("/options/underlyings")) path = "/options/underlyings";
                 else if (path.StartsWith("/options/expiries")) path = "/options/expiries";
                 else if (path.StartsWith("/options/chain")) path = "/options/chain";
                 else if (path.StartsWith("/options/positions")) path = "/options/positions";
@@ -528,6 +529,9 @@ namespace QuantowerBridge
                         break;
                     case "/orders":
                         json = BuildOrdersJson();
+                        break;
+                    case "/options/underlyings":
+                        json = BuildOptionUnderlyingsJson();
                         break;
                     case "/options/expiries":
                         json = BuildOptionExpiriesJson(request.QueryString["underlying"]);
@@ -1323,6 +1327,26 @@ namespace QuantowerBridge
             var root = OptionUnderlyingOf(s).ToUpperInvariant();
             if (root == u) return true;
             return (s.Name ?? "").ToUpperInvariant().StartsWith(u);
+        }
+
+        private static string BuildOptionUnderlyingsJson()
+        {
+            var map = new Dictionary<string, int>();
+            try
+            {
+                foreach (var s in Core.Instance.Symbols)
+                {
+                    if (!IsOptionSymbol(s)) continue;
+                    var u = OptionUnderlyingOf(s).ToUpperInvariant();
+                    if (string.IsNullOrEmpty(u)) continue;
+                    map[u] = (map.TryGetValue(u, out var c) ? c : 0) + 1;
+                }
+            }
+            catch (Exception ex) { FileLog($"[OPTIONS] underlyings erro: {ex.Message}"); }
+            var underlyings = map.OrderByDescending(kv => kv.Value)
+                .Select(kv => new { underlying = kv.Key, count = kv.Value })
+                .ToList();
+            return JsonSerializer.Serialize(new { underlyings, count = underlyings.Count }, JsonOptions);
         }
 
         private static string BuildOptionExpiriesJson(string underlying)

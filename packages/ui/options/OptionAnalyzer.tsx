@@ -38,6 +38,7 @@ import {
 import type { OptionChainQuote, OptionLeg, OptionRight, OptionStrategyGroup, OptionTemplateCategory } from '@apps/lib/db';
 import { fmtMoney } from '../currency';
 import { ensureOptionStyles } from './optionStyles';
+import UnderlyingSearch from './UnderlyingSearch';
 
 ensureOptionStyles();
 
@@ -64,6 +65,8 @@ export interface AnalyzerPreload {
 
 interface Props {
   underlyings: string[];
+  /** Lista com busca (do bridge) para escolher o subjacente. */
+  underlyingOptions?: Array<{ underlying: string; count?: number }>;
   quotes: OptionChainQuote[];
   spots: Record<string, number>;
   rate: number; // decimal
@@ -85,6 +88,7 @@ const dteOf = (expiry: string): number => Math.max(0, Math.ceil((new Date(expiry
 
 export default function OptionAnalyzer({
   underlyings,
+  underlyingOptions,
   quotes,
   spots,
   rate,
@@ -288,10 +292,14 @@ export default function OptionAnalyzer({
     <div className="opxa-root">
       {/* Toolbar compacta: subjacente + estratégia + IV + janela (spot/taxa/mult vêm dos globais) */}
       <div className="card opxa-toolbar" role="group" aria-label="Parâmetros do Analyzer">
-        <label className="opxa-tf" style={{ minWidth: 130 }}><span>Subjacente</span>
-          <input className="input" list="opx-underlyings" value={underlying} onChange={(e) => setUnderlying(e.target.value.toUpperCase())} placeholder="ex.: AAPL" />
-          <datalist id="opx-underlyings">{underlyings.map((u) => <option key={u} value={u} />)}</datalist>
-        </label>
+        <div className="opxa-tf" style={{ minWidth: 160 }}>
+          <span>Subjacente</span>
+          <UnderlyingSearch
+            value={underlying}
+            onChange={setUnderlying}
+            options={underlyingOptions && underlyingOptions.length ? underlyingOptions : underlyings.map((u) => ({ underlying: u }))}
+          />
+        </div>
         <label className="opxa-tf" style={{ minWidth: 150 }}><span>Estratégia</span>
           <select className="select" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
             <option value="custom">Personalizada (pela cadeia)</option>

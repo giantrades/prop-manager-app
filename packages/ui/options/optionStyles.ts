@@ -131,6 +131,15 @@ const CSS = `
 .opxa-price.put { color: var(--red); }
 .opxa-price:hover:not(:disabled) { border-color: var(--brand); }
 .opxa-price:disabled { opacity: 0.4; cursor: default; }
+
+/* Busca de subjacente (combobox) */
+.opxs-root { position: relative; }
+.opxs-panel { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; background: var(--panel); border: 1px solid var(--soft); border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,0.45); }
+.opxs-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 10px; min-height: 40px; background: transparent; border: 0; color: var(--text); text-align: left; cursor: pointer; font-size: 13px; }
+.opxs-item:hover, .opxs-item.on { background: var(--chip-bg); }
+.opxs-name { font-weight: 600; }
+.opxs-count { color: var(--muted); font-size: 11px; }
+.opxs-empty { padding: 10px 12px; color: var(--muted); font-size: 12px; }
 @media (max-width: 900px) {
   .opxa-grid { grid-template-columns: 1fr; }
   .opxa-main { order: 1; }

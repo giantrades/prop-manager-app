@@ -395,6 +395,12 @@ export class QuantowerAdapter extends BaseAdapter {
     return data.expiries || [];
   }
 
+  /** Subjacentes que têm opções na plataforma (roots), com a contagem de contratos. */
+  async getOptionUnderlyings() {
+    const data = await this._fetch('/options/underlyings');
+    return data.underlyings || [];
+  }
+
   /** Cadeia de um vencimento (quotes + gregas + IV). Retorna o payload cru p/ normalizar. */
   async getOptionChain(underlying, expiry, depth = 15) {
     const data = await this._fetch('/options/chain', { underlying, expiry, depth });

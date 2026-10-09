@@ -14,6 +14,8 @@ import {
 } from './optionsIngest';
 
 export interface OptionsBridge {
+  /** Descobre os subjacentes que têm opções (usado quando `opts.underlyings` não é dado). */
+  underlyings?: () => Promise<Array<{ underlying: string }>>;
   expiries: (underlying: string) => Promise<Array<{ expiry: string }>>;
   chain: (underlying: string, expiry: string, depth: number) => Promise<BridgeChainPayload>;
   positions: () => Promise<BridgePositionsPayload>;
@@ -38,7 +40,17 @@ export async function syncOptionsFromBridge(
   opts?: { underlyings?: string[]; depth?: number; defaultMultiplier?: number },
 ): Promise<SyncOptionsResult> {
   const depth = opts?.depth ?? 15;
-  const underlyings = (opts?.underlyings ?? []).map((u) => String(u).trim().toUpperCase()).filter(Boolean);
+  let underlyings = (opts?.underlyings ?? []).map((u) => String(u).trim().toUpperCase()).filter(Boolean);
+  // Sem subjacentes informados, descobre no bridge (roots que têm opções).
+  if (underlyings.length === 0 && bridge.underlyings) {
+    try {
+      underlyings = (await bridge.underlyings())
+        .map((x) => String(x?.underlying ?? '').trim().toUpperCase())
+        .filter(Boolean);
+    } catch {
+      /* bridge off */
+    }
+  }
   let expiries = 0;
   let quotes = 0;
   let rejectedQuotes = 0;
