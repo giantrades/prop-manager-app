@@ -6,9 +6,39 @@
 import type { Greeks, OptionChainQuote, OptionLeg, OptionQuoteSource, OptionRight } from './types';
 import { optionQuoteId } from './options';
 
+/**
+ * Deriva `strike`/`right` do NOME do contrato. O bridge manda o `symbol` cru (a API do
+ * Quantower não expõe `Strike` direto) e a derivação fica no app — assim uma variação de
+ * nomenclatura é corrigida aqui, sem recompilar o bridge. Best-effort; null se não achar.
+ * Formatos cobertos: OCC (`AAPL250117C00150000`), `<strike><C|P>` (`PETR4 40C`) e
+ * `<C|P><strike>` (`AAPL C150`, `C00150000`).
+ */
+export function parseOptionSymbol(name: string): { strike: number; right: OptionRight } | null {
+  const s = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  let m = s.match(/(\d{6})([CP])(\d{8})\b/); // OCC: yymmdd + C/P + strike*1000 (8 díg.)
+  if (m) {
+    const strike = parseInt(m[3], 10) / 1000;
+    if (strike > 0) return { right: m[2] === 'C' ? 'call' : 'put', strike };
+  }
+  m = s.match(/(\d+(?:[.,]\d+)?)\s*([CP])\b/); // <strike><C|P>
+  if (m) {
+    const strike = Number(m[1].replace(',', '.'));
+    if (strike > 0) return { right: m[2] === 'C' ? 'call' : 'put', strike };
+  }
+  m = s.match(/\b([CP])\s*(\d+(?:[.,]\d+)?)\b/); // <C|P><strike>
+  if (m) {
+    let strike = Number(m[2].replace(',', '.'));
+    if (strike >= 100000) strike /= 1000;
+    if (strike > 0) return { right: m[1] === 'C' ? 'call' : 'put', strike };
+  }
+  return null;
+}
+
 export interface BridgeChainQuote {
-  strike: number;
-  right: OptionRight;
+  /** Opcional: se ausente, é derivado do `symbol` via `parseOptionSymbol`. */
+  strike?: number;
+  right?: OptionRight;
   symbol?: string;
   bid?: number | null;
   ask?: number | null;
@@ -52,18 +82,25 @@ export function normalizeOptionChainDetailed(
   const quotes: OptionChainQuote[] = [];
   const rejected: RejectedRow[] = [];
   (payload.quotes ?? []).forEach((q, index) => {
+    const parsed = (typeof q.strike === 'number' && q.strike > 0 && q.right)
+      ? { strike: q.strike, right: q.right }
+      : parseOptionSymbol(q.symbol ?? '');
+    if (!parsed) {
+      rejected.push({ index, reason: `strike/right não deriváveis do símbolo (${q.symbol ?? '?'})` });
+      return;
+    }
     const multiplier = q.multiplier ?? opts?.defaultMultiplier;
     if (!(typeof multiplier === 'number' && multiplier > 0)) {
-      rejected.push({ index, reason: `multiplier ausente (${payload.underlying} ${q.strike} ${q.right})` });
+      rejected.push({ index, reason: `multiplier ausente (${payload.underlying} ${parsed.strike} ${parsed.right})` });
       return;
     }
     quotes.push({
-      id: optionQuoteId(payload.underlying, payload.expiry, q.strike, q.right),
+      id: optionQuoteId(payload.underlying, payload.expiry, parsed.strike, parsed.right),
       underlying: payload.underlying,
       expiry: payload.expiry,
-      strike: q.strike,
-      right: q.right,
-      symbol: q.symbol ?? `${payload.underlying}${q.right[0].toUpperCase()}${q.strike}`,
+      strike: parsed.strike,
+      right: parsed.right,
+      symbol: q.symbol ?? `${payload.underlying}${parsed.right[0].toUpperCase()}${parsed.strike}`,
       bid: q.bid ?? null,
       ask: q.ask ?? null,
       last: q.last ?? null,
@@ -92,8 +129,9 @@ export interface BridgeOptionPosition {
   accountId: string;
   underlying: string;
   symbol?: string;
-  right: OptionRight;
-  strike: number;
+  /** Opcional: se ausente, derivado do `symbol`. */
+  right?: OptionRight;
+  strike?: number;
   expiry: string;
   qty: number;
   avgPrice: number;
@@ -121,9 +159,16 @@ export function normalizeOptionPositionsDetailed(
   const legs: OptionLeg[] = [];
   const rejected: RejectedRow[] = [];
   (payload.positions ?? []).forEach((p, index) => {
+    const parsed = (typeof p.strike === 'number' && p.strike > 0 && p.right)
+      ? { strike: p.strike, right: p.right }
+      : parseOptionSymbol(p.symbol ?? '');
+    if (!parsed) {
+      rejected.push({ index, reason: `strike/right não deriváveis (${p.symbol ?? '?'})` });
+      return;
+    }
     const multiplier = p.multiplier ?? opts?.defaultMultiplier;
     if (!(typeof multiplier === 'number' && multiplier > 0)) {
-      rejected.push({ index, reason: `multiplier ausente (${p.underlying} ${p.strike} ${p.right})` });
+      rejected.push({ index, reason: `multiplier ausente (${p.underlying} ${parsed.strike} ${parsed.right})` });
       return;
     }
     const now = new Date().toISOString();
@@ -131,9 +176,9 @@ export function normalizeOptionPositionsDetailed(
       id: `opt_${p.platformPositionId}`,
       accountId: p.accountId,
       underlying: p.underlying,
-      symbol: p.symbol ?? `${p.underlying}${p.right[0].toUpperCase()}${p.strike}`,
-      right: p.right,
-      strike: p.strike,
+      symbol: p.symbol ?? `${p.underlying}${parsed.right[0].toUpperCase()}${parsed.strike}`,
+      right: parsed.right,
+      strike: parsed.strike,
       expiry: p.expiry,
       qty: p.qty,
       multiplier,

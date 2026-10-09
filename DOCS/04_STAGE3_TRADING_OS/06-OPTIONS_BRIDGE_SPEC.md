@@ -87,3 +87,18 @@ POST /options/close
 - [ ] Bridge off no meio de `/options/order` → app mostra `retryable:true`, nunca sucesso falso.
 - [ ] Multileg perna-a-perna: falha de uma perna mostra exatamente qual falhou (sem rollback silencioso).
 - [ ] `multiplier` ausente na chain → app recusa a linha com aviso (não assume 100).
+
+## Implementado (bridge v3) — resumo
+
+- Endpoints em `quantower-bridge/QuantowerBridge.cs`: `GET /options/expiries?underlying=`,
+  `GET /options/chain?underlying=&expiry=&depth=`, `GET /options/positions`.
+- Fonte: `Core.Instance.Symbols` (tipo Option). **IV, Δ/Γ/Θ/V/ρ, OI, ExpirationDate,
+  Root/Underlier, Bid/Ask/Last, LotSize** vêm direto do `Symbol`
+  (confirmado em `api.quantower.com/docs/TradingPlatform.BusinessLayer.Symbol.html`).
+- **Strike/right NÃO são derivados no bridge**: o payload manda o `symbol` cru e o APP deriva
+  (`parseOptionSymbol` em `packages/lib/db/optionsIngest.ts`). Assim, variação de nomenclatura
+  se corrige no app sem recompilar o bridge. `depth` é aplicado no app (após derivar o strike).
+- App: `packages/lib/db/optionsSync.ts` (`syncOptionsFromBridge`) puxa e grava em
+  `option_chain`/`option_legs` (merge por `quantowerId`); botão "Sincronizar Quantower" na aba Opções.
+- **VALIDAR AO VIVO** (não testável aqui): o nome do membro do enum `SymbolType.Option` e a
+  unidade do multiplicador (`LotSize`). Se o enum tiver outro nome, é 1 palavra no bridge.

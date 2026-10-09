@@ -14,7 +14,8 @@ import OptionChainEditor from '@apps/ui/options/OptionChainEditor';
 import OptionLegForm from '@apps/ui/options/OptionLegForm';
 import OptionBoundary from '@apps/ui/options/OptionBoundary';
 import { ensureOptionStyles } from '@apps/ui/options/optionStyles';
-import { useFinance } from '@apps/state';
+import { useFinance, bridgePrefs } from '@apps/state';
+import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import {
   closeOptionLeg,
   enrichOptionQuote,
@@ -22,6 +23,7 @@ import {
   optionAssignment,
   optionNakedExposure,
   recordOptionPremium,
+  syncOptionsFromBridge,
 } from '@apps/lib/db';
 import { fmtMoney } from '@apps/ui/currency';
 import { useToast } from '@apps/ui/Toast';
@@ -58,6 +60,7 @@ export default function OptionsPage() {
   const [gate, setGate] = useState(null);
   const [preload, setPreload] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const settingsLoaded = useRef(false);
 
   const ds = finance?.ds;
@@ -238,6 +241,28 @@ export default function OptionsPage() {
     }, 'Salvar estratégia');
   }, [accountId, ds, requestSave, toast]);
 
+  // Sync com o bridge Quantower: puxa vencimentos + cadeia + posições de opções.
+  const handleSync = useCallback(async () => {
+    if (!ds) return;
+    if (underlyings.length === 0) { toast('Informe um subjacente nos Parâmetros antes de sincronizar.', { type: 'warn' }); return; }
+    const { bridgeUrl, bridgeToken } = bridgePrefs();
+    const adapter = new QuantowerAdapter({ bridgeUrl, bridgeToken });
+    setSyncing(true);
+    try {
+      const res = await syncOptionsFromBridge(ds, {
+        expiries: (u) => adapter.getOptionExpiries(u),
+        chain: (u, e, depth) => adapter.getOptionChain(u, e, depth),
+        positions: () => adapter.getOptionPositions().then((positions) => ({ positions })),
+      }, { underlyings, depth: 15, defaultMultiplier: settings.defaultMultiplier ?? undefined });
+      toast(`Quantower: ${res.quotes} cotação(ões) · ${res.legs} posição(ões)${res.rejectedQuotes ? ` · ${res.rejectedQuotes} rejeitada(s)` : ''}.`);
+      reload();
+    } catch (e) {
+      toast(`Falha no sync: ${e?.message ?? e}`, { type: 'error' });
+    } finally {
+      setSyncing(false);
+    }
+  }, [ds, underlyings, settings.defaultMultiplier, toast, reload]);
+
   const importLegs = useCallback(async (list) => {
     if (!ds) return;
     const existing = new Set(legs.map((l) => l.id));
@@ -323,6 +348,11 @@ export default function OptionsPage() {
     <div className="cmd-page">
       <div className="cmd-page-head">
         <h1 className="cmd-page-title">Opções</h1>
+        <div className="cmd-actions">
+          <button type="button" className="cmd-refresh" onClick={handleSync} disabled={syncing || !ds}>
+            {syncing ? 'Sincronizando…' : 'Sincronizar Quantower'}
+          </button>
+        </div>
       </div>
       <ModuleTabs module="trading" />
 

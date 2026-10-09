@@ -98,7 +98,7 @@ namespace QuantowerBridge
         private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromMinutes(10);
         private static readonly object _idempotencyLock = new();
 
-        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream" };
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream", "/options/expiries", "/options/chain", "/options/positions" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -477,6 +477,9 @@ namespace QuantowerBridge
                     // keep as-is
                 }
                 else if (path.StartsWith("/orders")) path = "/orders";
+                else if (path.StartsWith("/options/expiries")) path = "/options/expiries";
+                else if (path.StartsWith("/options/chain")) path = "/options/chain";
+                else if (path.StartsWith("/options/positions")) path = "/options/positions";
                 else if (path.StartsWith("/status")) path = "/status";
                 else if (path.StartsWith("/accounts")) path = "/accounts";
                 else if (path.StartsWith("/trades")) path = "/trades";
@@ -525,6 +528,15 @@ namespace QuantowerBridge
                         break;
                     case "/orders":
                         json = BuildOrdersJson();
+                        break;
+                    case "/options/expiries":
+                        json = BuildOptionExpiriesJson(request.QueryString["underlying"]);
+                        break;
+                    case "/options/chain":
+                        json = BuildOptionChainJson(request.QueryString["underlying"], request.QueryString["expiry"], request.QueryString["depth"]);
+                        break;
+                    case "/options/positions":
+                        json = BuildOptionPositionsJson();
                         break;
                     case "/health":
                         json = BuildHealthJson();
@@ -1260,6 +1272,162 @@ namespace QuantowerBridge
             };
 
             return JsonSerializer.Serialize(result, JsonOptions);
+        }
+
+        // ── Opções (F3) ───────────────────────────────────────────────────────
+        // Greegas/IV/OI vêm DIRETO do Symbol (confirmado em api.quantower.com/docs/
+        // TradingPlatform.BusinessLayer.Symbol.html: IV, Delta, Gamma, Theta, Vega, Rho,
+        // OpenInterest, ExpirationDate, Root, Underlier, LotSize).
+        // O strike/right NÃO é derivado aqui: o bridge manda o `symbol` cru e o APP deriva
+        // (parseOptionSymbol) — assim uma variação de nomenclatura se corrige no app, sem
+        // recompilar o bridge. VALIDAR AO VIVO: o nome do membro do enum `SymbolType.Option`
+        // e a unidade do multiplicador (`LotSize`).
+        private static bool IsOptionSymbol(Symbol s)
+        {
+            try { return s != null && s.SymbolType == SymbolType.Option; }
+            catch { return false; }
+        }
+
+        private static double? SafeD(double v)
+        {
+            if (double.IsNaN(v) || double.IsInfinity(v)) return null;
+            if (v == double.MinValue) return null; // Utils.Const.DOUBLE_UNDEFINED
+            return v;
+        }
+
+        private static string OptionUnderlyingOf(Symbol s)
+        {
+            if (s == null) return "";
+            if (!string.IsNullOrEmpty(s.Root)) return s.Root;
+            if (!string.IsNullOrEmpty(s.UnderlierId)) return s.UnderlierId;
+            return s.Underlier?.Name ?? "";
+        }
+
+        private static bool OptionMatchesUnderlying(Symbol s, string u)
+        {
+            if (string.IsNullOrEmpty(u)) return true;
+            var root = OptionUnderlyingOf(s).ToUpperInvariant();
+            if (root == u) return true;
+            return (s.Name ?? "").ToUpperInvariant().StartsWith(u);
+        }
+
+        private static string BuildOptionExpiriesJson(string underlying)
+        {
+            string u = (underlying ?? "").Trim().ToUpperInvariant();
+            var expiries = new List<object>();
+            var seen = new HashSet<string>();
+            try
+            {
+                foreach (var s in Core.Instance.Symbols)
+                {
+                    if (!IsOptionSymbol(s) || !OptionMatchesUnderlying(s, u)) continue;
+                    var d = s.ExpirationDate;
+                    if (d == default(DateTime) || d.Date < DateTime.UtcNow.Date) continue;
+                    var key = d.ToString("yyyy-MM-dd");
+                    if (seen.Add(key)) expiries.Add(new { expiry = key, eod = false });
+                }
+            }
+            catch (Exception ex) { FileLog($"[OPTIONS] expiries erro: {ex.Message}"); }
+            return JsonSerializer.Serialize(new { underlying = u, expiries, count = expiries.Count }, JsonOptions);
+        }
+
+        private static string BuildOptionChainJson(string underlying, string expiry, string depthStr)
+        {
+            string u = (underlying ?? "").Trim().ToUpperInvariant();
+            int depth = int.TryParse(depthStr, out var d0) && d0 > 0 ? d0 : 15;
+            DateTime? exp = null;
+            if (DateTime.TryParse(expiry, CultureInfo.InvariantCulture, DateTimeStyles.None, out var pd)) exp = pd.Date;
+
+            double spot = 0;
+            try
+            {
+                var under = Core.Instance.Symbols.FirstOrDefault(s => (s.Name ?? "").ToUpperInvariant() == u)
+                    ?? Core.Instance.Symbols.FirstOrDefault(s => !IsOptionSymbol(s) && OptionUnderlyingOf(s).ToUpperInvariant() == u);
+                if (under != null) spot = under.Last;
+            }
+            catch { /* noop */ }
+
+            var quotes = new List<object>();
+            try
+            {
+                foreach (var s in Core.Instance.Symbols)
+                {
+                    if (!IsOptionSymbol(s) || !OptionMatchesUnderlying(s, u)) continue;
+                    if (exp.HasValue && s.ExpirationDate.Date != exp.Value) continue;
+                    quotes.Add(new
+                    {
+                        symbol = s.Name,
+                        root = OptionUnderlyingOf(s),
+                        expiry = s.ExpirationDate.ToString("yyyy-MM-dd"),
+                        bid = SafeD(s.Bid),
+                        ask = SafeD(s.Ask),
+                        last = SafeD(s.Last),
+                        iv = SafeD(s.IV),
+                        oi = SafeD(s.OpenInterest),
+                        volume = SafeD(s.Volume),
+                        greeks = new
+                        {
+                            delta = SafeD(s.Delta),
+                            gamma = SafeD(s.Gamma),
+                            theta = SafeD(s.Theta),
+                            vega = SafeD(s.Vega),
+                            rho = SafeD(s.Rho)
+                        },
+                        multiplier = s.LotSize > 0 ? s.LotSize : 1,
+                        at = DateTime.UtcNow.ToString("O")
+                    });
+                }
+            }
+            catch (Exception ex) { FileLog($"[OPTIONS] chain erro: {ex.Message}"); }
+
+            // depth é aplicado no APP após derivar o strike do nome (aqui devolvemos a série).
+            return JsonSerializer.Serialize(new
+            {
+                underlying = u,
+                expiry = exp?.ToString("yyyy-MM-dd") ?? (expiry ?? ""),
+                spot,
+                quotes,
+                count = quotes.Count,
+                timestamp = DateTime.UtcNow.ToString("O")
+            }, JsonOptions);
+        }
+
+        private static string BuildOptionPositionsJson()
+        {
+            var positions = new List<object>();
+            try
+            {
+                foreach (Position pos in Core.Instance.Positions)
+                {
+                    var s = pos.Symbol;
+                    if (!IsOptionSymbol(s)) continue;
+                    bool isBuy = string.Equals(pos.Side.ToString(), "Buy", StringComparison.OrdinalIgnoreCase);
+                    positions.Add(new
+                    {
+                        platformPositionId = pos.Id,
+                        accountId = pos.Account?.Id ?? "",
+                        underlying = OptionUnderlyingOf(s),
+                        symbol = s.Name,
+                        expiry = s.ExpirationDate.ToString("yyyy-MM-dd"),
+                        qty = (isBuy ? 1 : -1) * pos.Quantity,
+                        avgPrice = pos.OpenPrice,
+                        multiplier = s.LotSize > 0 ? s.LotSize : 1,
+                        iv = SafeD(s.IV),
+                        greeks = new
+                        {
+                            delta = SafeD(s.Delta),
+                            gamma = SafeD(s.Gamma),
+                            theta = SafeD(s.Theta),
+                            vega = SafeD(s.Vega),
+                            rho = SafeD(s.Rho)
+                        },
+                        marketPrice = SafeD(pos.CurrentPrice),
+                        unrealizedPnl = SafeD(pos.NetPnL?.Value ?? 0)
+                    });
+                }
+            }
+            catch (Exception ex) { FileLog($"[OPTIONS] positions erro: {ex.Message}"); }
+            return JsonSerializer.Serialize(new { positions, count = positions.Count, timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
         }
 
         // [RECONSTRUÍDO] este método tinha sido colado cortado no meio,
