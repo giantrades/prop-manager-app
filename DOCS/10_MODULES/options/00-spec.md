@@ -161,12 +161,20 @@ underlier ≠ moeda da conta.
       payoff/breakevens/gregas/prêmio) + **Desk** (`OptionDesk.tsx`: chain com IV/Δ/OI + paper),
       **Smile** (`OptionSmile.tsx`) e **Posições** (`OptionPositions.tsx`). Tudo offline via
       cache `option_chain`; o live é F3.
+      → **Rodada 2 (completa offline)**: Analyzer com pernas editáveis (template/paper/posição),
+      curva T+0, What-If (até 5 curvas) e overlays Δ Γ Θ V ρ; Desk com cards por strike no mobile,
+      seletor de colunas e Bid/Ask clicáveis; aba **Cotações** (manual + CSV, IV/gregas calculadas
+      marcadas "calc"); **Posições** com spot por subjacente, P/L teórico × mercado, proveniência,
+      fechar, rolar, exercer (só ITM) e excluir com confirmação; registrar operação real + CSV;
+      risk gate (A2); parâmetros persistidos em `meta`; ErrorBoundary/skeleton/empty states.
 - [ ] **F3 — Live bridge**: extensão bridge (spec `06-...`) + ingest + posições reais +
       fechar/rolar + proveniência bridge/calculada/manual. Gate: posição real reconciliada,
       editor não some com a ordem.
       → **CLIENTE PRONTO / BRIDGE PENDENTE**: `optionsIngest.ts` (`normalizeOptionChain`,
       `normalizeOptionPositions`, `mergeOptionLegs`) + métodos `getOptionExpiries/Chain/Positions`
       no `QuantowerAdapter` + testes. Falta o lado C# do bridge (externo) e o wiring do ingest.
+      → ingest corrigido: multiplier nunca chutado (rejeita a linha), `mergeOptionLegs` preserva
+      data de entrada/grupo/IV/saída e só atualiza dados de mercado.
 - [ ] **F4 — Integrações**: Investimentos (aba carteira/renda + cobertura + assignment→
       Position), Trading/Investimentos widgets, Money (kind de prêmio), Risk (Δ-notional/
       margem), Home, Calendar (vencimento/data-com), Trades/Journal (analytics por

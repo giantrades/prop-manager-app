@@ -78,14 +78,14 @@ export default function OptionIncome({ height = 180 }: { height?: number }) {
       {monthly.length >= 1 && (
         <ResponsiveContainer width="100%" height={height}>
           <BarChart data={monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-            <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
-            <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-            <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
-            <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+            <CartesianGrid stroke="var(--soft)" />
+            <XAxis dataKey="ym" tick={{ fontSize: 10, fill: 'var(--muted)' }} />
+            <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} width={48} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
+            <Tooltip contentStyle={{ background: 'var(--panel)', border: '1px solid var(--soft)', borderRadius: 10, fontSize: 12 }} formatter={(v) => fmtMoney(v, 'USD')} />
+            <ReferenceLine y={0} stroke="var(--muted)" />
             <Bar dataKey="premium" name="Prêmio realizado">
               {monthly.map((m) => (
-                <Cell key={m.ym} fill={m.premium >= 0 ? '#2ecc71' : '#e74c3c'} />
+                <Cell key={m.ym} fill={m.premium >= 0 ? 'var(--green)' : 'var(--red)'} />
               ))}
             </Bar>
           </BarChart>

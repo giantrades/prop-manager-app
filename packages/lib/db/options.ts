@@ -14,12 +14,15 @@ import type {
   OptionTemplateCategory,
 } from './types';
 import {
+  bsmGreeks,
+  impliedVolatility,
   netOptionGreeks,
   optionBreakevens,
   optionLegRealizedPnl,
   optionMaxProfitLoss,
   optionNetPremium,
   optionPayoffCurve,
+  timeToExpiry,
   type OptionMarketPoint,
   type PayoffPoint,
 } from './financialFormulas';
@@ -69,12 +72,23 @@ export interface BuildLegOpts {
   quantowerId?: string;
 }
 
-/** Cria uma `OptionLeg` a partir de uma linha da cadeia (paper ou ordem real). */
+/** Preço de referência da linha: mid (bid/ask) → last → ask → bid. null se não houver nada. */
+export function optionQuoteMid(quote: Pick<OptionChainQuote, 'bid' | 'ask' | 'last'>): number | null {
+  if (quote.bid != null && quote.ask != null && quote.bid > 0 && quote.ask > 0) return (quote.bid + quote.ask) / 2;
+  return quote.last ?? quote.ask ?? quote.bid ?? null;
+}
+
+/**
+ * Cria uma `OptionLeg` a partir de uma linha da cadeia (paper ou ordem real).
+ * O multiplier vem do contrato (opts → cotação). NUNCA há default: se faltar, lança —
+ * a UI avisa em vez de gravar uma perna com tamanho de contrato chutado.
+ */
 export function buildOptionLegFromQuote(quote: OptionChainQuote, opts: BuildLegOpts): OptionLeg {
-  const mid =
-    quote.bid != null && quote.ask != null
-      ? (quote.bid + quote.ask) / 2
-      : quote.last ?? quote.ask ?? quote.bid ?? 0;
+  const multiplier = opts.multiplier ?? quote.multiplier;
+  if (!(typeof multiplier === 'number' && multiplier > 0)) {
+    throw new Error(`Multiplicador do contrato ausente em ${quote.symbol || quote.underlying}`);
+  }
+  const mid = optionQuoteMid(quote) ?? 0;
   return {
     id: newId('leg'),
     accountId: opts.accountId,
@@ -84,7 +98,7 @@ export function buildOptionLegFromQuote(quote: OptionChainQuote, opts: BuildLegO
     strike: quote.strike,
     expiry: quote.expiry,
     qty: opts.qty,
-    multiplier: opts.multiplier ?? quote.multiplier ?? 100,
+    multiplier,
     entryPrice: opts.entryPrice ?? mid,
     entryDatetime: opts.entryDatetime ?? new Date().toISOString(),
     fees: opts.fees ?? 0,
@@ -206,9 +220,11 @@ export function summarizeOptionStrategy(
   const rangePct = input.rangePct ?? 0.5;
   const min = Math.max(0.0001, input.S * (1 - rangePct));
   const max = input.S * (1 + rangePct);
-  const maxPL = optionMaxProfitLoss(legs, { min, max });
+  // Risco/gregas/payoff = só o que ainda está ABERTO; prêmio e realizado olham o grupo todo.
+  const live = legs.filter((l) => l.exitPrice == null);
+  const maxPL = optionMaxProfitLoss(live, { min, max });
   const market: OptionMarketPoint = { S: input.S, r: input.r, q: input.q, now: input.now };
-  const greeks = netOptionGreeks(legs, market);
+  const greeks = netOptionGreeks(live, market);
   return {
     netPremium: optionNetPremium(legs),
     realizedPnl: Number(legs.reduce((s, l) => s + (optionLegRealizedPnl(l) ?? 0), 0).toFixed(6)),
@@ -216,10 +232,10 @@ export function summarizeOptionStrategy(
     maxLoss: maxPL.maxLoss,
     maxProfitUnbounded: maxPL.maxProfitUnbounded,
     maxLossUnbounded: maxPL.maxLossUnbounded,
-    breakevens: optionBreakevens(legs, { min, max }),
+    breakevens: optionBreakevens(live, { min, max }),
     greeks,
     deltaNotional: Number((Math.abs(greeks.delta) * input.S).toFixed(2)),
-    payoff: optionPayoffCurve(legs, { min, max, points: input.points ?? 121 }),
+    payoff: optionPayoffCurve(live, { min, max, points: input.points ?? 121 }),
   };
 }
 
@@ -302,4 +318,154 @@ export const DEFAULT_OPTION_TEMPLATES: OptionStrategyTemplate[] = [
 
 export function optionTemplatesByCategory(category: OptionTemplateCategory): OptionStrategyTemplate[] {
   return DEFAULT_OPTION_TEMPLATES.filter((x) => x.category === category);
+}
+
+// ---------------------------------------------------------------------------
+// Enriquecimento local de cotação (proveniência por campo)
+// ---------------------------------------------------------------------------
+
+/**
+ * Completa IV (a partir do preço mid) e gregas (BSM) quando a cotação não as trouxe e há
+ * spot. Campos derivados ficam marcados em `derivedFields` — IV calculada NUNCA é
+ * apresentada como IV do broker. Não altera o que já veio preenchido.
+ */
+export function enrichOptionQuote(
+  quote: OptionChainQuote,
+  opts: { spot?: number; r: number; q?: number; now?: Date },
+): OptionChainQuote {
+  const spot = opts.spot;
+  if (!(spot && spot > 0)) return quote;
+  const T = timeToExpiry(quote.expiry, opts.now);
+  if (!(T > 0)) return quote;
+  const derived = new Set(quote.derivedFields ?? []);
+  let iv = quote.iv ?? null;
+  let greeks = quote.greeks ?? null;
+  if (iv == null) {
+    const mid = optionQuoteMid(quote);
+    if (mid && mid > 0) {
+      const solved = impliedVolatility({ S: spot, K: quote.strike, T, r: opts.r, q: opts.q ?? 0, right: quote.right, price: mid });
+      if (solved != null) {
+        iv = solved;
+        derived.add('iv');
+      }
+    }
+  }
+  if (greeks == null && iv != null && iv > 0) {
+    const g = bsmGreeks({ S: spot, K: quote.strike, T, r: opts.r, q: opts.q ?? 0, sigma: iv, right: quote.right });
+    if (g) {
+      greeks = g;
+      derived.add('greeks');
+    }
+  }
+  if (iv === (quote.iv ?? null) && greeks === (quote.greeks ?? null)) return quote;
+  return { ...quote, iv, greeks, derivedFields: [...derived] };
+}
+
+// ---------------------------------------------------------------------------
+// Ciclo de vida: elegibilidade de assignment, fechar e rolar
+// ---------------------------------------------------------------------------
+
+export interface AssignmentEligibility {
+  ok: boolean;
+  /** Em-dinheiro no spot informado. */
+  itm: boolean;
+  /** Vencimento já passou/é hoje. */
+  expired: boolean;
+  /** Exercício antes do vencimento (a UI pede confirmação explícita). */
+  early: boolean;
+  reason?: string;
+}
+
+/** Só perna vendida ABERTA e em-dinheiro pode ser exercida. Sem spot, não decide por chute. */
+export function optionAssignmentEligibility(
+  leg: OptionLeg,
+  opts: { spot?: number; now?: Date },
+): AssignmentEligibility {
+  const base = { ok: false, itm: false, expired: false, early: false };
+  if (leg.exitPrice != null) return { ...base, reason: 'Perna já fechada.' };
+  if (!(leg.qty < 0)) return { ...base, reason: 'Só pernas vendidas são exercidas contra você.' };
+  const spot = opts.spot;
+  if (!(spot && spot > 0)) return { ...base, reason: 'Informe o spot do subjacente.' };
+  const itm = leg.right === 'call' ? spot > leg.strike : spot < leg.strike;
+  const expired = optionDaysToExpiry(leg.expiry, opts.now) <= 0;
+  if (!itm) return { ...base, expired, reason: 'Opção fora do dinheiro: não há assignment.' };
+  return { ok: true, itm, expired, early: !expired };
+}
+
+export interface CloseLegInput {
+  exitPrice: number;
+  exitDatetime?: string;
+  /** Taxas do fechamento, somadas às da abertura. */
+  fees?: number;
+}
+
+/** Fecha uma perna (puro; o chamador persiste via DataService). */
+export function closeOptionLeg(leg: OptionLeg, input: CloseLegInput): OptionLeg {
+  if (!(input.exitPrice >= 0)) throw new Error('Preço de saída inválido');
+  return {
+    ...leg,
+    exitPrice: input.exitPrice,
+    exitDatetime: input.exitDatetime ?? new Date().toISOString(),
+    fees: Number(((leg.fees || 0) + (input.fees ?? 0)).toFixed(6)),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export interface RollPlanItem {
+  leg: OptionLeg;
+  /** Preço de fechamento (mid da cadeia atual) ou null se não há cotação. */
+  closePrice: number | null;
+  /** Nova perna (mesma qty/direito/strike no novo vencimento) ou null. */
+  next: OptionLeg | null;
+  reason?: string;
+}
+
+export interface RollPlan {
+  items: RollPlanItem[];
+  /** Todas as pernas têm preço de saída e entrada. */
+  complete: boolean;
+  /** Crédito (+) / débito (−) líquido da rolagem, em moeda (×multiplier). */
+  netCredit: number | null;
+  groupId: string;
+}
+
+/**
+ * Simula a rolagem de um grupo para `targetExpiry` mantendo direito, strike e quantidade.
+ * Preços vêm do mid da cadeia (cotação manual/bridge). Nada é gravado nem enviado.
+ */
+export function buildRollPlan(
+  legs: OptionLeg[],
+  quotes: OptionChainQuote[],
+  opts: { targetExpiry: string; accountId?: string; now?: Date },
+): RollPlan {
+  const byId = new Map(quotes.map((q) => [q.id, q] as const));
+  const groupId = `grp_roll_${(opts.now ?? new Date()).getTime().toString(36)}`;
+  const items: RollPlanItem[] = [];
+  let net = 0;
+  let complete = true;
+  for (const leg of legs.filter((l) => l.exitPrice == null)) {
+    const cur = byId.get(optionQuoteId(leg.underlying, leg.expiry, leg.strike, leg.right));
+    const nxt = byId.get(optionQuoteId(leg.underlying, opts.targetExpiry, leg.strike, leg.right));
+    const closePrice = cur ? optionQuoteMid(cur) : null;
+    const openPrice = nxt ? optionQuoteMid(nxt) : null;
+    let next: OptionLeg | null = null;
+    let reason: string | undefined;
+    if (closePrice == null) reason = 'Sem cotação do vencimento atual.';
+    else if (!nxt || openPrice == null) reason = `Sem cotação do strike ${leg.strike} em ${opts.targetExpiry}.`;
+    else {
+      next = buildOptionLegFromQuote(nxt, {
+        accountId: opts.accountId ?? leg.accountId,
+        qty: leg.qty,
+        entryPrice: openPrice,
+        groupId,
+        strategyId: leg.strategyId,
+        multiplier: leg.multiplier,
+        source: 'manual',
+      });
+      net += leg.qty * (leg.multiplier || 1) * (closePrice - openPrice);
+    }
+    if (!next) complete = false;
+    items.push({ leg, closePrice, next, reason });
+  }
+  return { items, complete: complete && items.length > 0, netCredit: complete && items.length > 0 ? Number(net.toFixed(2)) : null, groupId };
 }

@@ -42,7 +42,7 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/trading` | Trading | `command/TradingDashboardPage.jsx` | `JournalDashboard.tsx` | `risk.snapshot()`, `ds.trades`, checklist |
 | `/journal` | Trading | `trading/JournalPage.jsx` | `HeatmapSection`, `BreakdownSection`, `HistogramR`, `DurationAnalysis`, `WeeklyReview`, `PlaybookPanel`, `NotesEditor` | `ds.trades`, `journalAnalytics.ts` |
 | `/trades` | Trading | `trading/TradesPage.jsx` | `Trades.tsx`, `TradeForm.tsx` | `ds.trades`, `chain.syncTrade/deleteTrade`, `csvImport.ts` |
-| `/options` | Trading | `trading/OptionsPage.jsx` | `options/OptionAnalyzer.tsx` | `options.ts` (templates/agregação), `financialFormulas.ts § Opções` (BSM/gregas/payoff) |
+| `/options` | Trading | `trading/OptionsPage.jsx` | `options/OptionAnalyzer.tsx`, `OptionDesk.tsx`, `OptionChainEditor.tsx`, `OptionSmile.tsx`, `OptionPositions.tsx`, `OptionLegForm.tsx`, `OptionBoundary.tsx` | `options.ts` (templates/agregação/rolagem/fechamento), `optionsImport.ts` (CSV), `financialFormulas.ts § Opções` (BSM/gregas/payoff/T+0/What-If/risco), `ds.optionChain/optionLegs/meta` |
 | `/playbook` | Trading | `trading/PlaybookPage.jsx` | `PreTradeChecklist`, `Strategies`, `EmotionalDiary` | `strategies.ts`, `checklist.ts` |
 | `/risk` | Trading | `command/EngineViews.jsx` → `RiskPage()` | `RiskCenter.tsx` | `risk.snapshot()` |
 | `/live-positions` | Trading | `trading/LivePositionsPage.jsx` | (tabela inline) | `usePlatform().livePositions`, `QuantowerAdapter.modifyPosition/closePosition` |
@@ -94,6 +94,9 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
   (`packages/ui/options/OptionAnalyzer.tsx` — 37 templates, payoff, breakevens, gregas),
   **Desk** (`OptionDesk.tsx` — chain com IV/Δ/OI + paper), **Smile** (`OptionSmile.tsx`) e
   **Posições** (`OptionPositions.tsx`). Paper → "Salvar estratégia" grava em `option_legs`.
+  Sub-abas atuais: Analyzer · Desk · **Cotações** (`OptionChainEditor.tsx`: manual + CSV) · Smile ·
+  Posições (fechar/rolar/exercer, registrar operação `OptionLegForm.tsx`, risk gate).
+  Parâmetros (spot por subjacente, taxa, multiplicador padrão, estresse) em `meta['options.settings']`.
   Motor `packages/lib/db/options.ts` + fórmulas no contrato (seção Opções). Live é a F3
   (bridge `04_STAGE3_TRADING_OS/06-OPTIONS_BRIDGE_SPEC.md`). Widget **Renda de opções**
   (`OptionIncome.tsx`) no Trading Resumo.

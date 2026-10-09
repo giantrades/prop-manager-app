@@ -183,10 +183,19 @@ export function optionCoverage(legs: OptionLeg[], positions: Position[]): Covera
   }
   const out: CoverageRow[] = [];
   for (const [underlying, callLegs] of callsByU) {
-    const perContract = callLegs[0]?.multiplier || 100;
+    // Cobertura em AÇÕES: cada perna consome qty × multiplier do contrato (nunca 100 fixo).
+    // Perna sem multiplier válido não é considerada coberta.
     const contracts = callLegs.reduce((s, l) => s + Math.abs(l.qty), 0);
     const shares = sharesByU.get(underlying) ?? 0;
-    const coveredContracts = Math.min(contracts, Math.floor(shares / perContract));
+    let remaining = shares;
+    let coveredContracts = 0;
+    for (const l of callLegs) {
+      const m = l.multiplier;
+      if (!(m > 0)) continue;
+      const take = Math.min(Math.abs(l.qty), Math.floor(remaining / m));
+      coveredContracts += take;
+      remaining -= take * m;
+    }
     out.push({
       underlying,
       shares,

@@ -446,6 +446,8 @@ export interface OptionChainQuote extends SyncedRecord {
   multiplier: number;
   at: string;
   source: OptionQuoteSource;
+  /** Campos calculados localmente (BSM) em vez de vindos da fonte — proveniência por campo. */
+  derivedFields?: Array<'iv' | 'greeks'>;
 }
 
 /** Payload exato de `datastore:change` (contrato 01-DATA_CONTRACT.md). */

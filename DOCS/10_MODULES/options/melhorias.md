@@ -17,22 +17,27 @@
 
 ## A2 — Risk gate de opções (fricção antes de vender naked)
 
-- **Status**: `[ ]`
+- **Status**: `[x]` (feito: perda máxima + estresse; **margem de corretora segue fora** — cada broker difere)
 - **Contexto**: venda descoberta (naked call/put) tem risco de cauda; a "aposta #2" do
   roadmap já pede risk gate por fricção para ações.
 - **Proposta**: antes de enviar ordem short sem cobertura, exigir confirmação com
   exposição máxima/margem estimada em destaque.
 - **Arquivos**: `options.ts` (exposição/margem), `packages/ui/options/*`, `RiskService`.
 - **Aceite**: ordem short descoberta não sai sem confirmação explícita; exposição exibida.
+- **Progresso**: `optionNakedExposure` (§ Opções) + gate na `OptionsPage` (salvar paper,
+  registrar operação e rolagem) com perda máxima/estresse e limite de estresse configurável.
+  Também alerta permanente no card da posição. Teste: `optionsLifecycle.test.ts`.
 
 ## A3 — Rolling sugerido (tempo/Δ)
 
-- **Status**: `[ ]`
+- **Status**: `[~]` (rolagem a mesmo strike com cotações da cadeia; sugestão por Δ pendente)
 - **Contexto**: renda mensal exige rolar posições; fazer isso "na mão" é onde mora o erro.
 - **Proposta**: sugestão de roll (mesmo Δ, vencimento seguinte, crédito/débito estimado)
   com simulação no Analyzer.
 - **Arquivos**: `options.ts`, `packages/ui/options/Analyzer*`.
 - **Aceite**: sugestão abre pré-preenchida no builder; nada é enviado sem confirmar.
+- **Progresso**: `buildRollPlan` + painel "Rolar" em Posições (preview crédito/débito, só confirma
+  com plano completo, passa pelo risk gate). Falta sugerir o strike por Δ e abrir no Analyzer.
 
 ## A4 — Probabilidade de profit / métricas probabilísticas
 
@@ -56,12 +61,15 @@
 
 ## A6 — Import CSV de opções (corretoras B3/US)
 
-- **Status**: `[ ]`
+- **Status**: `[~]` (parser genérico feito; falta validar com extrato real anonimizado)
 - **Contexto**: nem toda corretora tem bridge; import é o fallback (padrão do app).
 - **Proposta**: parser de extrato de opções → `optionLegs` com dedup por impressão digital
   (mesmo padrão do `csvImport`/trades).
 - **Arquivos**: novo `optionsImport.ts` + UI em `/options` (config).
 - **Aceite**: import idempotente, teste com extrato real anonimizado.
+- **Progresso**: `optionsImport.ts` — `parseOptionChainCsv` e `parseOptionLegsCsv` (`;`/`,`, vírgula
+  decimal, datas BR, IV em %, multiplicador obrigatório, ids determinísticos ⇒ reimportar não
+  duplica). UI: abas Cotações e Posições. Falta o formato real de B3/US.
 
 ## A7 — Multi-conta / colateral por conta
 

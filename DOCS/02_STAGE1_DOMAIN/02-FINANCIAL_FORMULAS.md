@@ -141,3 +141,38 @@ atual (isso mudaria o imposto retroativamente a cada consulta). Via Carnê-Leão
   moeda do underlier ≠ moeda da conta (converter só na exibição, guardar a original).
   Todo caso vira teste golden (BSM vs calculadora de referência, payoff de covered
   call/CSP/vertical, assignment) antes de aparecer na UI.
+
+### Opções — cenários teóricos, mercado e risco (implementação: `financialFormulas.ts`)
+
+- **Valor teórico da perna no cenário** (`optionLegTheoreticalValue`): BSM com
+  `σ = max(1e-4, ivEntry + volShift)` e `T = max(0, T0 − daysForward/365)`. Perna sem
+  `ivEntry` (e sem `fallbackIv`) → `null`: **não inventa preço**; entra em `unpriced`.
+- **P/L teórico do grupo** (`optionStrategyTheoreticalPnl`): perna aberta
+  `qty·mult·(valorTeórico − entryPrice) − fees`; perna fechada = P/L realizado (constante).
+  `daysForward ≥ T` ⇒ coincide com o payoff no vencimento (teste).
+- **Curva T+0 / What-If** (`optionTheoreticalCurve`): mesma grade do payoff; What-If =
+  `volShift` (pontos absolutos de IV) e `daysForward` (decaimento). Até 5 curvas na UI.
+- **Gregas por preço** (`optionGreeksCurve`): `netOptionGreeks` (só pernas abertas) em cada `S`.
+  Escalas de exibição: Θ/dia = Θ/365 (`optionThetaPerDay`); Vega e ρ por 1 ponto = cru/100
+  (`optionVegaPerPoint`, `optionRhoPerPoint`).
+- **P/L de mercado** (`optionStrategyMarkPnl`): perna aberta marcada a `marks[legId]` (mid
+  da cadeia): `qty·mult·(mark − entryPrice) − fees` + realizado das fechadas. Perna sem marca
+  conta em `unmarked` — a UI não mostra total parcial como completo. **Teórico ≠ mercado**:
+  a diferença é o quanto o preço negociado foge do modelo.
+- **Risco/gregas só de pernas ABERTAS** (`summarizeOptionStrategy`): payoff, breakevens,
+  máx lucro/perda e gregas ignoram pernas fechadas; prêmio líquido e realizado olham o grupo todo.
+- **Venda descoberta** (`optionNakedExposure`, risk gate A2). Pernas abertas, `shares` = ações
+  em carteira cobrindo calls (custo neutro no spot). `f(S)` = P/L no vencimento + `shares·(S−spot)`.
+  - ilimitada ⇔ `Σ_calls qty·mult + shares < 0` (inclinação para S→∞);
+  - put sem hedge ⇔ `−Σ_puts qty·mult > 0` (perde ao cair até S→0);
+  - `naked = ilimitada ∨ put sem hedge`; perda máxima finita = `−min f` nos pontos
+    {0, strikes, S grande} (exato: `f` é linear por partes); `null` se ilimitada;
+  - `stressLoss = −min(f(spot·(1−p)), f(spot·(1+p)))`, `p` configurável (default 20%).
+  - **Não é margem de corretora** (cada uma difere): é perda máxima e estresse no vencimento.
+    Limitação: ações em carteira cobrem cada grupo isoladamente (sem partilha entre grupos).
+- **Elegibilidade de assignment** (`optionAssignmentEligibility`): só perna short ABERTA e ITM
+  ao spot informado; antes do vencimento = exercício antecipado (confirmação explícita).
+- **Rolagem** (`buildRollPlan`): mesma qty/direito/strike no novo vencimento, preços a mid da
+  cadeia; resultado `Σ qty·mult·(closePrice − openPrice)` (positivo = crédito). Sem cotação
+  do strike no vencimento alvo ⇒ plano incompleto (não inventa preço); nada é gravado.
+- **Multiplier**: vem do contrato/usuário. Ausente ⇒ erro/linha rejeitada. **Nunca** 100 por padrão.

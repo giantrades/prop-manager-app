@@ -650,3 +650,186 @@ export function cashSecuredPutYield(input: {
     annualize: input.annualize,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Opções — cenários teóricos (T+0 / What-If), gregas por preço, risco de venda
+// descoberta. Mesma regra: só aqui há fórmula; a UI apenas exibe.
+// ---------------------------------------------------------------------------
+
+/** Theta por DIA (a escala crua de `bsmGreeks` é por ANO). */
+export function optionThetaPerDay(thetaPerYear: number): number {
+  return Number((thetaPerYear / 365).toFixed(8));
+}
+
+export interface OptionScenario {
+  r: number; // taxa livre de risco (decimal)
+  q?: number; // dividend yield
+  asOf?: Date; // data-base (default: agora)
+  daysForward?: number; // avanço no tempo (decaimento), dias corridos
+  volShift?: number; // choque ABSOLUTO de vol (+0.05 = +5 pontos de IV)
+  fallbackIv?: number; // IV p/ pernas sem `ivEntry` (se ausente, a perna fica "sem preço")
+}
+
+/** Valor teórico (por ação) da perna no cenário. null = sem IV (não inventa preço). */
+export function optionLegTheoreticalValue(leg: OptionLeg, S: number, scenario: OptionScenario): number | null {
+  const base = leg.ivEntry && leg.ivEntry > 0 ? leg.ivEntry : scenario.fallbackIv;
+  if (!(base && base > 0)) return null;
+  const asOf = scenario.asOf ?? new Date();
+  const T = Math.max(0, timeToExpiry(leg.expiry, asOf) - (scenario.daysForward ?? 0) / 365);
+  const sigma = Math.max(1e-4, base + (scenario.volShift ?? 0));
+  return bsmPrice({ S, K: leg.strike, T, r: scenario.r, sigma, right: leg.right, q: scenario.q ?? 0 });
+}
+
+/**
+ * P/L teórico do grupo no cenário (marcação a modelo).
+ * - perna ABERTA: qty × mult × (valor teórico − entrada) − fees
+ * - perna FECHADA: P/L realizado (constante)
+ * - perna sem IV: fora da conta, contada em `unpriced` (a UI avisa).
+ */
+export function optionStrategyTheoreticalPnl(
+  legs: OptionLeg[],
+  S: number,
+  scenario: OptionScenario,
+): { pnl: number; unpriced: number } {
+  let pnl = 0;
+  let unpriced = 0;
+  for (const leg of legs) {
+    const realized = optionLegRealizedPnl(leg);
+    if (realized != null) {
+      pnl += realized;
+      continue;
+    }
+    const v = optionLegTheoreticalValue(leg, S, scenario);
+    if (v == null) {
+      unpriced += 1;
+      continue;
+    }
+    pnl += leg.qty * (leg.multiplier || 1) * (v - leg.entryPrice) - (leg.fees || 0);
+  }
+  return { pnl: Number(pnl.toFixed(6)), unpriced };
+}
+
+/** Curva teórica P/L × S para um cenário (T+0, What-If de vol e/ou tempo). */
+export function optionTheoreticalCurve(
+  legs: OptionLeg[],
+  opts: { min: number; max: number; points: number },
+  scenario: OptionScenario,
+): { points: PayoffPoint[]; unpriced: number } {
+  const { min, max, points } = opts;
+  if (!(max > min) || points < 2) return { points: [], unpriced: 0 };
+  const out: PayoffPoint[] = [];
+  let unpriced = 0;
+  for (let i = 0; i < points; i += 1) {
+    const S = min + ((max - min) * i) / (points - 1);
+    const r = optionStrategyTheoreticalPnl(legs, S, scenario);
+    unpriced = r.unpriced;
+    out.push({ S: Number(S.toFixed(4)), pnl: r.pnl });
+  }
+  return { points: out, unpriced };
+}
+
+export interface GreeksPoint extends Greeks {
+  S: number;
+}
+
+/** Gregas líquidas (pernas abertas) em cada preço do subjacente — base dos overlays Δ Γ Θ V ρ. */
+export function optionGreeksCurve(
+  legs: OptionLeg[],
+  opts: { min: number; max: number; points: number },
+  market: { r: number; q?: number; now?: Date },
+): GreeksPoint[] {
+  const { min, max, points } = opts;
+  if (!(max > min) || points < 2) return [];
+  const open = legs.filter((l) => l.exitPrice == null);
+  const out: GreeksPoint[] = [];
+  for (let i = 0; i < points; i += 1) {
+    const S = min + ((max - min) * i) / (points - 1);
+    const g = netOptionGreeks(open, { S, r: market.r, q: market.q, now: market.now });
+    out.push({ S: Number(S.toFixed(4)), ...g });
+  }
+  return out;
+}
+
+export interface NakedExposure {
+  /** Há risco sem hedge: call líquida vendida além das ações, ou put líquida vendida sem put comprada abaixo. */
+  naked: boolean;
+  /** Perda teórica ilimitada (call descoberta). */
+  unbounded: boolean;
+  /** Perda máxima FINITA no vencimento (put até o subjacente a zero); null se ilimitada. */
+  maxLoss: number | null;
+  stressPct: number;
+  /** Perda no pior dos cenários spot×(1±stressPct) no vencimento (≥ 0). */
+  stressLoss: number;
+}
+
+/**
+ * Risco de venda descoberta (risk gate A2). Considera só pernas ABERTAS do mesmo subjacente.
+ * `shares` = ações em carteira que cobrem calls (custo neutro no spot). Exato: o P/L no
+ * vencimento é linear por partes, então o mínimo está em S=0 ou em algum strike.
+ * Não estima margem de corretora (cada broker difere) — mostra perda máxima e estresse.
+ */
+export function optionNakedExposure(
+  legs: OptionLeg[],
+  opts: { spot: number; stressPct: number; shares?: number },
+): NakedExposure {
+  const open = legs.filter((l) => l.exitPrice == null);
+  const sh = opts.shares ?? 0;
+  const f = (S: number) => optionStrategyPnlAtExpiry(open, S) + sh * (S - opts.spot);
+
+  const callQty = open.filter((l) => l.right === 'call').reduce((s, l) => s + l.qty * (l.multiplier || 1), 0);
+  const putQty = open.filter((l) => l.right === 'put').reduce((s, l) => s + l.qty * (l.multiplier || 1), 0);
+  const unbounded = callQty + sh < -1e-9; // inclinação para S→∞
+  const downsideOpen = -putQty > 1e-9; // put líquida vendida: perde ao cair (ações em carteira não hedgeiam put vendida)
+
+  const strikes = [...new Set(open.map((l) => l.strike))];
+  const probes = [0, ...strikes, Math.max(opts.spot, ...strikes, 1) * 3];
+  const minPnl = Math.min(...probes.map(f));
+  const bump = Math.max(0, opts.stressPct);
+  const worst = Math.min(f(opts.spot * (1 - bump)), f(opts.spot * (1 + bump)));
+
+  return {
+    naked: unbounded || downsideOpen,
+    unbounded,
+    maxLoss: unbounded ? null : Number(Math.max(0, -minPnl).toFixed(2)),
+    stressPct: bump,
+    stressLoss: Number(Math.max(0, -worst).toFixed(2)),
+  };
+}
+
+/**
+ * P/L "de mercado" do grupo: pernas abertas marcadas a um preço de mercado informado
+ * (`marks[legId]`, ex.: mid da cadeia) + realizado das fechadas. Difere do P/L TEÓRICO
+ * (`optionStrategyTheoreticalPnl`, preço de modelo). Pernas abertas sem marca ficam em
+ * `unmarked` — o chamador decide não exibir total parcial como se fosse completo.
+ */
+export function optionStrategyMarkPnl(
+  legs: OptionLeg[],
+  marks: Record<string, number | null | undefined>,
+): { pnl: number; unmarked: number } {
+  let pnl = 0;
+  let unmarked = 0;
+  for (const leg of legs) {
+    const realized = optionLegRealizedPnl(leg);
+    if (realized != null) {
+      pnl += realized;
+      continue;
+    }
+    const mark = marks[leg.id];
+    if (mark == null || !Number.isFinite(mark)) {
+      unmarked += 1;
+      continue;
+    }
+    pnl += leg.qty * (leg.multiplier || 1) * (mark - leg.entryPrice) - (leg.fees || 0);
+  }
+  return { pnl: Number(pnl.toFixed(6)), unmarked };
+}
+
+/** Vega por 1 ponto de vol (a escala crua é por 1.00 de vol). */
+export function optionVegaPerPoint(vegaRaw: number): number {
+  return Number((vegaRaw / 100).toFixed(8));
+}
+
+/** Rho por 1 ponto de taxa (a escala crua é por 1.00 de taxa). */
+export function optionRhoPerPoint(rhoRaw: number): number {
+  return Number((rhoRaw / 100).toFixed(8));
+}
