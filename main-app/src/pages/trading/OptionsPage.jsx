@@ -8,7 +8,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ModuleTabs from '../../ModuleTabs';
 import OptionAnalyzer from '@apps/ui/options/OptionAnalyzer';
-import OptionDesk from '@apps/ui/options/OptionDesk';
 import OptionSmile from '@apps/ui/options/OptionSmile';
 import OptionPositions from '@apps/ui/options/OptionPositions';
 import OptionChainEditor from '@apps/ui/options/OptionChainEditor';
@@ -17,7 +16,6 @@ import OptionBoundary from '@apps/ui/options/OptionBoundary';
 import { ensureOptionStyles } from '@apps/ui/options/optionStyles';
 import { useFinance } from '@apps/state';
 import {
-  buildOptionLegFromQuote,
   closeOptionLeg,
   enrichOptionQuote,
   groupOptionLegs,
@@ -32,7 +30,6 @@ ensureOptionStyles();
 
 const TABS = [
   { id: 'analyzer', label: 'Analyzer' },
-  { id: 'desk', label: 'Desk' },
   { id: 'quotes', label: 'Cotações' },
   { id: 'smile', label: 'Smile' },
   { id: 'positions', label: 'Posições' },
@@ -198,15 +195,6 @@ export default function OptionsPage() {
   }, [accountCurrency, settings.stressPct, sharesByUnderlying, spots]);
 
   // ---- paper ----
-  const addPaper = useCallback((quote, qty, price) => {
-    try {
-      const leg = buildOptionLegFromQuote(quote, { accountId, qty, entryPrice: price, source: 'manual' });
-      setPaper((p) => [...p, leg]);
-    } catch (err) {
-      toast(err.message, { type: 'error' });
-    }
-  }, [accountId, toast]);
-
   const sendToPaper = useCallback((list) => {
     setPaper((p) => [
       ...p,
@@ -237,6 +225,18 @@ export default function OptionsPage() {
       setShowForm(false);
     }, 'Registrar operação');
   }, [ds, requestSave, toast]);
+
+  // Salvar a estratégia montada no Analyzer como posição real (mesmo risk gate).
+  const saveAnalyzerLegs = useCallback((list) => {
+    if (!ds) return undefined;
+    if (!accountId) { toast('Escolha a conta antes de salvar.', { type: 'warn' }); return undefined; }
+    const withGroup = list.map((l) => ({ ...l, groupId: newGroupId(), accountId }));
+    return requestSave(withGroup, async () => {
+      await ds.optionLegs.bulkPut(withGroup, { source: 'local' });
+      toast(`Estratégia salva (${withGroup.length} perna(s)).`);
+      setTab('positions');
+    }, 'Salvar estratégia');
+  }, [accountId, ds, requestSave, toast]);
 
   const importLegs = useCallback(async (list) => {
     if (!ds) return;
@@ -297,7 +297,7 @@ export default function OptionsPage() {
   }, []);
 
   const openPaperInAnalyzer = useCallback(() => {
-    setPreload({ id: Date.now(), legs: paper, underlying: paper[0]?.underlying ?? '', source: 'paper' });
+    setPreload({ id: Date.now(), legs: paper, underlying: paper[0]?.underlying ?? '' });
     setTab('analyzer');
   }, [paper]);
 
@@ -334,11 +334,11 @@ export default function OptionsPage() {
         </div>
       )}
 
-      <details className="card opx-panel">
-        <summary className="opx-title" style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center' }}>
-          Parâmetros {underlyings.length > 0 && <span className="opx-muted opx-small" style={{ marginLeft: 8 }}>({underlyings.length} subjacente(s))</span>}
+      <details className="card opxa-toolbar" style={{ padding: '6px 12px' }}>
+        <summary className="opx-title" style={{ cursor: 'pointer', minHeight: 28, display: 'flex', alignItems: 'center', listStyle: 'none' }}>
+          Parâmetros globais {underlyings.length > 0 && <span className="opx-muted opx-small" style={{ marginLeft: 8 }}>({underlyings.length} subjacente(s))</span>}
         </summary>
-        <div className="opx-fields" style={{ marginTop: 10 }}>
+        <div className="opx-fields" style={{ marginTop: 8, width: '100%' }}>
           {underlyings.map((u) => (
             <label key={u} className="opx-field"><span>Spot {u}</span>
               <input className="input" type="number" inputMode="decimal" defaultValue={spots[u] ?? ''} key={`${u}${spots[u] ?? ''}`} placeholder="preço atual" onBlur={(e) => setSpot(u, Number(e.target.value))} />
@@ -416,6 +416,7 @@ export default function OptionsPage() {
         {tab === 'analyzer' && (
           <OptionAnalyzer
             underlyings={underlyings}
+            quotes={quotes}
             spots={spots}
             rate={rate}
             defaultMultiplier={settings.defaultMultiplier}
@@ -424,9 +425,10 @@ export default function OptionsPage() {
             groups={groups}
             preload={preload}
             onSendToPaper={sendToPaper}
+            onSaveLegs={saveAnalyzerLegs}
+            onEditChain={() => setTab('quotes')}
           />
         )}
-        {tab === 'desk' && <OptionDesk quotes={quotes} spots={spots} onAddPaper={addPaper} onEditChain={() => setTab('quotes')} />}
         {tab === 'quotes' && (
           <OptionChainEditor
             underlyings={underlyings}

@@ -101,6 +101,42 @@ const CSS = `
 .opx-legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid currentColor; vertical-align: middle; margin-right: 4px; }
 .opx-legend i.dash { border-top-style: dashed; }
 
+/* Analyzer — layout de duas colunas (OptionStrat-like): tudo visível sem scroll */
+.opxa-root { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.opxa-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; padding: 10px 12px; }
+.opxa-sep { width: 1px; align-self: stretch; background: var(--soft); margin: 2px; }
+.opxa-tf { display: flex; flex-direction: column; gap: 2px; font-size: 11px; min-width: 0; }
+.opxa-tf > span { color: var(--muted); }
+.opxa-tf .input, .opxa-tf .select { min-height: 32px; margin: 0; width: 100%; min-width: 84px; }
+.opxa-mult { display: flex; align-items: center; gap: 6px; }
+.opxa-grid { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.opxa-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.opxa-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.opxa-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opxa-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.opxa-kv > span { color: var(--muted); }
+.opxa-kv > b { font-variant-numeric: tabular-nums; }
+.opxa-chart { padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.opxa-greeks { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 10px; border: 1px solid var(--soft); border-radius: 10px; background: var(--chip-bg); }
+.opxa-gk { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; }
+.opxa-gk b { font-variant-numeric: tabular-nums; }
+.opxa-wi { display: grid; grid-template-columns: 10px 1fr 1fr 34px; gap: 6px; align-items: center; }
+.opxa-wi .input { min-height: 32px; margin: 0; }
+.opxa-wi-dot { width: 10px; height: 10px; border-radius: 50%; }
+.opxa-seg { display: inline-flex; gap: 4px; }
+.opxa-hint { margin-left: auto; }
+.opxa-chain .opx-table th, .opxa-chain .opx-table td { padding: 4px 6px; }
+.opxa-price { min-width: 56px; min-height: 32px; padding: 2px 6px; border-radius: 8px; border: 1px solid var(--soft); background: transparent; font-variant-numeric: tabular-nums; font-size: 12px; cursor: pointer; }
+.opxa-price.call { color: var(--green); }
+.opxa-price.put { color: var(--red); }
+.opxa-price:hover:not(:disabled) { border-color: var(--brand); }
+.opxa-price:disabled { opacity: 0.4; cursor: default; }
+@media (max-width: 900px) {
+  .opxa-grid { grid-template-columns: 1fr; }
+  .opxa-main { order: 1; }
+  .opxa-side { order: 2; }
+}
+
 @media (max-width: 720px) {
   .opx-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
   .opx-fields { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }

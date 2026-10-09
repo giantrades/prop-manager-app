@@ -8,7 +8,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import FinancialCalendar from '@apps/ui/FinancialCalendar';
 import ModuleTabs from '../../ModuleTabs';
 import { useFinance } from '@apps/state';
-import { fetchEconomicEvents, monthRange, tradePnl, nowIso, optionExpiryEvents } from '@apps/lib/db';
+import {
+  fetchEconomicEvents, monthRange, tradePnl, nowIso, optionExpiryEvents,
+  optionDividendRisks, optionQuoteMid, getAnnouncedDividends,
+} from '@apps/lib/db';
 
 const LAYER_IDS = ['trading', 'economic', 'bills', 'payouts', 'tax', 'options'];
 
@@ -30,11 +33,14 @@ export default function CalendarPage() {
     if (!finance) return;
     setLoading(true);
     try {
-      const [trades, transactions, payoutList, optionLegs] = await Promise.all([
+      const [trades, transactions, payoutList, optionLegs, optionQuotes, optionSettings, announcedDividends] = await Promise.all([
         finance.ds.trades.list(),
         finance.ds.transactions.list(),
         finance.ds.payouts.list(),
         finance.ds.optionLegs.list(),
+        finance.ds.optionChain.list(),
+        finance.ds.meta.getKey('options.settings'),
+        getAnnouncedDividends(finance.ds),
       ]);
 
       // Trading por dia (PnL usa tradePnl — fórmula única dos motores).
@@ -61,13 +67,24 @@ export default function CalendarPage() {
 
       setPayouts(payoutList.map((p) => ({ date: p.date ?? p.updatedAt, amount: p.net ?? 0, status: p.status })));
 
-      // Vencimentos de opções (pernas abertas) — camada "Opções".
-      setOptionMarks(
-        optionExpiryEvents(optionLegs, { withinDays: 60 }).map((e) => ({
-          date: e.date,
-          label: `${e.symbol} ${e.qty > 0 ? 'long' : 'short'} (${e.dte}d)`,
-        })),
-      );
+      // Camada "Opções": vencimentos de pernas abertas + data-com de calls vendidas
+      // (risco de assignment antecipado; nível "high" = extrínseco < dividendo).
+      const spots = optionSettings?.value?.spots ?? {};
+      const quoteById = new Map(optionQuotes.map((q) => [q.id, q]));
+      const marks = {};
+      for (const l of optionLegs) {
+        const q = quoteById.get(`${l.underlying}:${l.expiry}:${l.strike}:${l.right}`);
+        marks[l.id] = q ? optionQuoteMid(q) : null;
+      }
+      const expiries = optionExpiryEvents(optionLegs, { withinDays: 60 }).map((e) => ({
+        date: e.date,
+        label: `${e.symbol} ${e.qty > 0 ? 'long' : 'short'} (${e.dte}d)`,
+      }));
+      const exDividends = optionDividendRisks(optionLegs, announcedDividends, { spots, marks, withinDays: 90 }).map((r) => ({
+        date: r.exDate,
+        label: `data-com ${r.underlying}: call ${r.strike} short${r.level === 'high' ? ' — risco de assignment' : r.level === 'watch' ? ' — ITM' : ''}`,
+      }));
+      setOptionMarks([...expiries, ...exDividends]);
     } finally {
       setLoading(false);
     }

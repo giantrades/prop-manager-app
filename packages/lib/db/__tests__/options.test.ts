@@ -124,6 +124,18 @@ describe('opções — payoff, breakevens, prêmio e exposição', () => {
     expect(maxPL.maxLossUnbounded).toBe(true);
   });
 
+  it('máx lucro considera strikes fora da janela (spread com strikes distantes)', () => {
+    const legs = [
+      leg({ right: 'call', strike: 100, qty: 1, entryPrice: 5 }),
+      leg({ right: 'call', strike: 200, qty: -1, entryPrice: 1 }),
+    ];
+    // Janela NÃO alcança o strike 200 — antes o máx lucro saía subestimado.
+    const pl = optionMaxProfitLoss(legs, { min: 50, max: 150 });
+    expect(pl.maxProfit).toBeCloseTo(96, 2); // (200-100) - (5-1)
+    expect(pl.maxProfitUnbounded).toBe(false);
+    expect(pl.maxLoss).toBeCloseTo(-4, 2);
+  });
+
   it('prêmio líquido: crédito positivo, débito negativo', () => {
     const credit = [leg({ right: 'call', strike: 110, qty: -1, entryPrice: 3 })];
     expect(optionNetPremium(credit)).toBeCloseTo(3, 6);

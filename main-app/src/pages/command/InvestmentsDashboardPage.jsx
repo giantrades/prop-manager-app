@@ -15,6 +15,7 @@ import StatRow from '@apps/ui/StatRow';
 import { TrendingUp, CalendarDays, LineChart, Store, Coins } from 'lucide-react';
 import Portfolio from '@apps/ui/Portfolio';
 import OptionIncome from '@apps/ui/options/OptionIncome';
+import OptionIncomeDetail from '@apps/ui/options/OptionIncomeDetail';
 import {
   applyBenchmark, getCdiSeries, computeDcaFromTransactions, inPeriod, relativeSeries,
   dividendHistory, dividendIncomeByMonth, dividendByAsset, getAnnouncedDividends, upcomingDividends,
@@ -288,6 +289,10 @@ export default function InvestmentsDashboardPage() {
                 <div className="dash-section">
                   <div className="dash-title"><span><Coins size={14} /> Renda de opções</span><NavLink className="dash-link" to="/options">opções →</NavLink></div>
                   <OptionIncome />
+                  <details style={{ marginTop: 12 }}>
+                    <summary style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center', fontWeight: 600 }}>Detalhe: cobertura, yield e data-com</summary>
+                    <OptionIncomeDetail renderOptionsLink={(label) => <NavLink className="opx-btn small" to="/options">{label}</NavLink>} />
+                  </details>
                 </div>
               ) },
               { id: 'relative', node: (

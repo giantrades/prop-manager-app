@@ -167,6 +167,10 @@ underlier ≠ moeda da conta.
       marcadas "calc"); **Posições** com spot por subjacente, P/L teórico × mercado, proveniência,
       fechar, rolar, exercer (só ITM) e excluir com confirmação; registrar operação real + CSV;
       risk gate (A2); parâmetros persistidos em `meta`; ErrorBoundary/skeleton/empty states.
+      → **Rodada 3 (integrações)**: data-com no Calendar + alertas na página (A1); **Journal**
+      (`OptionAnalytics`: prêmio, win rate, P/L médio e R por subjacente); **Investimentos**
+      (`OptionIncomeDetail`: cobertura, yield/anualizado de calls e puts vendidas, risco de
+      data-com, assignments → ações); `optionMaxProfitLoss` passa a avaliar o piso S=0.
 - [ ] **F3 — Live bridge**: extensão bridge (spec `06-...`) + ingest + posições reais +
       fechar/rolar + proveniência bridge/calculada/manual. Gate: posição real reconciliada,
       editor não some com a ordem.

@@ -175,4 +175,18 @@ atual (isso mudaria o imposto retroativamente a cada consulta). Via Carnê-Leão
 - **Rolagem** (`buildRollPlan`): mesma qty/direito/strike no novo vencimento, preços a mid da
   cadeia; resultado `Σ qty·mult·(closePrice − openPrice)` (positivo = crédito). Sem cotação
   do strike no vencimento alvo ⇒ plano incompleto (não inventa preço); nada é gravado.
+- **Máx lucro/perda** (`optionMaxProfitLoss`): avalia a janela `[min,max]` **e o piso S=0**
+  (o subjacente não passa de zero ⇒ perda de put vendida e ganho de put comprada são finitos).
+  "Ilimitado" só existe para cima (inclinação do payoff em S→∞): call líquida comprada = lucro
+  ilimitado; vendida = perda ilimitada. (Antes, put vendida aparecia como "∞".)
+- **Data-com / assignment antecipado** (`optionDividendRisks`): calls VENDIDAS abertas com
+  `exDate ≤ expiry` e `exDate ≥ hoje`. `extrínseco = mark − max(S−K,0)`. Nível `high` = ITM e
+  extrínseco < dividendo/ação (exercício antecipado racional); `watch` = ITM; `info` = resto.
+  Sem spot ⇒ `itm = null`, nunca `high`. Dividendos vêm de `getAnnouncedDividends` (B1).
+- **Analytics por subjacente** (`optionAnalyticsByUnderlying`): por grupo FECHADO: win = P/L
+  realizado > 0; `R = realizado / |perda máxima|` só se a perda máxima é finita e definida
+  (ilimitadas ficam fora; `rSamples` declara o n). Abertas: contagem e prêmio.
+- **Renda** (`optionIncomeRows`): só grupos abertos de UMA perna vendida. Call:
+  `coveredCallYield` (prêmio ÷ spot·mult·contratos; sem spot ⇒ `null`). Put:
+  `cashSecuredPutYield` (prêmio ÷ strike·mult·contratos). Anualizado pelos DTE.
 - **Multiplier**: vem do contrato/usuário. Ausente ⇒ erro/linha rejeitada. **Nunca** 100 por padrão.

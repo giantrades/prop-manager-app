@@ -316,3 +316,105 @@ describe('opções — escalas de exibição das gregas', () => {
     expect(optionRhoPerPoint(-5)).toBeCloseTo(-0.05, 8);
   });
 });
+
+import { optionMaxProfitLoss } from '../financialFormulas';
+import { optionDividendRisks, optionAnalyticsByUnderlying, optionIncomeRows } from '../optionsIntegrations';
+
+describe('opções — data-com (A1)', () => {
+  const div = [{ symbol: 'AAPL', exDate: '2026-10-20', amountPerShare: 0.5 }];
+  const shortCall = mk({ qty: -1, strike: 100, expiry: '2026-11-15' });
+
+  it('call vendida ITM com extrínseco < dividendo = high', () => {
+    const r = optionDividendRisks([shortCall], div, { spots: { AAPL: 110 }, marks: { l: 10.2 }, now: NOW });
+    expect(r).toHaveLength(1);
+    expect(r[0].level).toBe('high'); // extrínseco 0.2 < 0.5
+    expect(r[0].extrinsic).toBeCloseTo(0.2, 4);
+    expect(r[0].daysToExDate).toBeGreaterThan(0);
+  });
+
+  it('ITM com extrínseco alto = watch; OTM/sem spot = info', () => {
+    expect(optionDividendRisks([shortCall], div, { spots: { AAPL: 110 }, marks: { l: 13 }, now: NOW })[0].level).toBe('watch');
+    expect(optionDividendRisks([shortCall], div, { spots: { AAPL: 90 }, now: NOW })[0].level).toBe('info');
+    expect(optionDividendRisks([shortCall], div, { now: NOW })[0].itm).toBeNull();
+  });
+
+  it('ignora: call comprada, put vendida, data-com depois do vencimento ou já passada, outro ativo', () => {
+    expect(optionDividendRisks([mk({ qty: 1 })], div, { now: NOW })).toHaveLength(0);
+    expect(optionDividendRisks([mk({ qty: -1, right: 'put' })], div, { now: NOW })).toHaveLength(0);
+    expect(optionDividendRisks([mk({ qty: -1, expiry: '2026-10-10' })], div, { now: NOW })).toHaveLength(0);
+    expect(optionDividendRisks([shortCall], [{ symbol: 'AAPL', exDate: '2026-09-01' }], { now: NOW })).toHaveLength(0);
+    expect(optionDividendRisks([shortCall], [{ symbol: 'MSFT', exDate: '2026-10-20' }], { now: NOW })).toHaveLength(0);
+    expect(optionDividendRisks([mk({ qty: -1, exitPrice: 0 })], div, { now: NOW })).toHaveLength(0);
+  });
+});
+
+describe('opções — analytics por subjacente (Journal)', () => {
+  it('prêmio, win rate, P/L médio e R (perda máxima definida)', () => {
+    // vertical de crédito fechada com lucro: short put 100 @3, long put 95 @1; risco = 5*100-200 = 300
+    const win = [
+      mk({ id: 'a1', right: 'put', qty: -1, strike: 100, entryPrice: 3, exitPrice: 1, groupId: 'w' }),
+      mk({ id: 'a2', right: 'put', qty: 1, strike: 95, entryPrice: 1, exitPrice: 0.2, groupId: 'w' }),
+    ];
+    // put vendida simples fechada com prejuízo
+    const loss = [mk({ id: 'b1', right: 'put', qty: -1, strike: 50, entryPrice: 1, exitPrice: 3, groupId: 'l' })];
+    // call vendida descoberta fechada (risco ilimitado → fora do R)
+    const naked = [mk({ id: 'c1', qty: -1, strike: 120, entryPrice: 1, exitPrice: 0.5, groupId: 'n' })];
+    const open = [mk({ id: 'd1', qty: -1, strike: 130, entryPrice: 2, groupId: 'o' })];
+    const [row] = optionAnalyticsByUnderlying([...win, ...loss, ...naked, ...open]);
+    expect(row.underlying).toBe('AAPL');
+    expect(row.closedGroups).toBe(3);
+    expect(row.wins).toBe(2);
+    expect(row.winRate).toBeCloseTo(2 / 3, 6);
+    // win: (-1*100*(1-3)) + (1*100*(0.2-1)) = 200-80 = 120 ; loss: -1*100*(3-1) = -200 ; naked: +50
+    expect(row.realized).toBeCloseTo(-30, 2);
+    expect(row.rSamples).toBe(2);
+    expect(row.openGroups).toBe(1);
+    expect(row.openPremium).toBeCloseTo(200, 2);
+    // R: vertical = 120/300 = 0.4 ; put vendida simples 50 = -200/4900 ; média de 2 amostras
+    expect(row.avgR).toBeCloseTo((120 / 300 + -200 / 4900) / 2, 3);
+  });
+
+  it('subjacente sem fechadas: winRate/avgPnl/avgR nulos', () => {
+    const [row] = optionAnalyticsByUnderlying([mk({ qty: -1 })]);
+    expect(row.winRate).toBeNull();
+    expect(row.avgPnl).toBeNull();
+    expect(row.avgR).toBeNull();
+  });
+});
+
+describe('opções — renda (covered call / CSP)', () => {
+  it('yield de covered call usa o spot; CSP usa o strike; ambos anualizam', () => {
+    const cc = mk({ id: 'cc', qty: -2, strike: 110, entryPrice: 2, groupId: 'g1', expiry: '2026-10-31' });
+    const csp = mk({ id: 'p', right: 'put', qty: -1, strike: 100, entryPrice: 3, groupId: 'g2', expiry: '2026-10-31' });
+    const rows = optionIncomeRows([cc, csp], { spots: { AAPL: 105 }, now: NOW });
+    const c = rows.find((r) => r.kind === 'covered-call')!;
+    const p = rows.find((r) => r.kind === 'cash-secured-put')!;
+    expect(c.netPremium).toBeCloseTo(400, 2);
+    expect(c.yieldPct).toBeCloseTo(400 / (105 * 100 * 2), 5);
+    expect(c.annualizedPct!).toBeGreaterThan(c.yieldPct!);
+    expect(p.yieldPct).toBeCloseTo(300 / (100 * 100), 5);
+  });
+
+  it('call sem spot não inventa yield; estratégias multi-perna ficam de fora', () => {
+    const [c] = optionIncomeRows([mk({ qty: -1, groupId: 'g1' })], { now: NOW });
+    expect(c.yieldPct).toBeNull();
+    expect(c.basis).toBeNull();
+    const spread = [mk({ id: 'x', qty: -1, groupId: 'g' }), mk({ id: 'y', qty: 1, strike: 110, groupId: 'g' })];
+    expect(optionIncomeRows(spread, { now: NOW })).toHaveLength(0);
+  });
+});
+
+describe('opções — máx lucro/perda: piso em S=0 e ilimitado só para cima', () => {
+  const window = { min: 50, max: 150 };
+  it('put vendida: perda FINITA (strike×mult − prêmio), não "ilimitada"', () => {
+    const r = optionMaxProfitLoss([mk({ right: 'put', qty: -1, strike: 100, entryPrice: 3 })], window);
+    expect(r.maxLossUnbounded).toBe(false);
+    expect(r.maxLoss).toBeCloseTo(-(100 * 100 - 300), 2);
+    expect(r.maxProfit).toBeCloseTo(300, 2);
+  });
+  it('put comprada: lucro finito (strike×mult − prêmio) no piso', () => {
+    const r = optionMaxProfitLoss([mk({ right: 'put', qty: 1, strike: 100, entryPrice: 3 })], window);
+    expect(r.maxProfitUnbounded).toBe(false);
+    expect(r.maxProfit).toBeCloseTo(100 * 100 - 300, 2);
+  });
+});

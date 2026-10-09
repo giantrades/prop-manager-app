@@ -97,6 +97,9 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
   Sub-abas atuais: Analyzer · Desk · **Cotações** (`OptionChainEditor.tsx`: manual + CSV) · Smile ·
   Posições (fechar/rolar/exercer, registrar operação `OptionLegForm.tsx`, risk gate).
   Parâmetros (spot por subjacente, taxa, multiplicador padrão, estresse) em `meta['options.settings']`.
+  Widgets em outras páginas: Journal → `options/OptionAnalytics.tsx` (por subjacente);
+  Investimentos → `options/OptionIncomeDetail.tsx` (cobertura/yield/data-com/assignments);
+  Calendar → camada "Opções" com vencimentos + data-com. Dados via `options/useOptionData.ts`.
   Motor `packages/lib/db/options.ts` + fórmulas no contrato (seção Opções). Live é a F3
   (bridge `04_STAGE3_TRADING_OS/06-OPTIONS_BRIDGE_SPEC.md`). Widget **Renda de opções**
   (`OptionIncome.tsx`) no Trading Resumo.

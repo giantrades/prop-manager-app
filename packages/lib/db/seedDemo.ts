@@ -171,6 +171,9 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
   await Promise.all(customTemplates.map((t) => ds.optionTemplates.put(t, { source: 'restore' })));
   // Renda: prêmio das estratégias fechadas entra no ledger (kind option_premium).
   await recordOptionPremium(ds, optionLegs, { currency: 'USD' });
+  // Parâmetros globais do módulo Opções (spot do subjacente + taxa + multiplicador),
+  // para o Analyzer/Desk abrirem com ATM e P/L teórico corretos no demo.
+  await ds.meta.setKey('options.settings', { spots: { [optUnderlying]: optSpot }, ratePct: 11, stressPct: 20, defaultMultiplier: optMultiplier });
 
   // Marca tudo que é demo: quando o usuário criar a 1ª conta própria, isso é limpo.
   const seedFirmNames = ['FTMO', 'E8 Markets', 'XP'];

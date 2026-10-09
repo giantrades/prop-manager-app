@@ -8,12 +8,15 @@ import type { Greeks, OptionLeg, OptionRight, Position, Transaction } from './ty
 import {
   assignmentCallProceeds,
   assignmentPutCostBasis,
+  cashSecuredPutYield,
+  coveredCallYield,
   netOptionGreeks,
+  optionMaxProfitLoss,
   optionLegRealizedPnl,
   optionNetPremium,
   type OptionMarketPoint,
 } from './financialFormulas';
-import { groupOptionLegs } from './options';
+import { groupOptionLegs, optionDaysToExpiry } from './options';
 
 // ---------------------------------------------------------------------------
 // Prêmio realizado → ledger (kind 'option_premium', renda pessoal)
@@ -235,6 +238,183 @@ export function optionExpiryEvents(
     out.push({ date: l.expiry, underlying: l.underlying, symbol: l.symbol, right: l.right, strike: l.strike, qty: l.qty, dte });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ---------------------------------------------------------------------------
+// Data-com (A1): risco de assignment antecipado em calls vendidas
+// ---------------------------------------------------------------------------
+
+export interface OptionDividendRisk {
+  exDate: string;
+  underlying: string;
+  symbol: string;
+  strike: number;
+  expiry: string;
+  qty: number;
+  amountPerShare: number | null;
+  daysToExDate: number;
+  /** null = spot desconhecido. */
+  itm: boolean | null;
+  /** mark − intrínseco; null sem spot ou sem preço de mercado. */
+  extrinsic: number | null;
+  /** high: ITM e valor extrínseco < dividendo (exercício antecipado racional); watch: ITM; info: o resto. */
+  level: 'high' | 'watch' | 'info';
+}
+
+/**
+ * Calls VENDIDAS abertas cujo vencimento é posterior (ou igual) à data-com de um dividendo
+ * do mesmo ativo. Só calls: o exercício antecipado por dividendo é risco de quem vende call.
+ * Não prevê exercício — sinaliza quando ele passa a ser economicamente racional.
+ */
+export function optionDividendRisks(
+  legs: OptionLeg[],
+  dividends: Array<{ symbol: string; exDate: string; amountPerShare?: number }>,
+  opts?: {
+    spots?: Record<string, number>;
+    marks?: Record<string, number | null | undefined>;
+    now?: Date;
+    withinDays?: number;
+  },
+): OptionDividendRisk[] {
+  const now = opts?.now ?? new Date();
+  const within = opts?.withinDays ?? 45;
+  const today = now.toISOString().slice(0, 10);
+  const out: OptionDividendRisk[] = [];
+  for (const leg of legs) {
+    if (leg.exitPrice != null || leg.right !== 'call' || !(leg.qty < 0)) continue;
+    for (const d of dividends) {
+      if (d.symbol.toUpperCase() !== leg.underlying.toUpperCase()) continue;
+      if (d.exDate > leg.expiry || d.exDate < today) continue;
+      const daysToExDate = optionDaysToExpiry(d.exDate, now);
+      if (daysToExDate > within) continue;
+      const spot = opts?.spots?.[leg.underlying];
+      const itm = spot && spot > 0 ? spot > leg.strike : null;
+      const mark = opts?.marks?.[leg.id];
+      const extrinsic = spot && spot > 0 && mark != null ? Number((mark - Math.max(spot - leg.strike, 0)).toFixed(4)) : null;
+      const amount = d.amountPerShare ?? null;
+      let level: OptionDividendRisk['level'] = 'info';
+      if (itm === true) level = extrinsic != null && amount != null && extrinsic < amount ? 'high' : 'watch';
+      out.push({
+        exDate: d.exDate, underlying: leg.underlying, symbol: leg.symbol, strike: leg.strike, expiry: leg.expiry,
+        qty: leg.qty, amountPerShare: amount, daysToExDate, itm, extrinsic, level,
+      });
+    }
+  }
+  const rank = { high: 0, watch: 1, info: 2 } as const;
+  return out.sort((a, b) => rank[a.level] - rank[b.level] || a.exDate.localeCompare(b.exDate));
+}
+
+// ---------------------------------------------------------------------------
+// Analytics por subjacente (Journal): prêmio, win rate, R
+// ---------------------------------------------------------------------------
+
+export interface UnderlyingOptionStats {
+  underlying: string;
+  closedGroups: number;
+  wins: number;
+  /** null sem estratégias fechadas. */
+  winRate: number | null;
+  realized: number;
+  avgPnl: number | null;
+  /** Prêmio líquido (crédito − débito) das estratégias fechadas. */
+  premiumClosed: number;
+  /** R médio = P/L realizado ÷ perda máxima definida da estratégia. null se nenhuma tem risco definido. */
+  avgR: number | null;
+  rSamples: number;
+  openGroups: number;
+  openPremium: number;
+}
+
+export function optionAnalyticsByUnderlying(legs: OptionLeg[]): UnderlyingOptionStats[] {
+  const acc = new Map<string, UnderlyingOptionStats & { rSum: number }>();
+  for (const g of groupOptionLegs(legs)) {
+    const cur =
+      acc.get(g.underlying) ??
+      { underlying: g.underlying, closedGroups: 0, wins: 0, winRate: null, realized: 0, avgPnl: null, premiumClosed: 0, avgR: null, rSamples: 0, openGroups: 0, openPremium: 0, rSum: 0 };
+    if (g.open) {
+      cur.openGroups += 1;
+      cur.openPremium += g.netPremium;
+    } else {
+      cur.closedGroups += 1;
+      cur.realized += g.realizedPnl;
+      cur.premiumClosed += g.netPremium;
+      if (g.realizedPnl > 0) cur.wins += 1;
+      const strikes = g.legs.map((l) => l.strike);
+      const pl = optionMaxProfitLoss(g.legs, { min: 0.0001, max: Math.max(...strikes) * 3 });
+      if (!pl.maxLossUnbounded && pl.maxLoss < 0) {
+        cur.rSum += g.realizedPnl / -pl.maxLoss;
+        cur.rSamples += 1;
+      }
+    }
+    acc.set(g.underlying, cur);
+  }
+  return [...acc.values()]
+    .map(({ rSum, ...r }) => ({
+      ...r,
+      winRate: r.closedGroups > 0 ? r.wins / r.closedGroups : null,
+      avgPnl: r.closedGroups > 0 ? Number((r.realized / r.closedGroups).toFixed(2)) : null,
+      avgR: r.rSamples > 0 ? Number((rSum / r.rSamples).toFixed(3)) : null,
+      realized: Number(r.realized.toFixed(2)),
+      premiumClosed: Number(r.premiumClosed.toFixed(2)),
+      openPremium: Number(r.openPremium.toFixed(2)),
+    }))
+    .sort((a, b) => b.realized - a.realized);
+}
+
+// ---------------------------------------------------------------------------
+// Renda (Investimentos): yield de covered calls e cash-secured puts abertas
+// ---------------------------------------------------------------------------
+
+export interface OptionIncomeRow {
+  groupId: string;
+  underlying: string;
+  kind: 'covered-call' | 'cash-secured-put';
+  contracts: number;
+  strike: number;
+  expiry: string;
+  dte: number;
+  netPremium: number;
+  /** Base do yield: spot (call) / strike (put) × multiplier × contratos. null sem spot (call). */
+  basis: number | null;
+  yieldPct: number | null;
+  annualizedPct: number | null;
+}
+
+/** Linhas de renda das posições abertas de UMA perna vendida (call ou put). */
+export function optionIncomeRows(
+  legs: OptionLeg[],
+  opts?: { spots?: Record<string, number>; now?: Date },
+): OptionIncomeRow[] {
+  const out: OptionIncomeRow[] = [];
+  for (const g of groupOptionLegs(legs)) {
+    const open = g.legs.filter((l) => l.exitPrice == null);
+    if (!g.open || open.length !== 1 || g.legs.length !== 1) continue;
+    const leg = open[0];
+    if (!(leg.qty < 0)) continue;
+    const dte = optionDaysToExpiry(leg.expiry, opts?.now);
+    const contracts = Math.abs(leg.qty);
+    const spot = opts?.spots?.[leg.underlying];
+    const base = { netPremium: g.netPremium, multiplier: leg.multiplier, contracts, daysToExpiry: dte };
+    if (leg.right === 'call') {
+      const hasSpot = Boolean(spot && spot > 0);
+      out.push({
+        groupId: g.id, underlying: leg.underlying, kind: 'covered-call', contracts, strike: leg.strike, expiry: leg.expiry, dte,
+        netPremium: g.netPremium,
+        basis: hasSpot ? (spot as number) * leg.multiplier * contracts : null,
+        yieldPct: hasSpot ? coveredCallYield({ ...base, spot: spot as number }) : null,
+        annualizedPct: hasSpot ? coveredCallYield({ ...base, spot: spot as number, annualize: true }) : null,
+      });
+    } else {
+      out.push({
+        groupId: g.id, underlying: leg.underlying, kind: 'cash-secured-put', contracts, strike: leg.strike, expiry: leg.expiry, dte,
+        netPremium: g.netPremium,
+        basis: leg.strike * leg.multiplier * contracts,
+        yieldPct: cashSecuredPutYield({ ...base, strike: leg.strike }),
+        annualizedPct: cashSecuredPutYield({ ...base, strike: leg.strike, annualize: true }),
+      });
+    }
+  }
+  return out.sort((a, b) => a.expiry.localeCompare(b.expiry));
 }
 
 /** P/L realizado por perna (reexport de conveniência p/ integrações). */

@@ -526,25 +526,31 @@ export interface MaxProfitLoss {
   maxLossUnbounded: boolean;
 }
 
-/** Máx lucro/perda na janela `[min,max]` + flag de ilimitado pelas inclinações das pontas. */
+/**
+ * Máx lucro/perda da estratégia no vencimento. O payoff é LINEAR POR PARTES: os extremos
+ * estão em S=0, nos strikes, ou em S→∞. Amostrar só a janela `[min,max]` erra quando um
+ * strike fica FORA dela (ex.: spread com strikes distantes) — por isso avaliamos 0 + todos
+ * os strikes (e as bordas da janela). "Ilimitado" só existe para cima, e vem da inclinação
+ * assintótica (S→∞): puts valem 0, calls crescem 1×mult → Σ qty×mult das calls.
+ */
 export function optionMaxProfitLoss(legs: OptionLeg[], opts: { min: number; max: number }): MaxProfitLoss {
-  const { min, max } = opts;
-  const curve = optionPayoffCurve(legs, { min, max, points: 401 });
+  const f = (S: number) => optionStrategyPnlAtExpiry(legs, S);
+  const probes = new Set<number>([0, opts.min, opts.max]);
+  for (const l of legs) probes.add(l.strike);
   let maxProfit = -Infinity;
   let maxLoss = Infinity;
-  for (const p of curve) {
-    if (p.pnl > maxProfit) maxProfit = p.pnl;
-    if (p.pnl < maxLoss) maxLoss = p.pnl;
+  for (const S of probes) {
+    if (!Number.isFinite(S) || S < 0) continue;
+    const v = f(S);
+    if (v > maxProfit) maxProfit = v;
+    if (v < maxLoss) maxLoss = v;
   }
-  const f = (S: number) => optionStrategyPnlAtExpiry(legs, S);
-  const eps = (max - min) * 1e-3;
-  const slopeMax = (f(max) - f(max - eps)) / eps;
-  const slopeMin = (f(min + eps) - f(min)) / eps;
+  const netCallSlope = legs.reduce((s, l) => s + (l.right === 'call' ? l.qty * (l.multiplier || 1) : 0), 0);
   return {
     maxProfit: Number((Number.isFinite(maxProfit) ? maxProfit : 0).toFixed(2)),
     maxLoss: Number((Number.isFinite(maxLoss) ? maxLoss : 0).toFixed(2)),
-    maxProfitUnbounded: slopeMax > 1e-6 || slopeMin < -1e-6,
-    maxLossUnbounded: slopeMax < -1e-6 || slopeMin > 1e-6,
+    maxProfitUnbounded: netCallSlope > 1e-9,
+    maxLossUnbounded: netCallSlope < -1e-9,
   };
 }
 

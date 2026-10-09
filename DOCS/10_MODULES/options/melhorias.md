@@ -5,7 +5,7 @@
 
 ## A1 — Alerta de vencimento e data-com no Calendar
 
-- **Status**: `[~]` (vencimento feito; data-com pendente)
+- **Status**: `[x]` (vencimento + data-com no calendário; alerta "vence em ≤3d" na página de Opções)
 - **Contexto**: vencimento de opções e data-com de dividendos (risco de early assignment
   em calls cobertas) não aparecem no calendário unificado.
 - **Proposta**: expiries + data-com entram no `FinancialCalendar` como eventos; toast/ação
@@ -13,7 +13,10 @@
 - **Arquivos**: `packages/ui/FinancialCalendar.tsx`, `options.ts`, `CalendarPage.jsx`.
 - **Aceite**: evento visível no dia certo (fuso do mercado), com drill-down para a perna.
 - **Progresso**: camada "Opções" no `FinancialCalendar` + `optionExpiryEvents` no
-  `CalendarPage` (vencimentos de pernas abertas em 60d). Falta o data-com de dividendos.
+  `CalendarPage` (vencimentos de pernas abertas em 60d). **Data-com**: `optionDividendRisks`
+  (§ Opções) reaproveita os proventos anunciados do Portfolio (`getAnnouncedDividends`) e entra
+  na camada "Opções" do calendário com o nível de risco; a `OptionsPage` mostra banner para
+  vencimento em ≤3d e data-com em ≤14d (call vendida ITM). Testes: `optionsLifecycle.test.ts`.
 
 ## A2 — Risk gate de opções (fricção antes de vender naked)
 

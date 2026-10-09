@@ -22,6 +22,7 @@ import BreakdownSection from '@apps/ui/BreakdownSection';
 import HistogramR from '@apps/ui/HistogramR';
 import DurationAnalysis from '@apps/ui/DurationAnalysis';
 import WeeklyReview from '@apps/ui/WeeklyReview';
+import OptionAnalytics from '@apps/ui/options/OptionAnalytics';
 
 export default function JournalPage() {
   const finance = useFinance();
@@ -251,6 +252,7 @@ export default function JournalPage() {
           <HistogramR trades={dashTrades} bucketSize={histBucket} onBucketSize={handleHistBucket} loading={loading} />
           <DurationAnalysis trades={dashTrades} loading={loading} />
           <WeeklyReview trades={dashTrades} currency="USD" loading={loading} />
+          <OptionAnalytics currency="USD" />
         </>
       ) : (
         <PlaybookPanel />
