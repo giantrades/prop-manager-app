@@ -41,11 +41,13 @@ describe('seedDemoData', () => {
 
     // Opções demo: cadeia (cache), pernas e template custom.
     const optChain = await ds.optionChain.list();
-    expect(optChain.length).toBe(36); // 2 vencimentos × 9 strikes × 2 lados
+    expect(optChain.length).toBe(72); // 4 vencimentos (0/7/30/45d) × 9 strikes × 2 lados
     expect(optChain.every((q) => q.multiplier === 100 && q.iv != null)).toBe(true);
+    expect(optChain.every((q) => q.expiryTime != null)).toBe(true); // hora do vencimento (0DTE)
     const optLegs = await ds.optionLegs.list();
-    expect(optLegs).toHaveLength(5);
+    expect(optLegs).toHaveLength(6);
     expect(optLegs.some((l) => l.groupId === 'grp-demo-cc' && l.right === 'call' && l.qty < 0)).toBe(true);
+    expect(optLegs.some((l) => l.groupId === 'grp-demo-0dte')).toBe(true);
     const optTemplates = await ds.optionTemplates.list();
     expect(optTemplates.map((t) => t.id)).toContain('tpl-demo-wheel');
     const txs = await ds.transactions.list();

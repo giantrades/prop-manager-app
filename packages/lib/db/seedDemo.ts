@@ -110,29 +110,41 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
 
   // -------------------------------------------------------------------------
   // Opções demo — cadeia (cache), pernas (posições) e um template custom.
-  // Preços/gregas via BSM (mesmo motor do Analyzer), então a UI offline já tem dado.
+  // Vencimentos RELATIVOS a hoje (inclui 0DTE) e com HORA de vencimento, para
+  // testar também 0DTE. Preços/gregas via BSM (mesmo motor do Analyzer).
   // -------------------------------------------------------------------------
   const optUnderlying = 'PETR4';
   const optSpot = 38;
   const optMultiplier = 100;
-  const optExpiries = [
-    { expiry: '2026-11-21', days: 44 },
-    { expiry: '2026-12-19', days: 72 },
-  ];
+  const optRate = 0.11;
   const optStrikes = [34, 35, 36, 37, 38, 39, 40, 41, 42];
+  const expiryAt = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(20, 0, 0, 0); // 20:00 local = "hora do vencimento"
+    const expiryTime = d.toISOString();
+    return { expiry: expiryTime.slice(0, 10), expiryTime, T: Math.max(0, (d.getTime() - Date.now()) / 86400000) / 365 };
+  };
+  const optExpiries = [0, 7, 30, 45].map(expiryAt);
+  const e0 = optExpiries[0]; // 0DTE (vence hoje)
+  const e30 = optExpiries[2];
+  const e45 = optExpiries[3];
+  const ePast20 = expiryAt(-20);
+  const ePast10 = expiryAt(-10);
+
   const chainQuotes: OptionChainQuote[] = [];
-  for (const { expiry, days } of optExpiries) {
-    const T = days / 365;
+  for (const { expiry, expiryTime, T } of optExpiries) {
     for (const strike of optStrikes) {
       const moneyness = (strike - optSpot) / optSpot;
       const iv = Number((0.3 + 1.2 * moneyness * moneyness).toFixed(4));
       for (const right of ['call', 'put'] as const) {
-        const price = bsmPrice({ S: optSpot, K: strike, T, r: 0.11, sigma: iv, right, q: 0 }) ?? 0;
+        const price = bsmPrice({ S: optSpot, K: strike, T, r: optRate, sigma: iv, right, q: 0 }) ?? 0;
         const spread = Math.max(0.02, price * 0.05);
         chainQuotes.push({
           id: optionQuoteId(optUnderlying, expiry, strike, right),
           underlying: optUnderlying,
           expiry,
+          expiryTime,
           strike,
           right,
           symbol: `${optUnderlying}${right[0].toUpperCase()}${strike}`,
@@ -142,7 +154,7 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
           iv,
           oi: Math.round(200 + Math.random() * 3000),
           volume: Math.round(50 + Math.random() * 800),
-          greeks: bsmGreeks({ S: optSpot, K: strike, T, r: 0.11, sigma: iv, right, q: 0 }),
+          greeks: bsmGreeks({ S: optSpot, K: strike, T, r: optRate, sigma: iv, right, q: 0 }),
           multiplier: optMultiplier,
           at: now(),
           source: 'computed',
@@ -154,12 +166,14 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
     }
   }
 
+  const legBase = { accountId: 'acct-xp', underlying: optUnderlying, multiplier: optMultiplier, fees: 1.5, source: 'manual' as const, updatedAt: now(), deviceId: 'demo', version: 0 };
   const optionLegs: OptionLeg[] = [
-    { id: 'leg-demo-cc', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C40', right: 'call', strike: 40, expiry: '2026-11-21', qty: -1, multiplier: optMultiplier, entryPrice: 1.2, entryDatetime: daysAgo(10), fees: 1.5, ivEntry: 0.28, groupId: 'grp-demo-cc', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
-    { id: 'leg-demo-bcs-long', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C38', right: 'call', strike: 38, expiry: '2026-12-19', qty: 1, multiplier: optMultiplier, entryPrice: 1.85, entryDatetime: daysAgo(6), fees: 1.5, ivEntry: 0.29, groupId: 'grp-demo-bcs', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
-    { id: 'leg-demo-bcs-short', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C40', right: 'call', strike: 40, expiry: '2026-12-19', qty: -1, multiplier: optMultiplier, entryPrice: 0.95, entryDatetime: daysAgo(6), fees: 1.5, ivEntry: 0.28, groupId: 'grp-demo-bcs', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
-    { id: 'leg-demo-csp', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4P36', right: 'put', strike: 36, expiry: '2026-09-19', qty: -1, multiplier: optMultiplier, entryPrice: 1.5, entryDatetime: daysAgo(50), exitPrice: 0.3, exitDatetime: daysAgo(20), fees: 1.5, ivEntry: 0.31, groupId: 'grp-demo-csp', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
-    { id: 'leg-demo-cc2', accountId: 'acct-xp', underlying: optUnderlying, symbol: 'PETR4C41', right: 'call', strike: 41, expiry: '2026-10-17', qty: -1, multiplier: optMultiplier, entryPrice: 0.8, entryDatetime: daysAgo(35), exitPrice: 0.1, exitDatetime: daysAgo(5), fees: 1.5, ivEntry: 0.27, groupId: 'grp-demo-cc2', strategyId: 'renda', source: 'manual', updatedAt: now(), deviceId: 'demo', version: 0 },
+    { ...legBase, id: 'leg-demo-cc', symbol: 'PETR4C40', right: 'call', strike: 40, expiry: e30.expiry, expiryTime: e30.expiryTime, qty: -1, entryPrice: 1.2, entryDatetime: daysAgo(10), ivEntry: 0.28, groupId: 'grp-demo-cc', strategyId: 'renda' },
+    { ...legBase, id: 'leg-demo-bcs-long', symbol: 'PETR4C38', right: 'call', strike: 38, expiry: e45.expiry, expiryTime: e45.expiryTime, qty: 1, entryPrice: 1.85, entryDatetime: daysAgo(6), ivEntry: 0.29, groupId: 'grp-demo-bcs' },
+    { ...legBase, id: 'leg-demo-bcs-short', symbol: 'PETR4C40', right: 'call', strike: 40, expiry: e45.expiry, expiryTime: e45.expiryTime, qty: -1, entryPrice: 0.95, entryDatetime: daysAgo(6), ivEntry: 0.28, groupId: 'grp-demo-bcs' },
+    { ...legBase, id: 'leg-demo-0dte', symbol: 'PETR4C38', right: 'call', strike: 38, expiry: e0.expiry, expiryTime: e0.expiryTime, qty: 1, entryPrice: 0.35, entryDatetime: daysAgo(0, 9), ivEntry: 0.55, groupId: 'grp-demo-0dte', strategyId: 'daytrade' },
+    { ...legBase, id: 'leg-demo-csp', symbol: 'PETR4P36', right: 'put', strike: 36, expiry: ePast20.expiry, expiryTime: ePast20.expiryTime, qty: -1, entryPrice: 1.5, entryDatetime: daysAgo(50), exitPrice: 0.3, exitDatetime: daysAgo(20), ivEntry: 0.31, groupId: 'grp-demo-csp', strategyId: 'renda' },
+    { ...legBase, id: 'leg-demo-cc2', symbol: 'PETR4C41', right: 'call', strike: 41, expiry: ePast10.expiry, expiryTime: ePast10.expiryTime, qty: -1, entryPrice: 0.8, entryDatetime: daysAgo(35), exitPrice: 0.1, exitDatetime: daysAgo(5), ivEntry: 0.27, groupId: 'grp-demo-cc2', strategyId: 'renda' },
   ];
 
   const customTemplates: StoredOptionTemplate[] = [
