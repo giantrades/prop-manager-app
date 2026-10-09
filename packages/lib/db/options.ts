@@ -97,6 +97,7 @@ export function buildOptionLegFromQuote(quote: OptionChainQuote, opts: BuildLegO
     right: quote.right,
     strike: quote.strike,
     expiry: quote.expiry,
+    expiryTime: quote.expiryTime ?? undefined,
     qty: opts.qty,
     multiplier,
     entryPrice: opts.entryPrice ?? mid,

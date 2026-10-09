@@ -426,9 +426,11 @@ export function impliedVolatility(input: IvInput): number | null {
   return Number(((a + b) / 2).toFixed(6));
 }
 
-/** Anos até o vencimento (ACT/365). `expiry` ISO. */
-export function timeToExpiry(expiry: string, now: Date = new Date()): number {
-  const days = (parseDate(expiry).getTime() - now.getTime()) / 86400000;
+/** Anos até o vencimento (ACT/365). Usa `expiryTime` (ISO com hora) quando houver —
+ *  essencial para 0DTE, em que o vencimento é HOJE mas ainda há valor temporal intradiário. */
+export function timeToExpiry(expiry: string, now: Date = new Date(), expiryTime?: string | null): number {
+  const target = expiryTime ? parseDate(expiryTime) : parseDate(expiry);
+  const days = (target.getTime() - now.getTime()) / 86400000;
   return Math.max(0, days / 365);
 }
 
@@ -568,7 +570,7 @@ export function netOptionGreeks(legs: OptionLeg[], market: OptionMarketPoint): G
   const now = market.now ?? new Date();
   const acc: Greeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
   for (const leg of legs) {
-    const T = timeToExpiry(leg.expiry, now);
+    const T = timeToExpiry(leg.expiry, now, leg.expiryTime);
     const sigma = leg.ivEntry;
     if (!(sigma && sigma > 0) || !(T > 0)) continue;
     const g = bsmGreeks({ S: market.S, K: leg.strike, T, r: market.r, sigma, right: leg.right, q });
@@ -681,7 +683,7 @@ export function optionLegTheoreticalValue(leg: OptionLeg, S: number, scenario: O
   const base = leg.ivEntry && leg.ivEntry > 0 ? leg.ivEntry : scenario.fallbackIv;
   if (!(base && base > 0)) return null;
   const asOf = scenario.asOf ?? new Date();
-  const T = Math.max(0, timeToExpiry(leg.expiry, asOf) - (scenario.daysForward ?? 0) / 365);
+  const T = Math.max(0, timeToExpiry(leg.expiry, asOf, leg.expiryTime) - (scenario.daysForward ?? 0) / 365);
   const sigma = Math.max(1e-4, base + (scenario.volShift ?? 0));
   return bsmPrice({ S, K: leg.strike, T, r: scenario.r, sigma, right: leg.right, q: scenario.q ?? 0 });
 }

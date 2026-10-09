@@ -388,6 +388,8 @@ export interface OptionLeg extends SyncedRecord {
   right: OptionRight;
   strike: number;
   expiry: string; // ISO date (vencimento) no fuso do mercado
+  /** Momento exato do vencimento (ISO com hora/offset), quando conhecido — essencial p/ 0DTE. */
+  expiryTime?: string;
   qty: number;
   multiplier: number;
   entryPrice: number;
@@ -433,6 +435,8 @@ export interface OptionChainQuote extends SyncedRecord {
   id: string; // `${underlying}:${expiry}:${strike}:${right}`
   underlying: string;
   expiry: string;
+  /** Momento exato do vencimento (ISO com hora/offset), quando conhecido — essencial p/ 0DTE. */
+  expiryTime?: string | null;
   strike: number;
   right: OptionRight;
   symbol: string;

@@ -40,6 +40,8 @@ export interface BridgeChainQuote {
   strike?: number;
   right?: OptionRight;
   symbol?: string;
+  /** Momento exato do vencimento (ISO), p/ 0DTE. */
+  expiryTime?: string;
   bid?: number | null;
   ask?: number | null;
   last?: number | null;
@@ -101,6 +103,7 @@ export function normalizeOptionChainDetailed(
       strike: parsed.strike,
       right: parsed.right,
       symbol: q.symbol ?? `${payload.underlying}${parsed.right[0].toUpperCase()}${parsed.strike}`,
+      expiryTime: q.expiryTime ?? null,
       bid: q.bid ?? null,
       ask: q.ask ?? null,
       last: q.last ?? null,
@@ -129,6 +132,8 @@ export interface BridgeOptionPosition {
   accountId: string;
   underlying: string;
   symbol?: string;
+  /** Momento exato do vencimento (ISO), p/ 0DTE. */
+  expiryTime?: string;
   /** Opcional: se ausente, derivado do `symbol`. */
   right?: OptionRight;
   strike?: number;
@@ -177,6 +182,7 @@ export function normalizeOptionPositionsDetailed(
       accountId: p.accountId,
       underlying: p.underlying,
       symbol: p.symbol ?? `${p.underlying}${parsed.right[0].toUpperCase()}${parsed.strike}`,
+      expiryTime: p.expiryTime,
       right: parsed.right,
       strike: parsed.strike,
       expiry: p.expiry,
@@ -223,6 +229,7 @@ export function mergeOptionLegs(existing: OptionLeg[], incoming: OptionLeg[]): O
         right: inc.right,
         strike: inc.strike,
         expiry: inc.expiry,
+        expiryTime: inc.expiryTime ?? prev.expiryTime,
         qty: inc.qty,
         multiplier: inc.multiplier,
         entryPrice: inc.entryPrice,
