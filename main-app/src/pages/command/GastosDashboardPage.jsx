@@ -24,9 +24,10 @@ import {
   merchantRankingPeriod, compareMonths, categoryOf, periodMonths, inPeriod, currentYm,
   categoryTrend, shiftYm, ymToList, invoiceCycle,
   previousPeriod, rollupByParent, subcategoriesOf, invoiceStatus, recurringDue,
-  upcomingBills, upcomingSummary,
+  upcomingBills, upcomingSummary, subscriptions, monthProjection,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
+import { CATEGORY_ICONS, CATEGORY_COLORS_HEX } from '@apps/ui/categoryIcons';
 
 const WIDGETS_KEY = 'ui:widgets:gastos';
 
@@ -65,8 +66,8 @@ function TrendBadge({ delta, invert = false }) {
   );
 }
 
-const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
-const COLORS = { blue: '#3498db', green: '#2ecc71', yellow: '#e1b12c', red: '#e74c3c', brand: '#7c5cff', gray: '#8b94a5' };
+const ICONS = CATEGORY_ICONS;
+const COLORS = CATEGORY_COLORS_HEX;
 
 const INVOICE_LABEL = { aberta: 'Aberta', fechada: 'Fechada', paga: 'Paga', parcial: 'Parcial' };
 
@@ -257,6 +258,8 @@ export default function GastosDashboardPage() {
       pending: pendingSummary(periodTxs), bills: pendingBills(periodTxs).slice(0, 5),
       upcoming: upcomingBills(txs, undefined, 15).slice(0, 8), upcomingSum: upcomingSummary(txs, undefined, 15),
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
+      subs: subscriptions(txs).slice(0, 8),
+      monthProj: monthProjection(txs, period.mode === 'month' ? (period.ym ?? currentYm()) : currentYm()),
       taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
       taxPending: Number(taxPending.toFixed(2)),
       delta, rollup, cardInvoices, projection,
@@ -426,6 +429,51 @@ export default function GastosDashboardPage() {
                 <div className="gd-row"><span className="gd-row-ico"><PiggyBank size={14} /></span><span className="gd-row-name">Fluxo mensal líquido</span><span className={`gd-row-val ${view.projection.netMonthly >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(view.projection.netMonthly, 'USD')}</span></div>
                 <div className="gd-row"><span className="gd-row-ico"><Activity size={14} /></span><span className="gd-row-name">Posso comprar (safe)</span><span className="gd-row-val">{fmtMoney(view.projection.safe, 'USD')}</span></div>
                 <div className="gd-hint">A pagar {fmtMoney(view.projection.pending.payable, 'USD')} · {view.projection.dueCount} recorrente(s) a gerar</div>
+              </div>
+            )}
+
+            {view.monthProj?.isCurrent && (
+              <div className="dash-section" key="monthproj" data-label="Fechamento do mês">
+                <div className="dash-title"><span><TrendingUp size={14} /> Fechamento do mês</span><span className="gd-row-sub">projeção</span></div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><TrendingDown size={14} /></span>
+                  <span className="gd-row-name">Gasto até hoje</span>
+                  <span className="gd-row-val gd-neg">{fmtMoney(view.monthProj.spentSoFar, 'USD')}</span>
+                </div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><Activity size={14} /></span>
+                  <span className="gd-row-name">Projeção de gasto</span>
+                  <span className="gd-row-val gd-neg">{fmtMoney(view.monthProj.projectedSpend, 'USD')}</span>
+                </div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><Wallet size={14} /></span>
+                  <span className="gd-row-name">Saldo projetado</span>
+                  <span className={`gd-row-val ${view.monthProj.projectedFreeCash >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(view.monthProj.projectedFreeCash, 'USD')}</span>
+                </div>
+                {view.monthProj.projectedSpend > 0 && (
+                  <div className="gd-card-bar"><span className="gd-card-fill" style={{ width: `${Math.min(100, Math.round((view.monthProj.spentSoFar / view.monthProj.projectedSpend) * 100))}%`, background: 'var(--brand, #7c5cff)' }} /></div>
+                )}
+                <div className="gd-hint">no ritmo dos {view.monthProj.daysElapsed} de {view.monthProj.daysInMonth} dias</div>
+              </div>
+            )}
+
+            {view.subs.length > 0 && (
+              <div className="dash-section" key="subs" data-label="Assinaturas">
+                <div className="dash-title">
+                  <span><Receipt size={14} /> Assinaturas</span>
+                  <span className="gd-row-sub">{fmtMoney(view.subs.reduce((s, x) => s + x.monthlyTotal, 0), 'USD')}/mês</span>
+                </div>
+                {view.subs.map((s) => {
+                  const meta = catMeta(s.categoryId ?? 'outros');
+                  return (
+                    <div key={s.key} className="gd-row">
+                      <CatIcon name={meta.icon} color={meta.color} />
+                      <span className="gd-row-name">{s.name}</span>
+                      <span className="gd-row-sub">{s.months} meses · dia {s.day}</span>
+                      <span className="gd-row-val gd-neg">{fmtMoney(s.amount, 'USD')}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

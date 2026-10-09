@@ -146,6 +146,9 @@ export async function seedDemoData(ds: DataService, chain: DataChainEngine): Pro
           multiplier: optMultiplier,
           at: now(),
           source: 'computed',
+          updatedAt: now(),
+          deviceId: 'demo',
+          version: 0,
         });
       }
     }

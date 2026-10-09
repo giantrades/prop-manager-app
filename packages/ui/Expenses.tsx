@@ -37,29 +37,17 @@ import {
 } from '@apps/lib/db';
 import type { ImportRule, CsvMapping } from '@apps/lib/db';
 import QuickAddExpense from './QuickAddExpense';
+import { CATEGORY_ICONS, CATEGORY_COLORS } from './categoryIcons';
+import { usePeriod } from '@apps/state';
 
-const ICONS: Record<string, React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>> = {
-  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
-  Briefcase, GraduationCap, Tag, Wallet, Pencil, Trash2, Plus, Receipt, Coins, Gift,
-};
-
-const COLORS: Record<string, string> = {
-  blue: 'var(--blue,#3498db)',
-  green: 'var(--green,#2ecc71)',
-  yellow: 'var(--yellow,#e1b12c)',
-  red: 'var(--red,#e74c3c)',
-  brand: 'var(--brand,#7c5cff)',
-  gray: 'var(--gray,#5b6270)',
-};
+const ICONS = CATEGORY_ICONS;
+const COLORS = CATEGORY_COLORS;
 
 const INCOME_META: Record<string, { label: string; icon: string; color: string }> = {
   payout_in: { label: 'Payouts', icon: 'Wallet', color: 'green' },
   rebate: { label: 'Rebates', icon: 'Coins', color: 'green' },
   income: { label: 'Outros ganhos', icon: 'Gift', color: 'blue' },
 };
-
-const ICON_CHOICES = ['House', 'UtensilsCrossed', 'Car', 'HeartPulse', 'Gamepad2', 'Landmark', 'TrendingUp', 'Briefcase', 'GraduationCap', 'Tag', 'Receipt', 'Coins', 'Gift', 'Wallet'];
-const COLOR_CHOICES = ['blue', 'green', 'yellow', 'red', 'brand', 'gray'];
 
 // H5 — rótulo do estado da fatura.
 const INVOICE_LABEL: Record<string, string> = {
@@ -117,6 +105,7 @@ interface ExpenseForm {
   cardId: string;
   installmentCount: string;
   tags: string;
+  merchant: string;
 }
 
 function emptyForm(): ExpenseForm {
@@ -124,7 +113,7 @@ function emptyForm(): ExpenseForm {
     type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '',
     recur: false, recurDay: new Date().getDate(), attachments: {},
     // D1/D2/D4
-    paid: true, dueDate: '', card: '', cardId: '', installmentCount: '', tags: '',
+    paid: true, dueDate: '', card: '', cardId: '', installmentCount: '', tags: '', merchant: '',
   };
 }
 
@@ -246,6 +235,8 @@ interface ExpensesProps {
   rolloverCats?: string[];
   onToggleRollover?: (catId: string) => void;
   onAddInstallments?: (input: { accountId: string; currency: string; totalAmount: number; count: number; category: string; card?: string; cardId?: string; note?: string; firstDate: string }) => void;
+  onUpdateSeries?: (groupId: string, patch: Partial<Transaction>, fromN?: number) => void;
+  onDeleteSeries?: (groupId: string, fromN?: number) => void;
   onTransfer?: (input: { fromAccountId: string; toAccountId: string; amount: number; currency: string; date?: string; note?: string }) => void;
   onPayInvoice?: (input: { cardId: string; competencia: string; accountId: string; amount: number; currency: string; note?: string }) => void;
   currency?: string;
@@ -256,10 +247,11 @@ export default function Expenses({
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   importRules = DEFAULT_IMPORT_RULES,
-  rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer, onPayInvoice,
+  rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer, onPayInvoice, onUpdateSeries, onDeleteSeries,
   currency = 'USD', loading = false,
 }: ExpensesProps) {
   const now = new Date();
+  const { period, setPeriod } = usePeriod();
   const [ym, setYm] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
   const [typeFilter, setTypeFilter] = useState('all');
   const [catFilter, setCatFilter] = useState('');
@@ -271,6 +263,24 @@ export default function Expenses({
   const [undo, setUndo] = useState<{ tx: Transaction } | null>(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transfer, setTransfer] = useState<TransferForm>({ from: '', to: '', amount: '', date: '', note: '' });
+  // I5 — filtros avançados + exportar.
+  const [showAdv, setShowAdv] = useState(false);
+  const [adv, setAdv] = useState({ accountId: '', cardId: '', status: 'all', tag: '', min: '', max: '' });
+  // I1 — diálogo de escopo da série de parcelas.
+  const [seriesDialog, setSeriesDialog] = useState<null | { mode: 'edit' | 'delete'; groupId: string; fromN: number; patch?: Partial<Transaction>; tx: Transaction }>(null);
+
+  // I5 — sincroniza o mês do ledger com o PERÍODO global (consistência entre telas).
+  useEffect(() => {
+    if (period.mode === 'month' && period.ym) {
+      const [y, m] = period.ym.split('-').map(Number);
+      setYm((s) => (s.year === y && s.month === m ? s : { year: y, month: m }));
+    }
+  }, [period.mode, period.ym]);
+  const goMonth = (delta: number): void => {
+    const next = shiftMonth(ym.year, ym.month, delta);
+    setYm(next);
+    setPeriod({ mode: 'month', ym: ymKey(next.year, next.month) });
+  };
 
   const cats = categories.length ? categories : DEFAULT_CATEGORIES;
   const catById = useMemo(() => {
@@ -304,15 +314,26 @@ export default function Expenses({
     if (typeFilter === 'income') list = list.filter((t) => ['payout_in', 'rebate', 'income'].includes(t.kind));
     if (typeFilter === 'expense') list = list.filter((t) => t.kind === 'expense');
     if (catFilter) list = list.filter((t) => (categoryOf(t, cats) ?? 'outros') === catFilter);
+    // I5 — filtros avançados.
+    if (adv.accountId) list = list.filter((t) => t.accountId === adv.accountId);
+    if (adv.cardId) list = list.filter((t) => (t.cardId || t.card) === adv.cardId);
+    if (adv.status === 'paid') list = list.filter((t) => t.paid !== false);
+    if (adv.status === 'pending') list = list.filter((t) => t.paid === false);
+    if (adv.tag) list = list.filter((t) => (t.tags ?? []).some((x) => x.toLowerCase() === adv.tag.toLowerCase()));
+    const mn = adv.min !== '' ? Number(adv.min) : null;
+    const mx = adv.max !== '' ? Number(adv.max) : null;
+    if (mn != null && Number.isFinite(mn)) list = list.filter((t) => Math.abs(t.amount) >= mn);
+    if (mx != null && Number.isFinite(mx)) list = list.filter((t) => Math.abs(t.amount) <= mx);
     const ql = q.trim().toLowerCase();
     if (ql) {
       list = list.filter((t) =>
         (t.note ?? '').toLowerCase().includes(ql)
+        || (t.merchant ?? '').toLowerCase().includes(ql)
         || (catById.get(categoryOf(t, cats) ?? 'outros')?.name ?? '').toLowerCase().includes(ql),
       );
     }
     return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [txs, key, typeFilter, catFilter, cats, q, catById]);
+  }, [txs, key, typeFilter, catFilter, cats, q, catById, adv]);
 
   // Progresso de orçamento consolidado (topo da página).
   const budgetTotals = useMemo(() => {
@@ -437,6 +458,7 @@ export default function Expenses({
       cardId: t.cardId ?? '',
       installmentCount: '',
       tags: (t.tags ?? []).join(', '),
+      merchant: t.merchant ?? '',
     });
     setAttachError(null);
     setShowForm(true);
@@ -458,11 +480,21 @@ export default function Expenses({
       card: form.card.trim() || undefined,
       cardId: form.cardId || undefined,
       tags: tags.length ? tags : undefined,
+      merchant: form.merchant.trim() || undefined,
     };
     if (editingId) {
       const patch: Partial<Transaction> = form.type === 'expense'
         ? { category: form.category, ...base }
         : { ...base };
+      const editingTx = txs.find((x) => x.id === editingId);
+      if (editingTx?.installments?.groupId && onUpdateSeries) {
+        // I1 — pergunta se edita só esta ou a série (esta e as futuras).
+        setSeriesDialog({ mode: 'edit', groupId: editingTx.installments.groupId, fromN: editingTx.installments.n, patch, tx: editingTx });
+        setShowForm(false);
+        setEditingId(null);
+        setForm(emptyForm());
+        return;
+      }
       onUpdate?.(editingId, patch);
     } else if (form.type === 'expense') {
       const parts = Number(form.installmentCount);
@@ -526,6 +558,39 @@ export default function Expenses({
     setTimeout(() => setUndo((u) => (u && u.tx.id === t.id ? null : u)), 8000);
   };
 
+  // I1 — excluir/editar com escopo da série de parcelas.
+  const requestDelete = (t: Transaction): void => {
+    if (t.installments?.groupId && onDeleteSeries) {
+      setSeriesDialog({ mode: 'delete', groupId: t.installments.groupId, fromN: t.installments.n, tx: t });
+      return;
+    }
+    handleDelete(t);
+  };
+
+  // I5 — exporta os lançamentos filtrados do mês em CSV.
+  const exportCsv = (): void => {
+    const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = ['data', 'tipo', 'categoria', 'estabelecimento', 'nota', 'conta', 'cartao', 'valor', 'status'].join(',');
+    const lines = monthTxs.map((t) => [
+      (t.date || '').slice(0, 10),
+      t.kind,
+      catById.get(categoryOf(t, cats) ?? 'outros')?.name ?? '',
+      t.merchant ?? '',
+      t.note ?? '',
+      accounts.find((a) => a.id === t.accountId)?.name ?? '',
+      t.card ?? '',
+      String(t.amount),
+      t.paid === false ? 'pendente' : 'pago',
+    ].map(esc).join(','));
+    const blob = new Blob([[head, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lancamentos-${key}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // A3/H10 — importa extrato (OFX/CSV/QIF): parse + preview com categoria editável + dedup.
   const importFileRef = React.useRef<HTMLInputElement | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -576,7 +641,8 @@ export default function Expenses({
     Saldo: s.balance,
   }));
 
-  const hasFilter = q.trim() !== '' || catFilter !== '' || typeFilter !== 'all';
+  const hasFilter = q.trim() !== '' || catFilter !== '' || typeFilter !== 'all'
+    || !!(adv.accountId || adv.cardId || adv.tag || adv.min || adv.max || adv.status !== 'all');
 
   return (
     <div className={`ex-root${hasFilter ? ' ex-filtering' : ''}`}>
@@ -625,9 +691,9 @@ export default function Expenses({
 
       {/* Filtros + ações (uma toolbar só; quebra sozinha em telas estreitas) */}
       <div className="ex-toolbar">        <div className="ex-monthnav">
-          <button className="ex-btn ex-btn-ghost ex-btn-sm" aria-label="Mês anterior" onClick={() => setYm((s) => shiftMonth(s.year, s.month, -1))}>‹</button>
+          <button className="ex-btn ex-btn-ghost ex-btn-sm" aria-label="Mês anterior" onClick={() => goMonth(-1)}>‹</button>
           <span className="ex-month">{MONTHS_PT[ym.month - 1]}/{ym.year}</span>
-          <button className="ex-btn ex-btn-ghost ex-btn-sm" aria-label="Próximo mês" onClick={() => setYm((s) => shiftMonth(s.year, s.month, 1))}>›</button>
+          <button className="ex-btn ex-btn-ghost ex-btn-sm" aria-label="Próximo mês" onClick={() => goMonth(1)}>›</button>
         </div>
         <div className="ex-typefilter" role="group" aria-label="Tipo">
           {[['all', 'Tudo'], ['income', 'Ganhos'], ['expense', 'Gastos']].map(([v, l]) => (
@@ -648,17 +714,53 @@ export default function Expenses({
           placeholder="Buscar lançamento…"
           aria-label="Buscar lançamento por nota ou categoria"
         />
+        <button className={`ex-btn ex-btn-ghost${showAdv ? ' ex-btn-on' : ''}`} aria-pressed={showAdv} onClick={() => setShowAdv((s) => !s)}>Filtros</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => setShowTransfer(true)}>Transferir</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato</button>
+        <button className="ex-btn ex-btn-ghost" onClick={exportCsv}>Exportar CSV</button>
         <span className="ex-toolbar-spacer" />
         <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
       </div>
+
+      {/* I5 — filtros avançados */}
+      {showAdv && (
+        <div className="ex-adv">
+          <label className="ex-field"><span>Conta</span>
+            <select className="ex-input" value={adv.accountId} onChange={(e) => setAdv((s) => ({ ...s, accountId: e.target.value }))} aria-label="Filtrar por conta">
+              <option value="">Todas</option>
+              {accounts.map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
+            </select>
+          </label>
+          <label className="ex-field"><span>Cartão</span>
+            <select className="ex-input" value={adv.cardId} onChange={(e) => setAdv((s) => ({ ...s, cardId: e.target.value }))} aria-label="Filtrar por cartão">
+              <option value="">Todos</option>
+              {cards.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
+            </select>
+          </label>
+          <label className="ex-field"><span>Status</span>
+            <select className="ex-input" value={adv.status} onChange={(e) => setAdv((s) => ({ ...s, status: e.target.value }))} aria-label="Filtrar por status">
+              <option value="all">Tudo</option>
+              <option value="paid">Pago/recebido</option>
+              <option value="pending">Pendente</option>
+            </select>
+          </label>
+          <label className="ex-field"><span>Valor mín.</span>
+            <input className="ex-input" type="number" min="0" step="0.01" value={adv.min} onChange={(e) => setAdv((s) => ({ ...s, min: e.target.value }))} placeholder="0" aria-label="Valor mínimo" />
+          </label>
+          <label className="ex-field"><span>Valor máx.</span>
+            <input className="ex-input" type="number" min="0" step="0.01" value={adv.max} onChange={(e) => setAdv((s) => ({ ...s, max: e.target.value }))} placeholder="—" aria-label="Valor máximo" />
+          </label>
+          <label className="ex-field"><span>Tag</span>
+            <input className="ex-input" type="text" value={adv.tag} onChange={(e) => setAdv((s) => ({ ...s, tag: e.target.value }))} placeholder="viagem" aria-label="Filtrar por tag" />
+          </label>
+        </div>
+      )}
 
       {/* Cabeçalho de resultados (só quando há filtro ativo) */}
       {hasFilter && (
         <div className="ex-results-head">
           <span className="ex-section-title">Resultados · {monthTxs.length}</span>
-          <button className="ex-btn ex-btn-ghost ex-btn-sm" onClick={() => { setTypeFilter('all'); setCatFilter(''); setQ(''); }}>Limpar filtros</button>
+          <button className="ex-btn ex-btn-ghost ex-btn-sm" onClick={() => { setTypeFilter('all'); setCatFilter(''); setQ(''); setAdv({ accountId: '', cardId: '', status: 'all', tag: '', min: '', max: '' }); }}>Limpar filtros</button>
         </div>
       )}
 
@@ -832,6 +934,48 @@ export default function Expenses({
         </div>
       )}
 
+      {/* I1 — escopo da série de parcelas */}
+      {seriesDialog && (
+        <div className="ex-overlay" onClick={() => setSeriesDialog(null)}>
+          <div className="ex-sheet ex-sheet-sm" role="dialog" aria-modal="true" aria-label="Parcelas" onClick={(e) => e.stopPropagation()}>
+            <div className="ex-sheet-head">
+              <span className="ex-sheet-title">{seriesDialog.mode === 'edit' ? 'Editar parcelas' : 'Excluir parcelas'}</span>
+              <button className="ex-mini" onClick={() => setSeriesDialog(null)} aria-label="Fechar">✕</button>
+            </div>
+            <div className="ex-form">
+              <div className="ex-hint">
+                {seriesDialog.tx.installments.n}/{seriesDialog.tx.installments.of} · esta compra tem {seriesDialog.tx.installments.of} parcelas.
+                {seriesDialog.mode === 'edit' ? ' Aplicar em:' : ' Excluir:'}
+              </div>
+              <div className="ex-form-row">
+                <button
+                  className="ex-btn ex-btn-ghost"
+                  onClick={() => {
+                    const d = seriesDialog;
+                    if (d.mode === 'edit') onUpdate?.(d.tx.id, d.patch);
+                    else handleDelete(d.tx);
+                    setSeriesDialog(null);
+                  }}
+                >
+                  Só esta parcela
+                </button>
+                <button
+                  className="ex-btn ex-btn-primary"
+                  onClick={() => {
+                    const d = seriesDialog;
+                    if (d.mode === 'edit') onUpdateSeries?.(d.groupId, d.patch ?? {}, d.fromN);
+                    else onDeleteSeries?.(d.groupId, d.fromN);
+                    setSeriesDialog(null);
+                  }}
+                >
+                  Esta e as futuras ({seriesDialog.tx.installments.of - seriesDialog.tx.installments.n + 1}x)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Recorrentes pendentes */}
       {due.length > 0 && (
         <div className="ex-recur" role="note">
@@ -914,30 +1058,33 @@ export default function Expenses({
             <input className="ex-input" type="text" value={form.note} onChange={(e) => setF('note', e.target.value)} placeholder="Ex.: aluguel" aria-label="Nota" />
           </label>
           <div className="ex-form-row">
-            <label className="ex-field"><span>Estabelecimento / tags</span>
+            <label className="ex-field"><span>Estabelecimento</span>
+              <input className="ex-input" type="text" value={form.merchant} onChange={(e) => setF('merchant', e.target.value)} placeholder="Ex.: iFood, Uber" aria-label="Estabelecimento" />
+            </label>
+            <label className="ex-field"><span>Tags</span>
               <input className="ex-input" type="text" value={form.tags} onChange={(e) => setF('tags', e.target.value)} placeholder="viagem, trabalho (separe por vírgula)" aria-label="Tags" />
             </label>
-            <label className="ex-field"><span>Cartão (fatura)</span>
-              {cards.length > 0 ? (
-                <select
-                  className="ex-input"
-                  value={form.cardId || ''}
-                  onChange={(e) => {
-                    const c = cards.find((x) => x.id === e.target.value);
-                    setForm((p) => ({ ...p, cardId: c?.id ?? '', card: c?.name ?? '' }));
-                  }}
-                  aria-label="Cartão"
-                >
-                  <option value="">Sem cartão</option>
-                  {cards.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}{c.closingDay ? ` · fecha ${c.closingDay}` : ''}</option>
-                  ))}
-                </select>
-              ) : (
-                <input className="ex-input" type="text" value={form.card} onChange={(e) => setF('card', e.target.value)} placeholder="Ex.: Nubank (cadastre em Settings p/ vincular)" aria-label="Cartão" />
-              )}
-            </label>
           </div>
+          <label className="ex-field"><span>Cartão (fatura)</span>
+            {cards.length > 0 ? (
+              <select
+                className="ex-input"
+                value={form.cardId || ''}
+                onChange={(e) => {
+                  const c = cards.find((x) => x.id === e.target.value);
+                  setForm((p) => ({ ...p, cardId: c?.id ?? '', card: c?.name ?? '' }));
+                }}
+                aria-label="Cartão"
+              >
+                <option value="">Sem cartão</option>
+                {cards.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.closingDay ? ` · fecha ${c.closingDay}` : ''}</option>
+                ))}
+              </select>
+            ) : (
+              <input className="ex-input" type="text" value={form.card} onChange={(e) => setF('card', e.target.value)} placeholder="Ex.: Nubank (cadastre em Settings p/ vincular)" aria-label="Cartão" />
+            )}
+          </label>
           <label className="ex-check">
             <input type="checkbox" checked={form.paid} onChange={(e) => setF('paid', e.target.checked)} />
             {form.type === 'expense' ? 'Já pago' : 'Já recebido'}
@@ -1207,7 +1354,7 @@ export default function Expenses({
                   <span className="ex-group-total ex-pos-t">{fmtMoney(g.total, currency)}</span>
                 </div>
                 {items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={meta.label} icon={meta.icon} color={meta.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} />
+                  <TxRow key={t.id} t={t} currency={currency} label={meta.label} icon={meta.icon} color={meta.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => requestDelete(t)} />
                 ))}
               </div>
             );
@@ -1242,7 +1389,7 @@ export default function Expenses({
                     {d.items.map((t) => {
                       const c = catById.get(categoryOf(t, cats) ?? 'outros') ?? { name: 'Lançamento', icon: 'Tag', color: 'gray' };
                       return (
-                        <TxRow key={t.id} t={t} currency={currency} label={t.note || c.name} icon={c.icon} color={c.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
+                        <TxRow key={t.id} t={t} currency={currency} label={t.note || c.name} icon={c.icon} color={c.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => requestDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
                       );
                     })}
                   </div>
@@ -1263,7 +1410,7 @@ export default function Expenses({
                   <span className="ex-group-total ex-neg-t">{fmtMoney(g.total, currency)}</span>
                 </div>
                 {items.map((t) => (
-                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} icon={cat.icon} color={cat.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => handleDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
+                  <TxRow key={t.id} t={t} currency={currency} label={t.note || cat.name} icon={cat.icon} color={cat.color} accountName={accounts.find((a) => a.id === t.accountId)?.name} onEdit={() => startEdit(t)} onDelete={() => requestDelete(t)} onPay={() => onUpdate?.(t.id, { paid: true })} />
                 ))}
               </div>
             );
@@ -1420,6 +1567,9 @@ const EX_CSS = `
 .ex-catpill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px 4px 4px; border: 1px solid rgba(255,255,255,0.08); border-radius: 999px; }
 .ex-form-inline { display: flex; gap: 8px; flex-wrap: wrap; }
 .ex-form-inline .ex-input { flex: 1; min-width: 120px; }
+.ex-adv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: linear-gradient(180deg, #161b25 0%, #131825 100%); border: 1px solid #1a2232; border-radius: 14px; padding: 14px; }
+.ex-adv .ex-field { font-size: 11px; }
+.ex-sheet-sm { max-width: 460px; }
 .ex-empty { padding: 24px; text-align: center; color: var(--muted, #a1a7b3); font-size: 13px; border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; }
 .ex-pie { display: flex; justify-content: center; }
 @media (max-width: 719px) { .ex-summary { grid-template-columns: 1fr; } .ex-sum-value { font-size: 19px; } .ex-form-row { grid-template-columns: 1fr; } }

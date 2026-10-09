@@ -44,6 +44,9 @@ import {
   getCategoryOrder,
   setCategoryOrder,
   categoryUsage,
+  installmentSeries,
+  subscriptions,
+  monthProjection,
   dividendHistory,
   dividendIncomeByMonth,
   dividendByAsset,
@@ -294,7 +297,7 @@ describe('gastos D1 — contas a pagar/receber (paid/pendente)', () => {
 
   it('recordExpense grava paid=false e dueDate', async () => {
     const { ds, money } = makeService();
-    const t = await money.recordExpense({ accountId: 'w', amount: 90, currency: 'BRL', category: 'moradia', paid: false, dueDate: '2026-09-25T00:00:00Z' });
+    const t = await money.recordExpense({ accountId: 'w', amount: 90, currency: 'BRL', category: 'moradia', date: '2026-09-20T12:00:00Z', paid: false, dueDate: '2026-09-25T00:00:00Z' });
     expect(t.paid).toBe(false);
     expect(t.dueDate).toBe('2026-09-25T00:00:00Z');
     const all = await ds.transactions.list();
@@ -660,5 +663,70 @@ describe('H12 — mesclar / remover / reordenar categorias', () => {
     ]) await ds.transactions.put(t, { source: 'local' });
     const usage = await categoryUsage(ds);
     expect(usage.find((u) => u.categoryId === 'lazer')).toEqual({ categoryId: 'lazer', total: 50, count: 2 });
+  });
+});
+
+describe('H-debt — merchant dedicado no ranking', () => {
+  it('merchant tem prioridade sobre note', () => {
+    const list = [
+      tx({ id: 'm1', kind: 'expense', amount: -30, note: 'compra', merchant: 'iFood', date: '2026-09-02T12:00:00Z' }),
+      tx({ id: 'm2', kind: 'expense', amount: -20, note: 'iFood', date: '2026-09-03T12:00:00Z' }),
+    ];
+    const rows = merchantRanking(list, '2026-09');
+    expect(rows.find((r) => r.name === 'iFood')).toMatchObject({ total: 50, count: 2 });
+  });
+});
+
+describe('I1 — serie de parcelas (editar/cancelar)', () => {
+  it('installmentSeries ordena por n', async () => {
+    const { money } = makeService();
+    const list = await money.recordInstallments({ accountId: 'w', currency: 'BRL', totalAmount: 300, count: 3, category: 'compras', firstDate: '2026-09-05T12:00:00Z', note: 'Fone' });
+    const series = installmentSeries(await money.allTransactions(), list[0].installments.groupId);
+    expect(series.map((t) => t.installments.n)).toEqual([1, 2, 3]);
+  });
+
+  it('updateInstallmentSeries a partir de N e removeInstallmentSeries', async () => {
+    const { ds, money } = makeService();
+    const list = await money.recordInstallments({ accountId: 'w', currency: 'BRL', totalAmount: 300, count: 3, category: 'compras', firstDate: '2026-09-05T12:00:00Z' });
+    const gid = list[0].installments.groupId;
+    const n = await money.updateInstallmentSeries(gid, { amount: -111, category: 'lazer' }, 2);
+    expect(n).toBe(2);
+    const after = installmentSeries(await ds.transactions.list(), gid);
+    expect(after.map((t) => t.amount)).toEqual([-100, -111, -111]);
+    expect(after[1].category).toBe('lazer');
+    const removed = await money.removeInstallmentSeries(gid, 3);
+    expect(removed).toBe(1);
+    expect(installmentSeries(await ds.transactions.list(), gid)).toHaveLength(2);
+  });
+});
+
+describe('I7/B — assinaturas', () => {
+  it('detecta mesmo nome+valor em 2+ meses, ignora parcela/recorrente', () => {
+    const list = [
+      tx({ id: 's1', kind: 'expense', amount: -30, merchant: 'Netflix', date: '2026-07-05T12:00:00Z' }),
+      tx({ id: 's2', kind: 'expense', amount: -30, merchant: 'Netflix', date: '2026-08-05T12:00:00Z' }),
+      tx({ id: 's3', kind: 'expense', amount: -30, merchant: 'Netflix', date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'x1', kind: 'expense', amount: -30, merchant: 'Uber', date: '2026-09-06T12:00:00Z' }),
+      tx({ id: 'p1', kind: 'expense', amount: -50, merchant: 'Loja', date: '2026-08-01T12:00:00Z', installments: { n: 1, of: 3, groupId: 'g' } }),
+      tx({ id: 'p2', kind: 'expense', amount: -50, merchant: 'Loja', date: '2026-09-01T12:00:00Z', installments: { n: 2, of: 3, groupId: 'g' } }),
+    ];
+    const subs = subscriptions(list);
+    expect(subs).toHaveLength(1);
+    expect(subs[0]).toMatchObject({ name: 'Netflix', amount: 30, months: 3 });
+  });
+});
+
+describe('I7/B — projecao de fechamento do mes', () => {
+  it('extrapola o ritmo pelos dias corridos', () => {
+    const list = [
+      tx({ id: 'e1', kind: 'expense', amount: -100, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'e2', kind: 'expense', amount: -100, date: '2026-09-10T12:00:00Z' }),
+    ];
+    // ref dia 10, gastou 200 em 10 dias => projeta 200 * (30/10) = 600
+    const p = monthProjection(list, '2026-09', '2026-09-10T12:00:00Z');
+    expect(p.isCurrent).toBe(true);
+    expect(p.spentSoFar).toBe(200);
+    expect(p.projectedSpend).toBe(600);
+    expect(p.daysInMonth).toBe(30);
   });
 });

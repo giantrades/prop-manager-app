@@ -175,6 +175,8 @@ export interface Transaction extends SyncedRecord {
   // `cardId` = vínculo com a entidade `Card` (quando escolhido da lista).
   card?: string;
   cardId?: string;
+  // D4/H: estabelecimento dedicado (o ranking usa este campo; fallback = note). Aditivo.
+  merchant?: string;
   // D4 — tags livres (ex.: 'viagem', 'trabalho').
   tags?: string[];
   // H5 — baixa da fatura do cartão (quitação/parcial). Marca a competência paga.
@@ -425,8 +427,9 @@ export interface StoredOptionTemplate extends OptionStrategyTemplate, SyncedReco
 
 export type OptionQuoteSource = 'bridge' | 'computed' | 'manual';
 
-/** Linha da cadeia — CACHE volátil (nunca fonte de verdade de posição). */
-export interface OptionChainQuote {
+/** Linha da cadeia — CACHE volátil (nunca fonte de verdade de posição). Ainda assim
+ *  é persistida via DataService, então carrega os metadados de sync obrigatórios. */
+export interface OptionChainQuote extends SyncedRecord {
   id: string; // `${underlying}:${expiry}:${strike}:${right}`
   underlying: string;
   expiry: string;

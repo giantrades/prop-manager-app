@@ -13,20 +13,10 @@ import {
 import type { Account, CategoryDef } from '@apps/lib/db';
 import { parseAmount } from '@apps/lib/db';
 import { fmtMoney } from './currency';
+import { CATEGORY_ICONS, CATEGORY_COLORS } from './categoryIcons';
 
-const ICONS: Record<string, React.ComponentType<{ size?: number | string; strokeWidth?: number | string }>> = {
-  House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
-  Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet,
-};
-
-const COLORS: Record<string, string> = {
-  blue: 'var(--blue,#3498db)',
-  green: 'var(--green,#2ecc71)',
-  yellow: 'var(--yellow,#e1b12c)',
-  red: 'var(--red,#e74c3c)',
-  brand: 'var(--brand,#7c5cff)',
-  gray: 'var(--gray,#5b6270)',
-};
+const ICONS = CATEGORY_ICONS;
+const COLORS = CATEGORY_COLORS;
 
 const LAST_KEY = 'expense:quick:last';
 

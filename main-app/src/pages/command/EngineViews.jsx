@@ -941,6 +941,18 @@ export function ExpensesPage() {
     await f.money.recordInstallments(input);
   }, []);
 
+  // I1 — editar/excluir a série de parcelas (esta e as futuras).
+  const onUpdateSeries = useCallback(async (groupId, patch, fromN) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.money.updateInstallmentSeries(groupId, patch, fromN);
+  }, []);
+  const onDeleteSeries = useCallback(async (groupId, fromN) => {
+    const f = financeRef.current;
+    if (!f) return;
+    await f.money.removeInstallmentSeries(groupId, fromN);
+  }, []);
+
   // D5 — transferência entre carteiras (débito na origem + crédito no destino).
   const onTransfer = useCallback(async (input) => {
     const f = financeRef.current;
@@ -977,6 +989,8 @@ export function ExpensesPage() {
         onSaveSavingsGoal={onSaveSavingsGoal}
         onImportBatch={onImportBatch}
         onAddInstallments={onAddInstallments}
+        onUpdateSeries={onUpdateSeries}
+        onDeleteSeries={onDeleteSeries}
         onTransfer={onTransfer}
         onPayInvoice={onPayInvoice}
         rolloverCats={data?.rolloverCats ?? []}

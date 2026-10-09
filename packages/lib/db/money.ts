@@ -938,7 +938,7 @@ export function merchantRanking(
     if (t.kind !== 'expense') continue;
     if (t.date.slice(0, 7) !== yearMonth) continue;
     if (t.paid === false) continue;
-    const name = (t.note ?? '').trim().replace(/\s+/g, ' ');
+    const name = ((t.merchant ?? t.note) ?? '').trim().replace(/\s+/g, ' ');
     if (!name) continue;
     const key = name.toLowerCase();
     const cur = acc.get(key) ?? { name, total: 0, count: 0 };
@@ -1483,6 +1483,104 @@ export function detectRecurringCandidates(
   return out.sort((a, b) => b.count - a.count);
 }
 
+// ---------------------------------------------------------------------------
+// I7 — Assinaturas (gastos fixos mensais) + projeção de fechamento do mês
+// ---------------------------------------------------------------------------
+
+export interface Subscription {
+  key: string;
+  name: string;
+  categoryId: string | null;
+  amount: number;
+  day: number;
+  months: number;
+  /** Total mensal do conjunto (para o card de assinaturas). */
+  monthlyTotal: number;
+}
+
+/**
+ * Assinaturas = despesas com mesmo estabelecimento (merchant/note normalizado) + mesmo
+ * valor em 2+ meses distintos (ou templates recorrentes). Não cria nada — só agrega.
+ */
+export function subscriptions(transactions: Transaction[], cats: CategoryDef[] = DEFAULT_CATEGORIES): Subscription[] {
+  const groups = new Map<string, { name: string; categoryId: string | null; amount: number; months: Set<string>; days: number[] }>();
+  const addTx = (t: Transaction, name: string, amount: number) => {
+    const ym = (t.date || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(ym)) return;
+    const key = `${name.toLowerCase().slice(0, 40)}|${amount.toFixed(2)}`;
+    const g = groups.get(key) ?? { name, categoryId: categoryOf(t, cats), amount, months: new Set<string>(), days: [] };
+    g.months.add(ym);
+    const day = Number((t.date || '').slice(8, 10));
+    if (day >= 1 && day <= 28) g.days.push(day);
+    groups.set(key, g);
+  };
+  for (const t of transactions) {
+    if (t.kind !== 'expense' || t.paid === false) continue;
+    const name = ((t.merchant ?? t.note) ?? '').trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    if (t.recurrence?.freq === 'monthly' || t.installments) continue; // recorrentes/parcelas não são "assinatura" nova
+    addTx(t, name, Math.abs(t.amount));
+  }
+  const out: Subscription[] = [];
+  for (const g of groups.values()) {
+    if (g.months.size < 2) continue;
+    const day = g.days.length ? g.days.reduce((a, b) => a + b, 0) / g.days.length : 1;
+    out.push({ key: `${g.name}|${g.amount}`, name: g.name, categoryId: g.categoryId, amount: g.amount, day: Math.round(day), months: g.months.size, monthlyTotal: g.amount });
+  }
+  return out.sort((a, b) => b.amount - a.amount);
+}
+
+export interface MonthProjection {  spentSoFar: number;
+  projectedSpend: number;
+  incomeSoFar: number;
+  projectedIncome: number;
+  projectedFreeCash: number;
+  daysElapsed: number;
+  daysInMonth: number;
+  isCurrent: boolean;
+}
+
+/**
+ * Projeção de fechamento: extrapola o ritmo do mês (gasto/entrada até o dia de referência
+ * × dias do mês). Só despesas/ganhos PESSOAIS pagos. Sem fórmula financeira nova.
+ */
+export function monthProjection(transactions: Transaction[], yearMonth: string, refIso?: string): MonthProjection {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const ref = (refIso ?? nowIso()).slice(0, 10);
+  const isCurrent = ref.slice(0, 7) === yearMonth;
+  const elapsed = isCurrent ? Math.max(1, Number(ref.slice(8, 10)) || 1) : daysInMonth;
+  let spent = 0;
+  let income = 0;
+  for (const t of transactions) {
+    if (t.paid === false) continue;
+    if ((t.date || '').slice(0, 7) !== yearMonth) continue;
+    if (isCurrent && Number((t.date || '').slice(8, 10)) > elapsed) continue;
+    if (PERSONAL_EXPENSE_KINDS.has(t.kind)) spent += Math.abs(t.amount);
+    else if (PERSONAL_INCOME_KINDS.has(t.kind)) income += t.amount;
+  }
+  const factor = isCurrent ? daysInMonth / elapsed : 1;
+  const projectedSpend = r2(spent * factor);
+  const projectedIncome = r2(income * factor);
+  return {
+    spentSoFar: r2(spent),
+    projectedSpend,
+    incomeSoFar: r2(income),
+    projectedIncome,
+    projectedFreeCash: r2(projectedIncome - projectedSpend),
+    daysElapsed: elapsed,
+    daysInMonth,
+    isCurrent,
+  };
+}
+
+/** I1 — todas as parcelas de um mesmo `groupId`, ordenadas por `n`. */
+export function installmentSeries(transactions: Transaction[], groupId: string): Transaction[] {
+  return transactions
+    .filter((t) => t.installments?.groupId === groupId)
+    .sort((a, b) => (a.installments?.n ?? 0) - (b.installments?.n ?? 0));
+}
+
 const SAVINGS_GOAL_KEY = 'expense:savings-goal';
 
 /** A4 — meta de economia mensal ({ [ym]: amount }). */
@@ -1780,6 +1878,7 @@ export class MoneyService {
     card?: string;
     cardId?: string;
     tags?: string[];
+    merchant?: string;
     invoice?: { cardId: string; competencia: string };
     externalId?: string;
   }): Promise<Transaction> {
@@ -1808,6 +1907,7 @@ export class MoneyService {
       card: input.card,
       cardId: input.cardId,
       tags: input.tags,
+      merchant: input.merchant,
       invoice: input.invoice,
       externalId: input.externalId,
       updatedAt: nowIso(),
@@ -1840,6 +1940,7 @@ export class MoneyService {
     card?: string;
     cardId?: string;
     tags?: string[];
+    merchant?: string;
     installments?: { n: number; of: number; groupId: string };
     externalId?: string;
   }): Promise<Transaction> {
@@ -1876,6 +1977,7 @@ export class MoneyService {
     cardId?: string;
     firstDate?: string;
     note?: string;
+    externalId?: string;
   }): Promise<Transaction[]> {
     const count = Math.max(2, Math.min(48, Math.floor(input.count)));
     const total = Math.abs(input.totalAmount);
@@ -1900,9 +2002,46 @@ export class MoneyService {
         dueDate: d.toISOString(),
         paid: false,
         installments: { n: i + 1, of: count, groupId },
+        externalId: input.externalId,
       }));
     }
     return out;
+  }
+
+  /**
+   * I1 — edita as parcelas de um grupo (a partir de `fromN`, inclusive). Mantém
+   * `installments`/id; só aplica o patch (valor/categoria/cartão/nota/data/paid).
+   * Retorna quantas foram alteradas.
+   */
+  async updateInstallmentSeries(
+    groupId: string,
+    patch: Partial<Transaction>,
+    fromN = 1,
+  ): Promise<number> {
+    const all = await this.allTransactions();
+    const series = all.filter((t) => t.installments?.groupId === groupId && (t.installments?.n ?? 0) >= fromN);
+    if (!series.length) return 0;
+    const clean: Partial<Transaction> = { ...patch };
+    delete clean.id;
+    delete clean.installments;
+    delete clean.version;
+    const updates = series.map((t) => ({
+      ...t,
+      ...clean,
+      amount: clean.amount != null ? r2(clean.amount) : t.amount,
+      updatedAt: nowIso(),
+      version: (t.version ?? 0) + 1,
+    }));
+    await this.ds.transactions.bulkPut(updates, { source: 'local' });
+    return updates.length;
+  }
+
+  /** I1 — remove as parcelas de um grupo (a partir de `fromN`, inclusive). */
+  async removeInstallmentSeries(groupId: string, fromN = 1): Promise<number> {
+    const all = await this.allTransactions();
+    const series = all.filter((t) => t.installments?.groupId === groupId && (t.installments?.n ?? 0) >= fromN);
+    for (const t of series) await this.ds.transactions.remove(t.id);
+    return series.length;
   }
 
   /** G6 — gera a parcela do mês para um template recorrente (cópia SEM recurrence). */

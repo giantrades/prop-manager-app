@@ -52,6 +52,9 @@ export function normalizeOptionChain(
     multiplier: q.multiplier ?? 100,
     at: q.at ?? new Date().toISOString(),
     source,
+    updatedAt: new Date().toISOString(),
+    deviceId: '',
+    version: 0,
   }));
 }
 

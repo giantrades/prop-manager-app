@@ -434,3 +434,52 @@
 - O importador converte BRL→USD pela taxa do app (`getFxUSD`); sem taxa salva, mantém o valor
   original e a nota registra a moeda.
 - `Transaction.externalId` e `Transaction.invoice` são aditivos (sem migração).
+
+## Batch I (parcial) + Dívidas técnicas + Pontos B ✅
+
+> Rodada pedida pelo dono. Foco: qualidade visual da aba Categorias, dívidas técnicas e os
+> diferenciais (B). Sem multi-moeda (decisão do dono).
+
+### Visual / Categorias
+- **`categoryIcons.tsx`** — registro ÚNICO de ícones/cores (fim da duplicação em 5 telas) com
+  paleta ampliada (~60 ícones) + `CategoryIcon`. Agora um ícone escolhido em Categorias renderiza
+  em Resumo/Lançamentos/Orçamento/Quick Add.
+- **CategoriasPage redesenhada**: lista à esquerda + editor sticky à direita (mobile empilha);
+  paleta de ícones em grade, cores em círculos, **prévia** ao vivo; ações por menu `⋯`
+  (mesclar/remover) com **modal** — sem os `<select>` brancos que apareciam.
+- **`color-scheme: dark` global** (`styles.css`): selects/inputs/scrollbar nativos sempre escuros.
+
+### Dívidas técnicas
+- **`Transaction.merchant`** (aditivo) + input "Estabelecimento" no form; `merchantRanking`
+  prioriza `merchant` sobre `note`.
+- **`recordInstallments` propaga `externalId`**.
+- **`Expenses` sincroniza o mês com o PERÍODO global** (mudar o mês no ledger atualiza o período
+  e vice-versa) — consistência com o resto do app.
+
+### I1 — Série de parcelas
+- Motor: `installmentSeries` + `MoneyService.updateInstallmentSeries/removeInstallmentSeries`
+  (a partir de N). UI: ao editar/excluir uma parcela, pergunta **"Só esta"** ou **"Esta e as
+  futuras"** (modal). Testes cobrindo update/remove por grupo.
+
+### I5 — Filtros avançados + exportar
+- Filtros por **conta, cartão, status (pago/pendente), faixa de valor e tag** (painel "Filtros").
+- **Exportar CSV** dos lançamentos filtrados do mês.
+
+### I7 / Pontos B — Assinaturas + projeção
+- Motor: `subscriptions` (gastos fixos: mesmo estabelecimento+valor em 2+ meses, ignora
+  parcelas/recorrentes) e `monthProjection` (extrapola o ritmo do mês).
+- Widgets no Resumo: **"Fechamento do mês"** (gasto até hoje, projeção, saldo projetado) e
+  **"Assinaturas"** (lista + total/mês).
+
+### Cross-módulo
+- Corrigido o erro de `tsc` deixado pelo commit `feat(options)` (`OptionChainQuote` sem os
+  metadados de sync exigidos por `BaseRepository`) — `OptionChainQuote extends SyncedRecord` +
+  campos em `normalizeOptionChain`/`seedDemo`.
+
+### Ainda em aberto (próximas rodadas)
+- **I2** fatura histórica por competência + limite disponível + conciliação.
+- **I3** notificações de vencimento/orçamento (PWA push — infra já existe, falta ligar).
+- **I4** recorrência multi-frequência (semanal/quinzenal/anual).
+- **I6** calendário de gastos.
+- **I8/B1** meta de poupança com progresso ligada a Goals 2.0.
+- **B5/B6** gastos × trading/payout (custo de vida financiado pelo trading).

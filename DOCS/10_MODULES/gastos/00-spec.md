@@ -89,6 +89,19 @@
   import v2, e as abas **Orçamento** (`BudgetPage`) e **Categorias** (`CategoriasPage`).
 - Detalhes/estado item a item em `melhorias.md`. Sem fórmula financeira nova.
 
+## Batch I (parcial) + Dívidas + Pontos B — executado
+- `categoryIcons.tsx` (registro único de ícones/cores, ~60 ícones) consumido por Categorias,
+  Resumo, Lançamentos, Orçamento e Quick Add; `color-scheme: dark` global.
+- `CategoriasPage` redesenhada (lista + editor sticky, menu de ações + modal).
+- `Transaction.merchant` (aditivo) + ranking por estabelecimento; `recordInstallments` propaga
+  `externalId`; `Expenses` sincroniza o mês com o período global.
+- Motor: `installmentSeries`/`updateInstallmentSeries`/`removeInstallmentSeries` (I1),
+  `subscriptions` + `monthProjection` (I7/B) — com testes.
+- UI: escopo de série de parcelas, filtros avançados + exportar CSV, widgets "Fechamento do mês"
+  e "Assinaturas".
+- Em aberto: I2 (fatura histórica), I3 (push), I4 (multi-freq), I6 (calendário), I8/B1 (meta
+  de poupança), B5/B6 (gastos × trading).
+
 ## Melhorias futuras (pasta melhorias.md)
 
 > Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,

@@ -9,6 +9,7 @@ import { usePeriod } from '@apps/state';
 import { useToast } from '@apps/ui/Toast';
 import { DashSkeleton, ActionableError } from '@apps/ui/DataState';
 import { fmtMoney } from '@apps/ui/currency';
+import { CATEGORY_ICONS, CATEGORY_COLORS } from '@apps/ui/categoryIcons';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
   Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Copy, Sparkles, ArrowRight,
@@ -18,8 +19,8 @@ import {
   setRolloverCats, suggestBudget, expensesByCategoryPeriod, periodMonths, currentYm,
 } from '@apps/lib/db';
 
-const ICONS = { House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank };
-const COLORS = { blue: 'var(--blue,#3498db)', green: 'var(--green,#2ecc71)', yellow: 'var(--yellow,#e1b12c)', red: 'var(--red,#e74c3c)', brand: 'var(--brand,#7c5cff)', gray: 'var(--gray,#5b6270)' };
+const ICONS = CATEGORY_ICONS;
+const COLORS = CATEGORY_COLORS;
 
 function CatIcon({ name, color, size = 16 }) {
   const Cmp = ICONS[name] || Tag;
