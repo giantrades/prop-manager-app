@@ -32,8 +32,8 @@ Abra no browser: `http://localhost:8787/status`
 ```json
 {
   "online": true,
-  "version": "2.0.0",
-  "build": "2.0.0-202601011200",
+  "version": "2.1.1",
+  "build": "2.1.1-202601011200",
   "platform": "quantower",
   "connectionsCount": 2,
   "connections": []
@@ -61,6 +61,11 @@ Abra no browser: `http://localhost:8787/status`
 | `/positions` | GET | Posições abertas com P&L em tempo real |
 | `/orders` | GET | Ordens pendentes |
 | `/stream` | GET (SSE) | Stream contínuo de posições+ordens (`text/event-stream`, ~1.5s). Auth por `?token=` (EventSource não manda header) |
+
+> **P&L de `/trades`** (v2.1.1): cada trade fechado reporta `grossPnl` (soma dos fills de
+> saída), `fee` (**entrada + saída**, as duas pernas da comissão) e `netPnl = grossPnl − fee − swaps`.
+> Antes de 2.1.1 a fee das entradas era descartada: o `netPnl` saía maior que o saldo real
+> (ex.: gross 380,50 e fees 153,00 deveriam dar 227,50, mas vinha 304 = só as saídas).
 
 ### Escrita (toda resposta `{ success, platformPositionId?, platformOrderId?, error? }`)
 

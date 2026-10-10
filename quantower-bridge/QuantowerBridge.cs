@@ -975,9 +975,10 @@ namespace QuantowerBridge
         }
 
         // ── Bridge v2: versão + build para o handshake do cliente ───────────
-        // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco
-        // (sobrevivem restart); fees somadas de entradas + saidas.
-        private const string BridgeVersion = "2.1.0";
+        // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco.
+        // 2.1.1: fee das ENTRADAS passa a ser contabilizada (antes ficava 0 e o netPnL
+        //        ignorava metade das taxas — saldo da conta divergia da soma dos trades).
+        private const string BridgeVersion = "2.1.1";
         // Prefixo usa a PRÓPRIA BridgeVersion (antes era "2.0.0-" hardcoded e confundia:
         // a ponte 2.1.0 aparecia com build "2.0.0-...").
         private static string BuildIdentifier =>
@@ -1808,11 +1809,17 @@ namespace QuantowerBridge
             var qty = (decimal)fill.Quantity;
             var price = (decimal)fill.Price;
             var time = fill.DateTime;
+            // Fee do fill SEMPRE capturada (entrada E saída). Brokers de futuros cobram
+            // comissão POR EXECUÇÃO (os dois lados). Antes a fee das entradas era
+            // descartada e o `netPnL` saía maior que o saldo real: num dia com gross
+            // 380,50 e fees 153,00 o correto é 227,50, mas o app mostrava 304 (= só as
+            // fees de saída, 76,50). Ver AddEntryFill e TradeDtoBuilder.
+            var fillFee = TradeHelpers.NormalizeFee(fill.Fee?.Value);
 
             if (current.NetQty == 0)
             {
                 var fresh = StartNewPosition(fill, tradingDay);
-                fresh = AddEntryFill(fresh, qty, price, time, sequence, fill.OrderId, fill.Id);
+                fresh = AddEntryFill(fresh, qty, price, time, sequence, fill.OrderId, fill.Id, fillFee);
                 fresh.NetQty = isBuy ? qty : -qty;
                 return (fresh, noClosedTrades);
             }
@@ -1827,7 +1834,7 @@ namespace QuantowerBridge
             if (!fillReducesPosition)
             {
                 // Scale-in: mesmo lado, só aumenta a posição
-                var scaled = AddEntryFill(current, qty, price, time, sequence, fill.OrderId, fill.Id);
+                var scaled = AddEntryFill(current, qty, price, time, sequence, fill.OrderId, fill.Id, fillFee);
                 scaled.NetQty += isBuy ? qty : -qty;
                 return (scaled, noClosedTrades);
             }
@@ -1836,8 +1843,12 @@ namespace QuantowerBridge
             var closeQty = Math.Min(Math.Abs(oldNetQty), qty);
             var remainingQty = qty - closeQty;
 
-            // Fee só é normalizada/usada no fill de SAÍDA — é o único lugar em que importa
-            var fee = TradeHelpers.NormalizeFee(fill.Fee?.Value);
+            // Fee rateada por contrato quando o fill FECHA e REVERTE (remainingQty > 0):
+            // a parte que fecha vira fee de saída; a que abre a reversão vira fee de
+            // entrada. Num fechamento total (remainingQty == 0) coincide com a fillFee.
+            var feePerUnit = qty != 0 ? fillFee / qty : 0m;
+            var exitFee = Math.Round(feePerUnit * closeQty, 8);
+            var remainingFee = fillFee - exitFee;
             var grossPnL = (decimal)(fill.GrossPnl?.Value ?? 0); // [CORRIGIDO] GrossPnl minúsculo — API real do Trade
             // [CORRIGIDO] Trade não expõe Swap/Swaps na API real — só Position tem.
             // Mantemos o campo por compatibilidade de schema, sempre 0 no nível de fill.
@@ -1848,7 +1859,7 @@ namespace QuantowerBridge
                 Qty = closeQty,
                 Price = price,
                 Time = time,
-                Fee = fee,
+                Fee = exitFee,
                 Swap = swap,
                 GrossPnL = grossPnL,
                 IsExit = true,
@@ -1880,7 +1891,7 @@ namespace QuantowerBridge
                     // Um fill de BUY que reverte uma SHORT deve abrir uma LONG, e vice-versa.
                     var reversed = StartNewPosition(fill, tradingDay);
                     reversed.Direction = isBuy ? "LONG" : "SHORT";
-                    reversed = AddEntryFill(reversed, remainingQty, price, time, sequence, fill.OrderId, fill.Id);
+                    reversed = AddEntryFill(reversed, remainingQty, price, time, sequence, fill.OrderId, fill.Id, remainingFee);
                     reversed.NetQty = isBuy ? remainingQty : -remainingQty;
 
                     QuantowerBridge.FileLog($"[RECON] REVERSÃO: Symbol={fill.Symbol?.Name} Closed={current.Direction} New={reversed.Direction} RemainingQty={remainingQty}");
@@ -1933,16 +1944,18 @@ namespace QuantowerBridge
             };
         }
 
-        // [CORRIGIDO] static; sem parâmetro "fee" — entradas nunca carregam fee
-        // (só a fee dos exits entra no cálculo final, ver TradeDtoBuilder).
-        private static PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId)
+        // [CORRIGIDO] entradas TAMBÉM carregam fee: a comissão é cobrada por execução
+        // (entrada e saída). Antes o parâmetro não existia e a fee era fixada em 0,
+        // fazendo o netPnL ignorar metade das taxas e divergir do saldo da conta.
+        // O total final soma entradas + saídas em TradeDtoBuilder.
+        private static PositionState AddEntryFill(PositionState state, decimal qty, decimal price, DateTime time, int sequence, string orderId, string tradeId, decimal fee)
         {
             var entry = new FillData
             {
                 Qty = qty,
                 Price = price,
                 Time = time,
-                Fee = 0,
+                Fee = fee,
                 Swap = 0,
                 GrossPnL = 0,
                 IsExit = false,
