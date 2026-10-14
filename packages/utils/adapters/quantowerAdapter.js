@@ -320,38 +320,50 @@ export class QuantowerAdapter extends BaseAdapter {
     return this.getTrades(undefined, undefined);
   }
 
+  /**
+   * Normaliza uma posição do bridge para o shape do app. Aceita tanto o payload CRU do
+   * `/positions` (e do SSE `/stream`) quanto um já normalizado (idempotente). É estático
+   * para o SSE usar a MESMA normalização do polling — sem isso o stream entregava posições
+   * CRUAS (sem `platformPositionId`) ao reconciliador, que passava a vê-las como uma
+   * posição DIFERENTE da mesma posição vinda do polling (chaves distintas → linhas duplicadas
+   * e botão de fechar quebrado, pois `closePosition` precisa do `platformPositionId`).
+   */
+  static normalizePosition(p) {
+    if (!p) return p;
+    if (p.platformPositionId) return p; // já normalizado
+    const side = ['long', 'buy'].includes((p.side || '').toLowerCase()) ? 'Long' : 'Short';
+    return {
+      platformPositionId: `qt_pos_${p.id}`,
+      symbol: p.symbol || '',
+      side,
+      quantity: p.quantity ?? 0,
+      openPrice: p.openPrice ?? 0,
+      currentPrice: p.currentPrice ?? 0,
+      // Se a plataforma não informa a abertura (vazio/`0001`), deixa VAZIO — a UI usa o
+      // "primeiro visto" como fallback. Substituir por "agora" aqui fazia entrada e "agora"
+      // colapsarem no mesmo ponto no mapa (a linha some e só fica a bolinha).
+      openTime: p.openTime && !String(p.openTime).startsWith('0001') ? p.openTime : '',
+      entryPrice: p.openPrice ?? 0,
+      entryTime: p.openTime && !String(p.openTime).startsWith('0001') ? p.openTime : '',
+      grossPnl: p.grossPnl ?? 0,
+      netPnl: p.netPnl ?? 0,
+      fee: p.fee ?? 0,
+      sl: p.sl ?? p.stopLoss ?? null,
+      tp: p.tp ?? p.takeProfit ?? null,
+      // id bruto da posição na plataforma (usado para casar com ordens por positionId).
+      positionId: p.id || '',
+      platformAccountId: p.accountId || '',
+      accountName: p.accountName || '',
+      connectionId: p.connectionId || '',
+      connectionName: p.connectionName || '',
+      isLive: true,
+    };
+  }
+
   async getPositions() {
     const data = await this._fetch('/positions');
     this._markSynced();
-    return (data.positions || []).map((p) => {
-      const side = ['long', 'buy'].includes((p.side || '').toLowerCase()) ? 'Long' : 'Short';
-      return {
-        platformPositionId: `qt_pos_${p.id}`,
-        symbol: p.symbol || '',
-        side,
-        quantity: p.quantity ?? 0,
-        openPrice: p.openPrice ?? 0,
-        currentPrice: p.currentPrice ?? 0,
-        // Se a plataforma não informa a abertura (vazio/`0001`), deixa VAZIO — a UI usa o
-        // "primeiro visto" como fallback. Substituir por "agora" aqui fazia entrada e "agora"
-        // colapsarem no mesmo ponto no mapa (a linha some e só fica a bolinha).
-        openTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : '',
-        entryPrice: p.openPrice ?? 0,
-        entryTime: p.openTime && !p.openTime.startsWith('0001') ? p.openTime : '',
-        grossPnl: p.grossPnl ?? 0,
-        netPnl: p.netPnl ?? 0,
-        fee: p.fee ?? 0,
-        sl: p.sl ?? p.stopLoss ?? null,
-        tp: p.tp ?? p.takeProfit ?? null,
-        // id bruto da posição na plataforma (usado para casar com ordens por positionId).
-        positionId: p.id || '',
-        platformAccountId: p.accountId || '',
-        accountName: p.accountName || '',
-        connectionId: p.connectionId || '',
-        connectionName: p.connectionName || '',
-        isLive: true,
-      };
-    });
+    return (data.positions || []).map((p) => QuantowerAdapter.normalizePosition(p));
   }
 
   /**

@@ -19,6 +19,20 @@ const SNAP_KEY = 'qt:lastPositions';
 const SNAP_META_KEY = 'lastPositions';
 const SNAP_META_THROTTLE_MS = 5 * 60 * 1000;
 
+// Reconciliação por conexão: tempo mínimo após a conexão aparecer conectada antes de confiar
+// no que ela (não) reportou, e confirmação de "vazio" para uma conexão que já tinha posições.
+// Mantidos curtos: o stream manda a lista COMPLETA a cada ~1.5s, então uma posição fechada
+// deve sumir em poucos segundos (antes eram 10s + 8s, o "demora demais" sentido pelo usuário).
+const POS_GRACE_MS = 6000;
+const POS_CLEAR_CONFIRM_MS = 4000;
+// Intervalo do refresh de /status (conexões conectadas). Antes 60s: se um /status falhava, a
+// posição de uma conexão ficava "não-fechável" até o próximo ciclo (até 60s).
+const STATUS_REFRESH_MS = 20000;
+// Uma posição FECHOU (o total caiu): dispara um ciclo de auto-sync JÁ (o histórico de trades
+// não espera os 2 min do BridgeAutoSync). Throttle evita rajada quando várias fecham juntas.
+let _lastCloseSyncAt = 0;
+const CLOSE_SYNC_THROTTLE_MS = 5000;
+
 function readLocalSnap() {
   try {
     const raw = localStorage.getItem(SNAP_KEY);
@@ -116,11 +130,21 @@ export function usePlatform() {
   // `reconcilePositions` (por conexão); aqui é só estado.
   const applyPositions = useCallback((list) => {
     if (!Array.isArray(list)) return;
+    const prevCount = _liveCount;
     setLivePositions(list);
     setLiveCount(list.length);
     publishLiveCount(list.length);
     setPositionsAt(Date.now());
     persistSnapshot(list);
+    // Posição FECHOU (o total caiu): força o auto-sync imediatamente — assim o trade entra
+    // no histórico sem esperar o intervalo de 2 min do BridgeAutoSync.
+    if (list.length < prevCount) {
+      const now = Date.now();
+      if (now - _lastCloseSyncAt > CLOSE_SYNC_THROTTLE_MS) {
+        _lastCloseSyncAt = now;
+        try { window.dispatchEvent(new Event('qt:autosync')); } catch { /* noop */ }
+      }
+    }
   }, [persistSnapshot]);
 
   // ── Reconciliação POR CONEXÃO ────────────────────────────────────────────────
@@ -141,6 +165,8 @@ export function usePlatform() {
       reported,
       connectedIds: connectedIdsRef.current,
       now: Date.now(),
+      graceMs: POS_GRACE_MS,
+      clearConfirmMs: POS_CLEAR_CONFIRM_MS,
     });
     applyPositions(reconciled);
     return reconciled;
@@ -213,7 +239,12 @@ export function usePlatform() {
     es.onmessage = (ev) => {
       try {
         const d = JSON.parse(ev.data);
-        if (Array.isArray(d.positions)) handlePositions(d.positions);
+        // O SSE manda o payload CRU do bridge (sem `platformPositionId`). Normaliza com a MESMA
+        // função do polling — senão o stream e o polling chaveiam a MESMA posição de formas
+        // diferentes (linha duplicada + botão de fechar sem `platformPositionId`).
+        if (Array.isArray(d.positions)) {
+          handlePositions(d.positions.map((p) => QuantowerAdapter.normalizePosition(p)));
+        }
         window.dispatchEvent(new CustomEvent('qt:stream', { detail: d }));
       } catch { /* payload inválido */ }
     };
@@ -247,7 +278,7 @@ export function usePlatform() {
 
   useEffect(() => {
     refreshStatuses();
-    const t = setInterval(refreshStatuses, 60000);
+    const t = setInterval(refreshStatuses, STATUS_REFRESH_MS);
     return () => clearInterval(t);
   }, [refreshStatuses]);
 
