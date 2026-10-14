@@ -221,6 +221,9 @@ export function parseOptionChainCsv(
       multiplier,
       at,
       source: 'manual',
+      updatedAt: at,
+      deviceId: '',
+      version: 0,
     });
   }
   return { quotes, errors };

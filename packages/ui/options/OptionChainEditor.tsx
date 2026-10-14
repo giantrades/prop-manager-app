@@ -83,6 +83,9 @@ export default function OptionChainEditor({ underlyings, defaultMultiplier, mult
       multiplier: effMult,
       at: new Date().toISOString(),
       source: 'manual',
+      updatedAt: new Date().toISOString(),
+      deviceId: '',
+      version: 0,
     };
     setBusy(true);
     try {

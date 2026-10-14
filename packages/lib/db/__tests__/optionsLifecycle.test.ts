@@ -32,7 +32,7 @@ const mk = (over: Partial<OptionLeg>): OptionLeg => ({
 const quote = (over: Partial<OptionChainQuote>): OptionChainQuote => ({
   id: 'AAPL:2026-11-15:100:call', underlying: 'AAPL', expiry: '2026-11-15', strike: 100, right: 'call',
   symbol: 'AAPLC100', bid: 3.4, ask: 3.6, last: 3.5, iv: null, oi: null, volume: null, greeks: null,
-  multiplier: 100, at: 'x', source: 'manual', ...over,
+  multiplier: 100, at: 'x', source: 'manual', updatedAt: 'x', deviceId: 'd', version: 0, ...over,
 });
 
 describe('opções — cenários teóricos (T+0 / What-If)', () => {
