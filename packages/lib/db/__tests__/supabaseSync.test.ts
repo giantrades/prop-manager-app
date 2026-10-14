@@ -264,4 +264,32 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     expect((up!.rows[0] as Record<string, unknown>).user_id).toBe('user-1');
     expect(await sync.listConflicts()).toHaveLength(0);
   });
+
+  it('push não aborta as demais tabelas quando uma falha (não derruba o lote inteiro)', async () => {
+    const { ds } = makeDs();
+    const upserts: string[] = [];
+    const supabase = {
+      from: (table: string) => ({
+        upsert: async () => {
+          upserts.push(table);
+          if (table === 'accounts') {
+            return { error: { message: 'null value in column "disabled"', code: '23502' } };
+          }
+          return { error: null };
+        },
+      }),
+      channel: () => ({ on: () => undefined, subscribe: () => undefined }),
+      removeChannel: () => undefined,
+    };
+    const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
+    await expect(
+      sync.push([
+        { entityType: 'account', record: { id: 'a1', kind: 'prop', name: 'X', updatedAt: 't', deviceId: 'd', version: 0 } as any },
+        { entityType: 'trade', record: { id: 't1', symbol: 'XAUUSD', direction: 'long', updatedAt: 't', deviceId: 'd', version: 0 } as any },
+      ]),
+    ).rejects.toThrow(/accounts/);
+    // a tabela que veio DEPOIS da que falhou ainda foi tentada (antes era abortada)
+    expect(upserts).toContain('accounts');
+    expect(upserts).toContain('trades');
+  });
 });

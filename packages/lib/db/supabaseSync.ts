@@ -239,6 +239,7 @@ export function createSupabaseSync(
 
     let count = 0;
     const entityCounts: Record<string, number> = {};
+    const failures: string[] = [];
     for (const [table, rows] of byTable) {
       if (rows.length === 0) continue;
       // upsert pela PK real da tabela (prop_extensions usa account_id).
@@ -250,10 +251,18 @@ export function createSupabaseSync(
           console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', errText(error));
           continue;
         }
-        throw new Error(`push ${table}: ${errText(error)}`);
+        // NÃO aborta as demais tabelas: uma tabela com problema (ex.: coluna NOT NULL sem
+        // default) bloqueava o lote INTEIRO — tudo que vinha depois dela no lote nunca subia.
+        // Segue tentando as outras e só relata no fim; a tabela ruim é reprocessada no próximo
+        // ciclo (o SyncEngine re-enfileira o lote e o upsert é idempotente).
+        failures.push(`push ${table}: ${errText(error)}`);
+        continue;
       }
       count += rows.length;
       entityCounts[table] = (entityCounts[table] ?? 0) + rows.length;
+    }
+    if (failures.length > 0) {
+      throw new Error(failures.join(' | '));
     }
     return { count, entityCounts };
   };
