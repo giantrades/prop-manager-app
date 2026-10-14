@@ -442,7 +442,7 @@ export default function ConnectionsManager() {
       )}
 
       <details className="cx-adv">
-        <summary>Avançado</summary>
+        <summary>Manutenção</summary>
         <div className="cx-actions">
           <button className="cmd-refresh" onClick={relinkTrades} disabled={busy}><Link2 size={13} /> Religar trades sem conta</button>
           <button className="cmd-refresh" onClick={clearDeleted} disabled={busy}><RotateCcw size={13} /> Limpar histórico de exclusão</button>
@@ -547,14 +547,8 @@ export default function ConnectionsManager() {
 
       {online && effectiveBridge.length > 0 && (
         <details className="cx-adv">
-          <summary>Avançado (contas, histórico e correções)</summary>
+          <summary>Correções e histórico</summary>
           <div className="cx-actions">
-            <label className="cx-kind">
-              <span>Criar como</span>
-              <select className="cx-select" value={newKind} onChange={(e) => setNewKind(e.target.value)} aria-label="Tipo da conta a criar">
-                {KIND_OPTIONS.map((k) => (<option key={k.v} value={k.v}>{k.label}</option>))}
-              </select>
-            </label>
             <button className="cmd-refresh" onClick={autoByName} disabled={busy}><Wand2 size={13} /> Auto-associar por nome</button>
             <button className="cmd-refresh" onClick={createAllMissing} disabled={busy}><Plus size={13} /> Criar contas faltantes</button>
             <button className="cmd-refresh" onClick={syncTradesYear} disabled={busy} title="Reprocessa 1 ano (corrige trades antigos: net com fee de entrada+saída, multiplier e R)"><RefreshCw size={13} /> Sincronizar 1 ano</button>

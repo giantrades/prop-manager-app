@@ -261,7 +261,58 @@ export default function SettingsPage() {
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Settings</h1></div>
       <ModuleTabs module="system" />
-          <ConnectionsCard />
+
+      {/* Conexões da ponte (Quantower/cTrader) */}
+      <ConnectionsCard />
+
+      {/* Sincronização com a nuvem — SEMPRE visível (antes ficava escondida num "Avançado") */}
+      <div className="st-card">
+        <div className="st-title">Sincronização (nuvem)</div>
+        <p className="st-hint">
+          É automática: puxa ao abrir/focar e envia suas mudanças sozinha. O botão só força um ciclo agora.
+          O mesmo vale no celular — contas, gastos, investimentos, metas e firms chegam pela nuvem.
+        </p>
+        {cloudStatus && (
+          <div className="st-hint" aria-live="polite">
+            {cloudStatus.userId === 'sem-login' ? <b>Sessão: SEM LOGIN (o sync não roda)</b> : <span>Sessão: logada ✓</span>}
+            {cloudStatus.at ? ` · último evento ${new Date(cloudStatus.at).toLocaleTimeString('pt-BR')}` : ''}
+            {typeof cloudStatus.applied === 'number' ? ` · puxados ${cloudStatus.applied}` : ''}
+            {typeof cloudStatus.pushed === 'number' ? ` · enviados ${cloudStatus.pushed}` : ''}
+            {cloudStatus.error ? <> · <b className="st-err">erro: {cloudStatus.error}</b></> : ''}
+          </div>
+        )}
+        <div className="st-actions">
+          <button className="st-btn" disabled={busy} onClick={async () => {
+            try {
+              const f = finance;
+              if (!f?.cloud) { toast('Sync da nuvem indisponível.', { type: 'error' }); return; }
+              const pulled = await f.cloud.pull();
+              const pushed = await f.cloud.pushAll();
+              toast(`Sincronizado — puxados ${pulled?.applied ?? 0}, enviados ${pushed?.count ?? 0}.`);
+            } catch (e) {
+              toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
+            }
+          }}>Sincronizar agora</button>
+        </div>
+        <SyncConflicts conflicts={conflicts} onResolve={handleResolve} loading={busy && conflicts.length === 0} />
+      </div>
+
+      {/* Notificações — regras do que vira alerta + push do aparelho */}
+      <ActionRulesCard />
+      <PushSettingsCard />
+
+      {/* Backup / dados */}
+      <CloudBackupCard />
+      <div className="st-card">
+        <div className="st-title">Dados (app-db v3)</div>
+        <div className="st-actions">
+          <button className="st-btn" onClick={handleExport} disabled={busy}>Exportar JSON</button>
+          <button className="st-btn" onClick={() => fileRef.current?.click()} disabled={busy}>Importar JSON</button>
+          <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])} />
+        </div>
+      </div>
+
+      {/* Moeda */}
       <div className="st-card">
         <div className="st-title">Moeda</div>
         <div className="st-row">
@@ -293,70 +344,19 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <CloudBackupCard />
-
-      <div className="st-card">
-        <div className="st-title">Dados (app-db v3)</div>
-        <div className="st-actions">
-          <button className="st-btn" onClick={handleExport} disabled={busy}>Exportar JSON</button>
-          <button className="st-btn" onClick={() => fileRef.current?.click()} disabled={busy}>Importar JSON</button>
-          <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={(e) => e.target.files?.[0] && handleImport(e.target.files[0])} />
-        </div>
-      </div>
-
-      <details className="st-adv">
-        <summary>Avançado (cartões, regras, notificações, import legado)</summary>
-        <ActionRulesCard />
-        <PushSettingsCard />
-        <div className="st-card">
-          <div className="st-title">Sincronização (nuvem)</div>
-          <p className="st-hint">O sync é automático: puxa ao abrir e envia suas mudanças sozinho. Use o botão apenas para forçar agora.</p>
-          {cloudStatus && (
-            <div className="st-hint" aria-live="polite">
-              {cloudStatus.userId === 'sem-login' ? <b>Sessão: SEM LOGIN (o sync não roda)</b> : <span>Sessão: logada ✓</span>}
-              {cloudStatus.at ? ` · último evento ${new Date(cloudStatus.at).toLocaleTimeString('pt-BR')}` : ''}
-              {typeof cloudStatus.applied === 'number' ? ` · puxados ${cloudStatus.applied}` : ''}
-              {typeof cloudStatus.pushed === 'number' ? ` · enviados ${cloudStatus.pushed}` : ''}
-              {cloudStatus.error ? <> · <b className="st-err">erro: {cloudStatus.error}</b></> : ''}
-            </div>
-          )}
-          <div className="st-actions">
-            <button className="st-btn" disabled={busy} onClick={async () => {
-              try {
-                const f = finance;
-                if (!f?.cloud) { toast('Sync da nuvem indisponível.', { type: 'error' }); return; }
-                const pulled = await f.cloud.pull();
-                const pushed = await f.cloud.pushAll();
-                toast(`Sincronizado — puxados ${pulled?.applied ?? 0}, enviados ${pushed?.count ?? 0}.`);
-              } catch (e) {
-                toast(`Falha ao sincronizar: ${e instanceof Error ? e.message : JSON.stringify(e)}`, { type: 'error' });
-              }
-            }}>Sincronizar agora</button>
-          </div>
-        </div>
-
-
-      </details>
-
+      {/* Conta */}
       <div className="st-card">
         <div className="st-title">Conta</div>
         <div className="st-actions">
           <button className="st-btn st-btn-danger" onClick={handleLogout}>Sair</button>
         </div>
       </div>
-
-      <SyncConflicts conflicts={conflicts} onResolve={handleResolve} loading={busy && conflicts.length === 0} />
-
-
     </div>
   );
 }
 
 const ST_CSS = `
 .st-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.st-adv { display: flex; flex-direction: column; gap: 12px; border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 10px 14px; background: rgba(255,255,255,0.01); }
-.st-adv > summary { cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
-.st-adv[open] > summary { margin-bottom: 12px; }
 .st-title { font-size: 14px; font-weight: 800; }
 .st-row { display: flex; gap: 8px; align-items: center; }
 .st-rate { font-size: 12px; color: var(--muted, #a1a7b3); }
