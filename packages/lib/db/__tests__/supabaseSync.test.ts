@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
 import { DataService } from '../DataService';
 import { EventBus } from '../events';
-import { camelToSnake, snakeToCamel, createSupabaseSync, isSyncedMetaKey } from '../supabaseSync';
+import { camelToSnake, snakeToCamel, createSupabaseSync, isSyncedMetaKey, groupRowsByKeys } from '../supabaseSync';
 
 function makeDs() {
   const adapter = new MemoryDbAdapter(createMemoryBackend());
@@ -291,5 +291,41 @@ describe('Fase 6/7 — supabaseSync (borda snake_case)', () => {
     // a tabela que veio DEPOIS da que falhou ainda foi tentada (antes era abortada)
     expect(upserts).toContain('accounts');
     expect(upserts).toContain('trades');
+  });
+
+  it('groupRowsByKeys separa por conjunto de colunas', () => {
+    const groups = groupRowsByKeys([
+      { id: 'a', disabled: false },
+      { id: 'b' },
+      { id: 'c', disabled: true },
+    ]);
+    expect(groups).toHaveLength(2);
+    const sizes = groups.map((g) => g.length).sort();
+    expect(sizes).toEqual([1, 2]); // {id,b} {id,disabled}
+  });
+
+  it('push separa linhas por conjunto de colunas (evita NULL do PostgREST em coluna com default)', async () => {
+    const { ds } = makeDs();
+    const upserts: Array<{ table: string; rows: Array<Record<string, unknown>> }> = [];
+    const supabase = {
+      from: (table: string) => ({
+        upsert: async (rows: Array<Record<string, unknown>>) => { upserts.push({ table, rows }); return { error: null }; },
+      }),
+      channel: () => ({ on: () => undefined, subscribe: () => undefined }),
+      removeChannel: () => undefined,
+    };
+    const sync = createSupabaseSync(supabase as any, ds, async () => 'user-1');
+    await sync.push([
+      { entityType: 'account', record: { id: 'a1', kind: 'prop', name: 'A', disabled: false, updatedAt: 't', deviceId: 'd', version: 0 } as any },
+      { entityType: 'account', record: { id: 'a2', kind: 'prop', name: 'B', updatedAt: 't', deviceId: 'd', version: 0 } as any },
+    ]);
+    // a conta sem `disabled` vai num upsert SEPARADO, sem a coluna `disabled` (usa o DEFAULT)
+    expect(upserts).toHaveLength(2);
+    const without = upserts.find((u) => u.rows.every((r) => !('disabled' in r)));
+    const withDisabled = upserts.find((u) => u.rows.some((r) => 'disabled' in r));
+    expect(without).toBeDefined();
+    expect(without!.rows).toHaveLength(1);
+    expect(withDisabled).toBeDefined();
+    expect(withDisabled!.rows).toHaveLength(1);
   });
 });

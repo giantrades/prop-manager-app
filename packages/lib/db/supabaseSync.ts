@@ -145,6 +145,37 @@ export function snakeToCamel(record: Record<string, unknown>): Record<string, un
   return out;
 }
 
+/** Remove chaves com valor `undefined` (o JSON as descarta; o conjunto efetivo de colunas
+ *  enviadas é só o de valores definidos). */
+function compactRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) if (v !== undefined) out[k] = v;
+  return out;
+}
+
+/**
+ * Agrupa linhas pelo CONJUNTO DE COLUNAS (assinatura das chaves).
+ *
+ * POR QUÊ: o PostgREST faz o upsert em LOTE numa ÚNICA instrução, com a UNIÃO das chaves do
+ * payload, preenchendo com NULL as chaves ausentes em algumas linhas. Como NULL explícito
+ * IGNORA o DEFAULT do banco, uma conta criada pela ponte (`disabled: false`) e uma conta demo
+ * (sem a chave `disabled`) no mesmo lote faziam as demais virarem `disabled = NULL` →
+ * `23502` no pushAll. Separando por conjunto de colunas, cada upsert fica com colunas
+ * consistentes e o que falta usa o DEFAULT do banco.
+ */
+export function groupRowsByKeys(
+  rows: Array<Record<string, unknown>>,
+): Array<Array<Record<string, unknown>>> {
+  const groups = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of rows) {
+    const sig = Object.keys(row).sort().join('\u0001');
+    const g = groups.get(sig);
+    if (g) g.push(row);
+    else groups.set(sig, [row]);
+  }
+  return [...groups.values()];
+}
+
 // ---------------------------------------------------------------------------
 // createSupabaseSync — push + pull
 // ---------------------------------------------------------------------------
@@ -234,7 +265,7 @@ export function createSupabaseSync(
       // Meta: sobe tudo menos estado do device (denylist).
       if (store === 'meta' && !isSyncedMetaKey((record as unknown as { key?: string }).key)) continue;
       if (!byTable.has(table)) byTable.set(table, []);
-      byTable.get(table)!.push({ ...camelToSnake(record as Record<string, unknown>), user_id: userId });
+      byTable.get(table)!.push(compactRow({ ...camelToSnake(record as Record<string, unknown>), user_id: userId }));
     }
 
     let count = 0;
@@ -242,24 +273,26 @@ export function createSupabaseSync(
     const failures: string[] = [];
     for (const [table, rows] of byTable) {
       if (rows.length === 0) continue;
-      // upsert pela PK real da tabela (prop_extensions usa account_id).
-      const { error } = await supabase.from(table).upsert(rows, { onConflict: onConflictFor(table) });
-      if (error) {
-        // app_meta é opcional (migration pode não ter rodado) — não derruba o sync dos demais.
-        if (table === 'app_meta') {
-          // eslint-disable-next-line no-console
-          console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', errText(error));
+      const onConflict = onConflictFor(table);
+      // Upsert em SUB-GRUPOS com o MESMO conjunto de colunas (ver groupRowsByKeys): evita o
+      // NULL que o PostgREST injeta nas chaves ausentes quando o lote mistura formatos.
+      for (const group of groupRowsByKeys(rows)) {
+        const { error } = await supabase.from(table).upsert(group, { onConflict });
+        if (error) {
+          // app_meta é opcional (migration pode não ter rodado) — não derruba os demais.
+          if (table === 'app_meta') {
+            // eslint-disable-next-line no-console
+            console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', errText(error));
+            break;
+          }
+          // NÃO aborta as demais tabelas/grupos: só relata e segue (a tabela ruim é
+          // reprocessada no próximo ciclo; o upsert é idempotente).
+          failures.push(`push ${table}: ${errText(error)}`);
           continue;
         }
-        // NÃO aborta as demais tabelas: uma tabela com problema (ex.: coluna NOT NULL sem
-        // default) bloqueava o lote INTEIRO — tudo que vinha depois dela no lote nunca subia.
-        // Segue tentando as outras e só relata no fim; a tabela ruim é reprocessada no próximo
-        // ciclo (o SyncEngine re-enfileira o lote e o upsert é idempotente).
-        failures.push(`push ${table}: ${errText(error)}`);
-        continue;
+        count += group.length;
+        entityCounts[table] = (entityCounts[table] ?? 0) + group.length;
       }
-      count += rows.length;
-      entityCounts[table] = (entityCounts[table] ?? 0) + rows.length;
     }
     if (failures.length > 0) {
       throw new Error(failures.join(' | '));
@@ -411,6 +444,7 @@ export function createSupabaseSync(
     const userId = await getUserId();
     if (!userId) return { count: 0, entityCounts: {} };
     const entityCounts: Record<string, number> = {};
+    const failures: string[] = [];
     let count = 0;
     for (const [store, table] of Object.entries(TABLE_BY_ENTITY)) {
       if (!table) continue;
@@ -423,17 +457,30 @@ export function createSupabaseSync(
       }
       const rows = recs
         .filter((r) => !(storeName === 'meta' && !isSyncedMetaKey(r.key)))
-        .map((r) => ({ ...camelToSnake(r), user_id: userId }));
-      for (let i = 0; i < rows.length; i += 200) {
-        const chunk = rows.slice(i, i + 200);
-        const { error } = await supabase.from(table).upsert(chunk, { onConflict: onConflictFor(table) });
-        if (error) {
-          if (table === 'app_meta') break;
-          throw new Error(`pushAll ${table}: ${errText(error)}`);
+        .map((r) => compactRow({ ...camelToSnake(r), user_id: userId }));
+      // Mesmo agrupamento por conjunto de colunas do `push` (evita o NULL do PostgREST em
+      // lotes que misturam formatos de registro). Cada grupo é fatiado em chunks de 200.
+      for (const group of groupRowsByKeys(rows)) {
+        for (let i = 0; i < group.length; i += 200) {
+          const chunk = group.slice(i, i + 200);
+          const { error } = await supabase.from(table).upsert(chunk, { onConflict: onConflictFor(table) });
+          if (error) {
+            if (table === 'app_meta') {
+              // eslint-disable-next-line no-console
+              console.warn('[sync] app_meta indisponível — rode 003_app_meta.sql:', errText(error));
+              break;
+            }
+            console.error(`[sync] pushAll ${table}:`, errText(error));
+            failures.push(`pushAll ${table}: ${errText(error)}`);
+            break; // este grupo falhou; segue para o próximo grupo/tabela
+          }
+          count += chunk.length;
         }
-        count += chunk.length;
       }
       if (rows.length) entityCounts[table] = rows.length;
+    }
+    if (failures.length > 0) {
+      throw new Error(failures.join(' | '));
     }
     return { count, entityCounts };
   };
