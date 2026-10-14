@@ -282,10 +282,10 @@ export default function SettingsPage() {
           </div>
         )}
         <div className="st-actions">
-          <button className="st-btn" disabled={busy} onClick={async () => {
+          <button className="st-btn" disabled={busy || !finance} onClick={async () => {
             try {
               const f = finance;
-              if (!f?.cloud) { toast('Sync da nuvem indisponível.', { type: 'error' }); return; }
+              if (!f?.cloud) { toast('O app ainda está carregando — tente de novo em instantes.', { type: 'warn' }); return; }
               const pulled = await f.cloud.pull();
               const pushed = await f.cloud.pushAll();
               toast(`Sincronizado — puxados ${pulled?.applied ?? 0}, enviados ${pushed?.count ?? 0}.`);

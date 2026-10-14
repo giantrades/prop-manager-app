@@ -228,15 +228,26 @@ export function FinanceProvider({ children, adapter = null }) {
         unsubCloud = await supabaseSync.subscribe(schedulePull);
       };
 
-      await ensureCloud();
-      // Login/logout depois do boot: re-consolida e re-assina.
+      // Login/logout: re-consolida e re-assina.
       const { data: authSub } = supabase.auth.onAuthStateChange(() => {
-        ensureCloud();
+        ensureCloud().catch((e) => console.error('[sync] ensureCloud falhou', e));
       });
 
-      if (!cancelled) {
-        setFinance({ ds, chain, money, wealth, risk, sync: syncEngine, cloud: supabaseSync });
-      }
+      // LOCAL-FIRST: publica os MOTORES já. A nuvem consolida em BACKGROUND. Antes, o
+      // `await ensureCloud()` (pull + realtime, com rede) segurava o `finance` — nesse
+      // intervalo a UI ficava "sem sync" (o botão dizia "Sync da nuvem indisponível") e, se
+      // o ensureCloud falhasse, `finance` ficava null PARA SEMPRE (app inteiro vazio).
+      const publish = () => {
+        if (!cancelled) {
+          setFinance({ ds, chain, money, wealth, risk, sync: syncEngine, cloud: supabaseSync });
+        }
+      };
+      publish();
+      ensureCloud()
+        // Re-publica (nova identidade) após o pull: efeitos que hidratam do `meta` (token da
+        // ponte, último snapshot) rodam de novo com os dados remotos já aplicados.
+        .then(publish)
+        .catch((e) => console.error('[sync] ensureCloud falhou', e));
 
       return () => {
         authSub.subscription.unsubscribe();
