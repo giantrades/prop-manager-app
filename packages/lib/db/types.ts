@@ -161,7 +161,7 @@ export interface Transaction extends SyncedRecord {
   ref?: TransactionRef;
   note?: string;
   category?: string; // G1 — id da categoria (ex.: 'moradia'). Aditivo; legado lê via prefixo na note.
-  recurrence?: { freq: 'monthly'; day: number }; // G6 — template recorrente (a cópia gerada NÃO carrega)
+  recurrence?: { freq: 'monthly'; day: number; everyMonths?: number }; // G6 — template recorrente (a cópia gerada NÃO carrega); I4 — everyMonths p/ trimestral/anual
   // A2 — anexos/comprovantes (base64 pequeno ou referência). Limite 300KB na UI.
   attachments?: Record<string, object>;
   // A4 — ativo da operação buy/sell (para FIFO de IR). Aditivo.

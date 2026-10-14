@@ -34,8 +34,9 @@ import {
   DEFAULT_CATEGORIES, parseAmount, subcategoriesOf, invoiceStatus,
   openingBalance, dailyBalance, upcomingBills, upcomingSummary,
   detectCsvColumns, DEFAULT_IMPORT_RULES,
+  detectBankProfile, parseStatementLines, reconcileStatement, DEFAULT_BANK_PROFILES,
 } from '@apps/lib/db';
-import type { ImportRule, CsvMapping } from '@apps/lib/db';
+import type { ImportRule, CsvMapping, BankProfile, ParsedStatement, Reconciliation } from '@apps/lib/db';
 import QuickAddExpense from './QuickAddExpense';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from './categoryIcons';
 import { usePeriod } from '@apps/state';
@@ -98,6 +99,7 @@ interface ExpenseForm {
   note: string;
   recur: boolean;
   recurDay: number | string;
+  recurEvery: number | string;
   attachments: Record<string, ExpenseFormAttachment>;
   paid: boolean;
   dueDate: string;
@@ -111,7 +113,7 @@ interface ExpenseForm {
 function emptyForm(): ExpenseForm {
   return {
     type: 'expense', category: 'moradia', accountId: '', amount: '', date: '', note: '',
-    recur: false, recurDay: new Date().getDate(), attachments: {},
+    recur: false, recurDay: new Date().getDate(), recurEvery: 1, attachments: {},
     // D1/D2/D4
     paid: true, dueDate: '', card: '', cardId: '', installmentCount: '', tags: '', merchant: '',
   };
@@ -232,6 +234,7 @@ interface ExpensesProps {
   onSaveSavingsGoal?: (ym: string, amount: number) => void;
   onImportBatch?: (entries: Array<{ date: string; amount: number; description: string; kind: string; categoryId: string | null; externalId?: string }>, meta?: { accountId: string; currency: string }) => void;
   importRules?: ImportRule[];
+  bankProfiles?: BankProfile[];
   rolloverCats?: string[];
   onToggleRollover?: (catId: string) => void;
   onAddInstallments?: (input: { accountId: string; currency: string; totalAmount: number; count: number; category: string; card?: string; cardId?: string; note?: string; firstDate: string }) => void;
@@ -247,6 +250,7 @@ export default function Expenses({
   onAdd, onUpdate, onDelete, onRestore, onSaveBudget, onSaveCategory, onGenerate,
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   importRules = DEFAULT_IMPORT_RULES,
+  bankProfiles = DEFAULT_BANK_PROFILES,
   rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer, onPayInvoice, onUpdateSeries, onDeleteSeries,
   currency = 'USD', loading = false,
 }: ExpensesProps) {
@@ -420,6 +424,8 @@ export default function Expenses({
   const [importCurrency, setImportCurrency] = useState('USD');
   const [importMapping, setImportMapping] = useState<{ headers: string[]; raw: string } | null>(null);
   const [mapCols, setMapCols] = useState<CsvMapping>({ date: 0, desc: 1, amount: 2 });
+  // Fase 1 — import de PDF: linhas extraídas + perfil + reconciliação (checksum).
+  const [pdfState, setPdfState] = useState<null | { lines: string[]; profileId: string; reconcile: Reconciliation; bankName: string }>(null);
 
   useEffect(() => {
     if (!importAccountId && accounts[0]) setImportAccountId(accounts[0].id);
@@ -439,6 +445,24 @@ export default function Expenses({
     });
   };
 
+  // Fase 1 — parseia as linhas do PDF com o perfil escolhido/detectado e monta a prévia.
+  const runPdf = (lines: string[], profileId: string): void => {
+    const text = lines.join('\n');
+    const prof = (profileId && bankProfiles.find((p) => p.id === profileId))
+      || detectBankProfile(text, bankProfiles)
+      || bankProfiles[0];
+    const parsed: ParsedStatement = parseStatementLines(lines, prof);
+    setPdfState({ lines, profileId: prof.id, reconcile: reconcileStatement(parsed), bankName: prof.name });
+    const entries: BankEntry[] = parsed.entries.map((e) => ({
+      date: e.date,
+      amount: e.amount,
+      description: e.description,
+      suggestedCategory: null,
+      key: `${e.date.slice(0, 10)}|${e.amount.toFixed(2)}|${e.description.slice(0, 40)}`,
+    }));
+    buildPreview(entries);
+  };
+
   const startEdit = (t: Transaction): void => {
     const isExp = t.kind === 'expense';
     setEditingId(t.id);
@@ -451,6 +475,7 @@ export default function Expenses({
       note: isExp && t.note ? t.note : (t.note ?? ''),
       recur: false,
       recurDay: new Date().getDate(),
+      recurEvery: t.recurrence?.everyMonths ?? 1,
       attachments: { ...(t.attachments as unknown as Record<string, ExpenseFormAttachment> | undefined ?? {}) },
       paid: t.paid !== false,
       dueDate: (t.dueDate || '').slice(0, 16),
@@ -508,7 +533,7 @@ export default function Expenses({
       } else {
         onAdd?.({
           kind: 'expense', ...base, amount: amt, category: form.category,
-          recurrence: form.recur ? { freq: 'monthly', day: Math.min(28, Math.max(1, Number(form.recurDay) || 1)) } : undefined,
+          recurrence: form.recur ? { freq: 'monthly', day: Math.min(28, Math.max(1, Number(form.recurDay) || 1)), everyMonths: Math.max(1, Number(form.recurEvery) || 1) } : undefined,
         });
       }
     } else {
@@ -598,7 +623,16 @@ export default function Expenses({
     if (!file) return;
     setImportError(null);
     setImportMapping(null);
+    setPdfState(null);
     try {
+      // Fase 1 — PDF (fatura/extrato digital): extrai texto no dispositivo e parseia.
+      const pdfMod = await import('@apps/lib/db/pdfText');
+      if (await pdfMod.isPdfFile(file)) {
+        const lines = await pdfMod.extractPdfLines(file);
+        if (!lines.length) { setImportError('Não encontrei texto no PDF (pode ser escaneado — foto/OCR é a Fase 2).'); return; }
+        runPdf(lines, '');
+        return;
+      }
       const text = await file.text();
       const entries = parseBankFile(text);
       if (entries.length === 0 && /[,;]/.test(text)) {
@@ -820,7 +854,7 @@ export default function Expenses({
         </div>
       )}
       <input
-        ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif" style={{ display: 'none' }}
+        ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif,.pdf" style={{ display: 'none' }}
         onChange={(e) => { handleImportFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Importar extrato OFX ou CSV"
       />
       {importError && <div className="ex-hint" role="alert">⚠️ {importError}</div>}
@@ -858,6 +892,36 @@ export default function Expenses({
             Prévia — {importPreview.entries.length} lançamentos
             {importPreview.skipped > 0 && ` (${importPreview.skipped} duplicatas puladas)`}
           </div>
+          {/* Fase 1 — conferência do documento (checksum com os totais declarados) */}
+          {pdfState && (
+            <div className={`ex-recon${pdfState.reconcile.checks.length === 0 ? '' : pdfState.reconcile.ok ? ' ok' : ' fail'}`} role="status">
+              <div className="ex-recon-head">
+                <span>Conferência do documento</span>
+                <span className="ex-recon-bank">
+                  banco:
+                  <select className="ex-input ex-recon-select" value={pdfState.profileId} onChange={(e) => runPdf(pdfState.lines, e.target.value)} aria-label="Perfil do banco">
+                    {bankProfiles.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  </select>
+                </span>
+              </div>
+              {pdfState.reconcile.checks.length === 0 ? (
+                <div className="ex-hint">O documento não trouxe totais/saldos para conferir — revise os lançamentos abaixo.</div>
+              ) : (
+                <>
+                  {pdfState.reconcile.checks.map((c) => (
+                    <div key={c.label} className="ex-recon-row">
+                      <span className={`ex-recon-ic ${c.ok ? 'ex-pos-t' : 'ex-neg-t'}`}>{c.ok ? '✓' : '⚠'}</span>
+                      <span className="ex-recon-label">{c.label}</span>
+                      <span className="ex-recon-val">documento {fmtMoney(c.expected, importCurrency)} · lido {fmtMoney(c.actual, importCurrency)}</span>
+                    </div>
+                  ))}
+                  <div className={`ex-recon-note ${pdfState.reconcile.ok ? 'ex-pos-t' : 'ex-neg-t'}`}>
+                    {pdfState.reconcile.ok ? 'Tudo confere com o documento.' : 'Algo não fecha — confira as linhas em destaque.'}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {/* H10 — conta e moeda do lote */}
           <div className="ex-form-row">
             <label className="ex-field"><span>Conta do extrato</span>
@@ -917,11 +981,12 @@ export default function Expenses({
                   externalId: en.fitid,
                 })), { accountId: importAccountId, currency: importCurrency });
                 setImportPreview(null);
+                setPdfState(null);
               }}
             >
               Confirmar importação ({importPreview.entries.length})
             </button>
-            <button className="ex-btn ex-btn-ghost" onClick={() => setImportPreview(null)}>Cancelar</button>
+            <button className="ex-btn ex-btn-ghost" onClick={() => { setImportPreview(null); setPdfState(null); }}>Cancelar</button>
           </div>
           {!importAccountId && <div className="ex-hint" role="alert">Escolha a conta do extrato.</div>}
         </div>
@@ -1122,9 +1187,22 @@ export default function Expenses({
             </div>
           )}
           {form.type === 'expense' && !editingId && (
-            <label className="ex-check"><input type="checkbox" checked={form.recur} onChange={(e) => setF('recur', e.target.checked)} /> Repetir todo mês (dia
-              <input className="ex-input ex-day" type="number" min={1} max={28} value={form.recurDay} onChange={(e) => setF('recurDay', e.target.value)} aria-label="Dia da recorrência" />)
-            </label>
+            <>
+              <label className="ex-check"><input type="checkbox" checked={form.recur} onChange={(e) => setF('recur', e.target.checked)} /> Repetir (dia
+                <input className="ex-input ex-day" type="number" min={1} max={28} value={form.recurDay} onChange={(e) => setF('recurDay', e.target.value)} aria-label="Dia da recorrência" />)
+              </label>
+              {form.recur && (
+                <label className="ex-field"><span>Frequência</span>
+                  <select className="ex-input" value={form.recurEvery} onChange={(e) => setF('recurEvery', e.target.value)} aria-label="Intervalo da recorrência">
+                    <option value={1}>Todo mês</option>
+                    <option value={2}>A cada 2 meses</option>
+                    <option value={3}>Trimestral</option>
+                    <option value={6}>Semestral</option>
+                    <option value={12}>Anual</option>
+                  </select>
+                </label>
+              )}
+            </>
           )}
           <div className="ex-form-row">
             <button className="ex-btn ex-btn-primary" onClick={handleSave} disabled={!form.amount || !form.accountId}>{editingId ? 'Salvar' : 'Adicionar'}</button>
@@ -1550,6 +1628,18 @@ const EX_CSS = `
 .ex-import-date { color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .ex-import-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-import-amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+/* Fase 1 — conferência do documento (PDF) */
+.ex-recon { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); }
+.ex-recon.ok { border-color: rgba(46,204,113,0.35); background: rgba(46,204,113,0.06); }
+.ex-recon.fail { border-color: rgba(231,76,60,0.4); background: rgba(231,76,60,0.06); }
+.ex-recon-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12px; font-weight: 800; }
+.ex-recon-bank { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted, #a1a7b3); }
+.ex-recon-select { min-height: 34px; padding: 5px 8px; font-size: 12px; width: auto; }
+.ex-recon-row { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.ex-recon-ic { font-weight: 800; }
+.ex-recon-label { flex: 1; font-weight: 600; }
+.ex-recon-val { color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
+.ex-recon-note { font-size: 12px; font-weight: 700; }
 @media (max-width: 719px) { .ex-import-row { grid-template-columns: 76px 1fr auto; } .ex-import-cat { grid-column: 1 / -1; } }
 .ex-undo { display: flex; gap: 10px; align-items: center; background: rgba(225,177,44,0.1); border: 1px solid rgba(225,177,44,0.3); border-radius: 10px; padding: 10px 12px; font-size: 12px; }
 .ex-recur { background: rgba(52,152,219,0.08); border: 1px solid rgba(52,152,219,0.3); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }

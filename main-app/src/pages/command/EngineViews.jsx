@@ -810,8 +810,8 @@ export function FirmPnlPage() {
 
 export function ExpensesPage() {
   const { loading, data, finance } = useEngineData(async (f) => {
-    const { getSavingsGoal, getRolloverCats, getImportRules } = await import('@apps/lib/db');
-    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules] = await Promise.all([
+    const { getSavingsGoal, getRolloverCats, getImportRules, getBankProfiles } = await import('@apps/lib/db');
+    const [txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules, bankProfiles] = await Promise.all([
       f.ds.transactions.list(),
       f.ds.accounts.list(),
       listCategories(f.ds),
@@ -820,8 +820,9 @@ export function ExpensesPage() {
       getRolloverCats(f.ds),
       f.ds.cards.list(),
       getImportRules(f.ds),
+      getBankProfiles(f.ds),
     ]);
-    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules };
+    return { txs, accounts, categories, budgets, savingsGoal, rolloverCats, cards, importRules, bankProfiles };
   });
   const financeRef = useRef(finance);
   financeRef.current = finance;
@@ -988,6 +989,8 @@ export function ExpensesPage() {
         onMakeRecurring={onMakeRecurring}
         onSaveSavingsGoal={onSaveSavingsGoal}
         onImportBatch={onImportBatch}
+        importRules={data?.importRules}
+        bankProfiles={data?.bankProfiles}
         onAddInstallments={onAddInstallments}
         onUpdateSeries={onUpdateSeries}
         onDeleteSeries={onDeleteSeries}

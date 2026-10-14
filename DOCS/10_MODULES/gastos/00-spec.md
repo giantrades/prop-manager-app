@@ -102,6 +102,25 @@
 - Em aberto: I2 (fatura histórica), I3 (push), I4 (multi-freq), I6 (calendário), I8/B1 (meta
   de poupança), B5/B6 (gastos × trading).
 
+## Batch I (cont.) — I2 · I4 · I6 · I8/B1 — executado
+- Motor: `invoiceCycleAt`/`invoiceHistory`/`availableLimit` (I2), `recurrence.everyMonths` +
+  `recurrenceMonthAligned` (I4), `expensesCalendar` (I6), `savingsProgress` (I8/B1) — com testes.
+- UI: widget de cartões com limite disponível + histórico de competências; seletor de frequência
+  de recorrência; widget "Calendário do mês"; widget "Meta de poupança" com progresso.
+- Em aberto: I3 (push de vencimento/orçamento) e B5/B6 (gastos × trading/payout).
+
+## Batch I (fim) — B2 · B5/B6 — executado
+- Motor: `expenseInsights` (B2) e `lifestyleCoverage` (B5/B6) — composição pura + testes.
+- UI: widget "Insights" e widget "Trading cobre os gastos?" no Resumo.
+- Módulo Gastos feature-complete vs Mobills + diferenciais. I3 (push) descartado pelo dono.
+
+## Import PDF/foto — Fase 1 — executado
+- Motor puro `bankStatement.ts`: perfis de banco (`expense:import-profiles`), `detectBankProfile`,
+  `parseStatementLines`, `detectStatementTotals`, `reconcileStatement` (checksum) — com testes.
+- `pdfText.ts` (lazy, fora do barrel): `extractPdfLines` (pdfjs-dist, offline) + `isPdfFile`.
+- UI: import aceita `.pdf` com painel "Conferência do documento" (✓/⚠) + seletor de perfil.
+- Fases 2 (OCR/tesseract) e 3 (aprendizado de perfil) planejadas. `pdfjs-dist` adicionado.
+
 ## Melhorias futuras (pasta melhorias.md)
 
 > Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,

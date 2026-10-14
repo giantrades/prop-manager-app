@@ -185,7 +185,7 @@ export default function BudgetPage() {
                     {opted && ro && ro.rollover > 0 && <div className="bp-sub">+{fmtMoney(ro.rollover, 'USD')} de rollover → efetivo {fmtMoney(ro.effective, 'USD')}</div>}
                   </div>
                   <span className="bp-pct">{Math.round(b.pct)}%{b.over ? ' ⚠️' : ''}</span>
-                  <button className={`bp-mini${opted ? ' on' : ''}`} onClick={() => toggleRollover(b.categoryId)} title={opted ? 'Desativar rollover' : 'Ativar rollover'} aria-pressed={opted}>↻</button>
+                  <button type="button" className={`bp-mini${opted ? ' on' : ''}`} onClick={() => toggleRollover(b.categoryId)} title={opted ? 'Desativar rollover' : 'Ativar rollover'} aria-pressed={opted}>↻</button>
                 </div>
               );
             })}
@@ -196,7 +196,7 @@ export default function BudgetPage() {
                 {view.cats.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </select>
               <input className="bp-input" type="number" min="0" step="0.01" value={editor.amount} onChange={(e) => setEditor((s) => ({ ...s, amount: e.target.value }))} placeholder="Meta" aria-label="Valor da meta" />
-              <button className="bp-btn" disabled={!editor.catId || !(Number(editor.amount) >= 0)} onClick={() => { doSave(editor.catId, editor.amount); setEditor({ catId: '', amount: '' }); }}>Salvar meta</button>
+              <button type="button" className="bp-btn" disabled={!editor.catId || !(Number(editor.amount) >= 0)} onClick={() => { doSave(editor.catId, editor.amount); setEditor({ catId: '', amount: '' }); }}>Salvar meta</button>
             </div>
           </div>
 
@@ -212,14 +212,14 @@ export default function BudgetPage() {
                     <CatIcon name={(view.catById.get(s.categoryId) ?? {}).icon} color={(view.catById.get(s.categoryId) ?? {}).color} />
                     <span className="bp-row-name">{view.catById.get(s.categoryId)?.name ?? s.categoryId}</span>
                     <span className="bp-row-val">{fmtMoney(s.average, 'USD')}</span>
-                    <button className="bp-mini" onClick={() => doSave(s.categoryId, s.average)} title={`Usar ${fmtMoney(s.average, 'USD')}`}>usar</button>
+                    <button type="button" className="bp-mini" onClick={() => doSave(s.categoryId, s.average)} title={`Usar ${fmtMoney(s.average, 'USD')}`}>usar</button>
                   </div>
                 ))}
-                <button className="bp-btn" disabled={busy} onClick={applySuggestions}>Aplicar todas as sugestões</button>
+                <button type="button" className="bp-btn" disabled={busy} onClick={applySuggestions}>Aplicar todas as sugestões</button>
               </>
             )}
             <div className="bp-actions">
-              <button className="bp-btn-ghost" disabled={busy} onClick={copyPrevious}><Copy size={14} /> Copiar do mês anterior</button>
+              <button type="button" className="bp-btn-ghost" disabled={busy} onClick={copyPrevious}><Copy size={14} /> Copiar do mês anterior</button>
               <NavLink className="bp-btn-ghost" to="/expenses">Ver lançamentos <ArrowRight size={14} /></NavLink>
             </div>
           </div>

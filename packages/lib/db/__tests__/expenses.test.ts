@@ -47,6 +47,14 @@ import {
   installmentSeries,
   subscriptions,
   monthProjection,
+  invoiceHistory,
+  invoiceCycleAt,
+  availableLimit,
+  recurrenceMonthAligned,
+  expensesCalendar,
+  savingsProgress,
+  lifestyleCoverage,
+  expenseInsights,
   dividendHistory,
   dividendIncomeByMonth,
   dividendByAsset,
@@ -728,5 +736,129 @@ describe('I7/B — projecao de fechamento do mes', () => {
     expect(p.spentSoFar).toBe(200);
     expect(p.projectedSpend).toBe(600);
     expect(p.daysInMonth).toBe(30);
+  });
+});
+
+describe('I2 — fatura: historico e limite disponivel', () => {
+  const CARD = { id: 'card-1', name: 'Nubank', closingDay: 15, dueDay: 25, creditLimit: 1000 };
+  const exp = (id, date, amount) => tx({ id, kind: 'expense', amount: -amount, cardId: 'card-1', date });
+
+  it('invoiceCycleAt recua competencias', () => {
+    const open = invoiceCycleAt(15, new Date(Date.UTC(2026, 8, 10)), 0);
+    expect(open.end.slice(0, 10)).toBe('2026-09-15');
+    const prev = invoiceCycleAt(15, new Date(Date.UTC(2026, 8, 10)), 1);
+    expect(prev.end.slice(0, 10)).toBe('2026-08-15');
+    expect(prev.start.slice(0, 10)).toBe('2026-07-16');
+  });
+
+  it('invoiceHistory lista competencias com movimento (mais recente primeiro)', () => {
+    const txs = [exp('e1', '2026-09-05T12:00:00Z', 200), exp('e2', '2026-08-05T12:00:00Z', 100)];
+    const hist = invoiceHistory(CARD, txs, new Date(Date.UTC(2026, 8, 10)), 6);
+    expect(hist.map((h) => h.competencia)).toEqual(['2026-09', '2026-08']);
+    expect(hist[0].total).toBe(200);
+    expect(hist[1].total).toBe(100);
+  });
+
+  it('availableLimit = limite - faturas nao pagas; baixa libera limite', () => {
+    const txs = [exp('e1', '2026-09-05T12:00:00Z', 300), exp('e2', '2026-08-05T12:00:00Z', 200)];
+    let al = availableLimit(CARD, txs, new Date(Date.UTC(2026, 8, 10)));
+    expect(al).toEqual({ limit: 1000, used: 500, available: 500 });
+    const pay = tx({ id: 'p1', kind: 'transfer', amount: -200, date: '2026-08-20T12:00:00Z', invoice: { cardId: 'card-1', competencia: '2026-08' } });
+    al = availableLimit(CARD, [...txs, pay], new Date(Date.UTC(2026, 8, 10)));
+    expect(al.used).toBe(300);
+    expect(al.available).toBe(700);
+  });
+});
+
+describe('I4 — recorrencia por intervalo (everyMonths)', () => {
+  it('recurrenceMonthAligned respeita o intervalo desde a ancora', () => {
+    const tpl = tx({ id: 't', kind: 'expense', amount: -50, date: '2026-01-05T12:00:00Z', recurrence: { freq: 'monthly', day: 5, everyMonths: 3 } });
+    expect(recurrenceMonthAligned(tpl, '2026-01')).toBe(true);
+    expect(recurrenceMonthAligned(tpl, '2026-02')).toBe(false);
+    expect(recurrenceMonthAligned(tpl, '2026-04')).toBe(true);
+    expect(recurrenceMonthAligned(tpl, '2025-12')).toBe(false);
+    const monthly = tx({ id: 'm', kind: 'expense', amount: -50, date: '2026-01-05T12:00:00Z', recurrence: { freq: 'monthly', day: 5 } });
+    expect(recurrenceMonthAligned(monthly, '2026-02')).toBe(true);
+  });
+
+  it('recurringDue so lista meses alinhados; generate respeita o intervalo', async () => {
+    const { ds, money } = makeService();
+    const tpl = tx({ id: 't', kind: 'expense', amount: -50, category: 'lazer', date: '2026-01-05T12:00:00Z', recurrence: { freq: 'monthly', day: 5, everyMonths: 3 } });
+    await ds.transactions.put(tpl, { source: 'local' });
+    expect(recurringDue(await ds.transactions.list(), '2026-02').map((t) => t.id)).toEqual([]);
+    expect(recurringDue(await ds.transactions.list(), '2026-04').map((t) => t.id)).toEqual(['t']);
+    expect(await money.generateRecurring('t', '2026-02')).toBeNull();
+    expect(await money.generateRecurring('t', '2026-04')).not.toBeNull();
+  });
+});
+
+describe('I6 — calendario de gastos por dia', () => {
+  it('um item por dia do mes com total/ganho', () => {
+    const list = [
+      tx({ id: 'e1', kind: 'expense', amount: -100, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'e2', kind: 'expense', amount: -50, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'i1', kind: 'income', amount: 500, date: '2026-09-10T12:00:00Z' }),
+      tx({ id: 'pend', kind: 'expense', amount: -999, date: '2026-09-05T12:00:00Z', paid: false }),
+    ];
+    const cal = expensesCalendar(list, '2026-09');
+    expect(cal).toHaveLength(30);
+    expect(cal.find((d) => d.day === '2026-09-05')).toMatchObject({ total: 150, count: 2, income: 0 });
+    expect(cal.find((d) => d.day === '2026-09-10')).toMatchObject({ income: 500 });
+  });
+});
+
+describe('I8/B1 — progresso da meta de poupanca', () => {
+  it('saved = free cash; pct/remaining/reached', () => {
+    const list = [
+      tx({ id: 'i1', kind: 'income', amount: 1000, date: '2026-09-05T12:00:00Z' }),
+      tx({ id: 'e1', kind: 'expense', amount: -400, date: '2026-09-06T12:00:00Z' }),
+    ];
+    const p = savingsProgress(list, { '2026-09': 500 }, '2026-09');
+    expect(p).toEqual({ goal: 500, saved: 600, pct: 120, remaining: 0, reached: true });
+    const p2 = savingsProgress(list, { '2026-09': 1000 }, '2026-09');
+    expect(p2.pct).toBe(60);
+    expect(p2.remaining).toBe(400);
+    expect(p2.reached).toBe(false);
+    const none = savingsProgress(list, {}, '2026-09');
+    expect(none.pct).toBeNull();
+  });
+});
+
+describe('B5/B6 — gastos x trading (payout cobre o custo de vida?)', () => {
+  it('coveragePct/afterPayouts/net', () => {
+    const list = [
+      tx({ id: 'p', kind: 'payout_in', amount: 3000, date: '2026-09-10T12:00:00Z' }),
+      tx({ id: 'i', kind: 'income', amount: 500, date: '2026-09-01T12:00:00Z' }),
+      tx({ id: 'e', kind: 'expense', amount: -2000, date: '2026-09-05T12:00:00Z' }),
+    ];
+    const c = lifestyleCoverage(list, '2026-09');
+    expect(c).toMatchObject({ expenses: 2000, payouts: 3000, otherIncome: 500, income: 3500, net: 1500, afterPayouts: 1000, coveragePct: 150 });
+  });
+
+  it('sem gasto => coveragePct null', () => {
+    const c = lifestyleCoverage([tx({ id: 'p', kind: 'payout_in', amount: 100, date: '2026-09-10T12:00:00Z' })], '2026-09');
+    expect(c.coveragePct).toBeNull();
+    expect(c.afterPayouts).toBe(100);
+  });
+});
+
+describe('B2 — insights de gastos', () => {
+  it('gera alta vs mes passado, assinaturas e maior estabelecimento', () => {
+    const list = [
+      // alimentacao subiu: ago 500 -> set 610 (+22%)
+      tx({ id: 'a1', kind: 'expense', category: 'alimentacao', amount: -500, date: '2026-08-05T12:00:00Z' }),
+      tx({ id: 'a2', kind: 'expense', category: 'alimentacao', amount: -610, date: '2026-09-05T12:00:00Z' }),
+      // assinatura Netflix 2 meses
+      tx({ id: 'n1', kind: 'expense', merchant: 'Netflix', amount: -30, date: '2026-08-10T12:00:00Z' }),
+      tx({ id: 'n2', kind: 'expense', merchant: 'Netflix', amount: -30, date: '2026-09-10T12:00:00Z' }),
+    ];
+    const ins = expenseInsights(list, DEFAULT_CATEGORIES, '2026-09');
+    expect(ins.some((i) => i.type === 'rise' && i.name === 'Alimentação' && i.deltaPct === 22)).toBe(true);
+    expect(ins.some((i) => i.type === 'subs' && i.amount === 30 && i.count === 1)).toBe(true);
+    expect(ins.some((i) => i.type === 'merchant')).toBe(true);
+  });
+
+  it('sem movimento => lista vazia', () => {
+    expect(expenseInsights([], DEFAULT_CATEGORIES, '2026-09')).toEqual([]);
   });
 });

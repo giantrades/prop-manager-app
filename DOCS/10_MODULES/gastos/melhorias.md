@@ -477,9 +477,67 @@
   campos em `normalizeOptionChain`/`seedDemo`.
 
 ### Ainda em aberto (próximas rodadas)
-- **I2** fatura histórica por competência + limite disponível + conciliação.
-- **I3** notificações de vencimento/orçamento (PWA push — infra já existe, falta ligar).
-- **I4** recorrência multi-frequência (semanal/quinzenal/anual).
-- **I6** calendário de gastos.
-- **I8/B1** meta de poupança com progresso ligada a Goals 2.0.
-- **B5/B6** gastos × trading/payout (custo de vida financiado pelo trading).
+- **I3** notificações de vencimento/orçamento — **descartado pelo dono** (não precisa de push).
+- **B5/B6** gastos × trading/payout — ✅ feito abaixo.
+
+## Batch I (fim) — B2 · B5/B6 ✅
+
+- **B2 — Insights de gastos**: `expenseInsights(txs, cats, ym, budgets[ym])` (composição de
+  `compareMonths`/`subscriptions`/`monthProjection`/`budgetStatus`/`merchantRanking`) → alertas
+  como "Alimentação subiu 22% vs mês passado", "Assinaturas somam X/mês", "Maior gasto: Y".
+  UI: widget **"Insights"** no Resumo (a UI formata os valores; o motor só expõe os números).
+- **B5/B6 — Gastos × trading**: `lifestyleCoverage(txs, ym)` → payouts, custo de vida, cobertura
+  (%) e sobra (`afterPayouts`). UI: widget **"Trading cobre os gastos?"** com barra de cobertura.
+- Testes: +4 (B2/B5/B6). Gate: `tsc` 0 + `pnpm build:all` verde + **465 testes**.
+
+> Com isso o módulo Gastos está **feature-complete** frente ao Mobills e com os diferenciais
+> do app (trader/tax/payout). Pendências conscientes: conciliação de fatura item a item (A3,
+> fora de escopo por decisão), import Open Finance (integração bancária) e push (descartado).
+
+## Import PDF/foto — Fase 1 (PDF com texto) ✅
+
+> Objetivo: importar fatura/extrato de **PDF** com qualidade, **sem IA**. O segredo é
+> determinístico: extrair o texto, parsear por perfil de banco e **conferir com os totais
+> do próprio documento** (checksum).
+
+- **`bankStatement.ts`** (motor puro + testes): perfis de banco (`expense:import-profiles`,
+  defaults p/ Itaú, Nubank, Bradesco, BB, Caixa, Inter, C6, XP + genéricos extrato/fatura),
+  `detectBankProfile`, `parseStatementLines` (data/valor/sinal, linha quebrada, descrição),
+  `detectStatementTotals` e `reconcileStatement` (confere débitos/créditos/total/saldo).
+- **`pdfText.ts`** (lazy, fora do barrel): `extractPdfLines` com `pdfjs-dist` **no
+  dispositivo** (offline) + `isPdfFile`. Vai como chunk separado (`pdf-*.js` + worker),
+  só carrega quando se importa um PDF.
+- **UI (`/expenses` → Importar extrato)**: aceita `.pdf`; mostra a **"Conferência do
+  documento"** (✓/⚠ por check, com valor do documento × valor lido) e um seletor de
+  **perfil do banco** que re-parseia na hora. Mantém preview + dedup + regras de categoria.
+- Gate: `tsc` 0 + `pnpm build:all` verde + **476 testes** (11 novos em `bankStatement.test.ts`).
+
+### Fase 2 (OCR para foto) — planejado
+- `tesseract.js` (WASM, offline após cache), **lazy**; pré-processar (cinza/limiar/deskew)
+  antes do OCR; sempre com revisão obrigatória. Mesmo parser (`bankStatement.ts`) por cima.
+
+### Fase 3 (aprendizado) — planejado
+- Ao corrigir o preview, **aprender o perfil** do banco (colunas/posições) e as regras de
+  categoria/estabelecimento (reusa o H10); detecção de assinatura/merchant.
+
+### Dicas de captura (para o usuário)
+- Prefira o **PDF original** do banco (não print/foto). Se for foto: só a tabela, luz boa,
+  sem inclinação. Extrato via OFX/CSV continua sendo o caminho de ouro.
+
+## Batch I (cont.) — I2 · I4 · I6 · I8/B1 ✅
+
+- **I2 — fatura histórica + limite disponível**: `invoiceCycleAt` (recua competências),
+  `invoiceHistory(card, txs, ref, n)` e `availableLimit` (limite − faturas não pagas).
+  UI: widget "Cartões" mostra **disponível de limite** + **chips das últimas competências**
+  (aberta/fechada/parcial/paga) e o modal de baixa segue.
+- **I4 — recorrência por intervalo**: `recurrence.everyMonths` (todo mês / 2 meses / trimestral /
+  semestral / anual). `recurringDue` e `generateRecurring` respeitam o alinhamento
+  (`recurrenceMonthAligned`). UI: seletor "Frequência" no form.
+- **I6 — calendário de gastos**: `expensesCalendar(txs, ym)` (um item por dia). UI: widget
+  "Calendário do mês" no Resumo (grade 7 colunas com total por dia).
+- **I8/B1 — meta de poupança com progresso**: `savingsProgress(txs, savingsGoal, ym)`
+  (`saved` = free cash do mês; `pct`, `remaining`, `reached`). UI: widget "Meta de poupança"
+  com barra e estado "meta batida".
+- Testes: +9 (I2/I4/I6/I8). Gate: `tsc` 0 + `pnpm build:all` verde + **461 testes**.
+- Cross-módulo: alinhado o `OptionChainQuote` (módulo Options) ao contrato `SyncedRecord`
+  nos 3 pontos que faltavam metadados — mantém `tsc` 0.

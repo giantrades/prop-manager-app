@@ -20,6 +20,7 @@ export * from './accountModel';
 export * from './risk';
 export * from './csvImport';
 export * from './bankImport';
+export * from './bankStatement';
 export * from './strategies';
 export * from './copyTrade';
 export * from './money';

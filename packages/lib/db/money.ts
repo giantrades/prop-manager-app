@@ -346,20 +346,29 @@ export interface InvoiceCardLike {
   name: string;
   closingDay?: number;
   dueDay?: number;
+  creditLimit?: number;
 }
 
 /**
- * H5 — estado da fatura de um cartão. Reusa `invoiceCycle` (janela por fechamento) e
- * as despesas do cartão no ciclo. `pago` = Σ baixas (`transfer` com `invoice`) da
- * competência. Sem fórmula financeira nova — só agregação.
- * `registry` é a lista de cartões (para casar `cardId`/nome); opcional.
+ * I2 — janela de fatura para um deslocamento de meses a partir da fatura ABERTA.
+ * `offset=0` = fatura aberta; `1` = a anterior; `2` = duas atrás...
  */
-export function invoiceStatus(
+export function invoiceCycleAt(closingDay: number | undefined, ref: Date, offset: number): InvoiceCycle {
+  const base = invoiceCycle(closingDay, ref);
+  const d = Math.min(28, Math.max(1, Math.floor(closingDay || 1)));
+  const endBase = new Date(base.end);
+  const end = new Date(Date.UTC(endBase.getUTCFullYear(), endBase.getUTCMonth() - offset, d, 23, 59, 59, 999));
+  const prev = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - 1, d, 23, 59, 59, 999));
+  return { start: new Date(prev.getTime() + 1).toISOString(), end: end.toISOString() };
+}
+
+/** Estado de UMA competência (ciclo já resolvido). Base para `invoiceStatus`/`invoiceHistory`. */
+function statusForCycle(
   card: InvoiceCardLike,
   transactions: Transaction[],
-  ref: Date = new Date(),
+  cyc: InvoiceCycle,
+  ref: Date,
 ): CardInvoiceStatus {
-  const cyc = invoiceCycle(card.closingDay, ref);
   const competencia = cyc.end.slice(0, 7);
   const fechamento = cyc.end;
   // Vencimento: primeiro dia `dueDay` (ou o fechamento, se não houver) em/após o fechamento.
@@ -398,6 +407,58 @@ export function invoiceStatus(
   else if (nowIsoStr > fechamento) estado = 'fechada';
   else estado = 'aberta';
   return { competencia, fechamento, vencimento, total, pago, restante, estado, closingDay: card.closingDay, dueDay: card.dueDay };
+}
+
+/**
+ * H5 — estado da fatura (competência aberta) de um cartão. Reusa `invoiceCycle` e as
+ * despesas do cartão no ciclo. `pago` = Σ baixas (`transfer` com `invoice`) da
+ * competência. Sem fórmula financeira nova — só agregação.
+ */
+export function invoiceStatus(
+  card: InvoiceCardLike,
+  transactions: Transaction[],
+  ref: Date = new Date(),
+): CardInvoiceStatus {
+  return statusForCycle(card, transactions, invoiceCycle(card.closingDay, ref), ref);
+}
+
+/**
+ * I2 — histórico das últimas `count` competências (0 = aberta, 1 = anterior...).
+ * Só inclui competências com movimento ou baixa (evita faturas vazias infinitas).
+ */
+export function invoiceHistory(
+  card: InvoiceCardLike,
+  transactions: Transaction[],
+  ref: Date = new Date(),
+  count = 6,
+): CardInvoiceStatus[] {
+  const out: CardInvoiceStatus[] = [];
+  for (let off = 0; off < count; off += 1) {
+    out.push(statusForCycle(card, transactions, invoiceCycleAt(card.closingDay, ref, off), ref));
+  }
+  return out.filter((s) => s.total > 0 || s.pago > 0);
+}
+
+export interface CardAvailableLimit {
+  limit: number;
+  /** Limite comprometido = Σ restante das competências em aberto/fechadas não pagas. */
+  used: number;
+  available: number;
+}
+
+/** I2 — limite disponível do cartão = limite − faturas não pagas (abertas/fechadas/parciais). */
+export function availableLimit(
+  card: InvoiceCardLike,
+  transactions: Transaction[],
+  ref: Date = new Date(),
+): CardAvailableLimit {
+  const limit = card.creditLimit ?? 0;
+  const used = r2(
+    invoiceHistory(card, transactions, ref, 6)
+      .filter((s) => s.estado !== 'paga')
+      .reduce((sum, s) => sum + s.restante, 0),
+  );
+  return { limit: r2(limit), used, available: r2(limit - used) };
 }
 
 // ---------------------------------------------------------------------------
@@ -1401,9 +1462,21 @@ export function recurringTemplates(transactions: Transaction[]): Transaction[] {
   return transactions.filter((t) => t.kind === 'expense' && t.recurrence?.freq === 'monthly');
 }
 
+/** I4 — o mês `ym` está alinhado ao intervalo do template (a cada N meses, desde a âncora)? */
+export function recurrenceMonthAligned(tpl: Transaction, yearMonth: string): boolean {
+  const every = Math.max(1, Math.floor(tpl.recurrence?.everyMonths ?? 1));
+  if (every <= 1) return true;
+  const anchor = (tpl.date || '').slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(anchor) || !/^\d{4}-\d{2}$/.test(yearMonth)) return true;
+  const [ay, am] = anchor.split('-').map(Number);
+  const [y, m] = yearMonth.split('-').map(Number);
+  const diff = (y - ay) * 12 + (m - am);
+  return diff >= 0 && diff % every === 0;
+}
+
 /**
  * G6 — templates com parcela do mês `ym` ainda NÃO gerada (sem cópia com
- * `ref: { type:'recurrence', id: templateId }` naquele mês).
+ * `ref: { type:'recurrence', id: templateId }` naquele mês) E alinhados ao intervalo.
  */
 export function recurringDue(transactions: Transaction[], yearMonth: string): Transaction[] {
   const generated = new Set(
@@ -1411,7 +1484,7 @@ export function recurringDue(transactions: Transaction[], yearMonth: string): Tr
       .filter((t) => t.ref?.type === 'recurrence' && t.date.slice(0, 7) === yearMonth)
       .map((t) => t.ref?.id),
   );
-  return recurringTemplates(transactions).filter((t) => !generated.has(t.id));
+  return recurringTemplates(transactions).filter((t) => !generated.has(t.id) && recurrenceMonthAligned(t, yearMonth));
 }
 
 export interface RecurringCandidate {
@@ -1572,6 +1645,160 @@ export function monthProjection(transactions: Transaction[], yearMonth: string, 
     daysInMonth,
     isCurrent,
   };
+}
+
+// ---------------------------------------------------------------------------
+// B5/B6 — Gastos × trading: o payout cobre o custo de vida do mês?
+// ---------------------------------------------------------------------------
+
+export interface LifestyleCoverage {
+  expenses: number;
+  payouts: number;
+  otherIncome: number;
+  income: number;
+  /** income − expenses (sobra do mês). */
+  net: number;
+  /** payouts − expenses (o payout sozinho cobre o custo?). */
+  afterPayouts: number;
+  /** payouts / expenses × 100 (null quando não há gasto). */
+  coveragePct: number | null;
+}
+
+/**
+ * B5/B6 — cruza o custo de vida pessoal do mês com o que veio de trading (payouts) e de
+ * outras rendas. Responde "quanto do meu gasto o payout cobre" e "quanto sobra". Composição
+ * de `Transaction`; sem fórmula nova.
+ */
+export function lifestyleCoverage(transactions: Transaction[], yearMonth: string): LifestyleCoverage {
+  let expenses = 0;
+  let payouts = 0;
+  let otherIncome = 0;
+  for (const t of transactions) {
+    if ((t.date || '').slice(0, 7) !== yearMonth) continue;
+    if (t.paid === false) continue;
+    if (t.kind === 'payout_in') payouts += t.amount;
+    else if (t.kind === 'income' || t.kind === 'dividend') otherIncome += t.amount;
+    else if (t.kind === 'expense') expenses += Math.abs(t.amount);
+  }
+  const income = r2(payouts + otherIncome);
+  return {
+    expenses: r2(expenses),
+    payouts: r2(payouts),
+    otherIncome: r2(otherIncome),
+    income,
+    net: r2(income - expenses),
+    afterPayouts: r2(payouts - expenses),
+    coveragePct: expenses > 0 ? Number(((payouts / expenses) * 100).toFixed(1)) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// B2 — Insights de gastos (composição pura de selectors; a UI formata os valores)
+// ---------------------------------------------------------------------------
+
+export type ExpenseInsightType = 'rise' | 'subs' | 'projection' | 'over' | 'merchant';
+
+export interface ExpenseInsight {
+  id: string;
+  kind: 'warn' | 'good' | 'info';
+  type: ExpenseInsightType;
+  name?: string;
+  deltaPct?: number;
+  amount?: number;
+  pct?: number;
+  count?: number;
+}
+
+/**
+ * B2 — insights de gastos do mês: maior alta vs mês passado, assinaturas, projeção de
+ * fechamento, estouro de meta e maior estabelecimento. NÃO narra número que um motor não
+ * exponha — só compõe `compareMonths`/`subscriptions`/`monthProjection`/`budgetStatus`/
+ * `merchantRanking`.
+ */
+export function expenseInsights(
+  transactions: Transaction[],
+  cats: CategoryDef[] = DEFAULT_CATEGORIES,
+  yearMonth: string,
+  budgetsForMonth: Record<string, number> = {},
+): ExpenseInsight[] {
+  const out: ExpenseInsight[] = [];
+  const rise = compareMonths(transactions, yearMonth, cats)
+    .filter((r) => r.deltaPct != null && r.cur > 0)
+    .sort((a, b) => (b.deltaPct ?? 0) - (a.deltaPct ?? 0))[0];
+  if (rise && (rise.deltaPct ?? 0) >= 10) {
+    out.push({ id: `rise:${rise.categoryId}`, kind: 'warn', type: 'rise', name: cats.find((c) => c.id === rise.categoryId)?.name ?? rise.categoryId, deltaPct: rise.deltaPct ?? 0 });
+  }
+  const subs = subscriptions(transactions);
+  if (subs.length) {
+    out.push({ id: 'subs', kind: 'info', type: 'subs', amount: r2(subs.reduce((s, x) => s + x.monthlyTotal, 0)), count: subs.length });
+  }
+  const proj = monthProjection(transactions, yearMonth);
+  if (proj.isCurrent && proj.projectedSpend > 0) {
+    out.push({ id: 'projection', kind: 'info', type: 'projection', amount: proj.projectedSpend });
+  }
+  const over = budgetStatus(transactions, budgetsForMonth, yearMonth, cats).find((b) => b.over);
+  if (over) {
+    out.push({ id: `over:${over.categoryId}`, kind: 'warn', type: 'over', name: cats.find((c) => c.id === over.categoryId)?.name ?? over.categoryId, pct: over.pct });
+  }
+  const mer = merchantRanking(transactions, yearMonth, 1)[0];
+  if (mer) out.push({ id: 'merchant', kind: 'info', type: 'merchant', name: mer.name, amount: mer.total });
+  return out;
+}
+
+/** I6 — calendário: total/ganho por dia do mês. */
+export interface CalendarDay {  day: string; // 'YYYY-MM-DD'
+  total: number;
+  count: number;
+  income: number;
+}
+
+/**
+ * I6 — gastos/ganhos por dia do mês (calendário). Um item por dia do mês; pagos apenas.
+ * Sem fórmula nova — só agregação por dia.
+ */
+export function expensesCalendar(transactions: Transaction[], yearMonth: string): CalendarDay[] {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const map = new Map<number, { total: number; count: number; income: number }>();
+  for (const t of transactions) {
+    if ((t.date || '').slice(0, 7) !== yearMonth) continue;
+    if (t.paid === false) continue;
+    const d = Number((t.date || '').slice(8, 10));
+    if (!(d >= 1 && d <= 31)) continue;
+    const e = map.get(d) ?? { total: 0, count: 0, income: 0 };
+    if (PERSONAL_EXPENSE_KINDS.has(t.kind)) { e.total = r2(e.total + Math.abs(t.amount)); e.count += 1; }
+    else if (PERSONAL_INCOME_KINDS.has(t.kind)) e.income = r2(e.income + t.amount);
+    map.set(d, e);
+  }
+  return Array.from({ length: last }, (_, i) => {
+    const day = i + 1;
+    const e = map.get(day) ?? { total: 0, count: 0, income: 0 };
+    return { day: `${yearMonth}-${String(day).padStart(2, '0')}`, total: e.total, count: e.count, income: e.income };
+  });
+}
+
+export interface SavingsProgress {
+  goal: number;
+  saved: number;
+  pct: number | null;
+  remaining: number;
+  reached: boolean;
+}
+
+/**
+ * I8/B1 — progresso da meta de poupança do mês: `saved` = free cash do mês (entrou − gastou),
+ * `pct` = saved/goal. `goal` vem do meta `expense:savings-goal` ({ [ym]: amount }).
+ */
+export function savingsProgress(
+  transactions: Transaction[],
+  goalByMonth: Record<string, number>,
+  yearMonth: string,
+): SavingsProgress {
+  const goal = r2(goalByMonth[yearMonth] ?? 0);
+  const fc = computeFreeCash(transactions, yearMonth);
+  const saved = fc.freeCash;
+  const pct = goal > 0 ? Number(((saved / goal) * 100).toFixed(1)) : null;
+  return { goal, saved, pct, remaining: r2(Math.max(0, goal - saved)), reached: goal > 0 && saved >= goal };
 }
 
 /** I1 — todas as parcelas de um mesmo `groupId`, ordenadas por `n`. */
@@ -2049,6 +2276,8 @@ export class MoneyService {
     const all = await this.allTransactions();
     const tpl = all.find((t) => t.id === templateId);
     if (!tpl || tpl.kind !== 'expense' || tpl.recurrence?.freq !== 'monthly') return null;
+    // I4 — respeita o intervalo (a cada N meses); mês fora do ciclo não gera.
+    if (!recurrenceMonthAligned(tpl, yearMonth)) return null;
     const already = all.some(
       (t) => t.ref?.type === 'recurrence' && t.ref?.id === templateId && t.date.slice(0, 7) === yearMonth,
     );

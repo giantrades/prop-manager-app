@@ -16,7 +16,7 @@ import { fmtMoney } from '@apps/ui/currency';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp, TrendingDown, Briefcase,
   GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Activity,
-  PieChart as PieChartIcon, CalendarClock, Store, List, CreditCard,
+  PieChart as PieChartIcon, CalendarClock, Store, List, CreditCard, Sparkles,
 } from 'lucide-react';
 import {
   listCategories, getBudgets, getSavingsGoal, expensesByCategoryPeriod, incomeByKindPeriod,
@@ -25,6 +25,8 @@ import {
   categoryTrend, shiftYm, ymToList, invoiceCycle,
   previousPeriod, rollupByParent, subcategoriesOf, invoiceStatus, recurringDue,
   upcomingBills, upcomingSummary, subscriptions, monthProjection,
+  invoiceHistory, availableLimit, expensesCalendar, savingsProgress,
+  lifestyleCoverage, expenseInsights,
 } from '@apps/lib/db';
 import { usePeriod } from '@apps/state';
 import { CATEGORY_ICONS, CATEGORY_COLORS_HEX } from '@apps/ui/categoryIcons';
@@ -53,8 +55,7 @@ function Sparkline({ values = [], color = 'var(--brand, #7c5cff)', width = 72, h
   );
 }
 
-/** Badge de tendência (Δ vs período anterior). */
-function TrendBadge({ delta, invert = false }) {
+/** Badge de tendência (Δ vs período anterior). */function TrendBadge({ delta, invert = false }) {
   if (delta == null) return null;
   const up = delta > 0;
   // invert: subir é ruim (gastos). Sem invert: subir é bom (entradas/saldo).
@@ -78,6 +79,18 @@ function CatIcon({ name, color, size = 16 }) {
       <Cmp size={size} strokeWidth={2} />
     </span>
   );
+}
+
+/** B2 — texto do insight (a UI formata os valores; o motor só expõe os números). */
+function insightText(ins) {
+  switch (ins.type) {
+    case 'rise': return `${ins.name} subiu ${ins.deltaPct}% vs mês passado`;
+    case 'subs': return `Assinaturas somam ${fmtMoney(ins.amount, 'USD')}/mês (${ins.count})`;
+    case 'projection': return `No ritmo atual, o mês fecha em ${fmtMoney(ins.amount, 'USD')}`;
+    case 'over': return `${ins.name} estourou a meta (${Math.round(ins.pct)}%)`;
+    case 'merchant': return `Maior gasto: ${ins.name} (${fmtMoney(ins.amount, 'USD')})`;
+    default: return '';
+  }
 }
 
 export default function GastosDashboardPage() {
@@ -240,7 +253,7 @@ export default function GastosDashboardPage() {
     const rollup = rollupByParent(groups, cats);
     // H5 — estado das faturas (aberta/fechada/paga/parcial).
     const cardInvoices = (data.cards ?? [])
-      .map((c) => ({ card: c, status: invoiceStatus(c, txs) }))
+      .map((c) => ({ card: c, status: invoiceStatus(c, txs), limit: availableLimit(c, txs), history: invoiceHistory(c, txs, new Date(), 3) }))
       .filter((x) => x.status.total > 0 || x.status.pago > 0)
       .sort((a, b) => b.status.total - a.status.total);
     // H7 — projeção de caixa (reusa wealth.forecast/safeAvailable + pendências).
@@ -260,6 +273,10 @@ export default function GastosDashboardPage() {
       merchants: merchantRankingPeriod(txs, period, 6), recent, worstRise, goal, balanceTotal, cards,
       subs: subscriptions(txs).slice(0, 8),
       monthProj: monthProjection(txs, period.mode === 'month' ? (period.ym ?? currentYm()) : currentYm()),
+      calendar: expensesCalendar(txs, period.mode === 'month' ? (period.ym ?? currentYm()) : currentYm()),
+      savings: savingsProgress(txs, savingsGoal, period.mode === 'month' ? (period.ym ?? currentYm()) : currentYm()),
+      lifestyle: lifestyleCoverage(txs, refYm),
+      insights: expenseInsights(txs, cats, refYm, budgets[refYm] ?? {}),
       taxGroups, taxTotal, taxAllTime, savingsRate, prevSavingsRate, trend, topCats,
       taxPending: Number(taxPending.toFixed(2)),
       delta, rollup, cardInvoices, projection,
@@ -316,6 +333,22 @@ export default function GastosDashboardPage() {
             <span className="gd-sub">soma das carteiras/contas (na moeda do app)</span>
           </div>
 
+          {/* Estado vazio — primeiro uso / período sem movimento */}
+          {view.groups.length === 0 && view.gains.length === 0 && view.recent.length === 0 && (
+            <div className="gd-first">
+              <span className="gd-first-ico"><Sparkles size={18} /></span>
+              <div className="gd-first-txt">
+                <div className="gd-first-title">Comece por aqui</div>
+                <div className="gd-first-sub">Lance sua primeira despesa, defina um orçamento ou importe um extrato bancário.</div>
+              </div>
+              <div className="gd-first-actions">
+                <NavLink className="gd-btn-primary" to="/expenses">Lançar</NavLink>
+                <NavLink className="gd-btn-ghost" to="/gastos/orcamento">Definir orçamento</NavLink>
+                <NavLink className="gd-btn-ghost" to="/gastos/categorias">Categorias</NavLink>
+              </div>
+            </div>
+          )}
+
           {/* KPIs */}
           <div className="gd-cards">
             <div className="gd-card gd-in"><span className="gd-ico-badge gd-pos"><TrendingUp size={15} /></span><span className="gd-label">Entrou no mês</span><span className="gd-value gd-pos">{fmtMoney(view.fc.income, 'USD')}</span><span className="gd-sub"><TrendBadge delta={view.delta.income} /> {view.gains.reduce((s, g) => s + g.count, 0)} lançamento(s)</span><Sparkline values={view.spark.income} color="var(--green, #2ecc71)" /></div>
@@ -339,7 +372,7 @@ export default function GastosDashboardPage() {
           {/* Gráficos */}
           <WidgetGrid storageKey="gastos" layout={data?.layout} onLayoutChange={onLayoutChange}>
             <div className="dash-section" key="donut" data-label="Gastos por categoria">
-              <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria <TrendBadge delta={view.delta.expenses} invert /></span>{focusCat && <button className="gd-clear" onClick={() => setFocusCat(null)}>{hasSubs ? '← voltar' : 'limpar filtro'}</button>}</div>
+              <div className="dash-title"><span><PieChartIcon size={14} /> Gastos por categoria <TrendBadge delta={view.delta.expenses} invert /></span>{focusCat && <button type="button" className="gd-clear" onClick={() => setFocusCat(null)}>{hasSubs ? '← voltar' : 'limpar filtro'}</button>}</div>
               {donut.length === 0 ? (
                 <div className="gd-empty">Sem despesas no período. <NavLink className="dash-link" to="/expenses">lançar →</NavLink></div>
               ) : (
@@ -477,6 +510,73 @@ export default function GastosDashboardPage() {
               </div>
             )}
 
+            {view.calendar.length > 0 && (
+              <div className="dash-section" key="calendar" data-label="Calendário do mês">
+                <div className="dash-title"><span><CalendarClock size={14} /> Calendário do mês</span></div>
+                <div className="gd-cal" role="grid" aria-label="Gastos por dia">
+                  {view.calendar.map((d) => {
+                    const n = Number(d.day.slice(8, 10));
+                    const has = d.total > 0 || d.income > 0;
+                    return (
+                      <div key={d.day} className={`gd-cal-day${has ? ' has' : ''}`} title={has ? `${d.day}: ${fmtMoney(d.total, 'USD')} gasto${d.income ? ` · ${fmtMoney(d.income, 'USD')} entrada` : ''}` : d.day}>
+                        <span className="gd-cal-n">{n}</span>
+                        {d.total > 0 && <span className="gd-cal-v gd-neg">{fmtMoney(d.total, 'USD')}</span>}
+                        {d.total === 0 && d.income > 0 && <span className="gd-cal-v gd-pos">+{fmtMoney(d.income, 'USD')}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {view.savings.goal > 0 && (
+              <div className="dash-section" key="savingsgoal" data-label="Meta de poupança">
+                <div className="dash-title"><span><PiggyBank size={14} /> Meta de poupança</span><span className="gd-row-sub">{view.savings.pct != null ? `${Math.round(view.savings.pct)}%` : ''}</span></div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><PiggyBank size={14} /></span>
+                  <span className="gd-row-name">Poupado no mês</span>
+                  <span className={`gd-row-val ${view.savings.saved >= 0 ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(view.savings.saved, 'USD')}</span>
+                </div>
+                <div className="gd-row">
+                  <span className="gd-row-ico"><Activity size={14} /></span>
+                  <span className="gd-row-name">{view.savings.reached ? 'Meta batida 🎉' : 'Falta para a meta'}</span>
+                  <span className="gd-row-val">{fmtMoney(view.savings.reached ? view.savings.goal : view.savings.remaining, 'USD')}</span>
+                </div>
+                <div className="gd-card-bar"><span className="gd-card-fill" style={{ width: `${Math.max(0, Math.min(100, view.savings.pct ?? 0))}%`, background: view.savings.reached ? 'var(--green, #2ecc71)' : 'var(--brand, #7c5cff)' }} /></div>
+                <div className="gd-hint">meta {fmtMoney(view.savings.goal, 'USD')}</div>
+              </div>
+            )}
+
+            {view.insights.length > 0 && (
+              <div className="dash-section" key="insights" data-label="Insights">
+                <div className="dash-title"><span><Sparkles size={14} /> Insights</span></div>
+                {view.insights.map((ins) => (
+                  <div key={ins.id} className={`gd-insight gd-insight-${ins.kind}`}>
+                    <span className="gd-insight-dot" />
+                    <span>{insightText(ins)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {view.lifestyle.expenses > 0 && (
+              <div className="dash-section" key="lifestyle" data-label="Trading cobre os gastos?">
+                <div className="dash-title">
+                  <span><Activity size={14} /> Trading cobre os gastos?</span>
+                  <span className={`gd-row-val ${(view.lifestyle.coveragePct ?? 0) >= 100 ? 'gd-pos' : 'gd-neg'}`}>
+                    {view.lifestyle.coveragePct != null ? `${Math.round(view.lifestyle.coveragePct)}%` : '—'}
+                  </span>
+                </div>
+                <div className="gd-row"><span className="gd-row-ico"><Wallet size={14} /></span><span className="gd-row-name">Payouts no mês</span><span className="gd-row-val gd-pos">{fmtMoney(view.lifestyle.payouts, 'USD')}</span></div>
+                <div className="gd-row"><span className="gd-row-ico"><TrendingDown size={14} /></span><span className="gd-row-name">Custo de vida</span><span className="gd-row-val gd-neg">{fmtMoney(view.lifestyle.expenses, 'USD')}</span></div>
+                {view.lifestyle.otherIncome > 0 && (
+                  <div className="gd-row"><span className="gd-row-ico"><Gift size={14} /></span><span className="gd-row-name">Outras rendas</span><span className="gd-row-val gd-pos">{fmtMoney(view.lifestyle.otherIncome, 'USD')}</span></div>
+                )}
+                <div className="gd-card-bar"><span className="gd-card-fill" style={{ width: `${Math.min(100, Math.max(0, view.lifestyle.coveragePct ?? 0))}%`, background: (view.lifestyle.coveragePct ?? 0) >= 100 ? 'var(--green, #2ecc71)' : 'var(--yellow, #e1b12c)' }} /></div>
+                <div className="gd-hint">o payout {view.lifestyle.afterPayouts >= 0 ? 'cobre e sobra' : 'não cobre'} {fmtMoney(Math.abs(view.lifestyle.afterPayouts), 'USD')}</div>
+              </div>
+            )}
+
             <div className="dash-section" key="budget" data-label="Orçado × realizado">
               <div className="dash-title"><span><PiggyBank size={14} /> Orçado × realizado</span></div>
               {(() => {
@@ -536,7 +636,7 @@ export default function GastosDashboardPage() {
                         {b.source === 'recurring' ? ' · recorrente' : ''}
                       </span>
                       <span className={`gd-row-val ${isIncome ? 'gd-pos' : 'gd-neg'}`}>{fmtMoney(Math.abs(b.tx.amount), 'USD')}</span>
-                      <button className="gd-pay" onClick={() => payBill(b.tx)}>{isIncome ? 'Receber' : 'Pagar'}</button>
+                      <button type="button" className="gd-pay" onClick={() => payBill(b.tx)}>{isIncome ? 'Receber' : 'Pagar'}</button>
                     </div>
                   );
                 })}
@@ -626,9 +726,9 @@ export default function GastosDashboardPage() {
             {view.cardInvoices.length > 0 && (
               <div className="dash-section" key="cards" data-label="Cartões de crédito">
                 <div className="dash-title"><span><CreditCard size={14} /> Cartões de crédito</span></div>
-                {view.cardInvoices.map(({ card, status }) => {
+                {view.cardInvoices.map(({ card, status, limit: lim, history }) => {
                   const limit = card.creditLimit || 0;
-                  const usedPct = limit > 0 ? Math.min(100, (status.total / limit) * 100) : null;
+                  const usedPct = lim.limit > 0 ? Math.min(100, (lim.used / lim.limit) * 100) : null;
                   return (
                     <div key={card.id} className="gd-card-row">
                       <span className="gd-card-badge"><Landmark size={14} /></span>
@@ -644,16 +744,28 @@ export default function GastosDashboardPage() {
                         {status.pago > 0 && (
                           <div className="gd-row-sub">pago {fmtMoney(status.pago, 'USD')} · restante {fmtMoney(status.restante, 'USD')}</div>
                         )}
+                        {lim.limit > 0 && (
+                          <div className="gd-row-sub">disponível <b className={lim.available < 0 ? 'gd-neg' : 'gd-pos'}>{fmtMoney(lim.available, 'USD')}</b> de {fmtMoney(lim.limit, 'USD')}</div>
+                        )}
                         {usedPct != null && (
                           <div className="gd-card-bar" aria-label={`Uso do limite ${Math.round(usedPct)}%`}>
                             <span className="gd-card-fill" style={{ width: `${usedPct}%`, background: usedPct >= 80 ? 'var(--red, #e74c3c)' : 'var(--brand, #7c5cff)' }} />
+                          </div>
+                        )}
+                        {history.length > 1 && (
+                          <div className="gd-inv-hist">
+                            {history.map((h) => (
+                              <span key={h.competencia} className={`gd-inv-chip gd-inv-${h.estado}`} title={`${h.competencia}: ${fmtMoney(h.total, 'USD')} (${INVOICE_LABEL[h.estado]})`}>
+                                {h.competencia.slice(5)}/{h.competencia.slice(2, 4)} · {fmtMoney(h.total, 'USD')}
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>
                       <div className="gd-card-amt">
                         <span className="gd-row-val gd-neg">{fmtMoney(status.total, 'USD')}</span>
                         {status.restante > 0 && (
-                          <button className="gd-pay" onClick={() => openPay(card, status)}>Pagar fatura</button>
+                          <button type="button" className="gd-pay" onClick={() => openPay(card, status)}>Pagar fatura</button>
                         )}
                       </div>
                     </div>
@@ -669,7 +781,7 @@ export default function GastosDashboardPage() {
           <div className="gd-modal" role="dialog" aria-modal="true" aria-label="Pagar fatura do cartão" onClick={(e) => e.stopPropagation()}>
             <div className="gd-modal-head">
               <span>Pagar fatura · {payCard.card.name}</span>
-              <button className="gd-modal-x" onClick={() => setPayCard(null)} aria-label="Fechar">✕</button>
+              <button type="button" className="gd-modal-x" onClick={() => setPayCard(null)} aria-label="Fechar">✕</button>
             </div>
             <div className="gd-modal-body">
               <div className="gd-modal-line">Competência <b>{payCard.status.competencia}</b> · total {fmtMoney(payCard.status.total, 'USD')} · restante {fmtMoney(payCard.status.restante, 'USD')}</div>
@@ -684,8 +796,8 @@ export default function GastosDashboardPage() {
               </label>
               <div className="gd-modal-note">É um transferência interna (neutra no caixa) — os gastos já contam quando lançados no cartão.</div>
               <div className="gd-modal-actions">
-                <button className="gd-btn-primary" onClick={confirmPay} disabled={!(Number(payAmount) > 0) || !payAccount}>Confirmar pagamento</button>
-                <button className="gd-btn-ghost" onClick={() => setPayCard(null)}>Cancelar</button>
+                <button type="button" className="gd-btn-primary" onClick={confirmPay} disabled={!(Number(payAmount) > 0) || !payAccount}>Confirmar pagamento</button>
+                <button type="button" className="gd-btn-ghost" onClick={() => setPayCard(null)}>Cancelar</button>
               </div>
             </div>
           </div>
@@ -787,6 +899,37 @@ const GD_CSS = `
 .gd-btn-primary { background: linear-gradient(135deg, #7c5cff, #6d4df2); color: #fff; border: none; border-radius: 11px; font-weight: 800; font-size: 13px; padding: 10px 14px; min-height: 42px; cursor: pointer; }
 .gd-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .gd-btn-ghost { background: rgba(255,255,255,0.03); border: 1px solid #2a3246; color: var(--text, #e7eaf0); border-radius: 11px; font-weight: 700; font-size: 13px; padding: 10px 14px; min-height: 42px; cursor: pointer; }
+
+/* I2 — histórico de faturas */
+.gd-inv-hist { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.gd-inv-chip { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); color: var(--muted, #a1a7b3); }
+.gd-inv-paga { color: var(--green, #2ecc71); border-color: rgba(46,204,113,0.4); }
+.gd-inv-fechada, .gd-inv-parcial { color: var(--yellow, #e1b12c); border-color: rgba(225,177,44,0.4); }
+.gd-inv-aberta { color: var(--blue, #3498db); border-color: rgba(52,152,219,0.4); }
+
+/* I6 — calendário */
+.gd-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.gd-cal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 46px; border-radius: 9px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 3px; }
+.gd-cal-day.has { background: rgba(124,92,255,0.08); border-color: rgba(124,92,255,0.22); }
+.gd-cal-n { font-size: 10px; color: var(--muted, #a1a7b3); }
+.gd-cal-v { font-size: 9px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* B2 — insights */
+.gd-insight { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12.5px; }
+.gd-insight:last-child { border-bottom: none; }
+.gd-insight-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--muted, #a1a7b3); }
+.gd-insight-warn .gd-insight-dot { background: var(--yellow, #e1b12c); }
+.gd-insight-good .gd-insight-dot { background: var(--green, #2ecc71); }
+.gd-insight-info .gd-insight-dot { background: var(--blue, #3498db); }
+
+/* Estado vazio (primeiro uso) */
+.gd-first { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 18px; border-radius: 16px; border: 1px dashed rgba(124,92,255,0.35); background: rgba(124,92,255,0.06); }
+.gd-first-ico { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(124,92,255,0.15); color: var(--brand, #7c5cff); flex-shrink: 0; }
+.gd-first-txt { flex: 1; min-width: 180px; }
+.gd-first-title { font-size: 14px; font-weight: 800; }
+.gd-first-sub { font-size: 12px; color: var(--muted, #a1a7b3); }
+.gd-first-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.gd-first-actions .gd-btn-primary, .gd-first-actions .gd-btn-ghost { text-decoration: none; display: inline-flex; align-items: center; }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('gd-styles')) {
   const style = document.createElement('style');

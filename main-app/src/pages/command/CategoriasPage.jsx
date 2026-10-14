@@ -136,10 +136,10 @@ export default function CategoriasPage() {
                     </div>
                     <div className="cat2-usage">{u ? <>{fmtMoney(u.total, 'USD')}<span className="cat2-usage-n">{u.count}x</span></> : <span className="cat2-unused">sem uso</span>}</div>
                     <div className="cat2-actions">
-                      <button className="cat2-icon-btn" onClick={() => move(c.id, -1)} disabled={i === 0} aria-label={`Subir ${c.name}`} title="Subir"><ChevronUp size={14} /></button>
-                      <button className="cat2-icon-btn" onClick={() => move(c.id, 1)} disabled={i === view.ordered.length - 1} aria-label={`Descer ${c.name}`} title="Descer"><ChevronDown size={14} /></button>
-                      <button className={`cat2-icon-btn${editing && form.id === c.id ? ' on' : ''}`} onClick={() => startEdit(c)} aria-label={`Editar ${c.name}`} title="Editar"><Pencil size={13} /></button>
-                      <button className={`cat2-icon-btn${openMenu === c.id ? ' on' : ''}`} onClick={() => setOpenMenu((m) => (m === c.id ? null : c.id))} aria-label={`Mais ações de ${c.name}`} title="Mais"><MoreHorizontal size={14} /></button>
+                      <button type="button" className="cat2-icon-btn" onClick={() => move(c.id, -1)} disabled={i === 0} aria-label={`Subir ${c.name}`} title="Subir"><ChevronUp size={14} /></button>
+                      <button type="button" className="cat2-icon-btn" onClick={() => move(c.id, 1)} disabled={i === view.ordered.length - 1} aria-label={`Descer ${c.name}`} title="Descer"><ChevronDown size={14} /></button>
+                      <button type="button" className={`cat2-icon-btn${editing && form.id === c.id ? ' on' : ''}`} onClick={() => startEdit(c)} aria-label={`Editar ${c.name}`} title="Editar"><Pencil size={13} /></button>
+                      <button type="button" className={`cat2-icon-btn${openMenu === c.id ? ' on' : ''}`} onClick={() => setOpenMenu((m) => (m === c.id ? null : c.id))} aria-label={`Mais ações de ${c.name}`} title="Mais"><MoreHorizontal size={14} /></button>
                     </div>
                     {openMenu === c.id && (
                       <div className="cat2-menu" role="menu">
@@ -157,7 +157,7 @@ export default function CategoriasPage() {
           <aside className="cat2-card cat2-editor">
             <div className="cat2-card-head">
               <span className="cat2-card-title">{editing ? 'Editar categoria' : 'Nova categoria'}</span>
-              {editing && <button className="cat2-link" onClick={reset}>cancelar</button>}
+              {editing && <button type="button" className="cat2-link" onClick={reset}>cancelar</button>}
             </div>
 
             <label className="cat2-field"><span>Nome</span>
@@ -199,13 +199,13 @@ export default function CategoriasPage() {
             </div>
 
             <div className="cat2-editor-actions">
-              <button className="cat2-btn" disabled={busy || !form.name.trim()} onClick={onSave}>
+              <button type="button" className="cat2-btn" disabled={busy || !form.name.trim()} onClick={onSave}>
                 {editing ? <><Check size={15} /> Salvar</> : <><Plus size={15} /> Criar</>}
               </button>
-              {editing && <button className="cat2-btn-ghost" onClick={reset}><X size={14} /> Cancelar</button>}
+              {editing && <button type="button" className="cat2-btn-ghost" onClick={reset}><X size={14} /> Cancelar</button>}
             </div>
 
-            <button className="cat2-link cat2-taxpack" disabled={busy} onClick={addTaxPack}>+ Garantir pack de impostos</button>
+            <button type="button" className="cat2-link cat2-taxpack" disabled={busy} onClick={addTaxPack}>+ Garantir pack de impostos</button>
           </aside>
         </div>
       )}
@@ -216,7 +216,7 @@ export default function CategoriasPage() {
           <div className="cat2-modal" role="dialog" aria-modal="true" aria-label={dialog.mode === 'merge' ? 'Mesclar categoria' : 'Remover categoria'} onClick={(e) => e.stopPropagation()}>
             <div className="cat2-modal-head">
               <span>{dialog.mode === 'merge' ? 'Mesclar categoria' : 'Remover categoria'}</span>
-              <button className="cat2-icon-btn" onClick={() => setDialog(null)} aria-label="Fechar"><X size={14} /></button>
+              <button type="button" className="cat2-icon-btn" onClick={() => setDialog(null)} aria-label="Fechar"><X size={14} /></button>
             </div>
             <p className="cat2-modal-text">
               {dialog.mode === 'merge'
@@ -230,7 +230,7 @@ export default function CategoriasPage() {
               </select>
             </label>
             <div className="cat2-modal-actions">
-              <button className="cat2-btn-ghost" onClick={() => setDialog(null)}>Cancelar</button>
+              <button type="button" className="cat2-btn-ghost" onClick={() => setDialog(null)}>Cancelar</button>
             </div>
           </div>
         </div>
