@@ -21,6 +21,7 @@ export * from './risk';
 export * from './csvImport';
 export * from './bankImport';
 export * from './bankStatement';
+export * from './ocrText';
 export * from './strategies';
 export * from './copyTrade';
 export * from './money';

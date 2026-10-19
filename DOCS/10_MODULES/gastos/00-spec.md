@@ -121,6 +121,12 @@
 - UI: import aceita `.pdf` com painel "Conferência do documento" (✓/⚠) + seletor de perfil.
 - Fases 2 (OCR/tesseract) e 3 (aprendizado de perfil) planejadas. `pdfjs-dist` adicionado.
 
+## Import PDF/foto — Fase 2 (OCR) — executado
+- `ocr.ts` (lazy): `ocrImageToLines` (tesseract.js, worker/WASM no dispositivo) + pré-processamento
+  (cinza/contraste/escala) + progresso. `ocrText.ts` (puro): `fixOcrNumbers`/`ocrTextToLines`.
+- UI: import aceita `image/*`; OCR → mesmo parser + reconciliação, com aviso de best-effort.
+- `tesseract.js` adicionado. Fase 3 (aprendizado de perfil) planejada.
+
 ## Melhorias futuras (pasta melhorias.md)
 
 > Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,

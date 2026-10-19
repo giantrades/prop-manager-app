@@ -35,6 +35,7 @@ import {
   openingBalance, dailyBalance, upcomingBills, upcomingSummary,
   detectCsvColumns, DEFAULT_IMPORT_RULES,
   detectBankProfile, parseStatementLines, reconcileStatement, DEFAULT_BANK_PROFILES,
+  cleanOcrLines,
 } from '@apps/lib/db';
 import type { ImportRule, CsvMapping, BankProfile, ParsedStatement, Reconciliation } from '@apps/lib/db';
 import QuickAddExpense from './QuickAddExpense';
@@ -426,6 +427,9 @@ export default function Expenses({
   const [mapCols, setMapCols] = useState<CsvMapping>({ date: 0, desc: 1, amount: 2 });
   // Fase 1 — import de PDF: linhas extraídas + perfil + reconciliação (checksum).
   const [pdfState, setPdfState] = useState<null | { lines: string[]; profileId: string; reconcile: Reconciliation; bankName: string }>(null);
+  // Fase 2 — OCR de foto: progresso + origem (para o aviso de best-effort).
+  const [ocrBusy, setOcrBusy] = useState<string | null>(null);
+  const [ocrUsed, setOcrUsed] = useState(false);
 
   useEffect(() => {
     if (!importAccountId && accounts[0]) setImportAccountId(accounts[0].id);
@@ -624,12 +628,31 @@ export default function Expenses({
     setImportError(null);
     setImportMapping(null);
     setPdfState(null);
+    setOcrUsed(false);
     try {
+      // Fase 2 — foto/print: OCR no dispositivo (best-effort; sempre revisar).
+      if (file.type.startsWith('image/')) {
+        setOcrBusy('Preparando imagem…');
+        try {
+          const ocrMod = await import('@apps/lib/db/ocr');
+          const raw = await ocrMod.ocrImageToLines(file, (p) => {
+            const pct = Math.round((p.progress || 0) * 100);
+            setOcrBusy(`Lendo a imagem… ${pct}%`);
+          });
+          const lines = cleanOcrLines(raw);
+          if (!lines.length) { setImportError('Não consegui ler texto na imagem. Tente uma foto nítida, só da tabela, com boa luz.'); return; }
+          setOcrUsed(true);
+          runPdf(lines, '');
+        } finally {
+          setOcrBusy(null);
+        }
+        return;
+      }
       // Fase 1 — PDF (fatura/extrato digital): extrai texto no dispositivo e parseia.
       const pdfMod = await import('@apps/lib/db/pdfText');
       if (await pdfMod.isPdfFile(file)) {
         const lines = await pdfMod.extractPdfLines(file);
-        if (!lines.length) { setImportError('Não encontrei texto no PDF (pode ser escaneado — foto/OCR é a Fase 2).'); return; }
+        if (!lines.length) { setImportError('Não encontrei texto no PDF (pode ser escaneado — use a foto/OCR).'); return; }
         runPdf(lines, '');
         return;
       }
@@ -750,7 +773,7 @@ export default function Expenses({
         />
         <button className={`ex-btn ex-btn-ghost${showAdv ? ' ex-btn-on' : ''}`} aria-pressed={showAdv} onClick={() => setShowAdv((s) => !s)}>Filtros</button>
         <button className="ex-btn ex-btn-ghost" onClick={() => setShowTransfer(true)}>Transferir</button>
-        <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato</button>
+        <button className="ex-btn ex-btn-ghost" onClick={() => importFileRef.current?.click()}>Importar extrato/PDF/foto</button>
         <button className="ex-btn ex-btn-ghost" onClick={exportCsv}>Exportar CSV</button>
         <span className="ex-toolbar-spacer" />
         <button className="ex-btn ex-btn-primary" onClick={startAdd}><Plus size={16} /> Novo</button>
@@ -854,10 +877,11 @@ export default function Expenses({
         </div>
       )}
       <input
-        ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif,.pdf" style={{ display: 'none' }}
+        ref={importFileRef} type="file" accept=".ofx,.csv,.txt,.qif,.pdf,image/*" style={{ display: 'none' }}
         onChange={(e) => { handleImportFile(e.target.files?.[0]); e.target.value = ''; }} aria-label="Importar extrato OFX ou CSV"
       />
       {importError && <div className="ex-hint" role="alert">⚠️ {importError}</div>}
+      {ocrBusy && <div className="ex-hint ex-ocr-busy" role="status">🔎 {ocrBusy} <span className="ex-hint">(roda no seu aparelho)</span></div>}
       {/* H10 — mapeamento de coluna quando a auto-detecção falha */}
       {importMapping && (
         <div className="ex-section" role="dialog" aria-label="Mapear colunas do extrato">
@@ -904,6 +928,9 @@ export default function Expenses({
                   </select>
                 </span>
               </div>
+              {ocrUsed && (
+                <div className="ex-hint">📷 Lido por OCR (foto) — é uma leitura automática, então <b>revise os lançamentos</b> antes de confirmar.</div>
+              )}
               {pdfState.reconcile.checks.length === 0 ? (
                 <div className="ex-hint">O documento não trouxe totais/saldos para conferir — revise os lançamentos abaixo.</div>
               ) : (
@@ -982,11 +1009,12 @@ export default function Expenses({
                 })), { accountId: importAccountId, currency: importCurrency });
                 setImportPreview(null);
                 setPdfState(null);
+                setOcrUsed(false);
               }}
             >
               Confirmar importação ({importPreview.entries.length})
             </button>
-            <button className="ex-btn ex-btn-ghost" onClick={() => { setImportPreview(null); setPdfState(null); }}>Cancelar</button>
+            <button className="ex-btn ex-btn-ghost" onClick={() => { setImportPreview(null); setPdfState(null); setOcrUsed(false); }}>Cancelar</button>
           </div>
           {!importAccountId && <div className="ex-hint" role="alert">Escolha a conta do extrato.</div>}
         </div>
@@ -1640,6 +1668,7 @@ const EX_CSS = `
 .ex-recon-label { flex: 1; font-weight: 600; }
 .ex-recon-val { color: var(--muted, #a1a7b3); font-variant-numeric: tabular-nums; }
 .ex-recon-note { font-size: 12px; font-weight: 700; }
+.ex-ocr-busy { display: inline-flex; align-items: center; gap: 6px; }
 @media (max-width: 719px) { .ex-import-row { grid-template-columns: 76px 1fr auto; } .ex-import-cat { grid-column: 1 / -1; } }
 .ex-undo { display: flex; gap: 10px; align-items: center; background: rgba(225,177,44,0.1); border: 1px solid rgba(225,177,44,0.3); border-radius: 10px; padding: 10px 12px; font-size: 12px; }
 .ex-recur { background: rgba(52,152,219,0.08); border: 1px solid rgba(52,152,219,0.3); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }

@@ -36,6 +36,7 @@
     "pdfjs-dist": "^4.10.38",
     "react-csv": "^2.2.2",
     "recharts": "^2.15.4",
+    "tesseract.js": "^7.0.0",
     "uuid": "^9.0.1"
   }
 }

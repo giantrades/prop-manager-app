@@ -512,9 +512,17 @@
   **perfil do banco** que re-parseia na hora. Mantém preview + dedup + regras de categoria.
 - Gate: `tsc` 0 + `pnpm build:all` verde + **476 testes** (11 novos em `bankStatement.test.ts`).
 
-### Fase 2 (OCR para foto) — planejado
-- `tesseract.js` (WASM, offline após cache), **lazy**; pré-processar (cinza/limiar/deskew)
-  antes do OCR; sempre com revisão obrigatória. Mesmo parser (`bankStatement.ts`) por cima.
+### Fase 2 (OCR para foto) — ✅ executada
+- **`ocr.ts`** (lazy, fora do barrel): `ocrImageToLines` com `tesseract.js` (worker/WASM no
+  dispositivo) + **pré-processamento** da imagem (escala p/ ~1600px, cinza + contraste) para
+  melhorar a leitura. `onProgress` alimenta a UI ("Lendo a imagem… 45%").
+- **`ocrText.ts`** (puro + testes): `fixOcrNumbers` conserta confusões do OCR (O/l/S/B/Z em
+  tokens que viram valor válido, sem estragar palavras), `ocrTextToLines`/`cleanOcrLines`.
+- **UI (`/expenses` → Importar extrato/PDF/foto)**: aceita `image/*`; roda o OCR e usa o
+  **mesmo parser** (`bankStatement.ts`) + reconciliação. Aviso explícito de best-effort:
+  "Lido por OCR — revise os lançamentos".
+- Chunk lazy (`ocr-*.js` + `tesseract` API ~16KB); worker/core/idioma são baixados na 1ª vez
+  e ficam em cache do navegador/SW (offline depois). Gate: `tsc` 0 + build verde + **490 testes**.
 
 ### Fase 3 (aprendizado) — planejado
 - Ao corrigir o preview, **aprender o perfil** do banco (colunas/posições) e as regras de
