@@ -6,6 +6,7 @@ import {
   detectStatementTotals,
   reconcileStatement,
   parseStatementDate,
+  guessBankKeyword,
   DEFAULT_BANK_PROFILES,
 } from '../bankStatement';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
@@ -117,5 +118,28 @@ describe('Fase 1 — perfis persistidos em meta', () => {
     expect((await getBankProfiles(ds)).some((p) => p.id === 'meu-banco')).toBe(true);
     await removeBankProfile(ds, 'meu-banco');
     expect((await getBankProfiles(ds)).some((p) => p.id === 'meu-banco')).toBe(false);
+  });
+});
+
+describe('Fase 3 — aprendizado de banco', () => {
+  it('guessBankKeyword pega o token mais longo do cabecalho (ignora genericos)', () => {
+    expect(guessBankKeyword(['Itau Unibanco - Extrato', '05/09/2026 PIX 10,00'])).toBe('Unibanco');
+    expect(guessBankKeyword(['EXTRATO CONTA', 'SALDO 100,00'])).toBeNull();
+  });
+
+  it('detectBankProfile consulta o mapa aprendido primeiro', () => {
+    const map = [{ keyword: 'MeuBancoXyz', profileId: 'generic-credit' }];
+    const prof = detectBankProfile('MeuBancoXyz fatura 05/09 compra 10,00', DEFAULT_BANK_PROFILES, map);
+    expect(prof?.id).toBe('generic-credit');
+  });
+
+  it('getBankMap/learnBankKeyword persistem e sao idempotentes', async () => {
+    const adapter = new MemoryDbAdapter(createMemoryBackend());
+    const ds = new DataService({ adapter, deviceId: 'd', bus: new EventBus(), channel: null });
+    const { getBankMap, learnBankKeyword } = await import('../bankStatement');
+    expect(await getBankMap(ds)).toEqual([]);
+    await learnBankKeyword(ds, 'Unibanco', 'itau');
+    await learnBankKeyword(ds, 'unibanco', 'nubank'); // mesma keyword (case-insensitive) substitui
+    expect(await getBankMap(ds)).toEqual([{ keyword: 'unibanco', profileId: 'nubank' }]);
   });
 });

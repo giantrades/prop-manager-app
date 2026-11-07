@@ -54,6 +54,44 @@ export const DEFAULT_BANK_PROFILES: BankProfile[] = [
 ];
 
 const BANK_PROFILES_KEY = 'expense:import-profiles';
+const BANK_MAP_KEY = 'expense:import-bank-map';
+
+/** Fase 3 — associação aprendida: palavra-chave do documento → perfil escolhido. */
+export interface BankMapEntry { keyword: string; profileId: string; }
+
+export async function getBankMap(ds: DataService): Promise<BankMapEntry[]> {
+  const rec = await ds.meta.getKey(BANK_MAP_KEY);
+  const v = rec?.value;
+  return Array.isArray(v) ? v.filter((x) => x && typeof x.keyword === 'string' && typeof x.profileId === 'string') : [];
+}
+
+export async function learnBankKeyword(ds: DataService, keyword: string, profileId: string): Promise<BankMapEntry[]> {
+  const kw = String(keyword || '').trim();
+  if (!kw || !profileId) return getBankMap(ds);
+  const map = await getBankMap(ds);
+  const next = map.filter((m) => m.keyword.toLowerCase() !== kw.toLowerCase()).concat([{ keyword: kw, profileId }]);
+  await ds.meta.setKey(BANK_MAP_KEY, next);
+  return getBankMap(ds);
+}
+
+const BANK_STOPWORDS = new Set([
+  'extrato', 'fatura', 'conta', 'agencia', 'periodo', 'data', 'saldo', 'total', 'banco', 'cartao',
+  'pagina', 'cliente', 'titular', 'cnpj', 'cpf', 'valor', 'limite', 'vencimento', 'fechamento',
+  'lancamentos', 'comprovante', 'recibo', 'pix', 'debito', 'credito',
+]);
+
+/**
+ * Fase 3 — adivinha uma palavra-chave do banco a partir do cabeçalho (primeiras linhas):
+ * o token alfabético mais longo que não seja palavra genérica. Usado para "aprender" o
+ * banco quando o usuário troca o perfil.
+ */
+export function guessBankKeyword(lines: string[]): string | null {
+  const head = (lines || []).slice(0, 4).join(' ');
+  const tokens = head.split(/[^A-Za-zÀ-ÿ]+/).filter((t) => t.length >= 4);
+  const candidates = tokens.filter((t) => !BANK_STOPWORDS.has(t.toLowerCase()));
+  if (!candidates.length) return null;
+  return candidates.reduce((a, b) => (b.length > a.length ? b : a));
+}
 
 export async function getBankProfiles(ds: DataService): Promise<BankProfile[]> {
   const rec = await ds.meta.getKey(BANK_PROFILES_KEY);
@@ -85,9 +123,20 @@ export async function removeBankProfile(ds: DataService, id: string): Promise<Ba
   return getBankProfiles(ds);
 }
 
-/** Detecta o banco pelas palavras-chave no texto. Retorna o perfil (ou null). */
-export function detectBankProfile(text: string, profiles: BankProfile[] = DEFAULT_BANK_PROFILES): BankProfile | null {
+/** Detecta o banco pelas palavras-chave no texto. Consulta o mapa APRENDIDO (Fase 3)
+ *  primeiro, depois os nomes dos perfis. Retorna o perfil (ou null). */
+export function detectBankProfile(
+  text: string,
+  profiles: BankProfile[] = DEFAULT_BANK_PROFILES,
+  map: BankMapEntry[] = [],
+): BankProfile | null {
   const t = (text || '').toLowerCase();
+  for (const m of map) {
+    if (m.keyword && t.includes(m.keyword.toLowerCase())) {
+      const p = profiles.find((pp) => pp.id === m.profileId);
+      if (p) return p;
+    }
+  }
   for (const p of profiles) {
     if (p.id.startsWith('generic')) continue;
     if (t.includes(p.name.toLowerCase())) return p;

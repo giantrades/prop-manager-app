@@ -12,11 +12,12 @@ import { fmtMoney } from '@apps/ui/currency';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '@apps/ui/categoryIcons';
 import {
   House, UtensilsCrossed, Car, HeartPulse, Gamepad2, Landmark, TrendingUp,
-  Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Copy, Sparkles, ArrowRight,
+  Briefcase, GraduationCap, Tag, Receipt, Coins, Gift, Wallet, PiggyBank, Copy, Sparkles, ArrowRight, Activity,
 } from 'lucide-react';
 import {
   listCategories, getBudgets, saveBudget, budgetStatus, rolloverAmount, getRolloverCats,
   setRolloverCats, suggestBudget, expensesByCategoryPeriod, periodMonths, currentYm,
+  getSavingsGoal, saveSavingsGoal, savingsProgress,
 } from '@apps/lib/db';
 
 const ICONS = CATEGORY_ICONS;
@@ -34,14 +35,16 @@ export default function BudgetPage() {
   const { toast } = useToast();
   const ym = period.mode === 'month' ? (period.ym ?? currentYm()) : currentYm();
   const { loading, data, error, reload, finance } = useEngineData(async (f) => {
-    const [txs, categories, budgets, rolloverCats] = await Promise.all([
+    const [txs, categories, budgets, rolloverCats, savingsGoal, forecast, safeAvailable] = await Promise.all([
       f.ds.transactions.list(), listCategories(f.ds), getBudgets(f.ds), getRolloverCats(f.ds),
+      getSavingsGoal(f.ds), f.wealth.forecast(), f.wealth.safeAvailable(),
     ]);
-    return { txs, categories, budgets, rolloverCats };
+    return { txs, categories, budgets, rolloverCats, savingsGoal, forecast, safeAvailable };
   });
 
   const [editor, setEditor] = useState({ catId: '', amount: '' });
   const [busy, setBusy] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
 
   const view = useMemo(() => {
     if (!data) return null;
@@ -70,7 +73,7 @@ export default function BudgetPage() {
       const grp = catById.get(g.categoryId)?.group ?? 'geral';
       groupTotals.set(grp, Number(((groupTotals.get(grp) ?? 0) + g.total).toFixed(2)));
     }
-    return { cats, catById, rows, rolloverByCat, totalBudget, totalSpent, remaining, perDay, daysLeft, suggestions, groupTotals: [...groupTotals.entries()].sort((a, b) => b[1] - a[1]), monthsCount: periodMonths({ mode: 'month', ym }, data.txs).length };
+    return { cats, catById, rows, rolloverByCat, totalBudget, totalSpent, remaining, perDay, daysLeft, suggestions, groupTotals: [...groupTotals.entries()].sort((a, b) => b[1] - a[1]), monthsCount: periodMonths({ mode: 'month', ym }, data.txs).length, savings: savingsProgress(data.txs, data.savingsGoal ?? {}, ym) };
   }, [data, ym, period]);
 
   const doSave = useCallback(async (catId, amount) => {
@@ -85,6 +88,12 @@ export default function BudgetPage() {
       toast(`${catId} em ${Math.round(r.pct)}% da meta (${fmtMoney(r.spent, 'USD')} / ${fmtMoney(r.budget, 'USD')})`, { type: 'warn' });
     }
   }, [finance, ym, data, toast]);
+
+  const doSaveGoal = useCallback(async (amount) => {
+    const f = finance;
+    if (!f) return;
+    await saveSavingsGoal(f.ds, ym, Number(amount) || 0);
+  }, [finance, ym]);
 
   const copyPrevious = useCallback(async () => {
     const f = finance;
@@ -223,6 +232,34 @@ export default function BudgetPage() {
               <NavLink className="bp-btn-ghost" to="/expenses">Ver lançamentos <ArrowRight size={14} /></NavLink>
             </div>
           </div>
+
+          {/* Meta de poupança do mês (movida da página de Lançamentos) */}
+          <div className="dash-section">
+            <div className="dash-title"><span><PiggyBank size={14} /> Meta de poupança do mês</span></div>
+            <div className="bp-editor">
+              <input className="bp-input" type="number" min="0" step="0.01" value={goalInput} onChange={(e) => setGoalInput(e.target.value)} placeholder={view.savings.goal > 0 ? `Atual ${view.savings.goal}` : 'Ex.: 5000'} aria-label="Meta de poupança do mês" />
+              <button type="button" className="bp-btn" onClick={() => { doSaveGoal(goalInput); setGoalInput(''); }}>Salvar meta</button>
+            </div>
+            {view.savings.goal > 0 && (
+              <>
+                <div className="bp-row"><span className="bp-row-name">Poupado no mês (entrou − gastou)</span><span className={`bp-row-val ${view.savings.saved >= 0 ? 'bp-pos' : 'bp-neg'}`}>{fmtMoney(view.savings.saved, 'USD')}</span></div>
+                <div className="bp-bar-wrap"><span className="bp-bar" style={{ width: `${Math.max(0, Math.min(100, view.savings.pct ?? 0))}%` }} /></div>
+                <div className="bp-sub">{view.savings.reached ? 'Meta batida 🎉' : `Falta ${fmtMoney(view.savings.remaining, 'USD')} · ${Math.round(view.savings.pct ?? 0)}%`}</div>
+              </>
+            )}
+          </div>
+
+          {/* Projeção de caixa (mesma página do orçamento) */}
+          {data?.forecast && (
+            <div className="dash-section">
+              <div className="dash-title"><span><TrendingUp size={14} /> Projeção de caixa</span><NavLink className="dash-link" to="/forecast">ajustar parâmetros →</NavLink></div>
+              <div className="bp-row"><span className="bp-row-name">Caixa hoje</span><span className="bp-row-val">{fmtMoney(data.forecast.today, 'USD')}</span></div>
+              <div className="bp-row"><span className="bp-row-name">Em 30 dias</span><span className="bp-row-val">{fmtMoney(data.forecast.d30, 'USD')}</span></div>
+              <div className="bp-row"><span className="bp-row-name">Em 60 dias</span><span className="bp-row-val">{fmtMoney(data.forecast.d60, 'USD')}</span></div>
+              <div className="bp-row"><span className="bp-row-name">Em 90 dias</span><span className="bp-row-val">{fmtMoney(data.forecast.d90, 'USD')}</span></div>
+              <div className="bp-row"><span className="bp-row-name">Posso comprar (safe)</span><span className="bp-row-val">{fmtMoney(data.safeAvailable, 'USD')}</span></div>
+            </div>
+          )}
         </>
       )}
     </div>

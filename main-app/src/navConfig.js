@@ -74,9 +74,7 @@ export const MODULES = [
     children: [
       { to: "/gastos", label: "Resumo", icon: Receipt, end: true, keywords: "gastos dashboard resumo mobills" },
       { to: "/expenses", label: "Lançamentos", icon: Receipt, keywords: "despesas mobills lançamentos extrato" },
-      { to: "/gastos/orcamento", label: "Orçamento", icon: PiggyBank, keywords: "orçamento metas limite mensal quanto posso gastar" },
-      { to: "/gastos/categorias", label: "Categorias", icon: Tag, keywords: "categorias subcategorias ícones cores mesclar" },
-      { to: "/forecast", label: "Forecast", icon: LineChart, keywords: "previsão fluxo caixa" },
+      { to: "/gastos/orcamento", label: "Orçamento e Projeção", icon: PiggyBank, keywords: "orçamento metas limite mensal quanto posso gastar projeção fluxo caixa" },
     ],
   },
   {
@@ -117,6 +115,7 @@ export const MODULES = [
     dashboard: "/settings",
     children: [
       { to: "/settings", label: "Settings", icon: Settings, keywords: "configurações moeda backup" },
+      { to: "/gastos/categorias", label: "Categorias de gastos", icon: Tag, keywords: "categorias subcategorias ícones cores mesclar gastos" },
       { to: "/quantower", label: "Quantower", icon: Zap, keywords: "sync bridge live" },
       { to: "/import", label: "Dados Teste", icon: Database, keywords: "demo dados teste" },
     ],

@@ -11,7 +11,7 @@ import { Plus, Trash2, Pencil, Check, X, ChevronUp, ChevronDown, MoreHorizontal,
 import { CATEGORY_ICONS, ICON_CHOICES, CATEGORY_COLORS, COLOR_CHOICES, CategoryIcon } from '@apps/ui/categoryIcons';
 import {
   listCategories, saveCategory, mergeCategories, removeCategory, setCategoryOrder,
-  categoryUsage, getCategoryOrder, DEFAULT_CATEGORIES, subcategoriesOf,
+  expensesByCategoryPeriod, currentYm, getCategoryOrder, DEFAULT_CATEGORIES, subcategoriesOf,
 } from '@apps/lib/db';
 
 const slug = (s) => String(s).trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -22,20 +22,24 @@ export default function CategoriasPage() {
   const { toast } = useToast();
   const { loading, data, error, reload, finance } = useEngineData(async (f) => {
     const cats = await listCategories(f.ds);
-    const [usage, order] = await Promise.all([categoryUsage(f.ds, cats), getCategoryOrder(f.ds)]);
-    return { cats, usage, order };
+    const [txs, order] = await Promise.all([f.ds.transactions.list(), getCategoryOrder(f.ds)]);
+    return { cats, txs, order };
   });
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [openMenu, setOpenMenu] = useState(null); // id do row com menu aberto
   const [dialog, setDialog] = useState(null); // { mode:'merge'|'remove', cat }
+  // Clareza: o uso pode ser do mês atual ou de todo o histórico (valores mudam por mês).
+  const [usagePeriod, setUsagePeriod] = useState('month');
 
   const view = useMemo(() => {
     if (!data) return null;
     const cats = data.cats ?? [];
-    const usageBy = new Map((data.usage ?? []).map((u) => [u.categoryId, u]));
-    const max = Math.max(1, ...(data.usage ?? []).map((u) => u.total));
+    const period = usagePeriod === 'month' ? { mode: 'month', ym: currentYm() } : { mode: 'all' };
+    const usage = expensesByCategoryPeriod(data.txs ?? [], period, cats);
+    const usageBy = new Map(usage.map((u) => [u.categoryId, u]));
+    const max = Math.max(1, ...usage.map((u) => u.total));
     const roots = cats.filter((c) => !c.parent);
     // Ordena: raízes na ordem atual, com as filhas logo abaixo do pai.
     const ordered = [];
@@ -45,7 +49,7 @@ export default function CategoriasPage() {
     }
     for (const c of cats) if (!ordered.includes(c)) ordered.push(c);
     return { cats, usageBy, max, roots, ordered };
-  }, [data]);
+  }, [data, usagePeriod]);
 
   const startEdit = (c) => setForm({ id: c.id, name: c.name, icon: c.icon || 'Tag', color: c.color || 'gray', parent: c.parent ?? '' });
   const reset = () => setForm(EMPTY_FORM);
@@ -104,7 +108,7 @@ export default function CategoriasPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head"><h1 className="cmd-page-title">Categorias</h1></div>
-      <ModuleTabs module="gastos" />
+      <ModuleTabs module="system" />
 
       {error && view && <ActionableError stale error={error} onRetry={reload} label="as Categorias" />}
       {error && !view ? (
@@ -116,8 +120,17 @@ export default function CategoriasPage() {
           {/* Lista */}
           <section className="cat2-card cat2-list">
             <div className="cat2-card-head">
-              <span className="cat2-card-title">Suas categorias</span>
-              <span className="cat2-count">{view.cats.length}</span>
+              <div className="cat2-head-left">
+                <span className="cat2-card-title">Gastos por categoria</span>
+                <span className="cat2-sub">Só despesas (ganhos não têm categoria). O valor é o total do período escolhido.</span>
+              </div>
+              <div className="cat2-head-right">
+                <select className="cat2-input cat2-period" value={usagePeriod} onChange={(e) => setUsagePeriod(e.target.value)} aria-label="Período do uso">
+                  <option value="month">Mês atual</option>
+                  <option value="all">Todo o histórico</option>
+                </select>
+                <span className="cat2-count">{view.cats.length}</span>
+              </div>
             </div>
             <div className="cat2-rows">
               {view.ordered.map((c, i) => {
@@ -245,6 +258,10 @@ const CAT2_CSS = `
 .cat2-editor { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 14px; }
 .cat2-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .cat2-card-title { font-size: 13px; font-weight: 800; }
+.cat2-head-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cat2-head-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.cat2-sub { font-size: 11px; color: var(--muted, #a1a7b3); }
+.cat2-period { min-height: 34px; padding: 5px 8px; font-size: 12px; width: auto; }
 .cat2-count { font-size: 11px; font-weight: 700; color: var(--muted, #a1a7b3); background: rgba(255,255,255,0.05); border-radius: 999px; padding: 2px 9px; }
 .cat2-link { background: transparent; border: none; color: var(--brand, #7c5cff); font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px; }
 .cat2-list .cat2-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

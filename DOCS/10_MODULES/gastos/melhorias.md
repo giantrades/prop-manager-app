@@ -524,9 +524,16 @@
 - Chunk lazy (`ocr-*.js` + `tesseract` API ~16KB); worker/core/idioma são baixados na 1ª vez
   e ficam em cache do navegador/SW (offline depois). Gate: `tsc` 0 + build verde + **490 testes**.
 
-### Fase 3 (aprendizado) — planejado
-- Ao corrigir o preview, **aprender o perfil** do banco (colunas/posições) e as regras de
-  categoria/estabelecimento (reusa o H10); detecção de assinatura/merchant.
+### Fase 3 (aprendizado) — ✅ executada
+- **Perfil do banco aprendido**: ao trocar o perfil no preview, o app guarda a associação
+  `palavra-chave → perfil` no meta `expense:import-bank-map` (`getBankMap`/`learnBankKeyword`
+  + `guessBankKeyword`, que extrai o token mais forte do cabeçalho). `detectBankProfile`
+  consulta esse mapa **primeiro** — na próxima vez o banco já é reconhecido.
+- **Regras de categoria só das correções**: `correctionsToLearn` filtra os itens em que a
+  categoria escolhida difere da sugerida; `onImportBatch` aprende **apenas** essas (antes
+  aprendia de tudo, poluindo as regras). Aprende via `learnImportRule` (H10).
+- Testes: `guessBankKeyword`, `detectBankProfile` com mapa, `get/learnBankKeyword`,
+  `correctionsToLearn`. Gate: `tsc` 0 + build verde + **494 testes**.
 
 ### Dicas de captura (para o usuário)
 - Prefira o **PDF original** do banco (não print/foto). Se for foto: só a tabela, luz boa,

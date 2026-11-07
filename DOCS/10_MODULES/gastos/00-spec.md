@@ -127,6 +127,12 @@
 - UI: import aceita `image/*`; OCR → mesmo parser + reconciliação, com aviso de best-effort.
 - `tesseract.js` adicionado. Fase 3 (aprendizado de perfil) planejada.
 
+## Import PDF/foto — Fase 3 (aprendizado) — executado
+- Perfil do banco aprendido: meta `expense:import-bank-map` (`getBankMap`/`learnBankKeyword`/
+  `guessBankKeyword`); `detectBankProfile` consulta o mapa primeiro.
+- Regras de categoria aprendidas só das CORREÇÕES (`correctionsToLearn`).
+- Testes cobrindo as duas coisas. Import PDF/foto (Fases 1–3) concluído.
+
 ## Melhorias futuras (pasta melhorias.md)
 
 > Itens numerados em melhorias.md com Status [ ]. O agente do m�dulo deve ler a pasta,

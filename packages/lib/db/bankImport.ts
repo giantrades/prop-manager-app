@@ -396,6 +396,19 @@ export function parseBankFile(text: string, mapping?: CsvMapping): BankEntry[] {
 // H10 — regras editáveis em meta (expense:import-rules) + aprendizado
 // ---------------------------------------------------------------------------
 
+/**
+ * Fase 3 — correções a APRENDER: só os itens em que a categoria escolhida difere da
+ * sugerida (evita poluir as regras com tudo que foi confirmado). Entrada: as linhas do
+ * preview ({ description, categoryId, suggestedCategory }).
+ */
+export function correctionsToLearn(
+  entries: Array<{ description: string; categoryId: string | null; suggestedCategory: string | null }>,
+): Array<{ description: string; categoryId: string | null }> {
+  return entries
+    .filter((e) => !!e.categoryId && e.categoryId !== e.suggestedCategory)
+    .map((e) => ({ description: e.description, categoryId: e.categoryId }));
+}
+
 const IMPORT_RULES_KEY = 'expense:import-rules';
 
 function isRule(x: unknown): x is ImportRule {

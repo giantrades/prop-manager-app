@@ -23,10 +23,6 @@ import {
   Receipt,
 } from 'lucide-react';
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
-  BarChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-} from 'recharts';
-import {
   computeFreeCash, expensesByCategory, incomeByKind, monthlySeries,
   budgetStatus, categoryOf, recurringDue, detectRecurringCandidates, compareMonths,
   parseBankFile, buildBankImport,
@@ -35,9 +31,9 @@ import {
   openingBalance, dailyBalance, upcomingBills, upcomingSummary,
   detectCsvColumns, DEFAULT_IMPORT_RULES,
   detectBankProfile, parseStatementLines, reconcileStatement, DEFAULT_BANK_PROFILES,
-  cleanOcrLines,
+  cleanOcrLines, guessBankKeyword, correctionsToLearn,
 } from '@apps/lib/db';
-import type { ImportRule, CsvMapping, BankProfile, ParsedStatement, Reconciliation } from '@apps/lib/db';
+import type { ImportRule, CsvMapping, BankProfile, ParsedStatement, Reconciliation, BankMapEntry } from '@apps/lib/db';
 import QuickAddExpense from './QuickAddExpense';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from './categoryIcons';
 import { usePeriod } from '@apps/state';
@@ -233,9 +229,10 @@ interface ExpensesProps {
   onMakeRecurring?: (id: string, day: number) => void;
   savingsGoal?: Record<string, number>;
   onSaveSavingsGoal?: (ym: string, amount: number) => void;
-  onImportBatch?: (entries: Array<{ date: string; amount: number; description: string; kind: string; categoryId: string | null; externalId?: string }>, meta?: { accountId: string; currency: string }) => void;
+  onImportBatch?: (entries: Array<{ date: string; amount: number; description: string; kind: string; categoryId: string | null; externalId?: string }>, meta?: { accountId: string; currency: string; learn?: Array<{ description: string; categoryId: string | null }>; learnBank?: { keyword: string; profileId: string } | null }) => void;
   importRules?: ImportRule[];
   bankProfiles?: BankProfile[];
+  bankMap?: BankMapEntry[];
   rolloverCats?: string[];
   onToggleRollover?: (catId: string) => void;
   onAddInstallments?: (input: { accountId: string; currency: string; totalAmount: number; count: number; category: string; card?: string; cardId?: string; note?: string; firstDate: string }) => void;
@@ -252,6 +249,7 @@ export default function Expenses({
   onMakeRecurring, savingsGoal = {}, onSaveSavingsGoal, onImportBatch,
   importRules = DEFAULT_IMPORT_RULES,
   bankProfiles = DEFAULT_BANK_PROFILES,
+  bankMap = [],
   rolloverCats = [], onToggleRollover, onAddInstallments, onTransfer, onPayInvoice, onUpdateSeries, onDeleteSeries,
   currency = 'USD', loading = false,
 }: ExpensesProps) {
@@ -426,7 +424,7 @@ export default function Expenses({
   const [importMapping, setImportMapping] = useState<{ headers: string[]; raw: string } | null>(null);
   const [mapCols, setMapCols] = useState<CsvMapping>({ date: 0, desc: 1, amount: 2 });
   // Fase 1 — import de PDF: linhas extraídas + perfil + reconciliação (checksum).
-  const [pdfState, setPdfState] = useState<null | { lines: string[]; profileId: string; reconcile: Reconciliation; bankName: string }>(null);
+  const [pdfState, setPdfState] = useState<null | { lines: string[]; profileId: string; detectedProfileId: string; reconcile: Reconciliation; bankName: string }>(null);
   // Fase 2 — OCR de foto: progresso + origem (para o aviso de best-effort).
   const [ocrBusy, setOcrBusy] = useState<string | null>(null);
   const [ocrUsed, setOcrUsed] = useState(false);
@@ -449,14 +447,16 @@ export default function Expenses({
     });
   };
 
-  // Fase 1 — parseia as linhas do PDF com o perfil escolhido/detectado e monta a prévia.
+  // Fase 1/3 — parseia as linhas do PDF/OCR com o perfil escolhido/detectado (consulta o
+  // mapa aprendido) e monta a prévia.
   const runPdf = (lines: string[], profileId: string): void => {
     const text = lines.join('\n');
+    const detected = detectBankProfile(text, bankProfiles, bankMap);
     const prof = (profileId && bankProfiles.find((p) => p.id === profileId))
-      || detectBankProfile(text, bankProfiles)
+      || detected
       || bankProfiles[0];
     const parsed: ParsedStatement = parseStatementLines(lines, prof);
-    setPdfState({ lines, profileId: prof.id, reconcile: reconcileStatement(parsed), bankName: prof.name });
+    setPdfState({ lines, profileId: prof.id, detectedProfileId: detected?.id ?? '', reconcile: reconcileStatement(parsed), bankName: prof.name });
     const entries: BankEntry[] = parsed.entries.map((e) => ({
       date: e.date,
       amount: e.amount,
@@ -742,7 +742,7 @@ export default function Expenses({
           categories={cats}
           accounts={accounts}
           currency={currency}
-          onAdd={(p) => onAdd({ kind: 'expense', accountId: p.accountId, amount: p.amount, category: p.category, date: p.date, note: p.note })}
+          onAdd={(p) => onAdd({ kind: p.kind, accountId: p.accountId, amount: p.amount, category: p.category, date: p.date, note: p.note })}
         />
       )}
 
@@ -823,7 +823,7 @@ export default function Expenses({
 
       {/* D1 — Contas a pagar / a receber */}
       {bills.length > 0 && (
-        <div className="ex-bills" role="region" aria-label="Contas a pagar e a receber">
+        <div className="ex-bills ex-secondary" role="region" aria-label="Contas a pagar e a receber">
           <div className="ex-bills-head">
             <span className="ex-section-title">Contas a pagar / receber</span>
             <span className="ex-bills-sum">
@@ -851,7 +851,7 @@ export default function Expenses({
       )}
       {/* H9 — Próximas a vencer (15 dias) */}
       {upcoming.length > 0 && (
-        <div className="ex-section" role="region" aria-label="Próximas contas a vencer">
+        <div className="ex-section ex-secondary" role="region" aria-label="Próximas contas a vencer">
           <div className="ex-section-head">
             <span className="ex-section-title">Próximas a vencer (15 dias)</span>
             <span className="ex-bills-sum">
@@ -999,6 +999,10 @@ export default function Expenses({
               onClick={() => {
                 if (!importPreview) return;
                 try { localStorage.setItem('expense:import-account', importAccountId); } catch { /* noop */ }
+                // Fase 3 — aprende só as correções de categoria + o banco (se o perfil foi trocado).
+                const learn = correctionsToLearn(importPreview.entries);
+                const kw = pdfState && pdfState.profileId !== pdfState.detectedProfileId ? guessBankKeyword(pdfState.lines) : null;
+                const learnBank = kw && pdfState ? { keyword: kw, profileId: pdfState.profileId } : null;
                 onImportBatch?.(importPreview.entries.map((en) => ({
                   date: en.date,
                   amount: en.amount,
@@ -1006,7 +1010,7 @@ export default function Expenses({
                   kind: en.amount >= 0 ? 'income' : 'expense',
                   categoryId: en.categoryId ?? en.suggestedCategory ?? null,
                   externalId: en.fitid,
-                })), { accountId: importAccountId, currency: importCurrency });
+                })), { accountId: importAccountId, currency: importCurrency, learn, learnBank });
                 setImportPreview(null);
                 setPdfState(null);
                 setOcrUsed(false);
@@ -1071,7 +1075,7 @@ export default function Expenses({
 
       {/* Recorrentes pendentes */}
       {due.length > 0 && (
-        <div className="ex-recur" role="note">
+        <div className="ex-recur ex-secondary" role="note">
           <span className="ex-recur-title">{due.length} recorrente(s) pendente(s) em {MONTHS_PT[ym.month - 1]}</span>
           {due.map((t) => (
             <div key={t.id} className="ex-recur-row">
@@ -1084,7 +1088,7 @@ export default function Expenses({
 
       {/* A1 — candidatas a recorrente (mesma categoria+valor em 3+ meses) */}
       {candidates.length > 0 && (
-        <div className="ex-section">
+        <div className="ex-section ex-secondary">
           <div className="ex-section-title">Pode ser recorrente?</div>
           {candidates.map((c) => (
             <div key={`${c.categoryId}-${c.amount}`} className="ex-recur-row">
@@ -1286,165 +1290,10 @@ export default function Expenses({
         </div>
       )}
 
-      {/* Gráficos */}
-      {typeFilter !== 'income' && pieData.length > 0 && (
-        <div className="ex-section">
-          <div className="ex-section-title">Distribuição por categoria</div>
-          <div className="ex-pie">
-            <ResponsiveContainer width="100%" height={210}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={2}>
-                  {pieData.map((p) => (
-                    <Cell key={p.name} fill={`var(--${p.color},#5b6270)`} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} formatter={(v) => fmtMoney(v, currency)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#a1a7b3' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-      <div className="ex-section">
-        <div className="ex-section-title">Últimos 6 meses</div>
-        <div style={{ width: '100%', height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={barData}>
-              <CartesianGrid stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="ym" tick={{ fontSize: 10, fill: '#a1a7b3' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#a1a7b3' }} width={52} tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)} />
-              <Tooltip contentStyle={{ background: '#161b25', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} formatter={(v) => fmtMoney(v, currency)} />
-              <Legend wrapperStyle={{ fontSize: 11, color: '#a1a7b3' }} />
-              <Bar dataKey="Receitas" fill="var(--green,#2ecc71)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Despesas" fill="var(--red,#e74c3c)" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="Saldo" stroke="var(--brand,#7c5cff)" strokeWidth={2} dot={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* D4 — onde mais gastei (estabelecimento) */}
-      {typeFilter !== 'income' && merchants.length > 0 && (
-        <div className="ex-section">
-          <div className="ex-section-title">Onde mais gastei</div>
-          <div className="ex-compare">
-            {merchants.map((m) => (
-              <div key={m.name} className="ex-compare-row">
-                <span className="ex-compare-name">{m.name}</span>
-                <span className="ex-compare-vals">{m.count}x</span>
-                <span className="ex-compare-delta ex-neg-t">{fmtMoney(m.total, currency)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* D2 — fatura por cartão */}
-      {cardTotals.length > 0 && (
-        <div className="ex-section">
-          <div className="ex-section-title">Fatura por cartão (mês)</div>
-          <div className="ex-compare">
-            {cardTotals.map((c) => (
-              <div key={c.card} className="ex-compare-row">
-                <span className="ex-compare-name">{c.card}</span>
-                <span className="ex-compare-vals">no mês</span>
-                <span className="ex-compare-delta ex-neg-t">{fmtMoney(c.total, currency)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* H5 — faturas: estado + baixa (total/parcial) */}
-      {cardInvoices.length > 0 && (
-        <div className="ex-section">
-          <div className="ex-section-title">Faturas dos cartões</div>
-          {cardInvoices.map(({ card, status }) => (
-            <div key={card.id} className={`ex-invoice${status.estado === 'paga' ? ' paid' : ''}`}>
-              <CatIcon name="Landmark" color={status.estado === 'paga' ? 'green' : status.estado === 'parcial' ? 'yellow' : 'blue'} size={16} />
-              <div className="ex-invoice-main">
-                <div className="ex-invoice-top">
-                  <span className="ex-invoice-name">{card.name}</span>
-                  <span className={`ex-invoice-state ex-st-${status.estado}`}>{INVOICE_LABEL[status.estado]}</span>
-                </div>
-                <div className="ex-invoice-sub">
-                  competência {status.competencia} · fecha {status.fechamento.slice(0, 10)} · vence {status.vencimento.slice(0, 10)}
-                </div>
-                {status.pago > 0 && (
-                  <div className="ex-invoice-sub">pago {fmtMoney(status.pago, currency)} · restante {fmtMoney(status.restante, currency)}</div>
-                )}
-              </div>
-              <div className="ex-invoice-amt">
-                <span className="ex-invoice-total">{fmtMoney(status.total, currency)}</span>
-                {onPayInvoice && status.restante > 0 && (
-                  <button
-                    className="ex-btn ex-btn-sm ex-btn-primary"
-                    onClick={() => onPayInvoice({
-                      cardId: card.id, competencia: status.competencia,
-                      accountId: accounts[0]?.id ?? '', amount: status.restante, currency,
-                    })}
-                    disabled={!accounts[0]}
-                  >
-                    Pagar {fmtMoney(status.restante, currency)}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* A4 — comparativo com o mês passado + meta de economia */}
-      {typeFilter !== 'income' && (
-        <div className="ex-section">
-          <div className="ex-section-title">Vs mês passado</div>
-          {worstRise && (
-            <div className="ex-insight" role="note">
-              {catById.get(worstRise.categoryId)?.name ?? worstRise.categoryId} {worstRise.deltaPct >= 0 ? '▲' : '▼'} {worstRise.deltaPct >= 0 ? '+' : ''}{worstRise.deltaPct}% vs mês passado
-            </div>
-          )}
-          {comparison.length === 0 ? (
-            <div className="ex-hint">Sem despesas para comparar.</div>
-          ) : (
-            <div className="ex-compare">
-              {comparison.slice(0, 6).map((r) => {
-                const cat = catById.get(r.categoryId) ?? { name: r.categoryId, icon: 'Tag', color: 'gray' };
-                return (
-                  <div key={r.categoryId} className="ex-compare-row">
-                    <CatIcon name={cat.icon} color={cat.color} size={15} />
-                    <span className="ex-compare-name">{cat.name}</span>
-                    <span className="ex-compare-vals">{fmtMoney(r.cur, currency)}</span>
-                    <span className={`ex-compare-delta ${r.deltaPct == null ? '' : r.deltaPct > 0 ? 'ex-neg-t' : 'ex-pos-t'}`}>
-                      {r.deltaPct == null ? '—' : `${r.deltaPct >= 0 ? '+' : ''}${r.deltaPct}%`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <div className="ex-goal">
-            <span className="ex-goal-label">Meta de gasto do mês</span>
-            <div className="ex-form-inline">
-              <input
-                className="ex-input" type="number" min="0" step="0.01"
-                value={goalInput} onChange={(e) => setGoalInput(e.target.value)}
-                placeholder={goal > 0 ? `Atual ${goal}` : 'Ex.: 8000'} aria-label="Meta de gasto do mês"
-              />
-              <button className="ex-btn ex-btn-sm" onClick={() => { if (Number(goalInput) >= 0) { onSaveSavingsGoal?.(key, Number(goalInput)); setGoalInput(''); } }}>Salvar meta</button>
-            </div>
-            {goal > 0 && (
-              <div className="ex-budget-main" style={{ marginTop: 8 }}>
-                <div className="ex-budget-top"><span>Gasto {fmtMoney(fc.expenses, currency)} / meta {fmtMoney(goal, currency)}</span></div>
-                <div className="ex-bar-wrap"><span className="ex-bar" style={{ width: `${Math.min(100, (fc.expenses / goal) * 100)}%` }} /></div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Ganhos (não têm categoria; somem quando o filtro é por categoria) */}
       {typeFilter !== 'expense' && !catFilter && (
-        <div className="ex-section ex-list">
+        <div className="ex-section ex-list ex-ledger">
           <div className="ex-section-title">Ganhos</div>
           {gains.length === 0 ? (
             <div className="ex-empty" role="status">Nenhum ganho neste mês.</div>
@@ -1470,7 +1319,7 @@ export default function Expenses({
 
       {/* Gastos agrupados */}
       {typeFilter !== 'income' && (
-        <div className="ex-section ex-list">
+        <div className="ex-section ex-list ex-ledger">
           <div className="ex-section-head">
             <span className="ex-section-title">Lançamentos do mês</span>
             <span className="ex-typefilter" role="group" aria-label="Agrupar lançamentos">
@@ -1711,6 +1560,14 @@ const EX_CSS = `
 .ex-root.ex-filtering .ex-toolbar { order: -3; }
 .ex-root.ex-filtering .ex-results-head { order: -2; }
 .ex-root.ex-filtering .ex-list { order: -1; }
+/* Layout da página de Lançamentos: a LISTA sobe (order 1) e as seções de apoio
+   (contas a pagar, próximas, recorrentes) ficam abaixo (order 2). O resto fica no topo. */
+.ex-ledger { order: 1; }
+.ex-secondary { order: 2; }
+/* Cards de resumo mais compactos — o foco é a tabela. */
+.ex-hero { padding: 12px 14px; gap: 8px; }
+.ex-sum-card { padding: 10px 12px; border-radius: 12px; }
+.ex-sum-value { font-size: 18px; }
 .ex-results-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ex-results-head .ex-section-title { margin: 0; }
 .ex-search { max-width: 240px; }

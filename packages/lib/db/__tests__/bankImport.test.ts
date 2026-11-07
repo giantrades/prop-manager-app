@@ -11,6 +11,7 @@ import {
   getImportRules,
   saveImportRules,
   learnImportRule,
+  correctionsToLearn,
   DEFAULT_IMPORT_RULES,
 } from '../bankImport';
 import { MemoryDbAdapter, createMemoryBackend } from '../adapter';
@@ -181,5 +182,16 @@ describe('bankImport H10 — regras editaveis em meta', () => {
     const entries = [{ date: '2026-09-05T12:00:00.000Z', amount: -10, description: 'PADARIA DO ZE', suggestedCategory: null, key: 'k' }];
     const { result } = buildBankImport(entries, [], [{ keyword: 'PADARIA', categoryId: 'lazer' }]);
     expect(result.entries[0].suggestedCategory).toBe('lazer');
+  });
+});
+
+describe('Fase 3 — correcoes a aprender', () => {
+  it('aprende so quando a categoria escolhida difere da sugerida', () => {
+    const entries = [
+      { description: 'PADARIA X', categoryId: 'lazer', suggestedCategory: 'alimentacao' }, // corrigida
+      { description: 'UBER', categoryId: 'transporte', suggestedCategory: 'transporte' },   // igual
+      { description: 'SEM CAT', categoryId: null, suggestedCategory: 'moradia' },            // sem escolha
+    ];
+    expect(correctionsToLearn(entries)).toEqual([{ description: 'PADARIA X', categoryId: 'lazer' }]);
   });
 });
