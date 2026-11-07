@@ -154,6 +154,7 @@ export default function QuantowerPage() {
         <h1 className="cmd-page-title">Quantower Sync</h1>
         <button className="cmd-refresh" onClick={() => window.dispatchEvent(new Event('qt:autosync'))}>Sincronizar agora</button>
       </div>
+      <ModuleTabs module="system" />
       <div className="qt-sync" aria-label="Auto-sync">
         <div className="qt-sync-title">
           <span>Auto-sync (a cada 2 min) — {isRunning ? 'ligado' : 'DESLIGADO'}</span>
@@ -196,8 +197,6 @@ export default function QuantowerPage() {
           </div>
         </details>
       )}
-      <ModuleTabs module="system" />
-
       <div className="qt-card">
         <div className="qt-grid">
           <label className="qt-field"><span className="qt-label">Bridge URL</span>

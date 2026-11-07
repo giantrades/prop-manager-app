@@ -134,8 +134,7 @@ export default function BudgetPage() {
   return (
     <div className="cmd-page">
       <div className="cmd-page-head">
-        <h1 className="cmd-page-title">Orçamento</h1>
-        <NavLink className="cmd-refresh" to="/expenses" style={{ textDecoration: 'none' }}>Lançamentos →</NavLink>
+        <h1 className="cmd-page-title">Orçamento e Projeção</h1>
       </div>
       <ModuleTabsWithPeriod module="gastos" period={period} onChange={setPeriod} />
 
@@ -229,7 +228,6 @@ export default function BudgetPage() {
             )}
             <div className="bp-actions">
               <button type="button" className="bp-btn-ghost" disabled={busy} onClick={copyPrevious}><Copy size={14} /> Copiar do mês anterior</button>
-              <NavLink className="bp-btn-ghost" to="/expenses">Ver lançamentos <ArrowRight size={14} /></NavLink>
             </div>
           </div>
 

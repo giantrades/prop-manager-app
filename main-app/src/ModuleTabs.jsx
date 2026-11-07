@@ -22,7 +22,7 @@ export default function ModuleTabs({ module: moduleId }) {
     if (!mod) return;
     for (const c of mod.children) prefetchPage(c.to);
   }, [mod]);
-  if (!mod) return null;
+  if (!mod || mod.children.length <= 1) return null;
   return (
     <nav className="ws-tabs" aria-label={`Seções de ${mod.label}`}>
       {mod.children.map(({ to, label, end }) => (

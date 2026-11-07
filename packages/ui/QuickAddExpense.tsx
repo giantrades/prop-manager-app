@@ -93,11 +93,11 @@ export default function QuickAddExpense({
   }, [save]);
 
   return (
-    <div className="qa-root" role="group" aria-label="Lançamento rápido">
+    <div className={`qa-root qa-${kind}`} role="group" aria-label="Lançamento rápido">
       <div className="qa-top">
         <div className="qa-kind" role="group" aria-label="Tipo">
-          <button type="button" className={`qa-kind-btn${kind === 'expense' ? ' on' : ''}`} aria-pressed={kind === 'expense'} onClick={() => setKind('expense')}>Gasto</button>
-          <button type="button" className={`qa-kind-btn${kind === 'income' ? ' on' : ''}`} aria-pressed={kind === 'income'} onClick={() => setKind('income')}>Ganho</button>
+          <button type="button" className={`qa-kind-btn qa-kind-exp${kind === 'expense' ? ' on' : ''}`} aria-pressed={kind === 'expense'} onClick={() => setKind('expense')}>Gasto</button>
+          <button type="button" className={`qa-kind-btn qa-kind-inc${kind === 'income' ? ' on' : ''}`} aria-pressed={kind === 'income'} onClick={() => setKind('income')}>Ganho</button>
         </div>
         <label className="qa-amount-wrap">
           <span className="qa-currency">{currency === 'BRL' ? 'R$' : '$'}</span>
@@ -176,6 +176,14 @@ const QA_CSS = `
 .qa-kind { display: inline-flex; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 2px; }
 .qa-kind-btn { padding: 7px 12px; border: none; background: transparent; color: var(--muted, #a1a7b3); font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; min-height: 34px; }
 .qa-kind-btn.on { background: rgba(124,92,255,0.18); color: var(--text, #e7eaf0); }
+/* Diferenciação sutil Gasto (vermelho) × Ganho (verde) — no botão ativo e na borda do card. */
+.qa-kind-exp.on { background: rgba(231,76,60,0.20); color: #ff9a8f; }
+.qa-kind-inc.on { background: rgba(46,204,113,0.20); color: #7bed9f; }
+.qa-root.qa-expense { border-color: rgba(231,76,60,0.28); }
+.qa-root.qa-income { border-color: rgba(46,204,113,0.30); }
+.qa-root.qa-expense .qa-amount-wrap:focus-within { border-color: rgba(231,76,60,0.55); }
+.qa-root.qa-income .qa-amount-wrap:focus-within { border-color: rgba(46,204,113,0.55); }
+.qa-root.qa-income .qa-save { background: linear-gradient(135deg, #2ecc71, #27ae60); box-shadow: 0 6px 16px rgba(46,204,113,0.24); }
 .qa-amount-wrap { display: flex; align-items: center; gap: 6px; flex: 1 1 160px; background: #111623; border: 1px solid #273044; border-radius: 11px; padding: 3px 10px; min-height: 42px; }
 .qa-amount-wrap:focus-within { border-color: var(--brand, #7c5cff); }
 .qa-currency { color: var(--muted, #a1a7b3); font-weight: 700; }

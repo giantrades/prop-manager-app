@@ -159,7 +159,7 @@ export default function GastosDashboardPage() {
     const worstRise = comparison.filter((r) => r.deltaPct != null && r.deltaPct > 0).sort((a, b) => b.deltaPct - a.deltaPct)[0] ?? null;
     const goal = months.reduce((s, m) => s + (savingsGoal[m] ?? 0), 0);
     const recent = txs
-      .filter((t) => inPeriod(t.date, period, txs) && (t.kind === 'expense' || ['payout_in', 'rebate', 'income'].includes(t.kind)))
+      .filter((t) => inPeriod(t.date, period, txs) && (t.kind === 'expense' || ['payout_in', 'rebate', 'income', 'dividend', 'option_premium'].includes(t.kind)))
       .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 6);
     // Saldo em contas (valor único, convertido para a moeda de exibição).
     let balanceTotal = 0;

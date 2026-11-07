@@ -45,6 +45,8 @@ const INCOME_META: Record<string, { label: string; icon: string; color: string }
   payout_in: { label: 'Payouts', icon: 'Wallet', color: 'green' },
   rebate: { label: 'Rebates', icon: 'Coins', color: 'green' },
   income: { label: 'Outros ganhos', icon: 'Gift', color: 'blue' },
+  dividend: { label: 'Dividendos', icon: 'Coins', color: 'blue' },
+  option_premium: { label: 'Opções (prêmios)', icon: 'TrendingUp', color: 'brand' },
 };
 
 // H5 — rótulo do estado da fatura.
@@ -314,7 +316,7 @@ export default function Expenses({
     return g;
   }, [groups, typeFilter, catFilter]);  const monthTxs = useMemo(() => {
     let list = txs.filter((t) => (t.date || '').slice(0, 7) === key);
-    if (typeFilter === 'income') list = list.filter((t) => ['payout_in', 'rebate', 'income'].includes(t.kind));
+    if (typeFilter === 'income') list = list.filter((t) => ['payout_in', 'rebate', 'income', 'dividend', 'option_premium'].includes(t.kind));
     if (typeFilter === 'expense') list = list.filter((t) => t.kind === 'expense');
     if (catFilter) list = list.filter((t) => (categoryOf(t, cats) ?? 'outros') === catFilter);
     // I5 — filtros avançados.
@@ -392,7 +394,7 @@ export default function Expenses({
       const cur = acc.get(day) ?? { day, items: [] as Transaction[], total: 0 };
       cur.items.push(t);
       if (t.kind === 'expense') cur.total -= Math.abs(t.amount);
-      else if (['payout_in', 'rebate', 'income', 'dividend'].includes(t.kind)) cur.total += t.amount;
+      else if (['payout_in', 'rebate', 'income', 'dividend', 'option_premium'].includes(t.kind)) cur.total += t.amount;
       acc.set(day, cur);
     }
     return [...acc.values()].sort((a, b) => b.day.localeCompare(a.day));
