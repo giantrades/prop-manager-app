@@ -32,8 +32,8 @@ Abra no browser: `http://localhost:8787/status`
 ```json
 {
   "online": true,
-  "version": "2.1.1",
-  "build": "2.1.1-202601011200",
+  "version": "2.1.2",
+  "build": "2.1.2-202601011200",
   "platform": "quantower",
   "connectionsCount": 2,
   "connections": []
@@ -60,7 +60,12 @@ Abra no browser: `http://localhost:8787/status`
 | `/trades` | GET | Histórico de trades (optional: `?from=&to=`) |
 | `/positions` | GET | Posições abertas com P&L em tempo real |
 | `/orders` | GET | Ordens pendentes |
+| `/symbols` | GET | Instrumentos negociáveis (`?q=` filtra por nome) — autocomplete no app |
 | `/stream` | GET (SSE) | Stream contínuo de posições+ordens (`text/event-stream`, ~1.5s). Auth por `?token=` (EventSource não manda header) |
+
+> **Preço de `/orders`** (v2.1.2): ordens `stop` reportam o nível em `triggerPrice` (o `price`
+> costuma vir 0/-1 porque a execução é a mercado); `orderType`/`orderTypeId` vêm como texto
+> (`Limit`, `Stop`, `StopLimit`). O app mostra `triggerPrice` para stop e `price` para limit.
 
 > **P&L de `/trades`** (v2.1.1): cada trade fechado reporta `grossPnl` (soma dos fills de
 > saída), `fee` (**entrada + saída**, as duas pernas da comissão) e `netPnl = grossPnl − fee − swaps`.

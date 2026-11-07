@@ -367,6 +367,40 @@ export class QuantowerAdapter extends BaseAdapter {
   }
 
   /**
+   * Tipo de ordem em texto amigável. O bridge manda `orderTypeId` como string
+   * ("Limit"/"Stop"/"StopLimit"), mas versões antigas podem mandar o enum numérico.
+   */
+  static normalizeOrderType(raw) {
+    if (raw == null || raw === '') return '';
+    const asText = String(raw).trim();
+    if (/^\d+$/.test(asText)) {
+      const map = { 0: 'market', 1: 'limit', 2: 'stop', 3: 'stop limit', 4: 'trailing stop', 5: 'trailing stop limit' };
+      return map[Number(asText)] ?? asText;
+    }
+    const t = asText.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    if (t.includes('stop limit') || t.includes('stoplimit')) return 'stop limit';
+    if (t.includes('trailing') && t.includes('stop')) return t.includes('limit') ? 'trailing stop limit' : 'trailing stop';
+    if (t.includes('stop')) return 'stop';
+    if (t.includes('limit')) return 'limit';
+    if (t.includes('market')) return 'market';
+    return t;
+  }
+
+  /**
+   * Preço visível de uma ordem: stop usa `TriggerPrice` (o `Price` costuma vir 0/-1
+   * porque a execução é a mercado); limit/stop-limit usam `Price`.
+   */
+  static orderDisplayPrice(o) {
+    if (!o) return null;
+    const pos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+    const t = QuantowerAdapter.normalizeOrderType(o.type ?? o.orderTypeId ?? o.orderType);
+    const trigger = pos(o.triggerPrice ?? o.stopPrice);
+    const limit = pos(o.limitPrice ?? o.price);
+    if (t.includes('stop')) return trigger ?? limit;
+    return limit ?? trigger;
+  }
+
+  /**
    * Normaliza uma ordem do bridge para o shape do app. Aceita tanto o payload CRU do
    * `/orders` (e do SSE) quanto um já normalizado (idempotente). É estático para o SSE
    * (que recebe o payload cru) usar a MESMA normalização do polling.
@@ -374,6 +408,17 @@ export class QuantowerAdapter extends BaseAdapter {
   static normalizeOrder(o) {
     if (!o) return o;
     if (o.platformOrderId) return o; // já normalizado
+    const type = QuantowerAdapter.normalizeOrderType(o.orderTypeId ?? o.type ?? o.orderType);
+    const pos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+    const triggerPrice = pos(o.triggerPrice ?? o.stopPrice);
+    const rawPrice = pos(o.price);
+    const limitPrice = o.limitPrice != null ? pos(o.limitPrice) : (type.includes('limit') ? rawPrice : null);
+    const price = QuantowerAdapter.orderDisplayPrice({
+      type,
+      triggerPrice,
+      limitPrice,
+      price: rawPrice,
+    });
     return {
       platformOrderId: `qt_ord_${o.id}`,
       symbol: o.symbol || '',
@@ -381,8 +426,10 @@ export class QuantowerAdapter extends BaseAdapter {
       quantity: o.quantity ?? 0,
       filledQuantity: o.filledQuantity ?? 0,
       remainingQuantity: o.remainingQuantity ?? 0,
-      price: o.price ?? 0,
-      type: o.orderTypeId || o.type || '',
+      price: price ?? 0,
+      triggerPrice,
+      limitPrice,
+      type,
       status: o.status || '',
       // Ordem pendente ligada a uma posição (SL/TP costumam vir assim na plataforma).
       positionId: o.positionId || '',
@@ -397,6 +444,25 @@ export class QuantowerAdapter extends BaseAdapter {
     const data = await this._fetch('/orders');
     this._markSynced();
     return (data.orders || []).map((o) => QuantowerAdapter.normalizeOrder(o));
+  }
+
+  /**
+   * Símbolos disponíveis na plataforma (para autocomplete no ticket de ordem).
+   * Bridges antigas não têm `/symbols` — quem chama deve tratar a falha e usar
+   * os símbolos recentes como fallback.
+   */
+  async getSymbols(query) {
+    const data = await this._fetch('/symbols', { q: query || undefined });
+    this._markSynced();
+    return (data.symbols || [])
+      .map((s) => ({
+        symbol: s.symbol || s.name || '',
+        last: s.last ?? null,
+        bid: s.bid ?? null,
+        ask: s.ask ?? null,
+        lotSize: s.lotSize ?? 1,
+      }))
+      .filter((s) => s.symbol);
   }
 
   // ── Opções (F3) — DOCS/04_STAGE3_TRADING_OS/06-OPTIONS_BRIDGE_SPEC.md ──────

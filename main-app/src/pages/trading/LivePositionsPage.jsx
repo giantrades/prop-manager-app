@@ -12,7 +12,7 @@ import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { mergeOrdersIntoPositions } from '@apps/utils/livePositionSlTp';
 import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
 import { useWakeLock } from '../../useWakeLock';
-import { Activity, RefreshCw, X, Clock, Zap, ZapOff } from 'lucide-react';
+import { Activity, RefreshCw, X, Clock, Zap, ZapOff, Shield, Target } from 'lucide-react';
 
 /** Selo da firm (logo > ícone > nome colorido) para as linhas de posição/ordem. */
 function FirmChip({ firm }) {
@@ -55,6 +55,9 @@ export default function LivePositionsPage() {
   const [orderEdit, setOrderEdit] = useState({ qty: '', price: '', sl: '', tp: '' });
   const [partialId, setPartialId] = useState(null);
   const [partialQty, setPartialQty] = useState('');
+  const [ticket, setTicket] = useState(null);
+  const [trades, setTrades] = useState([]);
+  const [allSymbols, setAllSymbols] = useState([]);
   const [appAccounts, setAppAccounts] = useState([]);
   const [firms, setFirms] = useState([]);
   const [connFirms, setConnFirms] = useState({});
@@ -115,6 +118,33 @@ export default function LivePositionsPage() {
     return () => { alive = false; };
   }, [finance]);
 
+  // Histórico de trades: usado só para sugerir os ativos mais recentes por conta.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!finance?.ds) return;
+      try {
+        const list = await finance.ds.trades.list();
+        if (alive) setTrades(Array.isArray(list) ? list : []);
+      } catch { /* sem histórico ainda */ }
+    })();
+    return () => { alive = false; };
+  }, [finance]);
+
+  // Lista completa de símbolos da plataforma (autocomplete). Bridge antiga não tem
+  // /symbols — cai silenciosamente nos recentes/posições/ordens/trades.
+  useEffect(() => {
+    if (!online) return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const list = await adapter.getSymbols();
+        if (alive) setAllSymbols(list);
+      } catch { /* /symbols indisponível */ }
+    })();
+    return () => { alive = false; };
+  }, [online, adapter]);
+
   const appByPlatform = useMemo(() => {
     const m = new Map();
     for (const a of appAccounts) if (a.platformAccountId) m.set(a.platformAccountId, a);
@@ -142,6 +172,143 @@ export default function LivePositionsPage() {
     const dir = p.side === 'Short' ? -1 : 1;
     return ((cur - open) / open) * 100 * dir;
   };
+
+  // Tipo/preço de ordem: stop mostra o trigger (Price costuma vir 0 na plataforma).
+  const orderTypeLabel = useCallback((o) => {
+    const t = String(o?.type ?? '').toLowerCase();
+    if (t.includes('stop') && t.includes('limit')) return 'Stop Limit';
+    if (t.includes('stop')) return 'Stop';
+    if (t.includes('limit')) return 'Limit';
+    if (t.includes('market')) return 'Mercado';
+    return o?.type || '—';
+  }, []);
+  const orderPrice = useCallback((o) => {
+    const pos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
+    const t = String(o?.type ?? '').toLowerCase();
+    if (t.includes('stop')) return pos(o?.triggerPrice) ?? pos(o?.price);
+    return pos(o?.price) ?? pos(o?.limitPrice) ?? pos(o?.triggerPrice);
+  }, []);
+
+  // Conta do app -> platformAccountId (trades antigos só têm accountId).
+  const platformByAppId = useMemo(
+    () => new Map(appAccounts.filter((a) => a.platformAccountId).map((a) => [a.id, a.platformAccountId])),
+    [appAccounts],
+  );
+
+  // Ativos recentes por conta: posições/ordens abertas primeiro, depois trades recentes.
+  // O histórico (grande) é ordenado uma vez; posições/ordens mudam a cada ~1,5s via SSE.
+  const recentTradeSymbols = useMemo(() => {
+    const byAcct = new Map();
+    const add = (key, symbol, ts) => {
+      const k = String(key || '');
+      if (!symbol) return;
+      const arr = byAcct.get(k) ?? [];
+      const hit = arr.find((x) => x.symbol === symbol);
+      if (hit) hit.score = Math.max(hit.score, ts);
+      else arr.push({ symbol, score: ts });
+      byAcct.set(k, arr);
+    };
+    const push = (acct, symbol, ts) => { add(acct, symbol, ts); add('', symbol, ts); };
+    const sortedTrades = [...trades].sort((a, b) => (
+      Date.parse(b.exitDatetime || b.entryDatetime || 0) - Date.parse(a.exitDatetime || a.entryDatetime || 0)
+    ));
+    for (const t of sortedTrades) {
+      push(t.platformAccountId || platformByAppId.get(t.accountId), t.symbol, Date.parse(t.exitDatetime || t.entryDatetime || 0) || 0);
+    }
+    return byAcct;
+  }, [trades, platformByAppId]);
+
+  const recentByAccount = useMemo(() => {
+    const byAcct = new Map();
+    const add = (key, symbol, score) => {
+      const k = String(key || '');
+      if (!symbol) return;
+      const arr = byAcct.get(k) ?? [];
+      const hit = arr.find((x) => x.symbol === symbol);
+      if (hit) hit.score = Math.max(hit.score, score);
+      else arr.push({ symbol, score });
+      byAcct.set(k, arr);
+    };
+    const push = (acct, symbol, score) => { add(acct, symbol, score); add('', symbol, score); };
+    for (const [acct, arr] of recentTradeSymbols) for (const x of arr) add(acct, x.symbol, x.score);
+    for (const p of positions) push(p.platformAccountId, p.symbol, 3e15);
+    for (const o of orders) push(o.platformAccountId, o.symbol, 2e15);
+    for (const arr of byAcct.values()) arr.sort((a, b) => b.score - a.score);
+    return byAcct;
+  }, [recentTradeSymbols, positions, orders]);
+
+  const recentSymbols = useMemo(() => {
+    const list = recentByAccount.get(form.accountId || '') ?? [];
+    return list.slice(0, 10).map((x) => x.symbol);
+  }, [recentByAccount, form.accountId]);
+
+  // Opções do autocomplete: todos os símbolos da plataforma + o que já apareceu no app.
+  const symbolOptions = useMemo(() => {
+    const set = new Set();
+    for (const s of allSymbols) if (s.symbol) set.add(s.symbol);
+    for (const arr of recentByAccount.values()) for (const x of arr) set.add(x.symbol);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [allSymbols, recentByAccount]);
+
+  // Último preço conhecido por símbolo/conta (mapa O(1) — evita varrer o histórico a cada render).
+  const lastTradeQuote = useMemo(() => {
+    const map = new Map();
+    for (const t of trades) {
+      const sym = String(t.symbol || '').toUpperCase();
+      if (!sym) continue;
+      const ts = Date.parse(t.exitDatetime || t.entryDatetime || 0) || 0;
+      const acct = t.platformAccountId || platformByAppId.get(t.accountId) || '';
+      for (const key of [`${acct}|${sym}`, `|${sym}`]) {
+        const cur = map.get(key);
+        if (!cur || ts > cur.ts) map.set(key, { ts, t });
+      }
+    }
+    return map;
+  }, [trades, platformByAppId]);
+
+  // Preço atual para o símbolo digitado: posição ao vivo > cotação do bridge > último trade.
+  const quoteFor = useCallback((symbol, accountId) => {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return null;
+    const p = positions.find((x) => String(x.symbol).toUpperCase() === sym
+      && (!accountId || x.platformAccountId === accountId));
+    const fromPos = Number(p?.currentPrice);
+    if (Number.isFinite(fromPos) && fromPos > 0) return fromPos;
+    const s = allSymbols.find((x) => String(x.symbol).toUpperCase() === sym);
+    const fromSym = Number(s?.last ?? s?.bid ?? s?.ask);
+    if (Number.isFinite(fromSym) && fromSym > 0) return fromSym;
+    const best = (accountId && lastTradeQuote.get(`${accountId}|${sym}`)) || lastTradeQuote.get(`|${sym}`);
+    const fromTrade = Number(best?.t?.exitPrice ?? best?.t?.entryPrice);
+    return Number.isFinite(fromTrade) && fromTrade > 0 ? fromTrade : null;
+  }, [positions, allSymbols, lastTradeQuote]);
+
+  const formQuote = quoteFor(form.symbol, form.accountId);
+  const priceHint = useMemo(() => {
+    if (!formQuote || form.type === 'market') return '';
+    const price = Number(String(form.price).replace(',', '.'));
+    if (!Number.isFinite(price) || price <= 0) return '';
+    const buy = form.side === 'buy';
+    if (form.type === 'limit') {
+      if (buy && price > formQuote) return 'Limit de compra normalmente abaixo do preço atual.';
+      if (!buy && price < formQuote) return 'Limit de venda normalmente acima do preço atual.';
+    } else if (form.type === 'stop') {
+      if (buy && price < formQuote) return 'Stop de compra normalmente acima do preço atual.';
+      if (!buy && price > formQuote) return 'Stop de venda normalmente abaixo do preço atual.';
+    }
+    return '';
+  }, [formQuote, form.type, form.side, form.price]);
+
+  // Ordens pendentes ligadas a uma posição (por positionId ou conta+símbolo+lado oposto).
+  const linkedOrders = useCallback((p) => {
+    const pid = String(p.positionId ?? '').replace(/^qt_pos_/, '');
+    return orders.filter((o) => {
+      const opid = String(o.positionId ?? '').replace(/^qt_pos_/, '');
+      if (pid && opid) return pid === opid;
+      return o.symbol === p.symbol
+        && (!o.platformAccountId || o.platformAccountId === p.platformAccountId)
+        && (p.side === 'Long' ? o.side === 'Short' : o.side === 'Long');
+    });
+  }, [orders]);
 
   const loadOrders = useCallback(async () => {
     if (!online) return;
@@ -211,6 +378,50 @@ export default function LivePositionsPage() {
       }
     } catch (err) {
       toast(`Falha ao atualizar ${p.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
+  // Ticket rápido de proteção: cria/edita SL e/ou TP da posição via `modifyPosition`
+  // (o bridge cria a ordem Stop/Limit de fechamento quando ela ainda não existe).
+  const openTicket = (p) => {
+    setTicket({
+      id: p.platformPositionId,
+      sl: p.sl != null ? String(p.sl) : '',
+      tp: p.tp != null ? String(p.tp) : '',
+    });
+  };
+
+  const sendTicket = async (p) => {
+    const sl = num(ticket?.sl);
+    const tp = num(ticket?.tp);
+    if (!sl && !tp) { toast('Informe o SL e/ou o TP.', { type: 'warn' }); return; }
+    const cur = Number(p.currentPrice);
+    if (Number.isFinite(cur) && cur > 0) {
+      const long = p.side === 'Long';
+      if (sl && ((long && sl >= cur) || (!long && sl <= cur))) {
+        toast(`SL de ${long ? 'compra' : 'venda'} deve ficar ${long ? 'abaixo' : 'acima'} de ${fmtPrice(cur)}.`, { type: 'warn' });
+        return;
+      }
+      if (tp && ((long && tp <= cur) || (!long && tp >= cur))) {
+        toast(`TP de ${long ? 'compra' : 'venda'} deve ficar ${long ? 'acima' : 'abaixo'} de ${fmtPrice(cur)}.`, { type: 'warn' });
+        return;
+      }
+    }
+    setBusy(p.platformPositionId);
+    try {
+      const res = await submitOrQueue(adapter, { kind: 'modify', payload: { platformPositionId: p.platformPositionId, sl: sl ?? null, tp: tp ?? null } });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — SL/TP de ${p.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`SL/TP enviados — ${p.symbol}`);
+        setTicket(null);
+        setEdits((prev) => { const n = { ...prev }; delete n[p.platformPositionId]; return n; });
+        refreshStatuses();
+        loadOrders();
+      }
+    } catch (err) {
+      toast(`Falha ao enviar SL/TP de ${p.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
   };
 
@@ -325,7 +536,7 @@ export default function LivePositionsPage() {
     setEditOrderId(o.platformOrderId);
     setOrderEdit({
       qty: String(o.remainingQuantity ?? o.quantity ?? ''),
-      price: String(o.price ?? ''),
+      price: String(orderPrice(o) ?? ''),
       sl: '',
       tp: '',
     });
@@ -465,6 +676,7 @@ export default function LivePositionsPage() {
                       <input className={`lp-input${tpDerived ? ' lp-input-inferred' : ''}`} type="number" step="0.00001" value={tpVal} placeholder="TP" title={tpDerived ? 'Sugerido pelas ordens pendentes — confira antes de salvar' : undefined} onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}${tpDerived ? ' (sugerido)' : ''}`} />
                       <span className="lp-actions">
                         {dirty && <button className="lp-btn lp-btn-primary" disabled={busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>}
+                        <button className={`lp-btn${ticket?.id === p.platformPositionId ? ' lp-btn-on' : ''}`} onClick={() => (ticket?.id === p.platformPositionId ? setTicket(null) : openTicket(p))} disabled={busy === p.platformPositionId} aria-expanded={ticket?.id === p.platformPositionId} title="Criar/editar Stop Loss e Take Profit desta posição"><Shield size={12} /> SL/TP</button>
                         <button className={`lp-btn${partial ? ' lp-btn-on' : ''}`} onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId} aria-expanded={partial}>Parcial</button>
                         {confirming ? (
                           <>
@@ -476,6 +688,40 @@ export default function LivePositionsPage() {
                         )}
                       </span>
                     </div>
+                    {ticket?.id === p.platformPositionId && (
+                      <div className="lp-ticket" role="group" aria-label={`Proteger ${p.symbol}`}>
+                        <div className="lp-ticket-head">
+                          <span><Shield size={13} /> Proteger <b>{p.symbol}</b></span>
+                          <span className="lp-muted">{p.side === 'Long' ? 'venda' : 'compra'} · qtd {p.quantity} · atual {fmtPrice(p.currentPrice)}</span>
+                        </div>
+                        <div className="lp-ticket-fields">
+                          <label className="lp-ticket-field">
+                            <span>Stop Loss</span>
+                            <input className="lp-input" type="number" step="0.00001" placeholder={p.sl != null ? String(p.sl) : 'preço do SL'} value={ticket.sl} onChange={(ev) => setTicket((t) => ({ ...t, sl: ev.target.value }))} aria-label={`Stop loss de ${p.symbol}`} />
+                          </label>
+                          <label className="lp-ticket-field">
+                            <span>Take Profit</span>
+                            <input className="lp-input" type="number" step="0.00001" placeholder={p.tp != null ? String(p.tp) : 'preço do TP'} value={ticket.tp} onChange={(ev) => setTicket((t) => ({ ...t, tp: ev.target.value }))} aria-label={`Take profit de ${p.symbol}`} />
+                          </label>
+                          <span className="lp-actions">
+                            <button className="lp-btn lp-btn-primary" disabled={busy === p.platformPositionId} onClick={() => sendTicket(p)}>Enviar SL/TP</button>
+                            <button className="lp-btn lp-btn-ico" onClick={() => setTicket(null)} aria-label="Fechar"><X size={13} /></button>
+                          </span>
+                        </div>
+                        {linkedOrders(p).length > 0 && (
+                          <div className="lp-ticket-orders">
+                            <span className="lp-muted">Ordens ligadas:</span>
+                            {linkedOrders(p).map((o) => (
+                              <span key={o.platformOrderId} className="lp-linked">
+                                {String(o.type ?? '').includes('stop') ? <Shield size={11} /> : <Target size={11} />}
+                                {orderTypeLabel(o)} @ {fmtPrice(orderPrice(o))}
+                                <button className="lp-btn lp-btn-ico lp-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)} aria-label={`Cancelar ${orderTypeLabel(o)} de ${p.symbol}`}><X size={11} /></button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {partial && (
                       <div className="lp-partial" role="group" aria-label={`Fechar parcial ${p.symbol}`}>
                         <span className="lp-partial-hint">Fechar parcialmente (ordem oposta a mercado — contas <b>netting</b>)</span>
@@ -496,26 +742,48 @@ export default function LivePositionsPage() {
             <>
           <h2 className="lp-section">Ordens</h2>
 
-          <div className="lp-neworder">
-            <select className="lp-input" value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} aria-label="Conta da ordem">
-              <option value="">Conta…</option>
-              {accounts.map((a) => <option key={a.platformAccountId} value={a.platformAccountId}>{a.name}</option>)}
-            </select>
-            <input className="lp-input" placeholder="Símbolo" value={form.symbol} onChange={(e) => setForm((f) => ({ ...f, symbol: e.target.value }))} aria-label="Símbolo da ordem" />
-            <select className="lp-input" value={form.side} onChange={(e) => setForm((f) => ({ ...f, side: e.target.value }))} aria-label="Lado da ordem">
-              <option value="buy">Compra</option>
-              <option value="sell">Venda</option>
-            </select>
-            <select className="lp-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} aria-label="Tipo da ordem">
-              <option value="limit">Limit</option>
-              <option value="stop">Stop</option>
-              <option value="market">Mercado</option>
-            </select>
-            <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} aria-label="Quantidade da ordem" />
-            <input className="lp-input" type="number" step="0.00001" placeholder={form.type === 'market' ? 'a mercado' : 'Preço'} value={form.price} disabled={form.type === 'market'} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} aria-label="Preço da ordem" />
-            <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={form.sl} onChange={(e) => setForm((f) => ({ ...f, sl: e.target.value }))} aria-label="Stop loss da ordem" />
-            <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={form.tp} onChange={(e) => setForm((f) => ({ ...f, tp: e.target.value }))} aria-label="Take profit da ordem" />
-            <button className="ac3-btn ac3-btn-sm" disabled={busy === 'new-order'} onClick={placeOrder}>Enviar</button>
+          <div className="lp-orderbox">
+            <div className="lp-neworder">
+              <select className="lp-input" value={form.accountId} onChange={(e) => setForm((f) => ({ ...f, accountId: e.target.value }))} aria-label="Conta da ordem">
+                <option value="">Conta…</option>
+                {accounts.map((a) => <option key={a.platformAccountId} value={a.platformAccountId}>{a.name}</option>)}
+              </select>
+              <input className="lp-input" list="lp-symbols" placeholder="Símbolo (ou recente)" value={form.symbol} onChange={(e) => setForm((f) => ({ ...f, symbol: e.target.value }))} aria-label="Símbolo da ordem" autoComplete="off" title="Digite para filtrar ou clique em um ativo recente abaixo" />
+              <select className="lp-input" value={form.side} onChange={(e) => setForm((f) => ({ ...f, side: e.target.value }))} aria-label="Lado da ordem">
+                <option value="buy">Compra</option>
+                <option value="sell">Venda</option>
+              </select>
+              <select className="lp-input" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} aria-label="Tipo da ordem">
+                <option value="limit">Limit</option>
+                <option value="stop">Stop</option>
+                <option value="market">Mercado</option>
+              </select>
+              <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} aria-label="Quantidade da ordem" />
+              <input className="lp-input" type="number" step="0.00001" placeholder={form.type === 'market' ? 'a mercado' : form.type === 'stop' ? 'Gatilho' : 'Preço limite'} value={form.price} disabled={form.type === 'market'} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} aria-label="Preço da ordem" />
+              <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={form.sl} onChange={(e) => setForm((f) => ({ ...f, sl: e.target.value }))} aria-label="Stop loss da ordem" />
+              <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={form.tp} onChange={(e) => setForm((f) => ({ ...f, tp: e.target.value }))} aria-label="Take profit da ordem" />
+              <button className="ac3-btn ac3-btn-sm" disabled={busy === 'new-order'} onClick={placeOrder}>Enviar</button>
+            </div>
+            <datalist id="lp-symbols">
+              {symbolOptions.map((s) => <option key={s} value={s} />)}
+            </datalist>
+            {recentSymbols.length > 0 && (
+              <div className="lp-recent" role="group" aria-label="Ativos recentes">
+                <span className="lp-recent-label">Recentes{form.accountId ? ' desta conta' : ''}:</span>
+                {recentSymbols.map((s) => (
+                  <button type="button" key={s} className={`lp-chip${form.symbol.toUpperCase() === s.toUpperCase() ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, symbol: s }))}>{s}</button>
+                ))}
+              </div>
+            )}
+            {form.symbol.trim() && (
+              <div className="lp-quote" role="status">
+                <span>Preço atual <b>{form.symbol.trim().toUpperCase()}</b>: <b>{formQuote != null ? fmtPrice(formQuote) : '—'}</b></span>
+                {form.type !== 'market' && formQuote != null && (
+                  <button type="button" className="lp-btn" onClick={() => setForm((f) => ({ ...f, price: String(formQuote) }))}>Usar preço</button>
+                )}
+                {priceHint && <span className="lp-warn">{priceHint}</span>}
+              </div>
+            )}
           </div>
 
           {orders.length === 0 ? (
@@ -530,9 +798,9 @@ export default function LivePositionsPage() {
                   <div className="lp-row lp-ordrow">
                     <span className="lp-sym">{o.symbol}</span>
                     <span className={`lp-side ${o.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{o.side}</span>
-                    <span className="lp-num">{o.type || '—'}</span>
+                    <span className="lp-num">{orderTypeLabel(o)}</span>
                     <span className="lp-num">{o.remainingQuantity ?? o.quantity}</span>
-                    <span className="lp-num">{fmtPrice(o.price)}</span>
+                    <span className="lp-num" title={String(o.type ?? '').includes('stop') ? 'Preço de gatilho (trigger)' : 'Preço limite'}>{fmtPrice(orderPrice(o))}</span>
                     <span className="lp-num">{o.status || '—'}</span>
                     <span className="lp-acct">{firmOf(o) && <FirmChip firm={firmOf(o)} />}{accountNameOf(o)}</span>
                     <span className="lp-actions">
@@ -600,7 +868,7 @@ const LP_CSS = `
    alinhados à DIREITA (título e célula juntos); SL/TP com largura fixa (não espalham). */
 .lp-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.8fr) 66px 56px 108px 108px 108px 80px 118px 118px minmax(150px, auto);
+  grid-template-columns: minmax(150px, 1.8fr) 66px 56px 108px 108px 108px 80px 118px 118px minmax(160px, 200px);
   gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px;
 }
 .lp-row > * { min-width: 0; white-space: nowrap; }
@@ -624,7 +892,7 @@ const LP_CSS = `
 .lp-input:focus { outline: none; border-color: var(--brand, #7c5cff); }
 /* SL/TP sugeridos pelas ordens pendentes: itálico + borda tracejada (não é valor confirmado). */
 .lp-input-inferred { color: var(--muted, #a1a7b3); border-style: dashed; font-style: italic; }
-.lp-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; justify-content: flex-end; }
+.lp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; justify-content: flex-end; }
 /* Botões de linha: compactos, para caber no grid da tabela (antes usavam .ac3-btn, 40px de altura). */
 .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e7eaf0); cursor: pointer; white-space: nowrap; font-family: inherit; }
 .lp-btn:hover:not(:disabled) { filter: brightness(1.14); }
@@ -638,6 +906,25 @@ const LP_CSS = `
 .lp-partial { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin: -2px 0 6px; border-radius: 10px; background: rgba(231,76,60,0.06); border: 1px dashed rgba(231,76,60,0.35); }
 .lp-partial-hint { font-size: 11px; color: var(--muted, #a1a7b3); flex: 1; min-width: 180px; }
 .lp-partial .lp-input { max-width: 110px; }
+.lp-orderbox { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.lp-recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lp-recent-label { font-size: 11px; color: var(--muted, #a1a7b3); }
+.lp-chip { padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text, #e7eaf0); font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.lp-chip:hover { border-color: rgba(124,92,255,0.5); }
+.lp-chip.on { background: rgba(124,92,255,0.18); border-color: rgba(124,92,255,0.6); color: #fff; }
+.lp-quote { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 11px; color: var(--muted, #a1a7b3); }
+.lp-quote b { color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; }
+.lp-warn { color: var(--yellow, #e1b12c); }
+.lp-ticket { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin: -2px 0 6px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px dashed rgba(124,92,255,0.35); }
+.lp-ticket-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.lp-ticket-head > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.lp-ticket-head .lp-muted { margin-left: 0; }
+.lp-ticket-fields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.lp-ticket-field { display: flex; flex-direction: column; gap: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted, #a1a7b3); }
+.lp-ticket-orders { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; }
+.lp-ticket-orders .lp-muted { margin-left: 0; }
+.lp-linked { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); font-size: 11px; font-variant-numeric: tabular-nums; }
+.lp-linked .lp-btn-ico { min-height: 22px; padding: 1px 5px; }
 @media (max-width: 900px) { .lp-orderedit { grid-template-columns: 1fr 1fr; } }
 .lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
 @media (max-width: 900px) {
@@ -646,6 +933,8 @@ const LP_CSS = `
   .lp-sym { grid-column: 1 / -1; }
   .lp-actions { grid-column: 1 / -1; }
   .lp-neworder { grid-template-columns: 1fr 1fr; }
+  .lp-ticket-fields { grid-template-columns: 1fr 1fr; }
+  .lp-ticket-fields > .lp-actions { grid-column: 1 / -1; }
 }
 `;
 if (typeof document !== 'undefined' && !document.getElementById('lp-styles')) {

@@ -29,6 +29,7 @@ export interface LiveOrder {
   orderTypeId?: string; // cru do bridge
   status?: string;
   price?: number;
+  triggerPrice?: number | null; // stop orders: nível real fica aqui
   quantity?: number;
   remainingQuantity?: number;
   platformAccountId?: string;
@@ -72,10 +73,17 @@ function kindOf(o: LiveOrder, entry: number | null, long: boolean): 'sl' | 'tp' 
   const t = String(o.type ?? o.orderTypeId ?? '').toLowerCase();
   if (t.includes('stop')) return 'sl';
   if (t.includes('limit')) return 'tp';
-  const price = num(o.price);
+  const price = priceOf(o);
   if (price == null || entry == null) return null;
   if (long) return price < entry ? 'sl' : price > entry ? 'tp' : null;
   return price > entry ? 'sl' : price < entry ? 'tp' : null;
+}
+
+/** Preço efetivo: stop carrega o nível em `triggerPrice`; limit em `price`. */
+function priceOf(o: LiveOrder): number | null {
+  const t = String(o.type ?? o.orderTypeId ?? '').toLowerCase();
+  if (t.includes('stop')) return num(o.triggerPrice) ?? num(o.price);
+  return num(o.price) ?? num(o.triggerPrice);
 }
 
 function oppSide(o: LiveOrder, long: boolean): boolean {
@@ -125,14 +133,14 @@ export function mergeOrdersIntoPositions(
         (!acctOf(o) || !pAcct || acctOf(o) === pAcct),
       );
 
-    cands = cands.filter((o) => oppSide(o, long) && num(o.price) != null);
+    cands = cands.filter((o) => oppSide(o, long) && priceOf(o) != null);
     if (cands.length === 0) return p;
 
     let sl = p.sl ?? null;
     let tp = p.tp ?? null;
     const sorted = [...cands].sort((a, b) => qtyDist(a, q) - qtyDist(b, q));
     for (const o of sorted) {
-      const price = num(o.price);
+      const price = priceOf(o);
       if (price == null) continue;
       const k = kindOf(o, entry, long);
       if (k === 'sl' && sl == null) sl = price;

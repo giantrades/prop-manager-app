@@ -16,6 +16,7 @@
 //   GET /trades     → trade history (optional ?from=&to=)
 //   GET /positions  → open positions with live P&L
 //   GET /orders     → pending orders
+//   GET /symbols    → tradeable instruments (autocomplete)
 // ============================================================
 //
 // CORREÇÕES NESTA REVISÃO (contra a API real do Quantower, confirmada em
@@ -98,7 +99,7 @@ namespace QuantowerBridge
         private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromMinutes(10);
         private static readonly object _idempotencyLock = new();
 
-        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/health", "/stream", "/options/underlyings", "/options/expiries", "/options/chain", "/options/positions" };
+        private static readonly string[] EndpointsList = new[] { "/status", "/accounts", "/trades", "/positions", "/orders", "/symbols", "/health", "/stream", "/options/underlyings", "/options/expiries", "/options/chain", "/options/positions" };
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
@@ -477,6 +478,7 @@ namespace QuantowerBridge
                     // keep as-is
                 }
                 else if (path.StartsWith("/orders")) path = "/orders";
+                else if (path.StartsWith("/symbols")) path = "/symbols";
                 else if (path.StartsWith("/options/underlyings")) path = "/options/underlyings";
                 else if (path.StartsWith("/options/expiries")) path = "/options/expiries";
                 else if (path.StartsWith("/options/chain")) path = "/options/chain";
@@ -529,6 +531,9 @@ namespace QuantowerBridge
                         break;
                     case "/orders":
                         json = BuildOrdersJson();
+                        break;
+                    case "/symbols":
+                        json = BuildSymbolsJson(request.QueryString["q"]);
                         break;
                     case "/options/underlyings":
                         json = BuildOptionUnderlyingsJson();
@@ -978,7 +983,8 @@ namespace QuantowerBridge
         // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco.
         // 2.1.1: fee das ENTRADAS passa a ser contabilizada (antes ficava 0 e o netPnL
         //        ignorava metade das taxas — saldo da conta divergia da soma dos trades).
-        private const string BridgeVersion = "2.1.1";
+        // 2.1.2: /symbols (autocomplete) + triggerPrice/orderType nas ordens (stop correto).
+        private const string BridgeVersion = "2.1.2";
         // Prefixo usa a PRÓPRIA BridgeVersion (antes era "2.0.0-" hardcoded e confundia:
         // a ponte 2.1.0 aparecia com build "2.0.0-...").
         private static string BuildIdentifier =>
@@ -1471,6 +1477,38 @@ namespace QuantowerBridge
             return JsonSerializer.Serialize(new { positions, count = positions.Count, timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
         }
 
+        // ── /symbols: lista de instrumentos para autocomplete no ticket de ordem ──
+        // Só símbolos negociáveis (fora opções). `q` filtra por nome. Cap em 2000 no
+        // modo "tudo" para não trafegar uma lista gigante pelo Funnel/celular.
+        private static string BuildSymbolsJson(string query)
+        {
+            var list = new List<object>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string q = (query ?? "").Trim().ToUpperInvariant();
+            try
+            {
+                foreach (var s in Core.Instance.Symbols)
+                {
+                    if (IsOptionSymbol(s)) continue;
+                    string name = s.Name ?? "";
+                    if (string.IsNullOrEmpty(name)) continue;
+                    if (q.Length > 0 && name.ToUpperInvariant().IndexOf(q, StringComparison.Ordinal) < 0) continue;
+                    if (!seen.Add(name)) continue;
+                    list.Add(new
+                    {
+                        symbol = name,
+                        last = SafeD(s.Last),
+                        bid = SafeD(s.Bid),
+                        ask = SafeD(s.Ask),
+                        lotSize = s.LotSize > 0 ? s.LotSize : 1
+                    });
+                    if (q.Length == 0 && list.Count >= 2000) break;
+                }
+            }
+            catch (Exception ex) { FileLog($"[SYMBOLS] erro: {ex.Message}"); }
+            return JsonSerializer.Serialize(new { symbols = list, count = list.Count, timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
+        }
+
         // [RECONSTRUÍDO] este método tinha sido colado cortado no meio,
         // faltando o corpo do foreach, a variável "result" e a chave de fechamento.
         private static string BuildOrdersJson()
@@ -1508,8 +1546,11 @@ namespace QuantowerBridge
                     quantity = order.TotalQuantity,
                     filledQuantity = order.FilledQuantity,
                     remainingQuantity = order.RemainingQuantity,
+                    // Limit/stop-limit usam Price; stop usa TriggerPrice (Price fica 0/-1).
                     price = order.Price,
+                    triggerPrice = order.TriggerPrice,
                     orderTypeId = order.OrderTypeId,
+                    orderType = order.OrderType.ToString(),
                     status = order.Status.ToString(),
                     positionId = order.PositionId ?? "",
                     accountId,
