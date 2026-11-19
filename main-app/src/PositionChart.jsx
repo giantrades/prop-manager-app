@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CandlestickSeries, CrosshairMode, createChart } from 'lightweight-charts';
 import { fmtMoney } from '@apps/ui/currency';
-import { X, SlidersHorizontal, Send } from 'lucide-react';
+import { X, SlidersHorizontal, Send, RefreshCw } from 'lucide-react';
 
 const PERIODS = [
   ['1m', '1m'],
@@ -53,7 +53,7 @@ function fmtBarTime(t, period) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function PositionChart({ position, order, adapter, online, onClose, onSaveLevels, onPlaceOrder }) {
+export default function PositionChart({ position, order, adapter, online, onClose, onRefresh, onSaveLevels, onPlaceOrder }) {
   const isOrder = !position && !!order;
   const symbol = String(position?.symbol ?? order?.symbol ?? '').toUpperCase();
   const long = isLongSide(position?.side ?? order?.side);
@@ -395,6 +395,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
           </div>
           <div className="pc-head-actions">
             <span className="pc-live">{online ? 'LIVE' : 'offline'}</span>
+            <button className="pc-x" onClick={() => onRefresh?.()} title="Atualizar ordens/posições" aria-label="Atualizar ordens e posições"><RefreshCw size={15} /></button>
             <button className="pc-x" onClick={() => onClose?.()} aria-label="Fechar gráfico"><X size={18} /></button>
           </div>
         </div>
@@ -405,6 +406,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
           ))}
           {slPrice == null && <button className="pc-period pc-add pc-add-sl" onClick={() => createLevel('sl')}>+ SL</button>}
           {tpPrice == null && <button className="pc-period pc-add pc-add-tp" onClick={() => createLevel('tp')}>+ TP</button>}
+          <span className="pc-levels">SL {slPrice != null ? fmtPrice(slPrice, precision) : '—'} · TP {tpPrice != null ? fmtPrice(tpPrice, precision) : '—'}</span>
           <span className="pc-hint"><SlidersHorizontal size={12} /> arraste SL/TP no gráfico</span>
         </div>
 
@@ -501,7 +503,8 @@ const PC_CSS = `
 .pc-add { font-weight: 800; }
 .pc-add-sl { color: #ff8b84; border-color: rgba(231,76,60,0.45); }
 .pc-add-tp { color: #7bed9f; border-color: rgba(46,204,113,0.45); }
-.pc-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted, #a1a7b3); font-size: 10px; }
+.pc-levels { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--text, #e7eaf0); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc-hint { margin-left: 10px; display: inline-flex; align-items: center; gap: 5px; color: var(--muted, #a1a7b3); font-size: 10px; }
 .pc-chart { position: relative; flex: 1; min-height: 240px; }
 .pc-lines { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .pc-guide { position: absolute; left: 0; height: 1px; margin-top: 0; display: flex; align-items: center; }

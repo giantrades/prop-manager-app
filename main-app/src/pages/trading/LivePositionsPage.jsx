@@ -350,7 +350,7 @@ export default function LivePositionsPage() {
   useEffect(() => {
     loadOrders();
     if (!online) return undefined;
-    const t = setInterval(loadOrders, 60000);
+    const t = setInterval(loadOrders, 15000);
     return () => clearInterval(t);
   }, [loadOrders, online]);
 
@@ -957,6 +957,7 @@ export default function LivePositionsPage() {
             adapter={adapter}
             online={online}
             onClose={() => { setChartId(null); setChartOrderId(null); }}
+            onRefresh={refresh}
             onSaveLevels={(next) => (chartPosition
               ? saveChartLevels(chartPosition, next)
               : saveChartOrderLevels(chartOrder, next))}
