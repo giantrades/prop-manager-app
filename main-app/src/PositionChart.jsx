@@ -72,6 +72,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
   const [drag, setDrag] = useState(null);
   const [pending, setPending] = useState(null);
   const [pendingOrder, setPendingOrder] = useState(null);
+  const [editor, setEditor] = useState(null);
   const [draft, setDraft] = useState(null);
   const [phantom, setPhantom] = useState({});
   const [orderSide, setOrderSide] = useState(long ? 'sell' : 'buy');
@@ -89,6 +90,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
   const periodRef = useRef(period);
   const dragRef = useRef(null);
   const levelsRef = useRef({});
+  const editorRef = useRef(null);
 
   const precision = useMemo(() => pricePrecision(bars), [bars]);
   const step = Math.pow(10, -precision);
@@ -342,6 +344,41 @@ export default function PositionChart({ position, order, adapter, online, onClos
     setPhantom((p) => ({ ...p, [kind]: price }));
   };
 
+  const shiftBrackets = (oldPrice, newPrice) => {
+    const delta = Number(newPrice) - Number(oldPrice);
+    if (!Number.isFinite(delta) || delta === 0) return;
+    setPending((p) => {
+      const n = { ...(p ?? {}) };
+      if (Number(slPrice) > 0) n.sl = roundTo(Number(slPrice) + delta, precisionRef.current);
+      if (Number(tpPrice) > 0) n.tp = roundTo(Number(tpPrice) + delta, precisionRef.current);
+      return n;
+    });
+  };
+
+  const openEditor = (kind) => {
+    const current = kind === 'order' ? displayEntry : kind === 'sl' ? slPrice : tpPrice;
+    if (!(Number(current) > 0)) return;
+    if (kind === 'order' ? !onSaveOrderPrice : !onSaveLevels) return;
+    setDraft(null);
+    setEditor({ kind, value: String(current) });
+  };
+
+  const confirmEditor = () => {
+    if (!editor) return;
+    const price = roundTo(Number(String(editor.value).replace(',', '.')), precisionRef.current);
+    if (price == null || !(price > 0)) return;
+    if (editor.kind === 'order') {
+      setPendingOrder(price);
+      shiftBrackets(Number(displayEntry), price);
+      onSaveOrderPrice?.(price);
+    } else {
+      setPending((p) => ({ ...(p ?? {}), [editor.kind]: price }));
+      setPhantom((p) => { const n = { ...p }; delete n[editor.kind]; return n; });
+      onSaveLevels?.(editor.kind === 'sl' ? { sl: price } : { tp: price });
+    }
+    setEditor(null);
+  };
+
   const beginDrag = (kind, e) => {
     if (!online) return;
     if (kind === 'order' ? !onSaveOrderPrice : !onSaveLevels) return;
@@ -353,9 +390,16 @@ export default function PositionChart({ position, order, adapter, online, onClos
     e.stopPropagation();
     const startPrice = Number(start);
     const isNew = kind === 'order' ? false : kind === 'sl' ? slNew : tpNew;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
     let last = null;
 
     const move = (ev) => {
+      if (!moved) {
+        if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) <= 4) return;
+        moved = true;
+      }
       const rect = el.getBoundingClientRect();
       const raw = series.coordinateToPrice(ev.clientY - rect.top);
       const rounded = roundTo(raw, precisionRef.current);
@@ -367,6 +411,12 @@ export default function PositionChart({ position, order, adapter, online, onClos
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      if (!moved) {
+        dragRef.current = null;
+        setDrag(null);
+        openEditor(kind);
+        return;
+      }
       const d = last || dragRef.current;
       dragRef.current = null;
       setDrag(null);
@@ -416,6 +466,17 @@ export default function PositionChart({ position, order, adapter, online, onClos
     if (!(entry > 0) || !Number.isFinite(Number(position?.currentPrice))) return null;
     const dir = long ? 1 : -1;
     return ((Number(position.currentPrice) - entry) / entry) * 100 * dir;
+  })();
+
+  const editorLabel = editor?.kind === 'order'
+    ? (orderIsStop ? 'Gatilho da ordem' : 'Preço da ordem')
+    : editor?.kind === 'sl' ? 'Stop loss' : 'Take profit';
+  const editorTop = (() => {
+    if (!editor) return '50%';
+    const y = editor.kind === 'order' ? lines.entry : editor.kind === 'sl' ? lines.sl : lines.tp;
+    const h = wrapRef.current?.clientHeight || 320;
+    const top = Number.isFinite(y) ? y : h / 2;
+    return `${Math.max(64, Math.min(top, h - 64))}px`;
   })();
 
   return (
@@ -502,6 +563,43 @@ export default function PositionChart({ position, order, adapter, online, onClos
               </div>
             )}
           </div>
+          {editor && (
+            <>
+              <div className="pc-edit-backdrop" onPointerDown={() => setEditor(null)} />
+              <div
+                className="pc-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-label={editorLabel}
+                ref={editorRef}
+                style={{ top: editorTop }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <div className="pc-editor-head">
+                  <span>{editorLabel}</span>
+                  <button className="pc-editor-x" onClick={() => setEditor(null)} aria-label="Cancelar edição"><X size={14} /></button>
+                </div>
+                <input
+                  className="pc-input pc-editor-input"
+                  type="number"
+                  step="0.00001"
+                  autoFocus
+                  value={editor.value}
+                  onChange={(e) => setEditor((s) => ({ ...s, value: e.target.value }))}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') confirmEditor();
+                    if (e.key === 'Escape') setEditor(null);
+                  }}
+                  aria-label={editorLabel}
+                />
+                <div className="pc-editor-actions">
+                  <button className="pc-send" onClick={confirmEditor}>Salvar</button>
+                  <button className="pc-editor-cancel" onClick={() => setEditor(null)}>Cancelar</button>
+                </div>
+              </div>
+            </>
+          )}
           {!loading && (error || bars.length === 0) && (
             <div className="pc-empty">
               {error || 'Sem dados de gráfico.'}
@@ -588,6 +686,13 @@ const PC_CSS = `
 .pc-oco { font-size: 9px; font-weight: 800; letter-spacing: 0.4px; color: #e1b12c; border: 1px solid rgba(225,177,44,0.5); border-radius: 999px; padding: 2px 6px; }
 .pc-send { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 6px 12px; border-radius: 8px; border: 0; background: linear-gradient(135deg, #7c5cff, #6d4df2); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .pc-send:disabled { opacity: 0.5; cursor: not-allowed; }
+.pc-edit-backdrop { position: absolute; inset: 0; z-index: 8; background: rgba(0,0,0,0.22); }
+.pc-editor { position: absolute; left: 50%; transform: translate(-50%, -50%); z-index: 9; width: min(300px, 92%); display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #161b25; border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 14px 34px rgba(0,0,0,0.55); }
+.pc-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
+.pc-editor-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text, #e7eaf0); cursor: pointer; }
+.pc-editor-input { width: 100%; font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.pc-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.pc-editor-cancel { min-height: 34px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; cursor: pointer; }
 @media (max-width: 640px) {
   .pc-backdrop { padding: 0; }
   .pc-panel { width: 100%; height: 100%; border-radius: 0; }

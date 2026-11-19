@@ -52,8 +52,6 @@ export default function LivePositionsPage() {
   const [accounts, setAccounts] = useState([]);
   const [form, setForm] = useState({ accountId: '', symbol: '', side: 'buy', type: 'limit', qty: '', price: '', sl: '', tp: '' });
   const [pending, setPending] = useState(() => readQueue().length);
-  const [editOrderId, setEditOrderId] = useState(null);
-  const [orderEdit, setOrderEdit] = useState({ qty: '', price: '', sl: '', tp: '' });
   const [partialId, setPartialId] = useState(null);
   const [partialQty, setPartialQty] = useState('');
   const [ticket, setTicket] = useState(null);
@@ -674,52 +672,6 @@ export default function LivePositionsPage() {
     } finally { setBusy(null); }
   };
 
-  // Editar ordem via /orders/modify (preserva a ordem; antes era cancelar + recolocar).
-  const startEditOrder = (o) => {
-    setEditOrderId(o.platformOrderId);
-    setOrderEdit({
-      qty: String(o.remainingQuantity ?? o.quantity ?? ''),
-      price: String(orderPrice(o) ?? ''),
-      sl: '',
-      tp: '',
-    });
-  };
-
-  const saveOrderEdit = async (o) => {
-    const qty = num(orderEdit.qty);
-    const price = num(orderEdit.price);
-    if (!qty || !price) {
-      toast('Preencha quantidade e preço.', { type: 'warn' });
-      return;
-    }
-    setBusy(o.platformOrderId);
-    try {
-      const isStop = (o.type || '').toLowerCase().includes('stop');
-      const res = await submitOrQueue(adapter, {
-        kind: 'modifyOrder',
-        payload: {
-          platformOrderId: o.platformOrderId,
-          quantity: qty,
-          price: isStop ? null : price,
-          triggerPrice: isStop ? price : null,
-          sl: num(orderEdit.sl),
-          tp: num(orderEdit.tp),
-        },
-      });
-      if (res.queued) {
-        setPending(readQueue().length);
-        toast('Bridge offline — edição da ordem na fila.', { type: 'warn' });
-      } else {
-        toast(`Ordem atualizada — ${o.symbol}`);
-      }
-      setEditOrderId(null);
-      loadOrders();
-      refreshStatuses();
-    } catch (err) {
-      toast(`Falha ao editar ${o.symbol}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
-    } finally { setBusy(null); }
-  };
-
   const refresh = () => { refreshStatuses(); loadOrders(); };
 
   return (
@@ -951,23 +903,10 @@ export default function LivePositionsPage() {
                     <span className="lp-num">{o.status || '—'}</span>
                     <span className="lp-acct">{firmOf(o) && <FirmChip firm={firmOf(o)} />}{accountNameOf(o)}</span>
                     <span className="lp-actions">
-                      <button className={`lp-btn lp-btn-ico${chartOrderId === o.platformOrderId ? ' lp-btn-on' : ''}`} onClick={() => openOrderChart(o)} title="Abrir gráfico para arrastar SL/TP da ordem" aria-label={`Abrir gráfico de ${o.symbol}`} aria-pressed={chartOrderId === o.platformOrderId}><LineChart size={13} /></button>
-                      <button className="lp-btn" onClick={() => startEditOrder(o)}>Editar</button>
+                      <button className={`lp-btn lp-btn-ico${chartOrderId === o.platformOrderId ? ' lp-btn-on' : ''}`} onClick={() => openOrderChart(o)} title="Abrir gráfico (clique na linha para editar o preço)" aria-label={`Abrir gráfico de ${o.symbol}`} aria-pressed={chartOrderId === o.platformOrderId}><LineChart size={13} /></button>
                       <button className="lp-btn lp-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
                     </span>
                   </div>
-                  {editOrderId === o.platformOrderId && (
-                    <div className="lp-orderedit">
-                      <input className="lp-input" type="number" step="0.01" placeholder="Qtd" value={orderEdit.qty} onChange={(e) => setOrderEdit((s) => ({ ...s, qty: e.target.value }))} aria-label="Quantidade" />
-                      <input className="lp-input" type="number" step="0.00001" placeholder="Preço" value={orderEdit.price} onChange={(e) => setOrderEdit((s) => ({ ...s, price: e.target.value }))} aria-label="Preço" />
-                      <input className="lp-input" type="number" step="0.00001" placeholder="SL (opc.)" value={orderEdit.sl} onChange={(e) => setOrderEdit((s) => ({ ...s, sl: e.target.value }))} aria-label="Stop loss" />
-                      <input className="lp-input" type="number" step="0.00001" placeholder="TP (opc.)" value={orderEdit.tp} onChange={(e) => setOrderEdit((s) => ({ ...s, tp: e.target.value }))} aria-label="Take profit" />
-                      <span className="lp-actions">
-                        <button className="lp-btn lp-btn-primary" disabled={busy === o.platformOrderId} onClick={() => saveOrderEdit(o)}>Salvar</button>
-                        <button className="lp-btn lp-btn-ico" onClick={() => setEditOrderId(null)} aria-label="Cancelar edição"><X size={13} /></button>
-                      </span>
-                    </div>
-                  )}
                 </React.Fragment>
               ))}
             </div>
@@ -1070,7 +1009,6 @@ const LP_CSS = `
 .lp-btn-danger:hover:not(:disabled) { background: rgba(231,76,60,0.14); border-color: rgba(231,76,60,0.6); }
 .lp-btn-on { background: rgba(124,92,255,0.16); border-color: rgba(124,92,255,0.45); color: var(--text, #e7eaf0); }
 .lp-btn-ico { padding: 4px 7px; min-width: 30px; }
-.lp-orderedit { display: grid; grid-template-columns: 0.8fr 1fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; padding: 8px 6px; margin: -2px 0 6px; border-radius: 10px; background: rgba(124,92,255,0.06); border: 1px dashed rgba(124,92,255,0.35); }
 .lp-partial { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; margin: -2px 0 6px; border-radius: 10px; background: rgba(231,76,60,0.06); border: 1px dashed rgba(231,76,60,0.35); }
 .lp-partial-hint { font-size: 11px; color: var(--muted, #a1a7b3); flex: 1; min-width: 180px; }
 .lp-partial .lp-input { max-width: 110px; }
@@ -1093,7 +1031,7 @@ const LP_CSS = `
 .lp-ticket-orders .lp-muted { margin-left: 0; }
 .lp-linked { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); font-size: 11px; font-variant-numeric: tabular-nums; }
 .lp-linked .lp-btn-ico { min-height: 22px; padding: 1px 5px; }
-@media (max-width: 900px) { .lp-orderedit { grid-template-columns: 1fr 1fr; } }
+
 .lp-neworder { display: grid; grid-template-columns: 1.3fr 1.1fr 0.8fr 0.8fr 0.7fr 0.9fr 0.8fr 0.8fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
 @media (max-width: 900px) {
   .lp-row { grid-template-columns: 1fr 1fr 1fr; }
