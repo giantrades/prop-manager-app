@@ -350,9 +350,11 @@ export default function LivePositionsPage() {
   useEffect(() => {
     loadOrders();
     if (!online) return undefined;
-    const t = setInterval(loadOrders, 15000);
+    // SSE já empurra ordens a cada ~1,5s. O poll é só rede de segurança:
+    // 15s com stream ativo; 3s quando o stream caiu (modo polling).
+    const t = setInterval(loadOrders, streaming ? 15000 : 3000);
     return () => clearInterval(t);
-  }, [loadOrders, online]);
+  }, [loadOrders, online, streaming]);
 
   // SSE: ordens chegam empurradas pelo bridge (posições já vêm via usePlatform).
   useEffect(() => {
