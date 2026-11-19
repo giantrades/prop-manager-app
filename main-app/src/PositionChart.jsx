@@ -360,17 +360,25 @@ export default function PositionChart({ position, order, adapter, online, onClos
     if (!(Number(current) > 0)) return;
     if (kind === 'order' ? !onSaveOrderPrice : !onSaveLevels) return;
     setDraft(null);
-    setEditor({ kind, value: String(current) });
+    setEditor({
+      kind,
+      value: String(current),
+      qty: kind === 'order' ? String(order?.remainingQuantity ?? order?.quantity ?? '') : '',
+    });
   };
 
   const confirmEditor = () => {
     if (!editor) return;
     const price = roundTo(Number(String(editor.value).replace(',', '.')), precisionRef.current);
     if (price == null || !(price > 0)) return;
+    const qty = editor.kind === 'order'
+      ? Number(String(editor.qty).replace(',', '.'))
+      : null;
+    if (editor.kind === 'order' && !(qty > 0)) return;
     if (editor.kind === 'order') {
       setPendingOrder(price);
       shiftBrackets(Number(displayEntry), price);
-      onSaveOrderPrice?.(price);
+      onSaveOrderPrice?.(price, qty);
     } else {
       setPending((p) => ({ ...(p ?? {}), [editor.kind]: price }));
       setPhantom((p) => { const n = { ...p }; delete n[editor.kind]; return n; });
@@ -579,20 +587,42 @@ export default function PositionChart({ position, order, adapter, online, onClos
                   <span>{editorLabel}</span>
                   <button className="pc-editor-x" onClick={() => setEditor(null)} aria-label="Cancelar edição"><X size={14} /></button>
                 </div>
-                <input
-                  className="pc-input pc-editor-input"
-                  type="number"
-                  step="0.00001"
-                  autoFocus
-                  value={editor.value}
-                  onChange={(e) => setEditor((s) => ({ ...s, value: e.target.value }))}
-                  onFocus={(e) => e.target.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') confirmEditor();
-                    if (e.key === 'Escape') setEditor(null);
-                  }}
-                  aria-label={editorLabel}
-                />
+                {editor.kind === 'order' && (
+                  <label className="pc-editor-field">
+                    <span>Quantidade</span>
+                    <input
+                      className="pc-input pc-editor-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editor.qty ?? ''}
+                      onChange={(e) => setEditor((s) => ({ ...s, qty: e.target.value }))}
+                      onFocus={(e) => e.target.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') confirmEditor();
+                        if (e.key === 'Escape') setEditor(null);
+                      }}
+                      aria-label="Quantidade da ordem"
+                    />
+                  </label>
+                )}
+                <label className="pc-editor-field">
+                  <span>{editor.kind === 'order' ? (orderIsStop ? 'Gatilho' : 'Preço') : 'Preço'}</span>
+                  <input
+                    className="pc-input pc-editor-input"
+                    type="number"
+                    step="0.00001"
+                    autoFocus
+                    value={editor.value}
+                    onChange={(e) => setEditor((s) => ({ ...s, value: e.target.value }))}
+                    onFocus={(e) => e.target.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') confirmEditor();
+                      if (e.key === 'Escape') setEditor(null);
+                    }}
+                    aria-label={editorLabel}
+                  />
+                </label>
                 <div className="pc-editor-actions">
                   <button className="pc-send" onClick={confirmEditor}>Salvar</button>
                   <button className="pc-editor-cancel" onClick={() => setEditor(null)}>Cancelar</button>
@@ -690,6 +720,7 @@ const PC_CSS = `
 .pc-editor { position: absolute; left: 50%; transform: translate(-50%, -50%); z-index: 9; width: min(300px, 92%); display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #161b25; border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 14px 34px rgba(0,0,0,0.55); }
 .pc-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); }
 .pc-editor-x { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: var(--text, #e7eaf0); cursor: pointer; }
+.pc-editor-field { display: flex; flex-direction: column; gap: 4px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted, #a1a7b3); }
 .pc-editor-input { width: 100%; font-size: 15px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
 .pc-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .pc-editor-cancel { min-height: 34px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: var(--text, #e7eaf0); font-size: 12px; font-weight: 600; cursor: pointer; }

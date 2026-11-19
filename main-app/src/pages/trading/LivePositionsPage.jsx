@@ -625,7 +625,7 @@ export default function LivePositionsPage() {
   };
 
   // Arrastar a linha da própria ordem: atualiza price (limit) ou triggerPrice (stop).
-  const saveChartOrderPrice = async (o, price) => {
+  const saveChartOrderPrice = async (o, price, qty) => {
     const isStop = String(o.type ?? '').toLowerCase().includes('stop');
     setBusy(`chart-${o.platformOrderId}`);
     try {
@@ -633,20 +633,21 @@ export default function LivePositionsPage() {
         kind: 'modifyOrder',
         payload: {
           platformOrderId: o.platformOrderId,
+          quantity: qty ?? null,
           price: isStop ? null : price,
           triggerPrice: isStop ? price : null,
         },
       });
       if (res.queued) {
         setPending(readQueue().length);
-        toast(`Bridge offline — preço da ordem ${o.symbol} na fila.`, { type: 'warn' });
+        toast(`Bridge offline — ordem ${o.symbol} na fila.`, { type: 'warn' });
       } else {
-        toast(`Preço da ordem atualizado — ${o.symbol} @ ${fmtPrice(price)}`);
+        toast(`Ordem atualizada — ${o.symbol} @ ${fmtPrice(price)}${qty ? ` · qtd ${qty}` : ''}`);
         loadOrders();
         refreshStatuses();
       }
     } catch (err) {
-      toast(`Falha ao mover a ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+      toast(`Falha ao alterar a ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
     } finally { setBusy(null); }
   };
 
@@ -928,7 +929,7 @@ export default function LivePositionsPage() {
             onSaveLevels={(next) => (chartPosition
               ? saveChartLevels(chartPosition, next)
               : saveChartOrderLevels(chartOrder, next))}
-            onSaveOrderPrice={chartOrder ? (price) => saveChartOrderPrice(chartOrder, price) : undefined}
+            onSaveOrderPrice={chartOrder ? (price, qty) => saveChartOrderPrice(chartOrder, price, qty) : undefined}
             onPlaceOrder={(order) => placeChartOrder(chartPosition ?? chartOrder, order)}
           />
         </React.Suspense>
