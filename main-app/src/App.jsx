@@ -89,6 +89,24 @@ const FirmPnlPage = lazyRetry(pageLoaders['/firms']);
 const ExpensesPage = lazyRetry(pageLoaders['/expenses']);
 const FinancialJournalPage = lazyRetry(pageLoaders['/journal-events']);
 const ReportsPage = lazyRetry(pageLoaders['/reports']);
+const MarketDashboardPage = lazyRetry(pageLoaders['/market']);
+const MarketHeatmapPage = lazyRetry(pageLoaders['/market/heatmap']);
+const MarketBreadthPage = lazyRetry(pageLoaders['/market/breadth']);
+const MarketThemesPage = lazyRetry(pageLoaders['/market/themes']);
+const MarketFactorsPage = lazyRetry(pageLoaders['/market/factors']);
+const MarketEtfMapPage = lazyRetry(pageLoaders['/market/etf-map']);
+const MarketMoversPage = lazyRetry(pageLoaders['/market/movers']);
+const MacroCrossAssetPage = lazyRetry(pageLoaders['/macro']);
+const MacroSessionTapePage = lazyRetry(pageLoaders['/macro/session-tape']);
+const MacroRatesPage = lazyRetry(pageLoaders['/macro/rates']);
+const MacroVolPage = lazyRetry(pageLoaders['/macro/vol']);
+const MacroCurvesPage = lazyRetry(pageLoaders['/macro/curves']);
+const MacroEventsPage = lazyRetry(pageLoaders['/macro/events']);
+const LiveSetupboardPage = lazyRetry(pageLoaders['/live']);
+const LiveIntradayBreadthPage = lazyRetry(pageLoaders['/live/intraday-breadth']);
+const LiveAlertsPage = lazyRetry(pageLoaders['/live/alerts']);
+const ScannerScreenerPage = lazyRetry(pageLoaders['/scanner']);
+const CryptoOverviewPage = lazyRetry(pageLoaders['/crypto']);
 
 function RouteFallback() {
   return (
@@ -295,6 +313,24 @@ export default function App() {
             <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/journal-events" element={<FinancialJournalPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/market" element={<MarketDashboardPage />} />
+            <Route path="/market/heatmap" element={<MarketHeatmapPage />} />
+            <Route path="/market/breadth" element={<MarketBreadthPage />} />
+            <Route path="/market/themes" element={<MarketThemesPage />} />
+            <Route path="/market/factors" element={<MarketFactorsPage />} />
+            <Route path="/market/etf-map" element={<MarketEtfMapPage />} />
+            <Route path="/market/movers" element={<MarketMoversPage />} />
+            <Route path="/macro" element={<MacroCrossAssetPage />} />
+            <Route path="/macro/session-tape" element={<MacroSessionTapePage />} />
+            <Route path="/macro/rates" element={<MacroRatesPage />} />
+            <Route path="/macro/vol" element={<MacroVolPage />} />
+            <Route path="/macro/curves" element={<MacroCurvesPage />} />
+            <Route path="/macro/events" element={<MacroEventsPage />} />
+            <Route path="/live" element={<LiveSetupboardPage />} />
+            <Route path="/live/intraday-breadth" element={<LiveIntradayBreadthPage />} />
+            <Route path="/live/alerts" element={<LiveAlertsPage />} />
+            <Route path="/scanner" element={<ScannerScreenerPage />} />
+            <Route path="/crypto" element={<CryptoOverviewPage />} />
             <Route path="/import" element={<DataPage />} />
             <Route path="/quantower" element={<QuantowerPage />} />
 

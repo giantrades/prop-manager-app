@@ -25,8 +25,12 @@ DOCS/10_MODULES/
     00-spec.md                     <- spec Prop/Firm Manager
     melhorias.md                   <- batch A (A1–A4)
   options/
-    00-spec.md                     <- Options Analytics (Quantower-like) + renda + portfólio — SPEC APROVADA (F0–F4 pendentes)
-    melhorias.md                   <- batch A (A1–A7)
+    00-spec.md                     <- Options Analytics (Quantower-like) + renda + portflio?" SPEC APROVADA (F0?"F4 pendentes)
+    melhorias.md                   <- batch A (A1?"A7)
+  market/
+    00-spec.md                     <- Terminal de mercado: Market + Macro + Live + Scanner + Crypto. VERTICAL SLICE EXECUTADO
+    01-scanner-rules.md            <- Linguagem de regras do Scanner (DSL) + campos/operadores/custom
+    02-fundamentals-feed.md        <- Contrato do feed externo de fundamentos/earnings (o que configurar)
 ```
 
 > O mapa de código (rota → container → UI → motor) vive em `DOCS/11_PAGE_MAP.md`.

@@ -27,6 +27,12 @@ import {
   PiggyBank,
   Sparkles,
   Tag,
+  Globe2,
+  Timer,
+  Percent,
+  Gauge,
+  Search,
+  Bitcoin,
 } from "lucide-react";
 
 /* 7 âncoras do visao-produto.md (resto é drill-down por abas) + grupo Sistema
@@ -40,6 +46,64 @@ export const MODULES = [
     dashboard: "/",
     children: [
       { to: "/", label: "Home", icon: LayoutDashboard, end: true, keywords: "command dashboard início" },
+    ],
+  },
+  {
+    id: "market",
+    label: "Market",
+    icon: LineChart,
+    dashboard: "/market",
+    children: [
+      { to: "/market", label: "Environment", icon: LineChart, end: true, keywords: "market mercado cross-asset índices setores juros câmbio commodities cripto painel" },
+      { to: "/market/heatmap", label: "Heatmap", icon: LineChart, keywords: "heatmap mapa calor setores treemap ações" },
+      { to: "/market/breadth", label: "Breadth", icon: Activity, keywords: "breadth amplitude avanços quedas distribuição volume setores" },
+      { to: "/market/themes", label: "Themes", icon: Sparkles, keywords: "themes temas cestas semis biotech quantum nuclear defensiva momentum" },
+      { to: "/market/factors", label: "Factors", icon: Sigma, keywords: "factors fatores growth value momentum quality size lowvol dividend" },
+      { to: "/market/etf-map", label: "ETF map", icon: ListOrdered, keywords: "etf map mapa etfs categorias bonds commodities internacional" },
+      { to: "/market/movers", label: "Movers", icon: TrendingUp, keywords: "movers altas baixas volume movimentos incomuns" },
+    ],
+  },
+  {
+    id: "macro",
+    label: "Macro",
+    icon: Globe2,
+    dashboard: "/macro",
+    children: [
+      { to: "/macro", label: "Cross-asset", icon: Globe2, end: true, keywords: "macro cross-asset indices commodities cambio dollar cripto normalizado" },
+      { to: "/macro/session-tape", label: "Session tape", icon: Timer, keywords: "macro session tape intraday sessao tempo real tape" },
+      { to: "/macro/rates", label: "Rates & liquidity", icon: Percent, keywords: "macro juros rates liquidez treasury yields credito high yield" },
+      { to: "/macro/vol", label: "Vol regime", icon: Gauge, keywords: "macro volatilidade vix regime contango backwardation term structure" },
+      { to: "/macro/curves", label: "Curves", icon: LineChart, keywords: "macro curva juros yield curve spreads invertida 10y 2y 30y" },
+      { to: "/macro/events", label: "Events", icon: CalendarDays, keywords: "macro calendario economico eventos fomc cpi payroll" },
+    ],
+  },
+  {
+    id: "live",
+    label: "Live",
+    icon: Zap,
+    dashboard: "/live",
+    children: [
+      { to: "/live", label: "Setupboard", icon: Zap, end: true, keywords: "live setupboard regime trend breadth vol credito juros dolar" },
+      { to: "/live/intraday-breadth", label: "Intraday breadth", icon: Activity, keywords: "live intraday breadth sessao acima open avancos quedas" },
+      { to: "/live/alerts", label: "Alerts", icon: Bell, keywords: "live alertas vol spike breadth thrust curva invertida credito" },
+    ],
+  },
+  {
+    id: "scanner",
+    label: "Scanner",
+    icon: Search,
+    dashboard: "/scanner",
+    children: [
+      { to: "/scanner", label: "Screener", icon: Search, end: true, keywords: "scanner screener filtro universo variacao volume busca ordenar" },
+    ],
+  },
+  {
+    id: "crypto",
+    label: "Crypto",
+    icon: Bitcoin,
+    dashboard: "/crypto",
+    children: [
+      { to: "/crypto", label: "Overview", icon: Bitcoin, end: true, keywords: "crypto cripto bitcoin ethereum solana majors painel" },
     ],
   },
   {

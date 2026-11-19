@@ -62,6 +62,24 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 | `/forecast` | Planejamento | `command/EngineViews.jsx` → `ForecastPage()` | `Forecast.tsx` | `wealth.forecast()`, `safeAvailable()` |
 | `/journal-events` | Planejamento | `command/EngineViews.jsx` → `FinancialJournalPage()` | `FinancialJournal.tsx` | `wealth.suggestJournalEvents()`, `listJournalEvents()` |
 | `/reports` | Relatórios | `command/ReportsPage.jsx` | (recharts inline) | `firmPnlHistory`, `freeCash`, `taxCockpit`, `netWorth` |
+| `/market` | Market | `market/MarketDashboardPage.jsx` | `market/MarketOverview.tsx` | `useMarketData`, `buildOverview`/`buildRiskComposite`/`buildBreadth` (`marketData.ts`) |
+| `/market/heatmap` | Market | `market/MarketHeatmapPage.jsx` | `market/MarketHeatmap.tsx` (+ `treemap.ts`) | `useMarketData`, `buildHeatmap` |
+| `/market/breadth` | Market | `market/MarketBreadthPage.jsx` | `market/MarketBreadth.tsx` | `useMarketData`, `buildBreadthDetail` |
+| `/market/themes` | Market | `market/MarketThemesPage.jsx` | `market/MarketBaskets.tsx` | `useMarketData`, `buildThemes` (`marketBaskets.ts`) |
+| `/market/factors` | Market | `market/MarketFactorsPage.jsx` | `market/MarketBaskets.tsx` | `useMarketData`, `buildFactors` |
+| `/market/etf-map` | Market | `market/MarketEtfMapPage.jsx` | `market/MarketEtfMap.tsx` | `useMarketData`, `buildEtfMap` |
+| `/market/movers` | Market | `market/MarketMoversPage.jsx` | `market/MarketMovers.tsx` | `useMarketData`, `buildMovers` |
+| `/macro` | Macro | `macro/MacroCrossAssetPage.jsx` | `market/MacroCrossAsset.tsx` | `useMarketData` (1mo), `buildCrossAssetSeries` (`marketMacro.ts`) |
+| `/macro/session-tape` | Macro | `macro/MacroSessionTapePage.jsx` | `market/MacroCrossAsset.tsx` | `useMarketData` (1d/5m), `buildCrossAssetSeries` |
+| `/macro/rates` | Macro | `macro/MacroRatesPage.jsx` | `market/MacroRates.tsx` | `useMarketData`, `buildRatesLiquidity`/`buildCreditStress` |
+| `/macro/vol` | Macro | `macro/MacroVolPage.jsx` | `market/MacroVol.tsx` | `useMarketData`, `buildVolRegime` |
+| `/macro/curves` | Macro | `macro/MacroCurvesPage.jsx` | `market/MacroCurves.tsx` | `useMarketData`, `buildYieldCurve`/`buildYieldSpreads` |
+| `/macro/events` | Macro | `macro/MacroEventsPage.jsx` | `market/MacroEvents.tsx` | `fetchEconomicEvents` (`economicCalendar.ts`) |
+| `/live` | Live | `live/LiveSetupboardPage.jsx` | `market/LiveSetupboard.tsx` | `useMarketData` (1mo), `buildSetupboard` (`marketLive.ts`) |
+| `/live/intraday-breadth` | Live | `live/LiveIntradayBreadthPage.jsx` | `market/LiveIntradayBreadth.tsx` | `useMarketData` (1d/5m), `buildIntradayBreadth` |
+| `/live/alerts` | Live | `live/LiveAlertsPage.jsx` | `market/LiveAlerts.tsx` | `useMarketData`, `buildAlerts` |
+| `/scanner` | Scanner | `scanner/ScannerScreenerPage.jsx` | `market/MarketScreener.tsx` | `useMarketData` (chave `market`), `buildScreener` (`marketScanner.ts`) |
+| `/crypto` | Crypto | `crypto/CryptoOverviewPage.jsx` | `market/CryptoOverview.tsx` | `useMarketData` (chave `crypto`), `buildCryptoBoard` (`marketCrypto.ts`) |
 | `/settings` | Sistema | `trading/SettingsPage.jsx` | `SyncConflicts.tsx` | `dumpAppDb`/`restoreAppDb`, `supabase` |
 | `/quantower` | Sistema | `trading/QuantowerPage.jsx` | — | `quantowerAdapter`, `quantowerIngest.ts` |
 | `/import` | Sistema | `trading/DataPage.jsx` | — | `bankImport.ts`, `importPayouts.ts` |
@@ -161,6 +179,86 @@ packages/lib/db/*.ts ................. MOTORES (DataService, DataChainEngine, se
 - **GoalsManagePage** — metas (editor + progresso).
 - **ForecastPage** — 30/60/90 + Safe Available + gráfico de projeção.
 - **FinancialJournalPage** ("Marcos") — eventos de vida sugeridos/confirmados.
+
+### Market (âncora `market`) — dashboard `/market`
+> Terminal de mercado **read-only** (não escreve saldo/ledger). Spec em
+> `DOCS/10_MODULES/market/00-spec.md`. Dados: Yahoo (batch via proxy) + Brapi/CoinGecko.
+> **Vertical slice:** Environment/Heatmap/**Breadth/Themes/Factors/ETF map**/Movers; Macro virou
+> módulo próprio (abaixo); Live/Scanner/Crypto no roadmap da spec.
+- **MarketDashboardPage** (`/market`, "Environment") — painel cross-asset (índices, setores
+  SPDR, juros/crédito, câmbio, commodities, cripto) com sparkline, **apetite a risco**
+  (`buildRiskComposite`), **breadth** por setor e KPIs. UI `MarketOverview.tsx`.
+- **MarketHeatmapPage** (`/market/heatmap`) — treemap setorial (2 níveis: setor → nome),
+  tamanho ≈ cap, cor = variação do dia. UI `MarketHeatmap.tsx` + layout `treemap.ts`
+  (`squarify`). Mobile (<640px) empilha os setores.
+- **MarketBreadthPage** (`/market/breadth`) — amplitude: adv/dec/linha A/D, distribuição
+  das variações (histograma), volume up/down e breadth por setor. UI `MarketBreadth.tsx`.
+- **MarketThemesPage** (`/market/themes`) e **MarketFactorsPage** (`/market/factors`) — cestas
+  temáticas e de fator pontuadas (variação média, breadth, rel SPY). UI `MarketBaskets.tsx`;
+  universos + `buildThemes`/`buildFactors` em `packages/lib/db/marketBaskets.ts`.
+- **MarketEtfMapPage** (`/market/etf-map`) — treemap de ETFs por categoria (AUM ≈ tamanho).
+  UI `MarketEtfMap.tsx`.
+- **MarketMoversPage** (`/market/movers`) — maiores altas/baixas, mais negociadas (volume)
+  e movimentos incomuns. UI `MarketMovers.tsx`.
+- **Motor** `packages/lib/db/marketData.ts` + `marketBaskets.ts` — universos curados +
+  `fetchMarketQuotes` (lote, cache offline-first, `stale`) + builders puros. Hook
+  `useMarketData.js` (SWR + auto-refresh 60s, 1 fetch compartilhado por `MARKET_FULL_SYMBOLS`).
+  Proxy `netlify/functions/yahoo-quote.ts` (modo batch `?symbols=&range=&interval=`).
+
+### Macro (âncora `macro`) — dashboard `/macro`
+> Painel macro **read-only**. Spec em `DOCS/10_MODULES/market/00-spec.md`. Dados: Yahoo
+> (batch via proxy, range `1mo`/`1d`; session tape `1d`/`5m`) + calendário free.
+> Sem FRED/COT (exigem chave/pago): juros via yields do Yahoo (3M/5Y/10Y/30Y; sem 2Y).
+- **MacroCrossAssetPage** (`/macro`) — desempenho normalizado (base 100) no mês + tabela.
+  UI `MacroCrossAsset.tsx` (recharts multi-linha). `buildCrossAssetSeries`.
+- **MacroSessionTapePage** (`/macro/session-tape`) — intraday (barras de 5 min) normalizado
+  no open da sessão. Mesmo UI; `buildCrossAssetSeries(..., { granularity: '5m' })`.
+- **MacroRatesPage** (`/macro/rates`) — yields do Treasury + ETFs de duration/crédito +
+  stress de crédito (HY vs Treasury). UI `MacroRates.tsx`; `buildRatesLiquidity`/`buildCreditStress`.
+- **MacroVolPage** (`/macro/vol`) — VIX + estrutura a termo (9D/VIX/3M/6M), contango/
+  backwardation e regime. UI `MacroVol.tsx`; `buildVolRegime`.
+- **MacroCurvesPage** (`/macro/curves`) — curva de juros + spreads 10y−3m / 30y−10y / 10y−5y.
+  UI `MacroCurves.tsx`; `buildYieldCurve`/`buildYieldSpreads`.
+- **MacroEventsPage** (`/macro/events`) — calendário econômico do mês (alta importância).
+  UI `MacroEvents.tsx`; `fetchEconomicEvents` + `monthRange` (`economicCalendar.ts`).
+- **Motor** `packages/lib/db/marketMacro.ts` — universos (`MACRO_SYMBOLS`, `CROSS_ASSET`,
+  `SESSION_TAPE`, `RATE_ROWS`, `YIELD_POINTS`) + builders puros. Compartilha
+  `fetchMarketQuotes`/`useMarketData` com o módulo Market (chaves `macro` e `macro-session`).
+
+### Live (âncora `live`) — dashboard `/live`
+> Painel "ao vivo" **read-only** derivado do feed. Spec em `DOCS/10_MODULES/market/00-spec.md`.
+> Dados: Yahoo (diário `1mo` p/ SMA20; intraday `1d`/`5m`). **Sem dealer gamma** (exige feed de opções).
+- **LiveSetupboardPage** (`/live`) — regime agregado (trend SPY vs SMA20, breadth setorial,
+  vol/VIX, crédito HY−IEF, juros, dólar) com score e cards por sinal. UI `LiveSetupboard.tsx`;
+  `buildSetupboard`.
+- **LiveIntradayBreadthPage** (`/live/intraday-breadth`) — % de instrumentos acima do open da
+  sessão, adv/dec e barras por instrumento. UI `LiveIntradayBreadth.tsx`; `buildIntradayBreadth`.
+- **LiveAlertsPage** (`/live/alerts`) — alertas objetivos (vol spike, breadth thrust, curva
+  invertida, estresse de crédito, movimento de BTC, dólar forte). UI `LiveAlerts.tsx`; `buildAlerts`.
+- **Motor** `packages/lib/db/marketLive.ts` — universos (`LIVE_SYMBOLS`, `LIVE_BREADTH`) + `sma`,
+  `sessionChangePct`, `buildSetupboard`, `buildIntradayBreadth`, `buildAlerts`. Reusa
+  `fetchMarketQuotes`/`useMarketData` (chaves `live` e `live-intraday`).
+
+### Scanner (âncora `scanner`) — `/scanner`
+> Screener **read-only** configurável. Spec em `DOCS/10_MODULES/market/00-spec.md`.
+> **Compartilha o MESMO fetch/cache do Market** (chave `market` + `MARKET_FULL_SYMBOLS`).
+- **ScannerScreenerPage** (`/scanner`) — screener estilo mercado: presets (Gainers/Losers/
+  Volume/Movers/Near 5d high-low), filtros (universo ações/setores/cestas/tudo, setor, direção,
+  variação mín./máx., preço mín./máx., volume mín., busca), ordenação por coluna, limite, export
+  CSV e filtros persistidos (`localStorage`). UI `MarketScreener.tsx`; `buildScreener`/
+  `applyPreset` (`marketScanner.ts`). Métricas de 5d (`change5d`/`offHigh5d`/`offLow5d`) do série.
+  **Linguagem de regras:** editor de texto (`change > 2% AND volume > 1M`…) com parser/avaliador
+  em `screenerRules.ts` (`parseRule`/`evaluateRule`, `RULE_FIELDS`/`RULE_EXAMPLES` para o guia no
+  app) e referência em `DOCS/10_MODULES/market/01-scanner-rules.md`.
+  **Fundamentos & Earnings:** seção separada com regra própria (`fundamentals.ts`,
+  `FUNDAMENTAL_FIELDS`) e feed plugável (`VITE_FUNDAMENTALS_ENDPOINT`; sem feed = “Aguardando
+  feed”; contrato em `02-fundamentals-feed.md`). **Campos personalizados:** expressões
+  (`customFields.ts`) persistidas em `localStorage` e usáveis como campos normais.
+
+### Crypto (âncora `crypto`) — `/crypto`
+> Painel cripto **read-only** (majors) via Yahoo. Spec em `DOCS/10_MODULES/market/00-spec.md`.
+- **CryptoOverviewPage** (`/crypto`) — KPIs (BTC/ETH, adv/dec, média), tiles com sparkline e
+  tabela de majors. UI `CryptoOverview.tsx`; `buildCryptoBoard` (`marketCrypto.ts`, `CRYPTO_MAJORS`).
 
 ### Relatórios (âncora `relatorios`) — `/reports`
 - **ReportsPage** — cards (patrimônio/firm-6m/IR-6m) + barras firm×mês + tabela de
