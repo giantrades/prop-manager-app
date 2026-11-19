@@ -626,6 +626,32 @@ export default function LivePositionsPage() {
     } finally { setBusy(null); }
   };
 
+  // Arrastar a linha da própria ordem: atualiza price (limit) ou triggerPrice (stop).
+  const saveChartOrderPrice = async (o, price) => {
+    const isStop = String(o.type ?? '').toLowerCase().includes('stop');
+    setBusy(`chart-${o.platformOrderId}`);
+    try {
+      const res = await submitOrQueue(adapter, {
+        kind: 'modifyOrder',
+        payload: {
+          platformOrderId: o.platformOrderId,
+          price: isStop ? null : price,
+          triggerPrice: isStop ? price : null,
+        },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — preço da ordem ${o.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`Preço da ordem atualizado — ${o.symbol} @ ${fmtPrice(price)}`);
+        loadOrders();
+        refreshStatuses();
+      }
+    } catch (err) {
+      toast(`Falha ao mover a ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
   const placeChartOrder = async (p, { side, qty, price, sl, tp }) => {
     setBusy(`chart-${p.platformPositionId ?? p.platformOrderId ?? 'target'}`);
     try {
@@ -963,6 +989,7 @@ export default function LivePositionsPage() {
             onSaveLevels={(next) => (chartPosition
               ? saveChartLevels(chartPosition, next)
               : saveChartOrderLevels(chartOrder, next))}
+            onSaveOrderPrice={chartOrder ? (price) => saveChartOrderPrice(chartOrder, price) : undefined}
             onPlaceOrder={(order) => placeChartOrder(chartPosition ?? chartOrder, order)}
           />
         </React.Suspense>

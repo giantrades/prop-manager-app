@@ -71,6 +71,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
   const [live, setLive] = useState(null);
   const [drag, setDrag] = useState(null);
   const [pending, setPending] = useState(null);
+  const [pendingOrder, setPendingOrder] = useState(null);
   const [draft, setDraft] = useState(null);
   const [phantom, setPhantom] = useState({});
   const [orderSide, setOrderSide] = useState(long ? 'sell' : 'buy');
@@ -91,6 +92,11 @@ export default function PositionChart({ position, order, adapter, online, onClos
 
   const precision = useMemo(() => pricePrecision(bars), [bars]);
   const step = Math.pow(10, -precision);
+  const orderIsStop = String(order?.type ?? '').toLowerCase().includes('stop');
+  const orderBasePrice = isOrder
+    ? (orderIsStop ? Number(order?.triggerPrice) : Number(order?.price)) || 0
+    : 0;
+  const displayEntry = isOrder ? (pendingOrder ?? (orderBasePrice || entry)) : entry;
 
   const slPrice = drag?.kind === 'sl' ? drag.price : pending?.sl ?? baseSl ?? phantom.sl ?? null;
   const tpPrice = drag?.kind === 'tp' ? drag.price : pending?.tp ?? baseTp ?? phantom.tp ?? null;
@@ -101,8 +107,8 @@ export default function PositionChart({ position, order, adapter, online, onClos
   useEffect(() => {
     periodRef.current = period;
     precisionRef.current = precision;
-    levelsRef.current = { sl: Number(slPrice), tp: Number(tpPrice), entry, current: markPrice };
-  }, [period, precision, slPrice, tpPrice, entry, markPrice]);
+    levelsRef.current = { sl: Number(slPrice), tp: Number(tpPrice), entry: displayEntry, current: markPrice };
+  }, [period, precision, slPrice, tpPrice, displayEntry, markPrice]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -245,7 +251,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
     const next = {
       sl: y(slPrice),
       tp: y(tpPrice),
-      entry: y(entry),
+      entry: y(displayEntry),
       current: y(markPrice),
       paneW,
     };
@@ -255,7 +261,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
         ? prev
         : next
     ));
-  }, [slPrice, tpPrice, entry, markPrice]);
+  }, [slPrice, tpPrice, displayEntry, markPrice]);
 
   useEffect(() => {
     recalc();
@@ -268,6 +274,16 @@ export default function PositionChart({ position, order, adapter, online, onClos
     const t = setTimeout(() => setPending(null), 6000);
     return () => clearTimeout(t);
   }, [pending]);
+
+  useEffect(() => {
+    if (pendingOrder == null) return undefined;
+    if (orderBasePrice > 0 && Math.abs(Number(pendingOrder) - orderBasePrice) < step / 2) {
+      setPendingOrder(null);
+      return undefined;
+    }
+    const t = setTimeout(() => setPendingOrder(null), 6000);
+    return () => clearTimeout(t);
+  }, [pendingOrder, orderBasePrice, step]);
 
   useEffect(() => {
     setPhantom((p) => {
@@ -297,7 +313,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
   }, [onClose]);
 
   const clampLevel = (kind, price) => {
-    const ref = isOrder ? Number(entry) : (Number(markPrice) || Number(entry));
+    const ref = isOrder ? Number(displayEntry) : (Number(markPrice) || Number(entry));
     if (!Number.isFinite(ref) || ref <= 0) return price;
     if (kind === 'sl') {
       return long ? Math.min(price, ref - step) : Math.max(price, ref + step);
@@ -305,8 +321,17 @@ export default function PositionChart({ position, order, adapter, online, onClos
     return long ? Math.max(price, ref + step) : Math.min(price, ref - step);
   };
 
+  const clampOrderPrice = (price) => {
+    const ref = Number(markPrice) || Number(displayEntry);
+    if (!Number.isFinite(ref) || ref <= 0) return price;
+    if (orderIsStop) {
+      return long ? Math.max(price, ref + step) : Math.min(price, ref - step);
+    }
+    return long ? Math.min(price, ref - step) : Math.max(price, ref + step);
+  };
+
   const createLevel = (kind) => {
-    const base = isOrder ? Number(entry) : (Number(markPrice) || Number(entry));
+    const base = isOrder ? Number(displayEntry) : (Number(markPrice) || Number(entry));
     if (!(base > 0)) return;
     const dist = 30 * step;
     const raw = kind === 'sl'
@@ -318,15 +343,16 @@ export default function PositionChart({ position, order, adapter, online, onClos
   };
 
   const beginDrag = (kind, e) => {
-    if (!online || !onSaveLevels) return;
+    if (!online) return;
+    if (kind === 'order' ? !onSaveOrderPrice : !onSaveLevels) return;
     const series = seriesRef.current;
     const el = wrapRef.current;
-    const start = kind === 'sl' ? slPrice : tpPrice;
+    const start = kind === 'order' ? displayEntry : kind === 'sl' ? slPrice : tpPrice;
     if (!series || !el || !Number.isFinite(Number(start))) return;
     e.preventDefault();
     e.stopPropagation();
     const startPrice = Number(start);
-    const isNew = kind === 'sl' ? slNew : tpNew;
+    const isNew = kind === 'order' ? false : kind === 'sl' ? slNew : tpNew;
     let last = null;
 
     const move = (ev) => {
@@ -334,7 +360,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
       const raw = series.coordinateToPrice(ev.clientY - rect.top);
       const rounded = roundTo(raw, precisionRef.current);
       if (rounded == null) return;
-      last = { kind, price: clampLevel(kind, rounded) };
+      last = { kind, price: kind === 'order' ? clampOrderPrice(rounded) : clampLevel(kind, rounded) };
       dragRef.current = last;
       setDrag(last);
     };
@@ -348,9 +374,22 @@ export default function PositionChart({ position, order, adapter, online, onClos
       if (finalPrice != null && (isNew || Math.abs(finalPrice - startPrice) >= step / 2)) {
         const next = roundTo(finalPrice, precisionRef.current);
         if (next != null) {
-          setPending((p) => ({ ...(p ?? {}), [kind]: next }));
-          setPhantom((p) => { const n = { ...p }; delete n[kind]; return n; });
-          onSaveLevels(kind === 'sl' ? { sl: next } : { tp: next });
+          if (kind === 'order') {
+            setPendingOrder(next);
+            // Bracket do Quantower é offset em ticks: move SL/TP junto com o preço.
+            const delta = next - startPrice;
+            setPending((p) => {
+              const n = { ...(p ?? {}) };
+              if (Number(slPrice) > 0) n.sl = roundTo(Number(slPrice) + delta, precisionRef.current);
+              if (Number(tpPrice) > 0) n.tp = roundTo(Number(tpPrice) + delta, precisionRef.current);
+              return n;
+            });
+            onSaveOrderPrice(next);
+          } else {
+            setPending((p) => ({ ...(p ?? {}), [kind]: next }));
+            setPhantom((p) => { const n = { ...p }; delete n[kind]; return n; });
+            onSaveLevels(kind === 'sl' ? { sl: next } : { tp: next });
+          }
         }
       }
     };
@@ -387,7 +426,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
             <b>{symbol}</b>
             {isOrder && <span className="pc-side pc-order-badge">ordem</span>}
             <span className={`pc-side ${long ? 'pc-long' : 'pc-short'}`}>{position?.side ?? order?.side}</span>
-            <span className="pc-muted">{position?.quantity ?? order?.quantity} @ {fmtPrice(entry, precision)}</span>
+            <span className="pc-muted">{position?.quantity ?? order?.quantity} @ {fmtPrice(displayEntry, precision)}</span>
             {Number.isFinite(pnl) && (
               <span className={`pc-pnl ${pnl >= 0 ? 'pc-long' : 'pc-short'}`}>{fmtMoney(pnl)}</span>
             )}
@@ -407,7 +446,7 @@ export default function PositionChart({ position, order, adapter, online, onClos
           {slPrice == null && <button className="pc-period pc-add pc-add-sl" onClick={() => createLevel('sl')}>+ SL</button>}
           {tpPrice == null && <button className="pc-period pc-add pc-add-tp" onClick={() => createLevel('tp')}>+ TP</button>}
           <span className="pc-levels">SL {slPrice != null ? fmtPrice(slPrice, precision) : '—'} · TP {tpPrice != null ? fmtPrice(tpPrice, precision) : '—'}</span>
-          <span className="pc-hint"><SlidersHorizontal size={12} /> arraste SL/TP no gráfico</span>
+          <span className="pc-hint"><SlidersHorizontal size={12} /> arraste a ordem e SL/TP</span>
         </div>
 
         <div className="pc-chart" ref={wrapRef}>
@@ -418,9 +457,23 @@ export default function PositionChart({ position, order, adapter, online, onClos
               </div>
             )}
             {lines.entry != null && (
-              <div className="pc-guide pc-guide-entry" style={{ top: lines.entry, width: lines.paneW }}>
-                <span className="pc-guide-tag">{isOrder ? 'ordem' : 'entrada'} {fmtPrice(entry, precision)}</span>
-              </div>
+              isOrder ? (
+                <div
+                  className="pc-level pc-level-order"
+                  style={{ top: lines.entry, width: lines.paneW }}
+                  onPointerDown={(e) => beginDrag('order', e)}
+                  role="slider"
+                  aria-label="Preço da ordem"
+                  aria-valuenow={Number(displayEntry) || 0}
+                  tabIndex={0}
+                >
+                  <span className="pc-level-tag">ordem {orderIsStop ? 'stop' : 'limit'} {fmtPrice(displayEntry, precision)}</span>
+                </div>
+              ) : (
+                <div className="pc-guide pc-guide-entry" style={{ top: lines.entry, width: lines.paneW }}>
+                  <span className="pc-guide-tag">entrada {fmtPrice(displayEntry, precision)}</span>
+                </div>
+              )
             )}
             {lines.tp != null && (
               <div
@@ -516,9 +569,11 @@ const PC_CSS = `
 .pc-level::before { content: ''; position: absolute; left: 0; right: 0; height: 1px; }
 .pc-level-sl::before { background: rgba(255,90,100,0.95); box-shadow: 0 0 8px rgba(231,76,60,0.5); }
 .pc-level-tp::before { background: rgba(80,220,140,0.95); box-shadow: 0 0 8px rgba(46,204,113,0.5); }
+.pc-level-order::before { background: rgba(240,190,60,0.95); box-shadow: 0 0 8px rgba(225,177,44,0.5); }
 .pc-level-tag { position: absolute; right: 4px; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pc-level-sl .pc-level-tag { color: #ffd7d4; background: rgba(231,76,60,0.22); border: 1px solid rgba(231,76,60,0.6); }
 .pc-level-tp .pc-level-tag { color: #c9ffdf; background: rgba(46,204,113,0.18); border: 1px solid rgba(46,204,113,0.6); }
+.pc-level-order .pc-level-tag { color: #fff3c4; background: rgba(225,177,44,0.2); border: 1px solid rgba(225,177,44,0.6); }
 .pc-level-new { opacity: 0.9; }
 .pc-level-new .pc-level-tag { border-style: dashed; animation: pc-pulse 1.4s ease-in-out infinite; }
 @keyframes pc-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 1; } }
