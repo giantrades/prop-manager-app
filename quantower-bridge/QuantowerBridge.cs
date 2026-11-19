@@ -82,6 +82,7 @@ namespace QuantowerBridge
         // [PATCH B] Handlers do Core para capturar SL/TP na abertura e no fechamento.
         private static Action<Position> _onPositionAdded;
         private static Action<Position> _onPositionRemoved;
+        private static Action<Order> _onOrderRemoved;
 
         // ── Bridge v2: autenticação + idempotência ─────────────────────────
         // X-Bridge-Token em TODAS as rotas (04-BRIDGE_V2_SPEC.md). Token gerado
@@ -187,16 +188,33 @@ namespace QuantowerBridge
                 // O timer de 2s é só rede de segurança caso algum evento não dispare.
                 if (_onPositionAdded == null)
                 {
-                    _onPositionAdded = pos => { try { PositionSlTpStore.Upsert(pos, false); } catch { /* noop */ } };
+                    _onPositionAdded = pos =>
+                    {
+                        try { PositionSlTpStore.Upsert(pos, false); } catch { /* noop */ }
+                        try { OcoStore.EnsureForPosition(pos); } catch { /* noop */ }
+                    };
                     Core.Instance.PositionAdded += _onPositionAdded;
                 }
                 if (_onPositionRemoved == null)
                 {
-                    _onPositionRemoved = pos => { try { PositionSlTpStore.Upsert(pos, true); } catch { /* noop */ } };
+                    _onPositionRemoved = pos =>
+                    {
+                        try { PositionSlTpStore.Upsert(pos, true); } catch { /* noop */ }
+                        try { OcoStore.OnPositionRemoved(pos?.Id); } catch { /* noop */ }
+                    };
                     Core.Instance.PositionRemoved += _onPositionRemoved;
                 }
+                if (_onOrderRemoved == null)
+                {
+                    _onOrderRemoved = order => { try { OcoStore.OnOrderRemoved(order); } catch { /* noop */ } };
+                    Core.Instance.OrderRemoved += _onOrderRemoved;
+                }
                 _slTpTimer = new System.Threading.Timer(
-                    _ => { try { PositionSlTpStore.Capture(); } catch { /* noop */ } },
+                    _ =>
+                    {
+                        try { PositionSlTpStore.Capture(); } catch { /* noop */ }
+                        try { OcoStore.CaptureAll(); } catch { /* noop */ }
+                    },
                     null, 2000, 2000);
 
                 // Block OnRun until server stops (prevents strategy from auto-stopping)
@@ -270,6 +288,7 @@ namespace QuantowerBridge
                 // [PATCH B] Desassina os eventos do Core (evita handler duplicado em restart).
                 if (_onPositionAdded != null) { Core.Instance.PositionAdded -= _onPositionAdded; _onPositionAdded = null; }
                 if (_onPositionRemoved != null) { Core.Instance.PositionRemoved -= _onPositionRemoved; _onPositionRemoved = null; }
+                if (_onOrderRemoved != null) { Core.Instance.OrderRemoved -= _onOrderRemoved; _onOrderRemoved = null; }
                 string m = "🛑 QuantowerBridge stopped";
                 Log(m, StrategyLoggingLevel.Trading);
                 FileLog(m);
@@ -473,12 +492,13 @@ namespace QuantowerBridge
                     // keep as-is
                 }
                 else if (path.StartsWith("/positions")) path = "/positions";
-                else if (path == "/orders/place" || path == "/orders/cancel")
+                else if (path == "/orders/place" || path == "/orders/cancel" || path == "/orders/modify")
                 {
                     // keep as-is
                 }
                 else if (path.StartsWith("/orders")) path = "/orders";
                 else if (path.StartsWith("/symbols")) path = "/symbols";
+                else if (path.StartsWith("/history")) path = "/history";
                 else if (path.StartsWith("/options/underlyings")) path = "/options/underlyings";
                 else if (path.StartsWith("/options/expiries")) path = "/options/expiries";
                 else if (path.StartsWith("/options/chain")) path = "/options/chain";
@@ -523,6 +543,9 @@ namespace QuantowerBridge
                     case "/orders/place":
                         json = HandlePlaceOrder(request);
                         break;
+                    case "/orders/modify":
+                        json = HandleModifyOrder(request);
+                        break;
                     case "/orders/cancel":
                         json = HandleCancelOrder(request);
                         break;
@@ -534,6 +557,9 @@ namespace QuantowerBridge
                         break;
                     case "/symbols":
                         json = BuildSymbolsJson(request.QueryString["q"]);
+                        break;
+                    case "/history":
+                        json = BuildHistoryJson(request.QueryString["symbol"], request.QueryString["period"], request.QueryString["limit"]);
                         break;
                     case "/options/underlyings":
                         json = BuildOptionUnderlyingsJson();
@@ -735,12 +761,16 @@ namespace QuantowerBridge
                 if (position == null)
                     return ErrorJson("position_not_found", $"Position not found: {req.PlatformPositionId}", false);
 
+                string slOrderId = position.StopLoss?.Id;
+                string tpOrderId = position.TakeProfit?.Id;
+
                 if (req.Sl.HasValue)
                 {
                     if (position.StopLoss != null)
                     {
                         var res = Core.Instance.ModifyOrder(position.StopLoss, price: req.Sl.Value);
                         if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar SL", true);
+                        slOrderId = position.StopLoss.Id;
                     }
                     else
                     {
@@ -758,6 +788,7 @@ namespace QuantowerBridge
                             TimeInForce = TimeInForce.GTC
                         });
                         if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao criar SL", true);
+                        slOrderId = res.OrderId;
                     }
                 }
                 if (req.Tp.HasValue)
@@ -766,6 +797,7 @@ namespace QuantowerBridge
                     {
                         var res = Core.Instance.ModifyOrder(position.TakeProfit, price: req.Tp.Value);
                         if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao modificar TP", true);
+                        tpOrderId = position.TakeProfit.Id;
                     }
                     else
                     {
@@ -781,8 +813,20 @@ namespace QuantowerBridge
                             TimeInForce = TimeInForce.GTC
                         });
                         if (!IsSuccess(res)) return ErrorJson("unknown", res?.Message ?? "Falha ao criar TP", true);
+                        tpOrderId = res.OrderId;
                     }
                 }
+
+                // Relê a posição: o Quantower pode preencher os IDs um instante depois.
+                try
+                {
+                    var live = Core.Instance.Positions.FirstOrDefault(p => p.Id == position.Id);
+                    if (live?.StopLoss != null) slOrderId = live.StopLoss.Id;
+                    if (live?.TakeProfit != null) tpOrderId = live.TakeProfit.Id;
+                }
+                catch { }
+                if (!string.IsNullOrEmpty(slOrderId) && !string.IsNullOrEmpty(tpOrderId))
+                    OcoStore.Register(position.Id, slOrderId, tpOrderId);
 
                 string resp = JsonSerializer.Serialize(new { success = true, platformPositionId = req.PlatformPositionId }, JsonOptions);
                 RememberIdempotent(req.ClientOrderId, resp);
@@ -816,6 +860,35 @@ namespace QuantowerBridge
                 var side = string.Equals(req.Side, "sell", StringComparison.OrdinalIgnoreCase) ? Side.Sell : Side.Buy;
                 bool isLimit = string.Equals(req.Type, "limit", StringComparison.OrdinalIgnoreCase);
 
+                // Bracket de ordem PENDENTE: o Quantower trata o SL/TP como offset em TICKS
+                // relativo ao preço da ordem (é o que o próprio gráfico envia: "Stop loss: 50 ticks").
+                // Mandar preço ABSOLUTO aqui faz o holder virar "-1 tick" (SL a 1 tick da entrada,
+                // às vezes no lado errado). Convertemos o preço absoluto do app para ticks.
+                SlTpHolder slHolder = null;
+                SlTpHolder tpHolder = null;
+                if (req.Sl.HasValue || req.Tp.HasValue)
+                {
+                    double tick = 0;
+                    try { tick = symbol.TickSize; } catch { }
+                    if (!(tick > 0) || double.IsNaN(tick) || double.IsInfinity(tick))
+                        return ErrorJson("invalid_request", "Symbol sem tick size: não é possível anexar SL/TP a uma ordem pendente.", false);
+
+                    if (req.Sl.HasValue)
+                    {
+                        double dist = req.Sl.Value - req.Price;
+                        if ((side == Side.Buy && dist >= 0) || (side == Side.Sell && dist <= 0))
+                            return ErrorJson("invalid_request", $"SL {req.Sl.Value} está do lado errado do preço da ordem ({req.Price}).", false);
+                        slHolder = SlTpHolder.CreateSL(Math.Round(Math.Abs(dist) / tick, 4), PriceMeasurement.Offset);
+                    }
+                    if (req.Tp.HasValue)
+                    {
+                        double dist = req.Tp.Value - req.Price;
+                        if ((side == Side.Buy && dist <= 0) || (side == Side.Sell && dist >= 0))
+                            return ErrorJson("invalid_request", $"TP {req.Tp.Value} está do lado errado do preço da ordem ({req.Price}).", false);
+                        tpHolder = SlTpHolder.CreateTP(Math.Round(Math.Abs(dist) / tick, 4), PriceMeasurement.Offset);
+                    }
+                }
+
                 var orderParams = new PlaceOrderRequestParameters
                 {
                     Account = account,
@@ -826,8 +899,8 @@ namespace QuantowerBridge
                     OrderTypeId = isLimit ? OrderType.Limit : OrderType.Stop,
                     Price = isLimit ? req.Price : -1,
                     TriggerPrice = isLimit ? -1 : req.Price,
-                    StopLoss = req.Sl.HasValue ? SlTpHolder.CreateSL(req.Sl.Value, PriceMeasurement.Absolute) : null,
-                    TakeProfit = req.Tp.HasValue ? SlTpHolder.CreateTP(req.Tp.Value, PriceMeasurement.Absolute) : null
+                    StopLoss = slHolder,
+                    TakeProfit = tpHolder
                 };
                 var result = Core.Instance.PlaceOrder(orderParams);
                 if (!IsSuccess(result))
@@ -841,6 +914,73 @@ namespace QuantowerBridge
             catch (Exception ex)
             {
                 FileLog($"[ORDERS/PLACE] Error: {ex.Message}");
+                return ErrorJson("quantower_disconnected", ex.Message, true);
+            }
+        }
+
+        // ── Bridge v2: /orders/modify (preço e/ou SL/TP da ordem pendente) ───
+        private static string HandleModifyOrder(HttpListenerRequest request)
+        {
+            if (request.HttpMethod != "POST")
+                return ErrorJson("method_not_allowed", "Use POST.", false);
+
+            var req = ReadJson<ModifyOrderRequest>(request);
+            if (req == null || string.IsNullOrEmpty(req.PlatformOrderId))
+                return ErrorJson("order_not_found", "Missing required field: platformOrderId", false);
+            if (TryGetIdempotent(req.ClientOrderId, out string cached)) return cached;
+
+            try
+            {
+                var order = Core.Instance.Orders.FirstOrDefault(o => o.Id == req.PlatformOrderId);
+                if (order == null)
+                    return ErrorJson("order_not_found", $"Order not found: {req.PlatformOrderId}", false);
+
+                var symbol = order.Symbol;
+                double tick = 0;
+                try { tick = symbol?.TickSize ?? 0; } catch { }
+                bool isBuy = order.Side == Side.Buy;
+                double basePrice = req.TriggerPrice ?? req.Price
+                    ?? (order.Price > 0 ? order.Price : order.TriggerPrice);
+
+                var orderParams = new ModifyOrderRequestParameters(order);
+                orderParams.OrderId = order.Id;
+                if (req.Quantity.HasValue) orderParams.Quantity = req.Quantity.Value;
+                if (req.Price.HasValue) orderParams.Price = req.Price.Value;
+                if (req.TriggerPrice.HasValue) orderParams.TriggerPrice = req.TriggerPrice.Value;
+
+                if (req.Sl.HasValue || req.Tp.HasValue)
+                {
+                    if (!(tick > 0) || double.IsNaN(tick) || double.IsInfinity(tick))
+                        return ErrorJson("invalid_request", "Symbol sem tick size: não é possível anexar SL/TP a uma ordem pendente.", false);
+
+                    if (req.Sl.HasValue)
+                    {
+                        double dist = req.Sl.Value - basePrice;
+                        if ((isBuy && dist >= 0) || (!isBuy && dist <= 0))
+                            return ErrorJson("invalid_request", $"SL {req.Sl.Value} está do lado errado do preço da ordem ({basePrice}).", false);
+                        orderParams.StopLoss = SlTpHolder.CreateSL(Math.Round(Math.Abs(dist) / tick, 4), PriceMeasurement.Offset);
+                    }
+                    if (req.Tp.HasValue)
+                    {
+                        double dist = req.Tp.Value - basePrice;
+                        if ((isBuy && dist <= 0) || (!isBuy && dist >= 0))
+                            return ErrorJson("invalid_request", $"TP {req.Tp.Value} está do lado errado do preço da ordem ({basePrice}).", false);
+                        orderParams.TakeProfit = SlTpHolder.CreateTP(Math.Round(Math.Abs(dist) / tick, 4), PriceMeasurement.Offset);
+                    }
+                }
+
+                var result = Core.Instance.ModifyOrder(orderParams);
+                if (!IsSuccess(result))
+                    return ErrorJson("unknown", result?.Message ?? "Falha ao modificar ordem", true);
+
+                string resp = JsonSerializer.Serialize(new { success = true, platformOrderId = order.Id }, JsonOptions);
+                RememberIdempotent(req.ClientOrderId, resp);
+                FileLog($"[ORDERS/MODIFY] {order.Id} price={req.Price} trigger={req.TriggerPrice} sl={req.Sl} tp={req.Tp} qty={req.Quantity}");
+                return resp;
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[ORDERS/MODIFY] Error: {ex.Message}");
                 return ErrorJson("quantower_disconnected", ex.Message, true);
             }
         }
@@ -945,6 +1085,17 @@ namespace QuantowerBridge
             public string ClientOrderId { get; set; }
         }
 
+        private class ModifyOrderRequest
+        {
+            public string PlatformOrderId { get; set; }
+            public double? Quantity { get; set; }
+            public double? Price { get; set; }
+            public double? TriggerPrice { get; set; }
+            public double? Sl { get; set; }
+            public double? Tp { get; set; }
+            public string ClientOrderId { get; set; }
+        }
+
         private class CancelOrderRequest
         {
             public string PlatformOrderId { get; set; }
@@ -983,8 +1134,10 @@ namespace QuantowerBridge
         // 2.1.0: contractSize (valor do ponto) no /trades; SL/TP persistidos em disco.
         // 2.1.1: fee das ENTRADAS passa a ser contabilizada (antes ficava 0 e o netPnL
         //        ignorava metade das taxas — saldo da conta divergia da soma dos trades).
-        // 2.1.2: /symbols (autocomplete) + triggerPrice/orderType nas ordens (stop correto).
-        private const string BridgeVersion = "2.1.2";
+        // 2.1.3: /history (candles p/ gráfico); SL/TP de ordem pendente viram offset em
+        //        TICKS (Absolute virava "-1 tick"); /positions lê o nível do stop em
+        //        TriggerPrice (Price costuma ser 0/-1).
+        private const string BridgeVersion = "2.1.3";
         // Prefixo usa a PRÓPRIA BridgeVersion (antes era "2.0.0-" hardcoded e confundia:
         // a ponte 2.1.0 aparecia com build "2.0.0-...").
         private static string BuildIdentifier =>
@@ -1269,8 +1422,9 @@ namespace QuantowerBridge
                     connectionId = pos.ConnectionId ?? "",
                     connectionName = connName,
                     // SL/TP atuais (usados pela tela de posições ao vivo). Null se não houver.
-                    sl = pos.StopLoss != null ? (double?)pos.StopLoss.Price : null,
-                    tp = pos.TakeProfit != null ? (double?)pos.TakeProfit.Price : null,
+                    // O stop costuma ter Price 0/-1 e o nível real em TriggerPrice.
+                    sl = TradeHelpers.OrderLevel(pos.StopLoss),
+                    tp = TradeHelpers.OrderLevel(pos.TakeProfit),
                     isLive = true
                 });
             }
@@ -1509,6 +1663,94 @@ namespace QuantowerBridge
             return JsonSerializer.Serialize(new { symbols = list, count = list.Count, timestamp = DateTime.UtcNow.ToString("O") }, JsonOptions);
         }
 
+        // ── /history: candles para o gráfico de gerenciamento da posição ──────
+        // `period` = 1m|5m|15m|30m|1h|4h|1d; `limit` = nº de candles (20..1500).
+        // Usa o histórico do próprio Quantower (mesma fonte do gráfico dele).
+        private static Period ParseHistoryPeriod(string text)
+        {
+            switch ((text ?? "").Trim().ToLowerInvariant())
+            {
+                case "1m": return Period.MIN1;
+                case "15m": return Period.MIN15;
+                case "30m": return Period.MIN30;
+                case "1h": return Period.HOUR1;
+                case "4h": return Period.HOUR4;
+                case "1d": return Period.DAY1;
+                default: return Period.MIN5;
+            }
+        }
+
+        private static string BuildHistoryJson(string symbolName, string periodText, string limitText)
+        {
+            string sym = (symbolName ?? "").Trim();
+            var period = ParseHistoryPeriod(periodText);
+            int limit = 300;
+            int.TryParse(limitText, out limit);
+            if (limit < 20) limit = 20;
+            if (limit > 1500) limit = 1500;
+
+            var bars = new List<object>();
+            DateTime to = DateTime.UtcNow;
+            DateTime from = to - TimeSpan.FromTicks(period.Duration.Ticks * (long)limit * 2L);
+
+            try
+            {
+                var symbol = Core.Instance.Symbols.FirstOrDefault(s => string.Equals(s.Name, sym, StringComparison.OrdinalIgnoreCase));
+                if (symbol == null)
+                    return ErrorJson("symbol_closed", $"Symbol not found: {sym}", false);
+
+                var history = symbol.GetHistory(period, from, to);
+                try
+                {
+                    if (history != null)
+                    {
+                        var all = new List<HistoryItemBar>();
+                        foreach (var item in history)
+                        {
+                            if (item is HistoryItemBar b && b.TimeRight != DateTime.MinValue) all.Add(b);
+                        }
+                        // A coleção do Quantower é indexada do mais novo para o mais antigo
+                        // (index 0 = bar atual). Ordena por tempo e garante tempos únicos.
+                        all.Sort((a, b) => a.TimeRight.CompareTo(b.TimeRight));
+                        int start = Math.Max(0, all.Count - limit);
+                        DateTime lastTime = DateTime.MinValue;
+                        for (int i = start; i < all.Count; i++)
+                        {
+                            var b = all[i];
+                            if (b.TimeRight <= lastTime) continue;
+                            lastTime = b.TimeRight;
+                            bars.Add(new
+                            {
+                                time = b.TimeRight.ToString("O"),
+                                open = b.Open,
+                                high = b.High,
+                                low = b.Low,
+                                close = b.Close,
+                                volume = b.Volume
+                            });
+                        }
+                    }
+                }
+                finally
+                {
+                    history?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                FileLog($"[HISTORY] {sym} {periodText}: {ex.Message}");
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                symbol = sym,
+                period = (periodText ?? "5m").Trim().ToLowerInvariant(),
+                count = bars.Count,
+                bars,
+                timestamp = DateTime.UtcNow.ToString("O")
+            }, JsonOptions);
+        }
+
         // [RECONSTRUÍDO] este método tinha sido colado cortado no meio,
         // faltando o corpo do foreach, a variável "result" e a chave de fechamento.
         private static string BuildOrdersJson()
@@ -1538,6 +1780,11 @@ namespace QuantowerBridge
                 }
                 catch { }
 
+                double orderPrice = order.Price > 0 ? order.Price : order.TriggerPrice;
+                double tick = 0;
+                try { tick = order.Symbol?.TickSize ?? 0; } catch { }
+                bool isBuy = string.Equals(side, "Buy", StringComparison.OrdinalIgnoreCase);
+
                 orders.Add(new
                 {
                     id = order.Id,
@@ -1549,6 +1796,9 @@ namespace QuantowerBridge
                     // Limit/stop-limit usam Price; stop usa TriggerPrice (Price fica 0/-1).
                     price = order.Price,
                     triggerPrice = order.TriggerPrice,
+                    // SL/TP pendurados na ordem (bracket/OCO) em preço absoluto.
+                    sl = TradeHelpers.HolderPrice(order.StopLoss, orderPrice, isBuy, true, tick),
+                    tp = TradeHelpers.HolderPrice(order.TakeProfit, orderPrice, isBuy, false, tick),
                     orderTypeId = order.OrderTypeId,
                     orderType = order.OrderType.ToString(),
                     status = order.Status.ToString(),
@@ -1654,6 +1904,45 @@ namespace QuantowerBridge
             using var sha1 = SHA1.Create();
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
             return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
+
+        /** Nível real de uma ordem de SL/TP: stop tem o nível em TriggerPrice (Price fica 0/-1). */
+        internal static double? OrderLevel(Order order)
+        {
+            if (order == null) return null;
+            try
+            {
+                if (order.Price > 0 && !double.IsNaN(order.Price) && !double.IsInfinity(order.Price))
+                    return order.Price;
+                if (order.TriggerPrice > 0 && !double.IsNaN(order.TriggerPrice) && !double.IsInfinity(order.TriggerPrice))
+                    return order.TriggerPrice;
+            }
+            catch { }
+            return null;
+        }
+
+        /**
+         * Preço absoluto do SL/TP pendurado em uma ordem pendente (SlTpHolder).
+         * `PriceMeasurement.Offset` é em TICKS relativo ao preço da ordem.
+         */
+        internal static double? HolderPrice(SlTpHolder holder, double orderPrice, bool isBuy, bool isStopLoss, double tick)
+        {
+            if (holder == null) return null;
+            try
+            {
+                double raw = holder.Price;
+                if (double.IsNaN(raw) || double.IsInfinity(raw)) return null;
+                if (holder.PriceMeasurement != PriceMeasurement.Offset)
+                    return raw > 0 ? raw : (double?)null;
+
+                double t = tick > 0 && !double.IsNaN(tick) && !double.IsInfinity(tick) ? tick : 1.0;
+                double sign = isStopLoss ? (isBuy ? -1.0 : 1.0) : (isBuy ? 1.0 : -1.0);
+                double price = raw > 0
+                    ? orderPrice + sign * raw * t
+                    : orderPrice + raw * t;
+                return price > 0 ? price : (double?)null;
+            }
+            catch { return null; }
         }
     }
 
@@ -1766,8 +2055,8 @@ namespace QuantowerBridge
             EnsureLoaded();
             try
             {
-                decimal? sl = pos.StopLoss != null ? (decimal)pos.StopLoss.Price : null;
-                decimal? tp = pos.TakeProfit != null ? (decimal)pos.TakeProfit.Price : null;
+                decimal? sl = (decimal?)TradeHelpers.OrderLevel(pos.StopLoss);
+                decimal? tp = (decimal?)TradeHelpers.OrderLevel(pos.TakeProfit);
                 lock (_lock)
                 {
                     if (preserveOnNull && _map.TryGetValue(pos.Id, out var prev))
@@ -1793,6 +2082,119 @@ namespace QuantowerBridge
                 if (_map.TryGetValue(positionId, out var e)) { sl = e.Sl; tp = e.Tp; return true; }
             }
             return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // OCO (One-Cancels-Other) para SL/TP de posições
+    // ═══════════════════════════════════════════════════════════════
+    // Quando o bridge cria SL/TP como ordens separadas (posição que não tinha
+    // bracket nativo), elas NÃO são OCO por conta do broker: se o stop bate, o
+    // take-profit continua vivo e pode abrir posição contrária. Aqui ligamos as
+    // duas ordens e cancelamos a irmã quando uma é executada ou a posição fecha.
+
+    internal static class OcoStore
+    {
+        private static readonly object _lock = new object();
+        private static readonly Dictionary<string, string> _sibling = new Dictionary<string, string>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, HashSet<string>> _byPosition = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        internal static void Register(string positionId, string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b) || string.Equals(a, b, StringComparison.Ordinal)) return;
+            lock (_lock)
+            {
+                _sibling[a] = b;
+                _sibling[b] = a;
+                if (!string.IsNullOrEmpty(positionId))
+                {
+                    if (!_byPosition.TryGetValue(positionId, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.Ordinal);
+                        _byPosition[positionId] = set;
+                    }
+                    set.Add(a);
+                    set.Add(b);
+                }
+            }
+        }
+
+        internal static void EnsureForPosition(Position pos)
+        {
+            if (pos?.StopLoss == null || pos.TakeProfit == null) return;
+            Register(pos.Id, pos.StopLoss.Id, pos.TakeProfit.Id);
+        }
+
+        internal static void CaptureAll()
+        {
+            try
+            {
+                foreach (var p in Core.Instance.Positions) EnsureForPosition(p);
+            }
+            catch { }
+        }
+
+        internal static void OnOrderRemoved(Order removed)
+        {
+            if (removed == null) return;
+            bool filled = removed.Status == OrderStatus.Filled;
+
+            string siblingId = null;
+            lock (_lock)
+            {
+                if (_sibling.TryGetValue(removed.Id, out siblingId))
+                {
+                    _sibling.Remove(removed.Id);
+                    if (!string.IsNullOrEmpty(siblingId)) _sibling.Remove(siblingId);
+                    foreach (var set in _byPosition.Values)
+                    {
+                        set.Remove(removed.Id);
+                        if (!string.IsNullOrEmpty(siblingId)) set.Remove(siblingId);
+                    }
+                }
+            }
+            if (!filled || string.IsNullOrEmpty(siblingId)) return;
+
+            try
+            {
+                var sib = Core.Instance.Orders.FirstOrDefault(o => o.Id == siblingId);
+                if (sib != null && IsWorking(sib)) sib.Cancel();
+            }
+            catch { }
+        }
+
+        internal static void OnPositionRemoved(string positionId)
+        {
+            if (string.IsNullOrEmpty(positionId)) return;
+            HashSet<string> ids;
+            lock (_lock)
+            {
+                if (!_byPosition.TryGetValue(positionId, out ids)) return;
+                _byPosition.Remove(positionId);
+                foreach (var id in ids) _sibling.Remove(id);
+            }
+            foreach (var id in ids)
+            {
+                try
+                {
+                    var o = Core.Instance.Orders.FirstOrDefault(x => x.Id == id);
+                    if (o != null && IsWorking(o)) o.Cancel();
+                }
+                catch { }
+            }
+        }
+
+        private static bool IsWorking(Order o)
+        {
+            if (o == null) return false;
+            switch (o.Status)
+            {
+                case OrderStatus.Opened:
+                case OrderStatus.PartiallyFilled:
+                    return true;
+                default:
+                    return false;
+            }
         }
     }
 
@@ -1960,8 +2362,8 @@ namespace QuantowerBridge
             try
             {
                 var livePos = Core.Instance.Positions.FirstOrDefault(p => p.Id == fill.PositionId);
-                if (livePos?.StopLoss != null) stopPrice = (decimal)livePos.StopLoss.Price;
-                if (livePos?.TakeProfit != null) takePrice = (decimal)livePos.TakeProfit.Price;
+                stopPrice = (decimal?)TradeHelpers.OrderLevel(livePos?.StopLoss);
+                takePrice = (decimal?)TradeHelpers.OrderLevel(livePos?.TakeProfit);
             }
             catch { /* posição já encerrada — R fica n/a */ }
 

@@ -12,7 +12,8 @@ import { QuantowerAdapter } from '@apps/utils/adapters/quantowerAdapter.js';
 import { mergeOrdersIntoPositions } from '@apps/utils/livePositionSlTp';
 import { submitOrQueue, flushQueue, readQueue } from '@apps/utils/orderQueue.js';
 import { useWakeLock } from '../../useWakeLock';
-import { Activity, RefreshCw, X, Clock, Zap, ZapOff, Shield, Target } from 'lucide-react';
+import { Activity, RefreshCw, X, Clock, Zap, ZapOff, Shield, Target, LineChart } from 'lucide-react';
+const PositionChart = React.lazy(() => import('../../PositionChart'));
 
 /** Selo da firm (logo > ícone > nome colorido) para as linhas de posição/ordem. */
 function FirmChip({ firm }) {
@@ -56,6 +57,8 @@ export default function LivePositionsPage() {
   const [partialId, setPartialId] = useState(null);
   const [partialQty, setPartialQty] = useState('');
   const [ticket, setTicket] = useState(null);
+  const [chartId, setChartId] = useState(null);
+  const [chartOrderId, setChartOrderId] = useState(null);
   const [trades, setTrades] = useState([]);
   const [allSymbols, setAllSymbols] = useState([]);
   const [appAccounts, setAppAccounts] = useState([]);
@@ -82,6 +85,29 @@ export default function LivePositionsPage() {
     () => mergeOrdersIntoPositions(rawPositions, orders),
     [rawPositions, orders],
   );
+  const chartPosition = useMemo(
+    () => (chartId ? positions.find((p) => p.platformPositionId === chartId) ?? null : null),
+    [positions, chartId],
+  );
+  const chartOrder = useMemo(
+    () => (chartOrderId ? orders.find((o) => o.platformOrderId === chartOrderId) ?? null : null),
+    [orders, chartOrderId],
+  );
+  useEffect(() => {
+    if (chartId && !chartPosition) setChartId(null);
+  }, [chartId, chartPosition]);
+  useEffect(() => {
+    if (chartOrderId && !chartOrder) setChartOrderId(null);
+  }, [chartOrderId, chartOrder]);
+
+  const openPositionChart = (p) => {
+    setChartOrderId(null);
+    setChartId(p.platformPositionId);
+  };
+  const openOrderChart = (o) => {
+    setChartId(null);
+    setChartOrderId(o.platformOrderId);
+  };
   const isStale = !online && positions.length > 0;
   // PnL somado das posições abertas: net (o que a plataforma reporta), gross e fees.
   const openPnl = useMemo(() => positions.reduce(
@@ -501,18 +527,33 @@ export default function LivePositionsPage() {
       toast(isMarket ? 'Preencha conta, símbolo e quantidade.' : 'Preencha conta, símbolo, quantidade e preço.', { type: 'warn' });
       return;
     }
+    const sl = num(form.sl);
+    const tp = num(form.tp);
+    // SL/TP têm que ficar do lado de risco/lucro do preço de referência (limit/trigger ou cotação).
+    const ref = isMarket ? formQuote : price;
+    if (ref > 0) {
+      const buy = form.side === 'buy';
+      if (sl && ((buy && sl >= ref) || (!buy && sl <= ref))) {
+        toast(`SL de ${buy ? 'compra' : 'venda'} deve ficar ${buy ? 'abaixo' : 'acima'} de ${fmtPrice(ref)}.`, { type: 'warn' });
+        return;
+      }
+      if (tp && ((buy && tp <= ref) || (!buy && tp >= ref))) {
+        toast(`TP de ${buy ? 'compra' : 'venda'} deve ficar ${buy ? 'acima' : 'abaixo'} de ${fmtPrice(ref)}.`, { type: 'warn' });
+        return;
+      }
+    }
     setBusy('new-order');
     try {
       const res = await submitOrQueue(adapter, isMarket
         ? {
             kind: 'open', // abrir a mercado (bridge /positions/open)
-            payload: { accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, sl: num(form.sl), tp: num(form.tp), note: 'mercado' },
+            payload: { accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, sl, tp, note: 'mercado' },
           }
         : {
             kind: 'place',
             payload: {
               accountId: form.accountId, symbol: form.symbol.trim().toUpperCase(), side: form.side, qty, type: form.type, price,
-              sl: num(form.sl), tp: num(form.tp),
+              sl, tp,
             },
           });
       const label = isMarket ? 'a mercado' : form.type;
@@ -531,7 +572,81 @@ export default function LivePositionsPage() {
     } finally { setBusy(null); }
   };
 
-  // Editar ordem = SUBSTITUIR (o bridge não tem rota de modify de ordem): cancelar + recolocar.
+  // Arrastar SL/TP no gráfico: manda só o lado alterado (null = bridge ignora).
+  const saveChartLevels = async (p, next) => {
+    setBusy(`chart-${p.platformPositionId}`);
+    const key = 'sl' in next ? 'sl' : 'tp';
+    try {
+      const res = await submitOrQueue(adapter, {
+        kind: 'modify',
+        payload: {
+          platformPositionId: p.platformPositionId,
+          sl: key === 'sl' ? next.sl : null,
+          tp: key === 'tp' ? next.tp : null,
+        },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — ${key.toUpperCase()} de ${p.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`${key.toUpperCase()} atualizado — ${p.symbol}`);
+        refreshStatuses();
+        loadOrders();
+      }
+    } catch (err) {
+      toast(`Falha ao atualizar ${key.toUpperCase()}: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
+  // Arrastar SL/TP de uma ORDEM pendente: modifica o bracket sem cancelar/recolocar.
+  const saveChartOrderLevels = async (o, next) => {
+    const key = 'sl' in next ? 'sl' : 'tp';
+    setBusy(`chart-${o.platformOrderId}`);
+    try {
+      const res = await submitOrQueue(adapter, {
+        kind: 'modifyOrder',
+        payload: {
+          platformOrderId: o.platformOrderId,
+          sl: key === 'sl' ? next.sl : null,
+          tp: key === 'tp' ? next.tp : null,
+        },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — ${key.toUpperCase()} da ordem ${o.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`${key.toUpperCase()} da ordem atualizado — ${o.symbol}`);
+        loadOrders();
+        refreshStatuses();
+      }
+    } catch (err) {
+      toast(`Falha ao atualizar ${key.toUpperCase()} da ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
+  const placeChartOrder = async (p, { side, qty, price, sl, tp }) => {
+    setBusy(`chart-${p.platformPositionId ?? p.platformOrderId ?? 'target'}`);
+    try {
+      const res = await submitOrQueue(adapter, {
+        kind: 'place',
+        payload: {
+          accountId: p.platformAccountId, symbol: p.symbol, side, qty, type: 'limit', price, sl: sl ?? null, tp: tp ?? null,
+        },
+      });
+      if (res.queued) {
+        setPending(readQueue().length);
+        toast(`Bridge offline — ordem limit de ${p.symbol} na fila.`, { type: 'warn' });
+      } else {
+        toast(`Ordem limit enviada — ${p.symbol} @ ${fmtPrice(price)}`);
+        loadOrders();
+        refreshStatuses();
+      }
+    } catch (err) {
+      toast(`Falha ao enviar ordem: ${err instanceof Error ? err.message : err}`, { type: 'error' });
+    } finally { setBusy(null); }
+  };
+
+  // Editar ordem via /orders/modify (preserva a ordem; antes era cancelar + recolocar).
   const startEditOrder = (o) => {
     setEditOrderId(o.platformOrderId);
     setOrderEdit({
@@ -551,20 +666,23 @@ export default function LivePositionsPage() {
     }
     setBusy(o.platformOrderId);
     try {
-      const type = (o.type || '').toLowerCase().includes('stop') ? 'stop' : 'limit';
-      const cancel = await submitOrQueue(adapter, { kind: 'cancel', payload: { platformOrderId: o.platformOrderId } });
-      const place = await submitOrQueue(adapter, {
-        kind: 'place',
+      const isStop = (o.type || '').toLowerCase().includes('stop');
+      const res = await submitOrQueue(adapter, {
+        kind: 'modifyOrder',
         payload: {
-          accountId: o.platformAccountId, symbol: o.symbol, side: o.side === 'Long' ? 'buy' : 'sell',
-          qty, type, price, sl: num(orderEdit.sl), tp: num(orderEdit.tp),
+          platformOrderId: o.platformOrderId,
+          quantity: qty,
+          price: isStop ? null : price,
+          triggerPrice: isStop ? price : null,
+          sl: num(orderEdit.sl),
+          tp: num(orderEdit.tp),
         },
       });
-      if (cancel.queued || place.queued) {
+      if (res.queued) {
         setPending(readQueue().length);
-        toast('Bridge offline — edição (cancelar+recolocar) na fila.', { type: 'warn' });
+        toast('Bridge offline — edição da ordem na fila.', { type: 'warn' });
       } else {
-        toast(`Ordem substituída — ${o.symbol}`);
+        toast(`Ordem atualizada — ${o.symbol}`);
       }
       setEditOrderId(null);
       loadOrders();
@@ -665,7 +783,7 @@ export default function LivePositionsPage() {
                 return (
                   <React.Fragment key={p.platformPositionId}>
                     <div className="lp-row">
-                      <span className="lp-sym">{p.symbol}<span className="lp-acct">{firm && <FirmChip firm={firm} />}{accountNameOf(p)}</span></span>
+                      <span className="lp-sym lp-sym-click" onClick={() => openPositionChart(p)} title="Abrir gráfico para gerenciar SL/TP"><span>{p.symbol}</span><span className="lp-acct">{firm && <FirmChip firm={firm} />}{accountNameOf(p)}</span></span>
                       <span className={`lp-side ${p.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{p.side}</span>
                       <span className="lp-num">{p.quantity}</span>
                       <span className="lp-num">{fmtPrice(p.openPrice)}</span>
@@ -676,6 +794,7 @@ export default function LivePositionsPage() {
                       <input className={`lp-input${tpDerived ? ' lp-input-inferred' : ''}`} type="number" step="0.00001" value={tpVal} placeholder="TP" title={tpDerived ? 'Sugerido pelas ordens pendentes — confira antes de salvar' : undefined} onChange={(ev) => setEdit(p.platformPositionId, 'tp', ev.target.value)} aria-label={`Take profit ${p.symbol}${tpDerived ? ' (sugerido)' : ''}`} />
                       <span className="lp-actions">
                         {dirty && <button className="lp-btn lp-btn-primary" disabled={busy === p.platformPositionId} onClick={() => saveSl(p)}>Salvar</button>}
+                        <button className={`lp-btn lp-btn-ico${chartId === p.platformPositionId ? ' lp-btn-on' : ''}`} onClick={() => openPositionChart(p)} title="Abrir gráfico para arrastar SL/TP e colocar ordens" aria-label={`Abrir gráfico de ${p.symbol}`} aria-pressed={chartId === p.platformPositionId}><LineChart size={13} /></button>
                         <button className={`lp-btn${ticket?.id === p.platformPositionId ? ' lp-btn-on' : ''}`} onClick={() => (ticket?.id === p.platformPositionId ? setTicket(null) : openTicket(p))} disabled={busy === p.platformPositionId} aria-expanded={ticket?.id === p.platformPositionId} title="Criar/editar Stop Loss e Take Profit desta posição"><Shield size={12} /> SL/TP</button>
                         <button className={`lp-btn${partial ? ' lp-btn-on' : ''}`} onClick={() => (partial ? setPartialId(null) : startPartial(p))} disabled={busy === p.platformPositionId} aria-expanded={partial}>Parcial</button>
                         {confirming ? (
@@ -796,7 +915,7 @@ export default function LivePositionsPage() {
               {orders.map((o) => (
                 <React.Fragment key={o.platformOrderId}>
                   <div className="lp-row lp-ordrow">
-                    <span className="lp-sym">{o.symbol}</span>
+                    <span className="lp-sym lp-sym-click" onClick={() => openOrderChart(o)} title="Abrir gráfico da ordem"><span>{o.symbol}</span></span>
                     <span className={`lp-side ${o.side === 'Long' ? 'dash-pos' : 'dash-neg'}`}>{o.side}</span>
                     <span className="lp-num">{orderTypeLabel(o)}</span>
                     <span className="lp-num">{o.remainingQuantity ?? o.quantity}</span>
@@ -804,6 +923,7 @@ export default function LivePositionsPage() {
                     <span className="lp-num">{o.status || '—'}</span>
                     <span className="lp-acct">{firmOf(o) && <FirmChip firm={firmOf(o)} />}{accountNameOf(o)}</span>
                     <span className="lp-actions">
+                      <button className={`lp-btn lp-btn-ico${chartOrderId === o.platformOrderId ? ' lp-btn-on' : ''}`} onClick={() => openOrderChart(o)} title="Abrir gráfico para arrastar SL/TP da ordem" aria-label={`Abrir gráfico de ${o.symbol}`} aria-pressed={chartOrderId === o.platformOrderId}><LineChart size={13} /></button>
                       <button className="lp-btn" onClick={() => startEditOrder(o)}>Editar</button>
                       <button className="lp-btn lp-btn-danger" disabled={busy === o.platformOrderId} onClick={() => cancelOrder(o)}>Cancelar</button>
                     </span>
@@ -827,6 +947,22 @@ export default function LivePositionsPage() {
             </>
           )}
         </>
+      )}
+
+      {(chartPosition || chartOrder) && (
+        <React.Suspense fallback={<div style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', color: 'var(--text, #e7eaf0)', fontSize: 13 }}>Carregando gráfico…</div>}>
+          <PositionChart
+            position={chartPosition}
+            order={chartOrder}
+            adapter={adapter}
+            online={online}
+            onClose={() => { setChartId(null); setChartOrderId(null); }}
+            onSaveLevels={(next) => (chartPosition
+              ? saveChartLevels(chartPosition, next)
+              : saveChartOrderLevels(chartOrder, next))}
+            onPlaceOrder={(order) => placeChartOrder(chartPosition ?? chartOrder, order)}
+          />
+        </React.Suspense>
       )}
     </div>
   );
@@ -885,6 +1021,8 @@ const LP_CSS = `
 
 .lp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted, #a1a7b3); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .lp-sym { font-weight: 700; display: flex; flex-direction: column; }
+.lp-sym-click { cursor: pointer; }
+.lp-sym-click:hover > span:first-child { color: var(--brand, #7c5cff); }
 .lp-acct { font-size: 10px; color: var(--muted, #a1a7b3); font-weight: 400; }
 .lp-side { font-weight: 700; }
 .lp-num { font-variant-numeric: tabular-nums; }

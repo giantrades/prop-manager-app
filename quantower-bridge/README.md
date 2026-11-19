@@ -32,8 +32,8 @@ Abra no browser: `http://localhost:8787/status`
 ```json
 {
   "online": true,
-  "version": "2.1.2",
-  "build": "2.1.2-202601011200",
+  "version": "2.1.3",
+  "build": "2.1.3-202601011200",
   "platform": "quantower",
   "connectionsCount": 2,
   "connections": []
@@ -61,8 +61,20 @@ Abra no browser: `http://localhost:8787/status`
 | `/positions` | GET | Posições abertas com P&L em tempo real |
 | `/orders` | GET | Ordens pendentes |
 | `/symbols` | GET | Instrumentos negociáveis (`?q=` filtra por nome) — autocomplete no app |
+| `/history` | GET | Candles (`?symbol=&period=1m\|5m\|15m\|30m\|1h\|4h\|1d&limit=300`) para o gráfico de gerenciamento |
 | `/stream` | GET (SSE) | Stream contínuo de posições+ordens (`text/event-stream`, ~1.5s). Auth por `?token=` (EventSource não manda header) |
 
+> **Gráfico de posição** (v2.1.3): `/history` usa `Symbol.GetHistory` do próprio
+> Quantower (mesma fonte do gráfico dele), devolve `{ symbol, period, count, bars:[
+> { time, open, high, low, close, volume }] }` em ordem cronológica. O app usa esses
+> candles + `/symbols` (cotação) para desenhar o gráfico e arrastar SL/TP.
+
+> **SL/TP de ordem pendente** (v2.1.3): `/orders/place` recebe preços **absolutos** (`sl`/`tp`)
+> e converte para **offset em ticks relativo ao preço da ordem** — é o formato que o
+> Quantower usa em brackets de ordem pendente. Enviar `PriceMeasurement.Absolute` aqui
+> fazia o stop virar `-1 tick` (a 1 tick da entrada, às vezes acima dela). O bridge também
+> rejeita SL/TP do lado errado do preço da ordem.
+>
 > **Preço de `/orders`** (v2.1.2): ordens `stop` reportam o nível em `triggerPrice` (o `price`
 > costuma vir 0/-1 porque a execução é a mercado); `orderType`/`orderTypeId` vêm como texto
 > (`Limit`, `Stop`, `StopLimit`). O app mostra `triggerPrice` para stop e `price` para limit.
@@ -80,7 +92,13 @@ Abra no browser: `http://localhost:8787/status`
 | `/positions/modify` | POST | `{ platformPositionId, sl?, tp?, clientOrderId }` | `{ success, platformPositionId }` |
 | `/positions/close` | POST | `{ id, clientOrderId }` | `{ success }` |
 | `/orders/place` | POST | `{ accountId, symbol, side, qty, type:'limit'\|'stop', price, sl?, tp?, clientOrderId }` | `{ success, platformOrderId }` |
+| `/orders/modify` | POST | `{ platformOrderId, quantity?, price?, triggerPrice?, sl?, tp?, clientOrderId }` | `{ success, platformOrderId }` |
 | `/orders/cancel` | POST | `{ platformOrderId, clientOrderId }` | `{ success }` |
+
+> **OCO no SL/TP da posição** (v2.1.3): ordens de SL/TP criadas pelo bridge
+> (`/positions/modify` quando a posição não tinha bracket) são registradas como OCO —
+> quando uma é executada ou a posição fecha, a irmã é cancelada automaticamente. Sem
+> isso, o TP continuava vivo depois do stop e podia abrir posição contrária.
 
 ## Streaming (SSE) — posições em tempo real
 

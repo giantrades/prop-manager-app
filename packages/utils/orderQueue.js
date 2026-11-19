@@ -73,6 +73,7 @@ const RUNNERS = {
   modify: (adapter, p) => adapter.modifyPosition(p),
   close: (adapter, p) => adapter.closePosition({ platformPositionId: p.platformPositionId }, p.clientOrderId),
   place: (adapter, p) => adapter.placeOrder(p),
+  modifyOrder: (adapter, p) => adapter.modifyOrder(p),
   cancel: (adapter, p) => adapter.cancelOrder(p),
 };
 

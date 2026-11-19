@@ -127,8 +127,8 @@ export class QuantowerAdapter extends BaseAdapter {
     return urls;
   }
 
-  async _fetchSingle(url, controller, fetchOptions = {}) {
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  async _fetchSingle(url, controller, fetchOptions = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
         ...fetchOptions,
@@ -148,7 +148,7 @@ export class QuantowerAdapter extends BaseAdapter {
     }
   }
 
-  async _fetch(endpoint, params = {}) {
+  async _fetch(endpoint, params = {}, timeoutMs = FETCH_TIMEOUT_MS) {
     const urls = this._getUrls(endpoint);
     const qs = Object.entries(params)
       .filter(([, v]) => v != null)
@@ -161,7 +161,7 @@ export class QuantowerAdapter extends BaseAdapter {
       const fullUrl = qs ? `${url}${url.includes('?') ? '&' : '?'}${qs}` : url;
       const controller = new AbortController();
       try {
-        const data = await this._fetchSingle(fullUrl, controller);
+        const data = await this._fetchSingle(fullUrl, controller, {}, timeoutMs);
         if (url !== this.bridgeUrl) this._lastWorkingUrl = url;
         this._retryCount = 0;
         this._cancelRetry();
@@ -429,6 +429,8 @@ export class QuantowerAdapter extends BaseAdapter {
       price: price ?? 0,
       triggerPrice,
       limitPrice,
+      sl: pos(o.sl),
+      tp: pos(o.tp),
       type,
       status: o.status || '',
       // Ordem pendente ligada a uma posição (SL/TP costumam vir assim na plataforma).
@@ -463,6 +465,41 @@ export class QuantowerAdapter extends BaseAdapter {
         lotSize: s.lotSize ?? 1,
       }))
       .filter((s) => s.symbol);
+  }
+
+  /** Cotação exata de um símbolo (last/bid/ask), sem baixar a lista inteira. */
+  async getQuote(symbol) {
+    const sym = String(symbol || '').trim().toUpperCase();
+    if (!sym) return null;
+    const list = await this.getSymbols(sym);
+    const hit = list.find((s) => String(s.symbol).toUpperCase() === sym);
+    return hit ? { last: hit.last, bid: hit.bid, ask: hit.ask } : null;
+  }
+
+  /**
+   * Candles do Quantower para o gráfico de gerenciamento.
+   * `period`: 1m | 5m | 15m | 30m | 1h | 4h | 1d.
+   */
+  async getHistory(symbol, period = '5m', limit = 300) {
+    const data = await this._fetch('/history', { symbol, period, limit }, 15000);
+    this._markSynced();
+    const out = (data.bars || [])
+      .map((b) => {
+        const iso = normIso(b.time);
+        if (!iso) return null;
+        return {
+          time: Math.floor(new Date(iso).getTime() / 1000),
+          open: Number(b.open),
+          high: Number(b.high),
+          low: Number(b.low),
+          close: Number(b.close),
+          volume: Number(b.volume) || 0,
+        };
+      })
+      .filter((b) => b && Number.isFinite(b.time) && Number.isFinite(b.close) && b.close > 0)
+      .sort((a, b) => a.time - b.time);
+    // lightweight-charts exige tempos estritamente crescentes.
+    return out.filter((b, i) => i === 0 || b.time > out[i - 1].time);
   }
 
   // ── Opções (F3) — DOCS/04_STAGE3_TRADING_OS/06-OPTIONS_BRIDGE_SPEC.md ──────
@@ -554,6 +591,26 @@ export class QuantowerAdapter extends BaseAdapter {
       clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
     };
     const result = await this._fetchPost('/orders/place', body);
+    this._assertNotQueued(result);
+    if (!result.success) throw new BridgeApiError(result.error, result);
+    this._markSynced();
+    return result;
+  }
+
+  /** Modifica ordem pendente (preço/trigger, qtd e SL/TP) sem cancelar/recolocar. */
+  async modifyOrder({ platformOrderId, quantity, price, triggerPrice, sl, tp, clientOrderId }) {
+    const rawId = (platformOrderId || '').replace(/^qt_ord_/, '');
+    if (!rawId) throw new Error('Invalid order: missing platformOrderId');
+    const body = {
+      platformOrderId: rawId,
+      quantity: quantity ?? null,
+      price: price ?? null,
+      triggerPrice: triggerPrice ?? null,
+      sl: sl ?? null,
+      tp: tp ?? null,
+      clientOrderId: clientOrderId || QuantowerAdapter.newClientOrderId(),
+    };
+    const result = await this._fetchPost('/orders/modify', body);
     this._assertNotQueued(result);
     if (!result.success) throw new BridgeApiError(result.error, result);
     this._markSynced();
