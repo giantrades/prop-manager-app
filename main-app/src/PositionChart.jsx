@@ -503,7 +503,7 @@ const PC_CSS = `
 .pc-add-tp { color: #7bed9f; border-color: rgba(46,204,113,0.45); }
 .pc-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--muted, #a1a7b3); font-size: 10px; }
 .pc-chart { position: relative; flex: 1; min-height: 240px; }
-.pc-lines { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.pc-lines { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
 .pc-guide { position: absolute; left: 0; height: 1px; margin-top: 0; display: flex; align-items: center; }
 .pc-guide-current { background: rgba(120,190,255,0.75); }
 .pc-guide-entry { background: rgba(180,180,180,0.6); border-top: 1px dashed rgba(180,180,180,0.8); }
@@ -519,7 +519,7 @@ const PC_CSS = `
 .pc-level-new { opacity: 0.9; }
 .pc-level-new .pc-level-tag { border-style: dashed; animation: pc-pulse 1.4s ease-in-out infinite; }
 @keyframes pc-pulse { 0%,100% { opacity: 0.65; } 50% { opacity: 1; } }
-.pc-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; color: var(--muted, #a1a7b3); font-size: 12px; pointer-events: none; }
+.pc-empty { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; color: var(--muted, #a1a7b3); font-size: 12px; pointer-events: none; background: rgba(15,19,27,0.72); }
 .pc-empty small { font-size: 10px; opacity: 0.8; }
 .pc-orderbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(124,92,255,0.06); }
 .pc-orderprice { font-size: 12px; color: var(--muted, #a1a7b3); }
